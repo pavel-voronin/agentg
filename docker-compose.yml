@@ -1,0 +1,70 @@
+services:
+  telegram:
+    profiles:
+      - container-client
+    build:
+      context: .
+      target: runtime
+    depends_on:
+      nats:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://agentg:agentg@postgres:5432/agentg
+      NATS_URL: nats://nats:4222
+      TELEGRAM_API_ID: ${TELEGRAM_API_ID:-}
+      TELEGRAM_API_HASH: ${TELEGRAM_API_HASH:-}
+      TDLIB_DATABASE_DIR: /app/td-data/database
+      TDLIB_FILES_DIR: /app/td-data/files
+    volumes:
+      - td-data:/app/td-data
+    restart: 'no'
+    command: ['npm', '--workspace', '@agentg/telegram', 'run', 'start']
+
+  gateway:
+    profiles:
+      - gateway
+    build:
+      context: .
+      target: runtime
+    command: ['npm', '--workspace', '@agentg/gateway', 'run', 'start']
+    depends_on:
+      nats:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    environment:
+      AGENT_GATEWAY_HOST: 0.0.0.0
+      AGENT_GATEWAY_PORT: ${AGENT_GATEWAY_PORT:-8787}
+      AGENT_GATEWAY_TOKEN: ${AGENT_GATEWAY_TOKEN:-}
+      DATABASE_URL: postgres://agentg:agentg@postgres:5432/agentg
+      NATS_URL: nats://nats:4222
+    ports:
+      - '${AGENT_GATEWAY_PORT:-8787}:${AGENT_GATEWAY_PORT:-8787}'
+    restart: 'no'
+
+  nats:
+    image: nats:2.12-alpine
+    ports:
+      - '4222:4222'
+
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: agentg
+      POSTGRES_USER: agentg
+      POSTGRES_PASSWORD: agentg
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U agentg -d agentg']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql
+
+volumes:
+  postgres-data:
+  td-data:

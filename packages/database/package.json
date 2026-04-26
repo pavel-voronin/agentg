@@ -1,0 +1,33 @@
+{
+  "name": "@agentg/database",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./client": "./src/client.ts",
+    "./config": "./src/config.ts",
+    "./database": "./src/database.ts",
+    "./migrate": "./src/migrate.ts",
+    "./schema": "./src/schema.ts"
+  },
+  "scripts": {
+    "build": "vite build",
+    "dev:smoke": "APP_MODE=smoke tsx src/main.ts",
+    "migrate": "APP_MODE=migrate tsx src/main.ts",
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "@agentg/shared": "file:../shared",
+    "dotenv": "17.4.2",
+    "drizzle-orm": "^0.45.2",
+    "pg": "8.20.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.0",
+    "@types/pg": "8.15.6",
+    "tsx": "4.21.0",
+    "typescript": "6.0.3",
+    "vite": "8.0.10",
+    "vitest": "4.1.5"
+  }
+}

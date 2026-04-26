@@ -1,0 +1,6 @@
+dist
+coverage
+node_modules
+td-data
+docs
+drizzle/meta

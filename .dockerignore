@@ -1,0 +1,9 @@
+node_modules
+dist
+**/dist
+coverage
+td-data
+.env
+.env.local
+.git
+npm-debug.log*

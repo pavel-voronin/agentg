@@ -1,0 +1,15 @@
+{
+  "name": "@agentg/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./events/bus": "./src/events/bus.ts",
+    "./events/envelope": "./src/events/envelope.ts",
+    "./events/telegram-events": "./src/events/telegram-events.ts",
+    "./json": "./src/json.ts"
+  },
+  "dependencies": {
+    "nats": "^2.29.3"
+  }
+}

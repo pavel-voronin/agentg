@@ -1,0 +1,40 @@
+import 'dotenv/config';
+
+export type GatewayConfig = {
+  databaseUrl: string;
+  gateway: {
+    host: string;
+    port: number;
+    token?: string;
+  };
+  nats: {
+    url: string;
+  };
+};
+
+export function loadGatewayConfig(env: NodeJS.ProcessEnv = process.env): GatewayConfig {
+  return {
+    databaseUrl: env.DATABASE_URL ?? 'postgres://agentg:agentg@localhost:5432/agentg',
+    gateway: {
+      host: env.AGENT_GATEWAY_HOST ?? '127.0.0.1',
+      port: parseOptionalInteger(env.AGENT_GATEWAY_PORT, 'AGENT_GATEWAY_PORT') ?? 8787,
+      ...(env.AGENT_GATEWAY_TOKEN === undefined ? {} : { token: env.AGENT_GATEWAY_TOKEN })
+    },
+    nats: {
+      url: env.NATS_URL ?? 'nats://localhost:4222'
+    }
+  };
+}
+
+function parseOptionalInteger(value: string | undefined, name: string): number | undefined {
+  if (value === undefined || value.length === 0) {
+    return undefined;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    throw new Error(`${name} must be a positive integer`);
+  }
+
+  return parsed;
+}
