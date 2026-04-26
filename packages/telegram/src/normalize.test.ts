@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { normalizeTelegramUpdate } from '@agentg/telegram/normalize';
+import { normalizeTelegramUpdate } from './normalize.js';
 
 describe('normalizeTelegramUpdate', () => {
   it('normalizes new text messages', () => {

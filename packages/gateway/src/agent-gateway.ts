@@ -62,7 +62,7 @@ export async function runAgentGateway(options: AgentGatewayOptions): Promise<voi
     });
   });
 
-  const subscription = options.eventBus.subscribe('telegram.>', (event) => {
+  const subscription = options.eventBus.subscribe('telegram.message.created', (event) => {
     broadcast(clients, {
       event
     });

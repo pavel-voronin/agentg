@@ -11,7 +11,10 @@
   "scripts": {
     "dev": "tsx watch --clear-screen=false src/main.ts",
     "build": "vite build",
-    "start": "node dist/main.js"
+    "start": "node dist/main.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@agentg/database": "file:../database",

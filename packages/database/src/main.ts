@@ -20,10 +20,8 @@ try {
     })
   );
 
-  if (config.appMode === 'migrate') {
-    await runDatabaseMigrations(database);
-    console.log(JSON.stringify({ event: 'database.migrated' }));
-  }
+  await runDatabaseMigrations(database);
+  console.log(JSON.stringify({ event: 'database.migrated' }));
 } catch (error) {
   console.error(
     JSON.stringify({

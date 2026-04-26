@@ -1,24 +1,10 @@
+import { resolve } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
-import { loadDatabaseCliConfig } from '@agentg/database/config';
-import { loadTelegramIngestionConfig } from '@agentg/telegram/config';
+import { loadTelegramIngestionConfig } from './config.js';
 
-describe('loadConfig', () => {
-  it('uses local development defaults', () => {
-    const config = loadDatabaseCliConfig({});
-
-    expect(config).toMatchObject({
-      appMode: 'smoke',
-      databaseUrl: 'postgres://agentg:agentg@localhost:5432/agentg'
-    });
-  });
-
-  it('rejects invalid app mode', () => {
-    expect(() => loadDatabaseCliConfig({ APP_MODE: 'bot' })).toThrow(
-      'APP_MODE must be "migrate" or "smoke"'
-    );
-  });
-});
+const repositoryRoot = resolve(process.cwd(), '../..');
 
 describe('loadTelegramIngestionConfig', () => {
   it('uses local ingestion defaults', () => {
@@ -27,6 +13,9 @@ describe('loadTelegramIngestionConfig', () => {
     expect(config).toMatchObject({
       backfill: {
         chatLoadBatchSize: 100,
+        catchupBootstrapLookbackDays: 31,
+        catchupOverlapDays: 2,
+        catchupWindowDays: 7,
         messageLimit: 100,
         requestDelayMs: 1000,
         windowDays: 31
@@ -36,8 +25,8 @@ describe('loadTelegramIngestionConfig', () => {
         url: 'nats://localhost:4222'
       },
       telegram: {
-        databaseDirectory: './td-data/database',
-        filesDirectory: './td-data/files'
+        databaseDirectory: resolve(repositoryRoot, 'td-data/database'),
+        filesDirectory: resolve(repositoryRoot, 'td-data/files')
       }
     });
   });

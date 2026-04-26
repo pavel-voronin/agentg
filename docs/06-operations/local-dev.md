@@ -12,28 +12,27 @@ npm run infra:up
 npm run db:migrate
 npm run dev:telegram
 npm run dev:gateway
-npm run dev:smoke
 ```
 
 `npm run infra:up` starts Postgres and NATS.
 
-`npm run db:migrate` applies versioned Drizzle migrations from `drizzle/`.
-
-`npm run dev:smoke` runs the `@agentg/database` healthcheck once and exits with
-code 0.
+`npm run db:migrate` applies versioned Drizzle migrations from
+`packages/database/drizzle/`.
 
 `npm run dev:telegram` runs the `@agentg/telegram` ingestion package. It owns the
 TDLib session, receives live Telegram updates, writes Telegram-shaped records to
-Postgres, publishes live integration events to NATS, and starts resumable
-historical backfill in the same process.
+Postgres, publishes live integration events to NATS, runs startup catch-up for
+messages received while the worker was offline, and starts resumable historical
+backfill in the same process.
 
-Use `BACKFILL_MESSAGE_LIMIT`, `BACKFILL_WINDOW_DAYS`, and
-`BACKFILL_REQUEST_DELAY_MS` to tune local backfill speed. `BACKFILL_CHAT_LOAD_BATCH_SIZE`
-controls how many chats TDLib is asked to load per chat-list discovery request;
-it is not a cap on total synced chats.
+Use `BACKFILL_MESSAGE_LIMIT`, `BACKFILL_WINDOW_DAYS`,
+`CATCHUP_BOOTSTRAP_LOOKBACK_DAYS`, `CATCHUP_WINDOW_DAYS`, and
+`BACKFILL_REQUEST_DELAY_MS` to tune local sync speed.
+`BACKFILL_CHAT_LOAD_BATCH_SIZE` controls how many chats TDLib is asked to load
+per chat-list discovery request; it is not a cap on total synced chats.
 
 ```bash
-BACKFILL_MESSAGE_LIMIT=25 BACKFILL_WINDOW_DAYS=7 BACKFILL_REQUEST_DELAY_MS=2000 npm run dev:telegram
+BACKFILL_MESSAGE_LIMIT=25 BACKFILL_WINDOW_DAYS=7 CATCHUP_WINDOW_DAYS=1 BACKFILL_REQUEST_DELAY_MS=2000 npm run dev:telegram
 ```
 
 `npm run dev:gateway` runs the `@agentg/gateway` package. It subscribes to live
@@ -54,9 +53,9 @@ Initial local stack includes:
 - Postgres
 - NATS
 
-## Phase 1 Smoke Test
+## Phase 1 Manual Validation
 
-The first local smoke test should prove that Telegram connectivity and Postgres
+The first local validation should prove that Telegram connectivity and Postgres
 persistence work end to end.
 
 Expected flow:

@@ -3,13 +3,22 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
   "exports": {
+    "./dotenv": "./src/dotenv.ts",
     "./events/bus": "./src/events/bus.ts",
     "./events/envelope": "./src/events/envelope.ts",
     "./events/telegram-events": "./src/events/telegram-events.ts",
     "./json": "./src/json.ts"
   },
   "dependencies": {
+    "dotenv": "17.4.2",
     "nats": "^2.29.3"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.0",
+    "typescript": "6.0.3"
   }
 }

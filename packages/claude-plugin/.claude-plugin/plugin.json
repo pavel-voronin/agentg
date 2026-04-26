@@ -1,0 +1,12 @@
+{
+  "name": "agentg",
+  "description": "Claude Code channel plugin for AgentG Gateway. Streams selected AgentG events into Claude and exposes a minimal gateway-backed MCP tool surface.",
+  "version": "0.1.0",
+  "keywords": ["agentg", "telegram", "channel", "mcp", "websocket"],
+  "mcpServers": "./.mcp.json",
+  "channels": [
+    {
+      "server": "agentg"
+    }
+  ]
+}

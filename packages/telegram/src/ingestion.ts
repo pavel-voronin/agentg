@@ -12,11 +12,14 @@ import {
 import {
   getBackfillChatWindowState,
   getBackfillSchedulerState,
+  getCatchupState,
   setBackfillChatWindowState,
   setBackfillSchedulerState,
+  setCatchupState,
   type BackfillChatWindowState,
   type BackfillPhase,
-  type BackfillSchedulerState
+  type BackfillSchedulerState,
+  type CatchupState
 } from './sync-state.js';
 import { persistTelegramUpdate, upsertChat } from './store.js';
 import {
@@ -27,6 +30,9 @@ import {
 
 export type BackfillOptions = {
   chatLoadBatchSize: number;
+  catchupBootstrapLookbackDays: number;
+  catchupOverlapDays: number;
+  catchupWindowDays: number;
   messageLimit: number;
   requestDelayMs: number;
   windowDays: number;
@@ -49,6 +55,7 @@ type PersistenceStats = {
 type TelegramClient = Awaited<ReturnType<typeof createTelegramClient>>;
 
 type BackfillQueue = Exclude<BackfillPhase, 'complete'>;
+type ChatListKind = 'main' | 'archive';
 
 type BackfillChat = {
   category: BackfillQueue;
@@ -90,12 +97,12 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
   await logAuthenticatedClient(client);
   await syncInitialChats(options.database, client);
 
-  const backfillTask = runBackfill(options.database, client, options.backfill).catch(
+  const backfillTask = runStartupSync(options.database, client, options.backfill).catch(
     (error: unknown) => {
       if (!shuttingDown) {
         console.error(
           JSON.stringify({
-            event: 'telegram.backfill_failed',
+            event: 'telegram.startup_sync_failed',
             error: error instanceof Error ? error.message : String(error)
           })
         );
@@ -110,6 +117,17 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
     await options.eventBus.close();
     await backfillTask;
   });
+}
+
+async function runStartupSync(
+  database: AppDatabase,
+  client: TelegramClient,
+  options: BackfillOptions
+): Promise<void> {
+  const safeOptions = normalizeBackfillOptions(options);
+
+  await runCatchup(database, client, safeOptions);
+  await runBackfill(database, client, safeOptions);
 }
 
 async function logAuthenticatedClient(client: TelegramClient): Promise<void> {
@@ -138,6 +156,13 @@ async function runBackfill(
 ): Promise<void> {
   const safeOptions = normalizeBackfillOptions(options);
   const scheduler = await getOrCreateSchedulerState(database);
+
+  console.log(
+    JSON.stringify({
+      event: 'telegram.backfill_started',
+      phase: scheduler.phase
+    })
+  );
 
   while (scheduler.phase !== 'complete') {
     const chats = await discoverBackfillChats(database, client, safeOptions.chatLoadBatchSize);
@@ -175,6 +200,83 @@ async function runBackfill(
   }
 
   console.log(JSON.stringify({ event: 'telegram.backfill_complete' }));
+}
+
+async function runCatchup(
+  database: AppDatabase,
+  client: TelegramClient,
+  options: BackfillOptions
+): Promise<void> {
+  const catchupStartedAt = new Date();
+  const state = await getCatchupState(database);
+  const catchupStart = getCatchupStart(catchupStartedAt, state, options);
+
+  if (catchupStart >= catchupStartedAt) {
+    await setCatchupState(database, {
+      lastCompletedAtIso: catchupStartedAt.toISOString(),
+      version: 1
+    });
+    console.log(JSON.stringify({ event: 'telegram.catchup_skipped' }));
+    return;
+  }
+
+  const chats = await discoverBackfillChats(database, client, options.chatLoadBatchSize);
+  const totals = {
+    chats: 0,
+    fetchedMessages: 0,
+    storedMessages: 0,
+    windows: 0
+  };
+
+  console.log(
+    JSON.stringify({
+      event: 'telegram.catchup_started',
+      freshInstall: state === undefined,
+      from: catchupStart.toISOString(),
+      to: catchupStartedAt.toISOString(),
+      totalChats: chats.length
+    })
+  );
+
+  for (const window of getCatchupWindows(
+    catchupStart,
+    catchupStartedAt,
+    options.catchupWindowDays
+  )) {
+    const stats = await runCatchupWindow(database, client, chats, window, {
+      messageLimit: options.messageLimit,
+      requestDelayMs: options.requestDelayMs
+    });
+
+    totals.chats += stats.chats;
+    totals.fetchedMessages += stats.fetchedMessages;
+    totals.storedMessages += stats.storedMessages;
+    totals.windows += 1;
+
+    console.log(
+      JSON.stringify({
+        event: 'telegram.catchup_window_complete',
+        windowStart: window.start.toISOString(),
+        windowEnd: window.end.toISOString(),
+        ...stats
+      })
+    );
+  }
+
+  await setCatchupState(database, {
+    lastCompletedAtIso: catchupStartedAt.toISOString(),
+    version: 1
+  });
+
+  console.log(
+    JSON.stringify({
+      event: 'telegram.catchup_complete',
+      freshInstall: state === undefined,
+      from: catchupStart.toISOString(),
+      to: catchupStartedAt.toISOString(),
+      ...totals
+    })
+  );
 }
 
 async function persistLiveUpdate(
@@ -249,13 +351,30 @@ async function syncInitialChats(
 }
 
 async function getMainChatIds(client: TelegramClient, limit: number): Promise<number[]> {
-  const chats = asTdObject(
-    await client.invoke({
-      _: 'getChats',
-      chat_list: { _: 'chatListMain' },
-      limit
-    })
-  );
+  return getChatIds(client, 'main', limit);
+}
+
+async function getChatIds(
+  client: TelegramClient,
+  chatList: ChatListKind,
+  limit: number
+): Promise<number[]> {
+  let chats: TdObject | undefined;
+  try {
+    chats = asTdObject(
+      await invokeTdlib(client, {
+        _: 'getChats',
+        chat_list: toTdChatList(chatList),
+        limit
+      })
+    );
+  } catch (error) {
+    if (chatList === 'archive' && isTdlibNotFound(error)) {
+      return [];
+    }
+
+    throw error;
+  }
 
   return Array.isArray(chats?.chat_ids) ? chats.chat_ids.filter(isTelegramId) : [];
 }
@@ -263,6 +382,9 @@ async function getMainChatIds(client: TelegramClient, limit: number): Promise<nu
 function normalizeBackfillOptions(options: BackfillOptions): BackfillOptions {
   return {
     chatLoadBatchSize: Math.max(1, options.chatLoadBatchSize),
+    catchupBootstrapLookbackDays: Math.max(1, options.catchupBootstrapLookbackDays),
+    catchupOverlapDays: Math.max(0, options.catchupOverlapDays),
+    catchupWindowDays: Math.max(1, options.catchupWindowDays),
     messageLimit: Math.min(100, Math.max(1, options.messageLimit)),
     requestDelayMs: Math.max(0, options.requestDelayMs),
     windowDays: Math.max(1, options.windowDays)
@@ -292,13 +414,20 @@ async function discoverBackfillChats(
   client: TelegramClient,
   loadBatchSize: number
 ): Promise<BackfillChat[]> {
-  await loadAllMainChats(client, loadBatchSize);
+  await loadAllChats(client, loadBatchSize);
 
-  const chatIds = await getMainChatIds(client, 100000);
+  const chatIds = dedupeTelegramIds([
+    ...(await getChatIds(client, 'main', 100000)),
+    ...(await getChatIds(client, 'archive', 100000))
+  ]);
   const chats: BackfillChat[] = [];
 
   for (const chatId of chatIds) {
-    const chat = asTdObject(await invokeTdlib(client, { _: 'getChat', chat_id: chatId }));
+    const chat = await getChatOrUndefined(client, chatId);
+    if (chat === undefined) {
+      continue;
+    }
+
     const normalized = normalizeChat(chat);
     if (normalized !== undefined) {
       await upsertChat(database, normalized);
@@ -309,8 +438,8 @@ async function discoverBackfillChats(
       chats.push({
         category,
         id: chatId,
-        title: typeof chat?.title === 'string' ? chat.title : '',
-        type: asTdObject(chat?.type)?._ ?? 'unknown'
+        title: typeof chat.title === 'string' ? chat.title : '',
+        type: asTdObject(chat.type)?._ ?? 'unknown'
       });
     }
   }
@@ -318,12 +447,36 @@ async function discoverBackfillChats(
   return chats;
 }
 
-async function loadAllMainChats(client: TelegramClient, batchSize: number): Promise<void> {
+async function getChatOrUndefined(
+  client: TelegramClient,
+  chatId: number
+): Promise<TdObject | undefined> {
+  try {
+    return asTdObject(await invokeTdlib(client, { _: 'getChat', chat_id: chatId }));
+  } catch (error) {
+    if (isTdlibNotFound(error)) {
+      return undefined;
+    }
+
+    throw error;
+  }
+}
+
+async function loadAllChats(client: TelegramClient, batchSize: number): Promise<void> {
+  await loadAllChatsFromList(client, 'main', batchSize);
+  await loadAllChatsFromList(client, 'archive', batchSize);
+}
+
+async function loadAllChatsFromList(
+  client: TelegramClient,
+  chatList: ChatListKind,
+  batchSize: number
+): Promise<void> {
   for (;;) {
     try {
       await invokeTdlib(client, {
         _: 'loadChats',
-        chat_list: { _: 'chatListMain' },
+        chat_list: toTdChatList(chatList),
         limit: batchSize
       });
     } catch (error) {
@@ -334,6 +487,14 @@ async function loadAllMainChats(client: TelegramClient, batchSize: number): Prom
       throw error;
     }
   }
+}
+
+function toTdChatList(chatList: ChatListKind): TdObject {
+  return chatList === 'main' ? { _: 'chatListMain' } : { _: 'chatListArchive' };
+}
+
+function dedupeTelegramIds(ids: number[]): number[] {
+  return [...new Set(ids)];
 }
 
 function classifyBackfillChat(chat: TdObject | undefined): BackfillQueue | undefined {
@@ -352,6 +513,91 @@ function classifyBackfillChat(chat: TdObject | undefined): BackfillQueue | undef
   }
 
   return undefined;
+}
+
+function getCatchupStart(
+  catchupStartedAt: Date,
+  state: CatchupState | undefined,
+  options: Pick<BackfillOptions, 'catchupBootstrapLookbackDays' | 'catchupOverlapDays'>
+): Date {
+  if (state === undefined) {
+    return subtractDays(catchupStartedAt, options.catchupBootstrapLookbackDays);
+  }
+
+  return subtractDays(new Date(state.lastCompletedAtIso), options.catchupOverlapDays);
+}
+
+function getCatchupWindows(start: Date, end: Date, windowDays: number): BackfillWindow[] {
+  const windows: BackfillWindow[] = [];
+  let windowEnd = end;
+
+  while (windowEnd > start) {
+    const windowStart = maxDate(start, subtractDays(windowEnd, windowDays));
+    windows.push({
+      end: windowEnd,
+      start: windowStart
+    });
+    windowEnd = windowStart;
+  }
+
+  return windows;
+}
+
+async function runCatchupWindow(
+  database: AppDatabase,
+  client: TelegramClient,
+  chats: BackfillChat[],
+  window: BackfillWindow,
+  options: Pick<BackfillOptions, 'messageLimit' | 'requestDelayMs'>
+): Promise<{
+  chats: number;
+  fetchedMessages: number;
+  storedMessages: number;
+}> {
+  const stats = {
+    chats: 0,
+    fetchedMessages: 0,
+    storedMessages: 0
+  };
+
+  for (const chat of chats) {
+    const state = createEphemeralWindowState('private', window);
+    const initializedState = await ensureWindowCursor(database, client, chat.id, state, window, {
+      persistState: false
+    });
+    const result =
+      initializedState.reachedBeginning || initializedState.windowComplete
+        ? {
+            fetchedMessages: 0,
+            reachedBeginning: initializedState.reachedBeginning,
+            storedMessages: 0,
+            windowComplete: initializedState.windowComplete
+          }
+        : await fetchWindowMessages(database, client, chat.id, initializedState, window, options, {
+            persistState: false
+          });
+
+    stats.chats += 1;
+    stats.fetchedMessages += result.fetchedMessages;
+    stats.storedMessages += result.storedMessages;
+  }
+
+  return stats;
+}
+
+function createEphemeralWindowState(
+  phase: BackfillQueue,
+  window: BackfillWindow
+): BackfillChatWindowState {
+  return {
+    fetchedCount: 0,
+    phase,
+    reachedBeginning: false,
+    version: 2,
+    windowComplete: false,
+    windowEndIso: window.end.toISOString(),
+    windowStartIso: window.start.toISOString()
+  };
 }
 
 async function runBackfillWindow(
@@ -475,7 +721,8 @@ async function ensureWindowCursor(
   client: TelegramClient,
   chatId: number,
   state: BackfillChatWindowState,
-  window: BackfillWindow
+  window: BackfillWindow,
+  options: { persistState: boolean } = { persistState: true }
 ): Promise<BackfillChatWindowState> {
   if (state.cursorMessageId !== undefined) {
     return state;
@@ -488,7 +735,9 @@ async function ensureWindowCursor(
       reachedBeginning: true,
       windowComplete: true
     };
-    await setBackfillChatWindowState(database, chatId, nextState);
+    if (options.persistState) {
+      await setBackfillChatWindowState(database, chatId, nextState);
+    }
     return nextState;
   }
 
@@ -500,7 +749,9 @@ async function ensureWindowCursor(
       reachedBeginning: true,
       windowComplete: true
     };
-    await setBackfillChatWindowState(database, chatId, nextState);
+    if (options.persistState) {
+      await setBackfillChatWindowState(database, chatId, nextState);
+    }
     return nextState;
   }
 
@@ -510,7 +761,9 @@ async function ensureWindowCursor(
       cursorMessageId: anchorMessageId,
       windowComplete: true
     };
-    await setBackfillChatWindowState(database, chatId, nextState);
+    if (options.persistState) {
+      await setBackfillChatWindowState(database, chatId, nextState);
+    }
     return nextState;
   }
 
@@ -518,7 +771,9 @@ async function ensureWindowCursor(
     ...state,
     cursorMessageId: anchorMessageId
   };
-  await setBackfillChatWindowState(database, chatId, nextState);
+  if (options.persistState) {
+    await setBackfillChatWindowState(database, chatId, nextState);
+  }
   return nextState;
 }
 
@@ -528,7 +783,8 @@ async function fetchWindowMessages(
   chatId: number,
   state: BackfillChatWindowState,
   window: BackfillWindow,
-  options: Pick<BackfillOptions, 'messageLimit' | 'requestDelayMs'>
+  options: Pick<BackfillOptions, 'messageLimit' | 'requestDelayMs'>,
+  stateOptions: { persistState: boolean } = { persistState: true }
 ): Promise<WindowBackfillResult> {
   let cursorMessageId = state.cursorMessageId;
   let fetchedMessages = 0;
@@ -545,7 +801,7 @@ async function fetchWindowMessages(
         chat_id: chatId,
         from_message_id: cursorMessageId,
         limit: options.messageLimit,
-        offset: -1,
+        offset: 0,
         only_local: false
       })
     );
@@ -589,13 +845,15 @@ async function fetchWindowMessages(
       cursorMessageId = nextCursor;
     }
 
-    await setBackfillChatWindowState(database, chatId, {
-      ...state,
-      ...(cursorMessageId === undefined ? {} : { cursorMessageId }),
-      fetchedCount: state.fetchedCount + fetchedMessages,
-      reachedBeginning,
-      windowComplete
-    });
+    if (stateOptions.persistState) {
+      await setBackfillChatWindowState(database, chatId, {
+        ...state,
+        ...(cursorMessageId === undefined ? {} : { cursorMessageId }),
+        fetchedCount: state.fetchedCount + fetchedMessages,
+        reachedBeginning,
+        windowComplete
+      });
+    }
   }
 
   return {
@@ -659,6 +917,14 @@ function advanceSchedulerPastPhase(scheduler: BackfillSchedulerState): void {
   scheduler.phase = 'complete';
 }
 
+function subtractDays(date: Date, days: number): Date {
+  return new Date(date.getTime() - days * 24 * 60 * 60 * 1000);
+}
+
+function maxDate(first: Date, second: Date): Date {
+  return first > second ? first : second;
+}
+
 function tdMessageId(message: TdObject | undefined): number | undefined {
   return typeof message?.id === 'number' ? message.id : undefined;
 }
@@ -715,7 +981,7 @@ function parseFloodWaitSeconds(error: unknown): number | undefined {
 
 function isTdlibNotFound(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
-  return /\b404\b/.test(message) || message.includes('NOT_FOUND');
+  return /\b404\b/.test(message) || message.includes('NOT_FOUND') || message.includes('Not Found');
 }
 
 function isTdObject(value: TdObject | undefined): value is TdObject {

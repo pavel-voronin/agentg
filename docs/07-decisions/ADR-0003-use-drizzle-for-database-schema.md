@@ -7,7 +7,7 @@ Accepted for implementation.
 ## Context
 
 AgenTG needs a stable Postgres contract between Telegram ingestion code and
-durable storage. Hand-written bootstrap DDL was useful for the first smoke
+durable storage. Hand-written bootstrap DDL was useful for the first validation
 tests, but it makes schema ownership ambiguous and does not scale well as
 normalization and backfill evolve.
 
@@ -20,7 +20,8 @@ Use Drizzle for:
 - Type-safe insert and query code for Postgres.
 
 The schema lives in `packages/database/src/schema.ts`. Generated SQL migrations
-live in `drizzle/` and are applied explicitly with `npm run db:migrate`.
+live in `packages/database/drizzle/` and are applied explicitly with
+`npm run db:migrate`.
 
 ## Consequences
 

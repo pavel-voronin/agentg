@@ -30,6 +30,11 @@ export type BackfillChatWindowState = {
   windowStartIso: string;
 };
 
+export type CatchupState = {
+  lastCompletedAtIso: string;
+  version: 1;
+};
+
 export async function getBackfillSyncState(
   database: AppDatabase,
   chatId: number
@@ -64,6 +69,22 @@ export async function setBackfillSchedulerState(
   state: BackfillSchedulerState
 ): Promise<void> {
   await upsertSyncState(database, backfillSchedulerKey(), state);
+}
+
+export async function getCatchupState(database: AppDatabase): Promise<CatchupState | undefined> {
+  const rows = await database
+    .select({
+      value: telegramSyncState.value
+    })
+    .from(telegramSyncState)
+    .where(eq(telegramSyncState.key, catchupKey()))
+    .limit(1);
+
+  return parseCatchupState(rows[0]?.value);
+}
+
+export async function setCatchupState(database: AppDatabase, state: CatchupState): Promise<void> {
+  await upsertSyncState(database, catchupKey(), state);
 }
 
 export async function getBackfillChatWindowState(
@@ -128,6 +149,10 @@ function backfillSchedulerKey(): string {
 
 function backfillChatWindowKey(phase: Exclude<BackfillPhase, 'complete'>, chatId: number): string {
   return `telegram:backfill:v2:${phase}:${String(chatId)}`;
+}
+
+function catchupKey(): string {
+  return 'telegram:catchup:v1';
 }
 
 function parseBackfillSyncState(value: JsonObject | undefined): BackfillSyncState | undefined {
@@ -199,6 +224,17 @@ function parseBackfillChatWindowState(
     windowComplete: value.windowComplete,
     windowEndIso: value.windowEndIso,
     windowStartIso: value.windowStartIso
+  };
+}
+
+function parseCatchupState(value: JsonObject | undefined): CatchupState | undefined {
+  if (value?.version !== 1 || typeof value.lastCompletedAtIso !== 'string') {
+    return undefined;
+  }
+
+  return {
+    lastCompletedAtIso: value.lastCompletedAtIso,
+    version: 1
   };
 }
 
