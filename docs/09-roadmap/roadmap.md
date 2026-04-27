@@ -6,7 +6,7 @@
 - Implement TDLib sidecar boundary.
 - Authenticate as the Telegram user and persist the session.
 - Discover personal chats, groups, channels, and Saved Messages.
-- Implement historical message backfill with configurable limits.
+- Implement history templates, concrete targets, coverage intervals, and reconciliation into backfill jobs.
 - Store raw events in Postgres.
 - Build basic normalized message state for text-oriented messages.
 - Store attachment metadata without bulk-downloading payloads.

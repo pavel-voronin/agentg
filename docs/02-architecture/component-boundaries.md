@@ -12,6 +12,7 @@ Owns:
 - Fetching chat lists and historical messages.
 - Exposing a small internal API for client commands.
 - Passing raw Telegram facts to storage.
+- Executing historical fetch jobs requested by the history sync domain.
 
 Does not own:
 
@@ -26,7 +27,7 @@ Owns:
 - Postgres schema for raw events and current message state.
 - Idempotent writes.
 - Basic chat, user, message, reply, and attachment metadata.
-- Sync progress for historical backfill.
+- History templates, targets, coverage intervals, and backfill job state.
 
 Does not own:
 

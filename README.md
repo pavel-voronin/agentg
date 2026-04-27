@@ -9,7 +9,7 @@ The first implementation target is deliberately small and concrete:
 - log in as the user through Telegram client infrastructure;
 - synchronize the chat list;
 - read personal chats, groups, channels, and Saved Messages;
-- backfill visible text history where feasible;
+- maintain requested visible text history coverage;
 - persist text-oriented Telegram data into Postgres;
 - keep attachment payloads lazy while storing basic attachment metadata;
 - make new Telegram messages visible in Postgres shortly after they appear in the normal Telegram client.
@@ -22,5 +22,6 @@ The first implementation target is deliberately small and concrete:
 - [System Overview](docs/02-architecture/system-overview.md)
 - [Component Boundaries](docs/02-architecture/component-boundaries.md)
 - [Domain Map](docs/03-domains/domain-map.md)
+- [History Sync](docs/03-domains/history-sync.md)
 - [Data Model](docs/04-data/data-model.md)
 - [MVP](docs/09-roadmap/mvp.md)

@@ -4,7 +4,7 @@ This documentation is the source of truth for the AgenTG project. It is structur
 
 AgenTG is a Telegram client service for an external personal assistant. It is not the assistant itself, not a Telegram bot, and not a generic private-source memory platform.
 
-The current implementation baseline is the working Telegram foundation: authenticate as the user, synchronize chats, backfill visible text history where feasible, receive new updates, and store Telegram-shaped text data in Postgres.
+The current implementation baseline is the working Telegram foundation: authenticate as the user, synchronize chats, maintain requested visible text history coverage, receive new updates, and store Telegram-shaped text data in Postgres.
 
 Do not pre-document higher-level assistant behavior. Add it only after the Telegram client and storage loop work reliably and the next concrete task is selected.
 
@@ -21,7 +21,9 @@ Do not pre-document higher-level assistant behavior. Add it only after the Teleg
 - [Domain Map](03-domains/domain-map.md)
 - [Telegram Client](03-domains/telegram-client.md)
 - [Ingestion](03-domains/ingestion.md)
+- [History Sync](03-domains/history-sync.md)
 - [Data Model](04-data/data-model.md)
+- [History Sync Schema](04-data/history-sync-schema.md)
 - [TDLib Sidecar API](05-interfaces/tdlib-sidecar-api.md)
 - [Agent Gateway API](05-interfaces/agent-gateway-api.md)
 - [MVP](09-roadmap/mvp.md)
@@ -46,5 +48,5 @@ AgenTG should behave as a real Telegram client service first. It should ingest a
 Short formula:
 
 ```text
-Telegram user-client -> visible text sync -> Postgres
+Telegram user-client -> history coverage -> Postgres
 ```

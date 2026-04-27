@@ -16,7 +16,7 @@ Use Postgres for:
 - current message state
 - chats and users
 - attachment metadata
-- historical sync state
+- history templates, targets, coverage, and job state
 
 ## Consequences
 
@@ -24,7 +24,7 @@ Benefits:
 
 - simple local development stack
 - direct SQL inspection for the first acceptance checks
-- natural fit for current message state and sync progress
+- natural fit for current message state and history coverage
 - fewer moving parts while TDLib integration is still being proven
 
 Trade-offs:

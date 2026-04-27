@@ -21,19 +21,11 @@ npm run dev:gateway
 
 `npm run dev:telegram` runs the `@agentg/telegram` ingestion package. It owns the
 TDLib session, receives live Telegram updates, writes Telegram-shaped records to
-Postgres, publishes live integration events to NATS, runs startup catch-up for
-messages received while the worker was offline, and starts resumable historical
-backfill in the same process.
+Postgres, publishes live integration events to NATS, and runs history sync work
+in the same process.
 
-Use `BACKFILL_MESSAGE_LIMIT`, `BACKFILL_WINDOW_DAYS`,
-`CATCHUP_BOOTSTRAP_LOOKBACK_DAYS`, `CATCHUP_WINDOW_DAYS`, and
-`BACKFILL_REQUEST_DELAY_MS` to tune local sync speed.
-`BACKFILL_CHAT_LOAD_BATCH_SIZE` controls how many chats TDLib is asked to load
-per chat-list discovery request; it is not a cap on total synced chats.
-
-```bash
-BACKFILL_MESSAGE_LIMIT=25 BACKFILL_WINDOW_DAYS=7 CATCHUP_WINDOW_DAYS=1 BACKFILL_REQUEST_DELAY_MS=2000 npm run dev:telegram
-```
+History sync policy is described by templates and concrete chat targets. See
+[History Sync](../03-domains/history-sync.md).
 
 `npm run dev:gateway` runs the `@agentg/gateway` package. It subscribes to live
 NATS events and serves WebSocket clients with Postgres-backed read RPCs.
@@ -64,7 +56,7 @@ Expected flow:
 2. Apply migrations with `npm run db:migrate`.
 3. Start Telegram ingestion with `npm run dev:telegram`.
 4. Authenticate as the Telegram user if no session exists.
-5. Confirm that chats and historical messages appear in Postgres.
+5. Confirm that chats, messages, history targets, and coverage appear in Postgres.
 6. Send a text message to Saved Messages from the normal Telegram client.
 7. Query Postgres and verify that the same message was persisted with Telegram
    chat and message identifiers.

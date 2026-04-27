@@ -6,7 +6,7 @@ Retention policy is not final yet.
 
 - Keep raw events during early development for replay and debugging.
 - Keep current message state as long as the user wants Telegram memory.
-- Keep sync state long enough to resume backfill safely.
+- Keep history targets, coverage, and job state long enough to resume history sync safely.
 
 ## Open Questions
 

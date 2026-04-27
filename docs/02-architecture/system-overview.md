@@ -2,7 +2,7 @@
 
 AgenTG is a Telegram user-client service backed by Postgres.
 
-The first architecture is intentionally simple. It should prove that the system can log in as the user, synchronize Telegram chats and visible text history, receive live updates, and persist Telegram-shaped data for later use.
+The first architecture is intentionally simple. It should prove that the system can log in as the user, synchronize Telegram chats, maintain requested visible text history coverage, receive live updates, and persist Telegram-shaped data for later use.
 
 ## First Architecture
 
@@ -20,7 +20,7 @@ Additional APIs should be documented only after this loop works reliably.
 1. AgenTG is a Telegram client service, not a Telegram bot.
 2. The normal Telegram client and AgenTG should observe the same visible text messages.
 3. New visible text messages should appear in Postgres shortly after Telegram receives them.
-4. Historical sync should aim for full visible text coverage where feasible.
+4. Historical sync should converge requested history targets into covered timelines.
 5. Attachment payloads are lazy; attachment metadata is stored first.
 6. Telegram identifiers and semantics must remain available in storage.
 7. The first implementation should only depend on the Telegram client, the sidecar runtime, and Postgres.
@@ -49,8 +49,8 @@ NATS Core is used as an internal, non-durable event bus. Postgres remains the so
 
 The preferred starting runtime is TypeScript/Node.js, provided TDLib can be integrated reliably through its JSON/C interface or a maintained wrapper. Go or Rust remain fallback choices if the Node.js integration becomes the risky part of the project.
 
-This first layer should prove authentication, update reception, chat discovery, historical message backfill, message persistence, and database inspectability for personal chats, groups, and channels. It should focus on text messages and text-bearing message content first.
+This first layer should prove authentication, update reception, chat discovery, history target reconciliation, message persistence, and database inspectability for personal chats, groups, and channels. It should focus on text messages and text-bearing message content first.
 
-The first implementation should support backfill as a capability without hard-coding the final data volume policy. Fetching all private chat history may be reasonable; fetching all history from large long-lived channels may not be. Those limits should be configurable.
+The first implementation should support history coverage as a desired-state capability. Product policy should live in history templates and concrete chat targets, not in a global backfill scheduler.
 
 The product preference is complete visible text coverage: if the user can see text content in the normal Telegram client, AgenTG should aim to persist it. Attachment payloads can remain lazy and request-driven.

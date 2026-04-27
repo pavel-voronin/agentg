@@ -15,8 +15,8 @@ The system can connect to the user's Telegram account, read personal chats, grou
 - Authentication and session persistence.
 - Reading personal chats, groups, and channels.
 - Chat list synchronization.
-- Historical message backfill as a mechanism.
-- Backfill should target all accessible chats and channels, with depth controlled by practical limits.
+- History sync as a desired-state mechanism.
+- History templates, concrete chat targets, coverage intervals, and backfill jobs.
 - Text messages and text-bearing message content.
 - Text visible to the user's normal Telegram client is the primary data target.
 - Replies and reply references where available.
@@ -36,9 +36,9 @@ The system can connect to the user's Telegram account, read personal chats, grou
 - The system can ingest Telegram updates.
 - The system can authenticate and resume a Telegram user session.
 - Personal chats, groups, and channels can be discovered.
-- The system can backfill historical messages according to configurable depth limits.
-- Personal chat history starts backfilling automatically.
-- Channel history starts backfilling automatically, with practical depth limits if full history is too expensive or slow.
+- The system can materialize history targets for known chats.
+- The system can record coverage intervals and derive backfill jobs for missing intervals.
+- Live updates and historical fetches both paint the same coverage timeline.
 - Incoming text-oriented messages are written to Postgres.
 - Replies preserve enough references to reconstruct local context.
 - A developer can inspect chats and messages in Postgres and verify that connectivity and persistence work.
@@ -54,10 +54,10 @@ The first convincing success signal is database-visible Telegram parity:
 
 If Telegram shows a new message notification but AgenTG does not persist the corresponding message, Phase 1 is not working yet.
 
-## Historical Sync Target
+## History Sync Target
 
-The ideal target is full visible text history: every text message, post caption, and text-bearing item that the user can see in the normal Telegram client should eventually be represented in AgenTG storage.
+The ideal target is requested visible text history coverage: every text message, post caption, and text-bearing item covered by an active history target should eventually be represented in AgenTG storage.
 
 Attachments are not part of the initial bulk target. Store enough metadata to know that an attachment exists, but download or process attachment payloads only on request or in later dedicated pipelines.
 
-If full channel history is too large or slow to fetch immediately, the implementation may use configurable depth limits. This is a practical sync policy, not a product preference: the desired end state remains complete visible text coverage where feasible.
+Full history, rolling recent windows, and targeted historical ranges are represented as history targets. Backfill jobs are only execution details derived from target minus coverage.

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { normalizeTelegramUpdate } from './normalize.js';
+import { normalizeHistoricalMessage, normalizeTelegramUpdate } from './normalize.js';
 
 describe('normalizeTelegramUpdate', () => {
   it('normalizes new text messages', () => {
@@ -112,6 +112,50 @@ describe('normalizeTelegramUpdate', () => {
       fromCache: true,
       isPermanent: false,
       messageIds: ['42']
+    });
+  });
+
+  it('escapes nul bytes in raw historical poll payloads for jsonb storage', () => {
+    const normalized = normalizeHistoricalMessage({
+      _: 'message',
+      chat_id: -100,
+      content: {
+        _: 'messagePoll',
+        poll: {
+          _: 'poll',
+          options: [
+            {
+              _: 'pollOption',
+              id: String.fromCharCode(0),
+              text: {
+                _: 'formattedText',
+                entities: [],
+                text: 'Option'
+              }
+            }
+          ]
+        }
+      },
+      date: 1777130000,
+      id: 42,
+      sender_id: {
+        _: 'messageSenderUser',
+        user_id: 927300
+      }
+    });
+
+    expect(JSON.stringify(normalized?.event?.payload)).not.toContain(String.fromCharCode(0));
+    expect(JSON.stringify(normalized?.event?.payload)).toContain('\\\\u0000');
+    expect(normalized?.message?.raw).toMatchObject({
+      content: {
+        poll: {
+          options: [
+            {
+              id: '\\u0000'
+            }
+          ]
+        }
+      }
     });
   });
 });

@@ -2,7 +2,7 @@
 
 The data model starts from Telegram, not from a generic message abstraction.
 
-The first implementation should focus on Postgres tables needed to inspect connectivity and text-oriented message ingestion: chats, users or senders, raw events, messages, replies, timestamps, identifiers, sync progress, and basic attachment metadata.
+The first implementation should focus on Postgres tables needed to inspect connectivity and text-oriented message ingestion: chats, users or senders, raw events, messages, replies, timestamps, identifiers, history coverage, and basic attachment metadata.
 
 ## Stores
 
@@ -15,6 +15,10 @@ telegram_files
 telegram_reactions
 telegram_topics
 telegram_sync_state
+history_templates
+history_targets
+history_coverage
+backfill_jobs
 ```
 
 For the first implementation, the minimum practical subset is:
@@ -25,6 +29,9 @@ telegram_messages
 telegram_chats
 telegram_users
 telegram_sync_state
+history_targets
+history_coverage
+backfill_jobs
 ```
 
 Add more tables when the Telegram data being ingested needs them.
@@ -69,13 +76,19 @@ Purpose:
 - evidence lookup
 - later API reads
 
-## Sync State
+## History Sync State
 
-`telegram_sync_state` tracks historical backfill progress and live-update checkpoints per chat where needed.
+History sync state tracks desired coverage, factual coverage, and executable work.
 
 Purpose:
 
-- resume backfill after restart
-- avoid repeated historical fetches
-- inspect sync progress per chat
-- separate live update ingestion from historical sync
+- store templates that materialize targets for matching chats
+- store concrete history targets per chat
+- store merged coverage intervals per chat
+- resume backfill jobs after restart
+- avoid repeated historical fetches for already covered intervals
+- inspect target coverage and missing intervals per chat
+
+See [History Sync](../03-domains/history-sync.md).
+See [History Sync Schema](history-sync-schema.md) for the pre-implementation
+table shape.

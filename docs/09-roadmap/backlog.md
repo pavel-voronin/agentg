@@ -16,7 +16,7 @@
 - Draft SQL schema for messages.
 - Draft SQL schema for chats.
 - Draft SQL schema for users or sender records.
-- Draft sync state tables for chat list and historical backfill progress.
+- Draft SQL schema for history templates, targets, coverage intervals, and backfill jobs.
 - Draft SQL schemas for participants, files, reactions, and topics after the first text-message loop works.
 - Decide retention defaults.
 
@@ -24,7 +24,7 @@
 
 - Define MVP Telegram API subset.
 - Define how personal chats, groups, and channels are discovered and synchronized.
-- Define default historical backfill depth for private chats, groups, and channels.
+- Define default history templates for private chats, groups, channels, and Saved Messages.
 - Define how replies and forwarded messages are represented in the first schema.
 - Define long-term Telegram API coverage strategy.
 - Define how service events, media, topics, and reactions are normalized after text-message ingestion works.

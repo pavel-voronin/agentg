@@ -9,6 +9,8 @@ TDLib update
   -> inspectable chats and messages
 ```
 
-The first implementation proves that the system can authenticate, receive Telegram data, synchronize the chat list, backfill historical messages, and persist text-oriented chats and messages.
+The first implementation proves that the system can authenticate, receive Telegram data, synchronize the chat list, maintain requested history coverage, and persist text-oriented chats and messages.
 
-Historical backfill is a mechanism, not a fixed product policy. The system should be able to load older messages; the exact depth can be adjusted for private chats, groups, and channels after real limits are known.
+History sync is a desired-state loop. Templates materialize concrete chat targets, coverage records which intervals are already covered, and the reconciler derives backfill jobs for missing intervals.
+
+See [History Sync](../03-domains/history-sync.md).

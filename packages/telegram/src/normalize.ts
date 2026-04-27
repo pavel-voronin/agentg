@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-import type { JsonObject } from '@agentg/shared/json';
+import type { JsonObject, JsonValue } from '@agentg/shared/json';
 
 export type { JsonObject, JsonValue } from '@agentg/shared/json';
 
@@ -403,5 +403,23 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
 }
 
 function toJsonObject(value: unknown): JsonObject {
-  return JSON.parse(JSON.stringify(value)) as JsonObject;
+  return sanitizeJsonValue(JSON.parse(JSON.stringify(value))) as JsonObject;
+}
+
+function sanitizeJsonValue(value: JsonValue): JsonValue {
+  if (typeof value === 'string') {
+    return value.replaceAll('\u0000', '\\u0000');
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(sanitizeJsonValue);
+  }
+
+  if (typeof value === 'object' && value !== null) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [key, sanitizeJsonValue(entry)])
+    );
+  }
+
+  return value;
 }

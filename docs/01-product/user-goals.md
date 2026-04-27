@@ -15,7 +15,7 @@ AgenTG is not the assistant itself and not a Telegram bot. It is the Telegram cl
 - Authenticate as the user through Telegram client infrastructure.
 - Read personal chats, groups, channels, and Saved Messages.
 - Synchronize the chat list.
-- Backfill visible text history where feasible.
+- Maintain requested visible text history coverage.
 - Persist incoming text-oriented message data in Postgres.
 - Preserve replies, message identifiers, chat identifiers, sender identifiers, timestamps, and enough Telegram metadata to rebuild useful current state.
 - Store attachment metadata initially.
