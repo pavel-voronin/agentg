@@ -3,5 +3,6 @@ dist/
 coverage/
 .env
 .env.local
+.claude/settings.local.json
 td-data/
 npm-debug.log*

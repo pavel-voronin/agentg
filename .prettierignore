@@ -3,4 +3,5 @@ coverage
 node_modules
 td-data
 docs
-drizzle/meta
+.claude/settings.local.json
+**/drizzle/meta

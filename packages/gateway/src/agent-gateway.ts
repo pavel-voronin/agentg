@@ -10,10 +10,13 @@ import { and, desc, eq, ilike, sql } from 'drizzle-orm';
 import { WebSocket, WebSocketServer, type RawData } from 'ws';
 
 import { callHistoryMethod } from './history-observability.js';
+import { historyBrowserScript } from './history/history-browser-script.js';
+import { historyPageStyles } from './history/history-styles.js';
 import { historyPageHtml } from './history-page.js';
 
 const require = createRequire(import.meta.url);
 const tailwindBrowserScript = readFileSync(require.resolve('@tailwindcss/browser'), 'utf8');
+const vueGlobalScript = readFileSync(require.resolve('vue/dist/vue.global.prod.js'), 'utf8');
 
 export type AgentGatewayConfig = {
   host: string;
@@ -301,6 +304,21 @@ function handleHttpRequest(
 
   if (parsed.pathname === '/history/tailwindcss-browser.js') {
     sendHttp(response, 200, 'text/javascript; charset=utf-8', tailwindBrowserScript);
+    return;
+  }
+
+  if (parsed.pathname === '/history/history.css') {
+    sendHttp(response, 200, 'text/css; charset=utf-8', historyPageStyles);
+    return;
+  }
+
+  if (parsed.pathname === '/history/vue.global.prod.js') {
+    sendHttp(response, 200, 'text/javascript; charset=utf-8', vueGlobalScript);
+    return;
+  }
+
+  if (parsed.pathname === '/history/history-client.js') {
+    sendHttp(response, 200, 'text/javascript; charset=utf-8', historyBrowserScript);
     return;
   }
 
