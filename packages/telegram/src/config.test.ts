@@ -13,9 +13,6 @@ describe('loadTelegramIngestionConfig', () => {
     expect(config).toMatchObject({
       backfill: {
         chatLoadBatchSize: 100,
-        catchupBootstrapLookbackDays: 31,
-        catchupOverlapDays: 2,
-        catchupWindowDays: 7,
         messageLimit: 100,
         requestDelayMs: 1000,
         windowDays: 31

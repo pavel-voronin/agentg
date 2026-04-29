@@ -1,8 +1,7 @@
 # History Sync Schema
 
-This is the pre-implementation data shape for history sync. It records the
-domain model from [History Sync](../03-domains/history-sync.md) without yet
-committing to generated SQL migrations.
+This is the data shape for history sync. It records the domain model from
+[History Sync](../03-domains/history-sync.md).
 
 ## Tables
 
@@ -79,7 +78,8 @@ There can be more than one target for the same chat. A chat can have, for
 example, one rolling recent target and one absolute historical target.
 
 For one chat, targets with the same range describe the same desired coverage and
-should be coalesced rather than duplicated.
+are coalesced rather than duplicated. Storage enforces uniqueness for
+`telegram_chat_id + range`.
 
 ## history_coverage
 
@@ -126,14 +126,18 @@ updated_at
 - `id`: job identifier.
 - `telegram_chat_id`: concrete Telegram chat identifier.
 - `start_at`, `end_at`: absolute interval to fetch.
-- `status`: job lifecycle state.
+- `status`: queue state, either `pending` or `running`.
 - `cursor`: current paging position when a job has started.
 - `created_at`, `updated_at`: storage timestamps.
 
 Jobs are derived from targets minus coverage. They are not product policy.
+Successfully finished jobs are deleted immediately after coverage is written;
+`backfill_jobs` is a work queue, not a historical log.
 
 Runnable jobs are ordered by missing intervals closest to the present first.
 This ordering rule is not represented as a stored priority field.
+
+Storage enforces uniqueness for `telegram_chat_id + start_at + end_at`.
 
 ## Derived Views
 

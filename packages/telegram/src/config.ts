@@ -9,9 +9,6 @@ const dotenvDirectory = loadNearestDotenv();
 export type TelegramIngestionConfig = {
   backfill: {
     chatLoadBatchSize: number;
-    catchupBootstrapLookbackDays: number;
-    catchupOverlapDays: number;
-    catchupWindowDays: number;
     messageLimit: number;
     requestDelayMs: number;
     windowDays: number;
@@ -33,14 +30,6 @@ export function loadTelegramIngestionConfig(
       chatLoadBatchSize:
         parseOptionalInteger(env.BACKFILL_CHAT_LOAD_BATCH_SIZE, 'BACKFILL_CHAT_LOAD_BATCH_SIZE') ??
         100,
-      catchupBootstrapLookbackDays:
-        parseOptionalInteger(
-          env.CATCHUP_BOOTSTRAP_LOOKBACK_DAYS,
-          'CATCHUP_BOOTSTRAP_LOOKBACK_DAYS'
-        ) ?? 31,
-      catchupOverlapDays:
-        parseOptionalInteger(env.CATCHUP_OVERLAP_DAYS, 'CATCHUP_OVERLAP_DAYS') ?? 2,
-      catchupWindowDays: parseOptionalInteger(env.CATCHUP_WINDOW_DAYS, 'CATCHUP_WINDOW_DAYS') ?? 7,
       messageLimit:
         parseOptionalInteger(env.BACKFILL_MESSAGE_LIMIT, 'BACKFILL_MESSAGE_LIMIT') ?? 100,
       requestDelayMs:

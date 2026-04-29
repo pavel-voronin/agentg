@@ -3,6 +3,7 @@ import { createIntegrationEvent, type IntegrationEvent } from './envelope.js';
 
 export type TelegramEventPersistResult = {
   chat: boolean;
+  chatFolders: boolean;
   message: boolean;
 };
 
@@ -37,8 +38,18 @@ export type TelegramEventMessageDelete = {
   messageIds: string[];
 };
 
+export type TelegramEventChatFolder = {
+  iconName?: string;
+  id: number;
+  position: number;
+  title: string;
+};
+
 export type TelegramEventSourceUpdate = {
   chat?: TelegramEventChat;
+  chatFolders?: {
+    folders: TelegramEventChatFolder[];
+  };
   contentUpdate?: TelegramEventMessageContentUpdate;
   delete?: TelegramEventMessageDelete;
   message?: TelegramEventMessage;
@@ -64,6 +75,23 @@ export function createTelegramIntegrationEvents(
         },
         meta: {
           chatId: update.chat.id
+        }
+      })
+    );
+  }
+
+  if (result.chatFolders && update.chatFolders !== undefined) {
+    events.push(
+      createIntegrationEvent({
+        type: 'telegram.chat_folders.updated',
+        source: 'telegram',
+        data: {
+          folders: update.chatFolders.folders.map((folder) => ({
+            iconName: folder.iconName ?? null,
+            id: folder.id,
+            position: folder.position,
+            title: folder.title
+          }))
         }
       })
     );

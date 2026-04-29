@@ -12,6 +12,8 @@
   "dependencies": {
     "@agentg/database": "file:../database",
     "@agentg/shared": "file:../shared",
+    "@agentg/telegram": "file:../telegram",
+    "@tailwindcss/browser": "^4.2.4",
     "dotenv": "17.4.2",
     "drizzle-orm": "^0.45.2",
     "nats": "^2.29.3",
@@ -21,6 +23,7 @@
   "devDependencies": {
     "@types/node": "24.10.0",
     "@types/ws": "^8.18.1",
+    "tailwindcss": "^4.2.4",
     "tsx": "4.21.0",
     "typescript": "6.0.3",
     "vite": "8.0.10"

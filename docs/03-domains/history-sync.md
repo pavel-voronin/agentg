@@ -29,6 +29,9 @@ Examples:
 Templates are not executed directly. They materialize concrete
 `HistoryTarget` objects for concrete chats.
 
+If there are no templates and no concrete targets, history backfill is disabled:
+the reconciler has no desired coverage to pursue.
+
 ## HistoryTarget
 
 `HistoryTarget` is the desired history coverage for one concrete chat.
@@ -99,6 +102,10 @@ current paging position, if already started
 
 The executor runs jobs, fetches Telegram history, persists messages, and extends
 coverage for the interval it covered.
+
+Completed jobs are not retained as queue rows. Once a job successfully extends
+coverage, it is deleted from `backfill_jobs`; durable completion history belongs
+to events/logs, not to the work queue.
 
 ## HistoryReconciler
 

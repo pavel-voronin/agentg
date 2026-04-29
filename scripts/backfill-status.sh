@@ -4,46 +4,56 @@ set -euo pipefail
 compose=(docker compose)
 psql=("${compose[@]}" exec -T postgres psql -U agentg -d agentg)
 
-echo "== Backfill scheduler =="
+echo "== History sync objects =="
 "${psql[@]}" -c "
 select
-  value->>'phase' as phase,
-  value->>'privateWindowEndIso' as private_window_end,
-  value->>'groupChannelWindowEndIso' as group_channel_window_end,
-  updated_at
-from telegram_sync_state
-where key = 'telegram:backfill:v2:scheduler';
+  (select count(*) from history_templates) as templates,
+  (select count(*) from history_targets) as targets,
+  (select count(*) from history_coverage) as coverage_intervals,
+  (select count(*) from backfill_jobs) as backfill_jobs;
 "
 
 echo
-echo "== Window progress by phase =="
+echo "== Backfill jobs by status =="
 "${psql[@]}" -c "
 select
-  value->>'phase' as phase,
-  count(*) as states,
-  count(*) filter (where (value->>'windowComplete')::boolean) as complete,
-  count(*) filter (where not (value->>'windowComplete')::boolean) as incomplete,
-  sum((value->>'fetchedCount')::bigint) as fetched,
+  status,
+  count(*) as jobs,
+  min(start_at) as oldest_start,
+  max(end_at) as newest_end,
   max(updated_at) as last_update
-from telegram_sync_state
-where key like 'telegram:backfill:v2:%:%'
-group by value->>'phase'
-order by phase;
+from backfill_jobs
+group by status
+order by status;
 "
 
 echo
-echo "== Incomplete windows =="
+echo "== Runnable jobs =="
 "${psql[@]}" -c "
 select
-  replace(replace(key, 'telegram:backfill:v2:', ''), ':', ' / ') as window,
-  value->>'windowStartIso' as window_start,
-  value->>'windowEndIso' as window_end,
-  (value->>'fetchedCount')::bigint as fetched,
-  value->>'cursorMessageId' as cursor_message_id,
-  updated_at as last_update
-from telegram_sync_state
-where key like 'telegram:backfill:v2:%:%'
-  and not (value->>'windowComplete')::boolean
-order by updated_at desc
+  id,
+  telegram_chat_id,
+  start_at,
+  end_at,
+  status,
+  cursor is not null as has_cursor,
+  updated_at
+from backfill_jobs
+where status in ('pending', 'running')
+order by end_at desc, start_at desc
+limit 25;
+"
+
+echo
+echo "== Coverage by chat =="
+"${psql[@]}" -c "
+select
+  telegram_chat_id,
+  count(*) as intervals,
+  min(start_at) as oldest_coverage,
+  max(end_at) as newest_coverage
+from history_coverage
+group by telegram_chat_id
+order by newest_coverage desc
 limit 25;
 "

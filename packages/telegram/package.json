@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     "./config": "./src/config.ts",
+    "./history-sync/observability": "./src/history-sync/observability.ts",
     "./ingestion": "./src/ingestion.ts",
     "./normalize": "./src/normalize.ts"
   },

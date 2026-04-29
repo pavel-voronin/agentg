@@ -30,9 +30,23 @@ export type NormalizedTelegramChat = {
 export type NormalizedTelegramUser = {
   id: string;
   firstName: string;
+  isSelf?: boolean;
   lastName: string;
   username?: string;
   isBot: boolean;
+  raw: JsonObject;
+};
+
+export type NormalizedTelegramChatFolder = {
+  iconName?: string;
+  id: number;
+  position: number;
+  raw: JsonObject;
+  title: string;
+};
+
+export type NormalizedTelegramChatFolders = {
+  folders: NormalizedTelegramChatFolder[];
   raw: JsonObject;
 };
 
@@ -67,6 +81,7 @@ export type NormalizedTelegramMessageDelete = {
 
 export type NormalizedTelegramUpdate = {
   chat?: NormalizedTelegramChat;
+  chatFolders?: NormalizedTelegramChatFolders;
   contentUpdate?: NormalizedTelegramMessageContentUpdate;
   delete?: NormalizedTelegramMessageDelete;
   event?: RawTelegramEvent;
@@ -94,6 +109,11 @@ export function normalizeTelegramUpdate(update: unknown): NormalizedTelegramUpda
     if (normalizedUser !== undefined) {
       normalized.user = normalizedUser;
     }
+  } else if (tdUpdate._ === 'updateChatFolders') {
+    const chatFolders = normalizeChatFolders(tdUpdate);
+    if (chatFolders !== undefined) {
+      normalized.chatFolders = chatFolders;
+    }
   } else if (tdUpdate._ === 'updateNewMessage') {
     const message = asTdObject(tdUpdate.message);
     const normalizedMessage = normalizeMessage(message);
@@ -115,6 +135,25 @@ export function normalizeTelegramUpdate(update: unknown): NormalizedTelegramUpda
   normalized.event = normalizeRawEvent(tdUpdate, normalized);
 
   return normalized;
+}
+
+export function normalizeChatFolders(
+  update: TdObject | undefined
+): NormalizedTelegramChatFolders | undefined {
+  if (update === undefined || !Array.isArray(update.chat_folders)) {
+    return undefined;
+  }
+
+  const folders = update.chat_folders
+    .map(asTdObject)
+    .filter((folder): folder is TdObject => folder !== undefined)
+    .map(normalizeChatFolderInfo)
+    .filter((folder): folder is NormalizedTelegramChatFolder => folder !== undefined);
+
+  return {
+    folders,
+    raw: toJsonObject(update)
+  };
 }
 
 export function normalizeMessageContentUpdate(
@@ -196,11 +235,14 @@ export function normalizeChat(chat: TdObject | undefined): NormalizedTelegramCha
     id,
     raw: toJsonObject(chat),
     title: typeof chat.title === 'string' ? chat.title : '',
-    type: extractTdType(chat.type)
+    type: normalizeChatType(chat.type)
   };
 }
 
-export function normalizeUser(user: TdObject | undefined): NormalizedTelegramUser | undefined {
+export function normalizeUser(
+  user: TdObject | undefined,
+  options: { isSelf?: boolean } = {}
+): NormalizedTelegramUser | undefined {
   if (user === undefined) {
     return undefined;
   }
@@ -216,6 +258,7 @@ export function normalizeUser(user: TdObject | undefined): NormalizedTelegramUse
     firstName: typeof user.first_name === 'string' ? user.first_name : '',
     id,
     isBot: extractTdType(user.type) === 'userTypeBot',
+    ...(options.isSelf === true ? { isSelf: true } : {}),
     lastName: typeof user.last_name === 'string' ? user.last_name : '',
     raw: toJsonObject(user),
     ...(username === undefined ? {} : { username })
@@ -339,6 +382,47 @@ function extractActiveUsername(user: TdObject): string | undefined {
     : undefined;
 }
 
+function normalizeChatFolderInfo(
+  folder: TdObject,
+  position: number
+): NormalizedTelegramChatFolder | undefined {
+  const id = extractSafeInteger(folder.id ?? folder.chat_folder_id ?? folder.chatFolderId);
+  if (id === undefined) {
+    return undefined;
+  }
+
+  const title = extractChatFolderTitle(folder) ?? `Folder ${String(id)}`;
+  const iconName = extractChatFolderIconName(folder);
+
+  return {
+    id,
+    position,
+    raw: toJsonObject(folder),
+    title,
+    ...(iconName === undefined ? {} : { iconName })
+  };
+}
+
+function extractChatFolderTitle(folder: TdObject): string | undefined {
+  const name = asRecord(folder.name);
+  const formattedText = asRecord(name?.text);
+  const formattedTitle = asRecord(folder.title);
+  const candidates = [
+    formattedText?.text,
+    name?.text,
+    folder.title,
+    formattedTitle?.text,
+    folder.name
+  ];
+
+  return candidates.find((value): value is string => typeof value === 'string' && value.length > 0);
+}
+
+function extractChatFolderIconName(folder: TdObject): string | undefined {
+  const icon = asRecord(folder.icon);
+  return typeof icon?.name === 'string' && icon.name.length > 0 ? icon.name : undefined;
+}
+
 function mapEventType(tdlibUpdateType: string): string {
   if (tdlibUpdateType === 'updateNewMessage') {
     return 'message_created';
@@ -350,6 +434,10 @@ function mapEventType(tdlibUpdateType: string): string {
 
   if (tdlibUpdateType === 'updateUser') {
     return 'user_seen';
+  }
+
+  if (tdlibUpdateType === 'updateChatFolders') {
+    return 'chat_folders_updated';
   }
 
   if (tdlibUpdateType === 'updateMessageContent') {
@@ -371,8 +459,37 @@ function unixSecondsToDate(value: unknown): Date | undefined {
   return typeof value === 'number' && value > 0 ? new Date(value * 1000) : undefined;
 }
 
+function extractSafeInteger(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isSafeInteger(value) ? value : undefined;
+}
+
 function extractTdType(value: unknown): string {
   return asTdObject(value)?._ ?? 'unknown';
+}
+
+function normalizeChatType(value: unknown): string {
+  const type = asTdObject(value);
+  if (type === undefined) {
+    return 'unknown';
+  }
+
+  if (type._ === 'chatTypePrivate') {
+    return 'private';
+  }
+
+  if (type._ === 'chatTypeSecret') {
+    return 'secret';
+  }
+
+  if (type._ === 'chatTypeBasicGroup') {
+    return 'group';
+  }
+
+  if (type._ === 'chatTypeSupergroup') {
+    return type.is_channel === true || type.isChannel === true ? 'channel' : 'group';
+  }
+
+  return type._;
 }
 
 function stringifyTelegramId(value: unknown): string | undefined {
@@ -403,7 +520,8 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
 }
 
 function toJsonObject(value: unknown): JsonObject {
-  return sanitizeJsonValue(JSON.parse(JSON.stringify(value))) as JsonObject;
+  const parsed: unknown = JSON.parse(JSON.stringify(value));
+  return sanitizeJsonValue(parsed as JsonValue) as JsonObject;
 }
 
 function sanitizeJsonValue(value: JsonValue): JsonValue {

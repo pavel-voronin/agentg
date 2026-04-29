@@ -14,7 +14,6 @@ telegram_users
 telegram_files
 telegram_reactions
 telegram_topics
-telegram_sync_state
 history_templates
 history_targets
 history_coverage
@@ -28,7 +27,7 @@ telegram_events
 telegram_messages
 telegram_chats
 telegram_users
-telegram_sync_state
+history_templates
 history_targets
 history_coverage
 backfill_jobs
@@ -90,5 +89,4 @@ Purpose:
 - inspect target coverage and missing intervals per chat
 
 See [History Sync](../03-domains/history-sync.md).
-See [History Sync Schema](history-sync-schema.md) for the pre-implementation
-table shape.
+See [History Sync Schema](history-sync-schema.md) for the table shape.

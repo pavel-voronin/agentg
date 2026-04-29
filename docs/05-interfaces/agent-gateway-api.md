@@ -30,6 +30,12 @@ npm run dev:telegram
 npm run dev:gateway
 ```
 
+History observability page:
+
+```text
+http://127.0.0.1:8787/history
+```
+
 Start Gateway from Docker:
 
 ```sh
@@ -155,3 +161,66 @@ Errors:
   "chatId": "123"
 }
 ```
+
+## History Observability Methods
+
+Gateway exposes these methods over WebSocket, but the API implementation belongs
+to the Telegram history-sync domain. Gateway delegates to
+`@agentg/telegram/history-sync/observability` and does not own history range,
+coverage, target, or job semantics.
+
+`history.getOverview`
+
+Returns chat, template, target, coverage, and job counters.
+
+`history.listChats`
+
+```json
+{
+  "query": "optional title or id filter",
+  "limit": 200
+}
+```
+
+`history.getChatHistoryState`
+
+```json
+{
+  "chatId": "123"
+}
+```
+
+Returns the selected chat, targets, projected desired intervals, coverage,
+missing intervals, and jobs.
+
+`history.upsertTarget`
+
+```json
+{
+  "chatId": "123",
+  "preset": "last30d"
+}
+```
+
+Supported presets are `last7d`, `last30d`, and `full`. A custom target can use
+`start` and `end` strings such as `past`, `now-30d`, `now`, or an absolute date.
+Gateway does not write `history_targets` directly. It sends a NATS request on
+`history.target.upsert.requested` and returns success only after the Telegram
+history domain writes the target. Telegram also emits `history.target.upserted`
+and wakes the reconciler in the same process.
+
+`history.requestSync`
+
+```json
+{
+  "chatId": "123"
+}
+```
+
+`chatId` is optional. The command is sent through NATS and consumed by the
+Telegram process when it is running.
+
+The Telegram history-sync actor is event-driven and single-flight. Startup,
+target changes, chat changes, and explicit sync requests wake it. If another
+wake-up arrives during a run, it performs another pass after the current run.
+There is no periodic polling loop.

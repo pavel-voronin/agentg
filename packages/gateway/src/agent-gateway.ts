@@ -1,4 +1,6 @@
-import { createServer, type Server } from 'node:http';
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
 
 import type { AppDatabase } from '@agentg/database/client';
 import { telegramChats, telegramMessages } from '@agentg/database/schema';
@@ -6,6 +8,12 @@ import type { EventBus, EventSubscription } from '@agentg/shared/events/bus';
 import type { IntegrationEvent } from '@agentg/shared/events/envelope';
 import { and, desc, eq, ilike, sql } from 'drizzle-orm';
 import { WebSocket, WebSocketServer, type RawData } from 'ws';
+
+import { callHistoryMethod } from './history-observability.js';
+import { historyPageHtml } from './history-page.js';
+
+const require = createRequire(import.meta.url);
+const tailwindBrowserScript = readFileSync(require.resolve('@tailwindcss/browser'), 'utf8');
 
 export type AgentGatewayConfig = {
   host: string;
@@ -35,7 +43,9 @@ type RpcResponse = {
 };
 
 export async function runAgentGateway(options: AgentGatewayOptions): Promise<void> {
-  const server = createServer();
+  const server = createServer((request, response) => {
+    handleHttpRequest(options.config, request, response);
+  });
   const webSocketServer = new WebSocketServer({ noServer: true });
   const clients = new Set<WebSocket>();
 
@@ -55,18 +65,25 @@ export async function runAgentGateway(options: AgentGatewayOptions): Promise<voi
     clients.add(client);
 
     client.on('message', (payload) => {
-      void handleClientMessage(options.database, client, rawDataToString(payload));
+      void handleClientMessage(options, client, rawDataToString(payload));
     });
     client.on('close', () => {
       clients.delete(client);
     });
   });
 
-  const subscription = options.eventBus.subscribe('telegram.message.created', (event) => {
-    broadcast(clients, {
-      event
-    });
-  });
+  const subscriptions = [
+    options.eventBus.subscribe('telegram.>', (event) => {
+      broadcast(clients, {
+        event
+      });
+    }),
+    options.eventBus.subscribe('history.>', (event) => {
+      broadcast(clients, {
+        event
+      });
+    })
+  ];
 
   await listen(server, options.config.host, options.config.port);
   console.log(
@@ -77,11 +94,11 @@ export async function runAgentGateway(options: AgentGatewayOptions): Promise<voi
     })
   );
 
-  await waitForShutdown(server, webSocketServer, subscription, options.eventBus);
+  await waitForShutdown(server, webSocketServer, subscriptions, options.eventBus);
 }
 
 async function handleClientMessage(
-  database: AppDatabase,
+  options: AgentGatewayOptions,
   client: WebSocket,
   payload: string
 ): Promise<void> {
@@ -121,7 +138,7 @@ async function handleClientMessage(
   }
 
   try {
-    const result = await callMethod(database, request.method, request.params);
+    const result = await callMethod(options, request.method, request.params);
     sendResponse(client, {
       id,
       result
@@ -138,24 +155,31 @@ async function handleClientMessage(
 }
 
 async function callMethod(
-  database: AppDatabase,
+  options: AgentGatewayOptions,
   method: string,
   params: unknown
 ): Promise<unknown> {
+  if (method.startsWith('history.')) {
+    const result = await callHistoryMethod(options, method, params);
+    if (result !== undefined) {
+      return result;
+    }
+  }
+
   if (method === 'telegram.getMessage') {
-    return getMessage(database, params);
+    return getMessage(options.database, params);
   }
 
   if (method === 'telegram.listRecentMessages') {
-    return listRecentMessages(database, params);
+    return listRecentMessages(options.database, params);
   }
 
   if (method === 'telegram.searchMessages') {
-    return searchMessages(database, params);
+    return searchMessages(options.database, params);
   }
 
   if (method === 'telegram.getChat') {
-    return getChat(database, params);
+    return getChat(options.database, params);
   }
 
   throw new Error(`Unknown method: ${method}`);
@@ -254,6 +278,48 @@ async function getChat(database: AppDatabase, params: unknown): Promise<unknown>
   };
 }
 
+function handleHttpRequest(
+  config: AgentGatewayConfig,
+  request: IncomingMessage,
+  response: ServerResponse
+): void {
+  const parsed = new URL(request.url ?? '/', 'http://localhost');
+  if (request.method !== 'GET') {
+    sendHttp(response, 405, 'text/plain; charset=utf-8', 'Method Not Allowed');
+    return;
+  }
+
+  if (parsed.pathname === '/history' || parsed.pathname === '/history/') {
+    if (!isAuthorized(request.url, config.token)) {
+      sendHttp(response, 401, 'text/plain; charset=utf-8', 'Unauthorized');
+      return;
+    }
+
+    sendHttp(response, 200, 'text/html; charset=utf-8', historyPageHtml);
+    return;
+  }
+
+  if (parsed.pathname === '/history/tailwindcss-browser.js') {
+    sendHttp(response, 200, 'text/javascript; charset=utf-8', tailwindBrowserScript);
+    return;
+  }
+
+  sendHttp(response, 404, 'text/plain; charset=utf-8', 'Not Found');
+}
+
+function sendHttp(
+  response: ServerResponse,
+  statusCode: number,
+  contentType: string,
+  body: string
+): void {
+  response.writeHead(statusCode, {
+    'content-length': Buffer.byteLength(body),
+    'content-type': contentType
+  });
+  response.end(body);
+}
+
 function isAuthorized(url: string | undefined, token: string | undefined): boolean {
   if (token === undefined || token.length === 0) {
     return true;
@@ -341,12 +407,14 @@ async function listen(server: Server, host: string, port: number): Promise<void>
 async function waitForShutdown(
   server: Server,
   webSocketServer: WebSocketServer,
-  subscription: EventSubscription,
+  subscriptions: EventSubscription[],
   eventBus: EventBus
 ): Promise<void> {
   await new Promise<void>((resolve) => {
     const shutdown = (): void => {
-      subscription.unsubscribe();
+      for (const subscription of subscriptions) {
+        subscription.unsubscribe();
+      }
       webSocketServer.close();
       server.close(() => {
         void eventBus.close().finally(resolve);
