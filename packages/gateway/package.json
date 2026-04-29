@@ -4,12 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "npm run build:server && npm run build:ui",
-    "build:server": "vite build",
-    "build:ui": "vite build --config vite.ui.config.ts",
-    "dev": "npm run build:ui && tsx watch --clear-screen=false src/main.ts",
+    "build": "vite build",
+    "dev": "tsx watch --clear-screen=false src/main.ts",
     "start": "node dist/main.js",
-    "typecheck": "vue-tsc --noEmit"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@agentg/database": "file:../database",
@@ -19,18 +17,13 @@
     "drizzle-orm": "^0.45.2",
     "nats": "^2.29.3",
     "pg": "8.20.0",
-    "vue": "^3.5.33",
     "ws": "^8.20.0"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "^4.2.4",
     "@types/node": "24.10.0",
     "@types/ws": "^8.18.1",
-    "@vitejs/plugin-vue": "^6.0.6",
-    "tailwindcss": "^4.2.4",
     "tsx": "4.21.0",
     "typescript": "6.0.3",
-    "vite": "8.0.10",
-    "vue-tsc": "^3.2.7"
+    "vite": "8.0.10"
   }
 }

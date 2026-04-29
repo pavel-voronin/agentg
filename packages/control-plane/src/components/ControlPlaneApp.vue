@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import { onMounted } from 'vue';
 
-import { mountGatewayAppRuntime, useGatewayAppView } from '../app-runtime.js';
+import { mountControlPlaneAppRuntime, useControlPlaneAppView } from '../app-runtime.js';
 import DashboardMetrics from './DashboardMetrics.vue';
 import EventsList from './EventsList.vue';
 
-const { dashboardMetrics, eventItems, hasEvents } = useGatewayAppView();
+const { dashboardMetrics, eventItems, hasEvents } = useControlPlaneAppView();
 
 onMounted(() => {
-  mountGatewayAppRuntime();
+  mountControlPlaneAppRuntime();
 });
 </script>
 
@@ -17,7 +17,7 @@ onMounted(() => {
     <header class="shrink-0 bg-zinc-100 px-4 py-3">
       <div class="flex flex-wrap items-center justify-between gap-3">
         <div class="min-w-0">
-          <h1 class="truncate text-base font-semibold tracking-normal">AgenTG Gateway UI</h1>
+          <h1 class="truncate text-base font-semibold tracking-normal">AgenTG Control Plane</h1>
           <div class="text-xs text-zinc-500">
             Chats, messages, targets, coverage, jobs, and events
           </div>

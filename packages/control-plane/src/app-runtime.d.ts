@@ -14,10 +14,10 @@ export type AppEventItem = {
   type: string;
 };
 
-export function useGatewayAppView(): {
+export function useControlPlaneAppView(): {
   dashboardMetrics: ComputedRef<DashboardMetric[]>;
   eventItems: ComputedRef<AppEventItem[]>;
   hasEvents: ComputedRef<boolean>;
 };
 
-export function mountGatewayAppRuntime(): void;
+export function mountControlPlaneAppRuntime(): void;

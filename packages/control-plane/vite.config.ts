@@ -3,11 +3,17 @@ import vue from '@vitejs/plugin-vue';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  base: '/ui/',
   build: {
     emptyOutDir: true,
-    outDir: '../../dist/ui'
+    outDir: 'dist'
   },
   plugins: [vue(), tailwindcss()],
-  root: 'src/ui'
+  preview: {
+    host: '127.0.0.1',
+    port: 8788
+  },
+  server: {
+    host: '127.0.0.1',
+    port: 8788
+  }
 });

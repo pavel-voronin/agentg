@@ -1,7 +1,4 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
-import { readFileSync } from 'node:fs';
-import { basename, dirname, isAbsolute, join, normalize } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import type { AppDatabase } from '@agentg/database/client';
 import { telegramChats, telegramMessages } from '@agentg/database/schema';
@@ -11,12 +8,6 @@ import { and, desc, eq, ilike, sql } from 'drizzle-orm';
 import { WebSocket, WebSocketServer, type RawData } from 'ws';
 
 import { callHistoryMethod } from './history-observability.js';
-
-const gatewayModuleDirectory = dirname(fileURLToPath(import.meta.url));
-const uiDistDirectory =
-  basename(gatewayModuleDirectory) === 'dist'
-    ? join(gatewayModuleDirectory, 'ui')
-    : join(gatewayModuleDirectory, '..', 'dist', 'ui');
 
 export type AgentGatewayConfig = {
   host: string;
@@ -47,7 +38,7 @@ type RpcResponse = {
 
 export async function runAgentGateway(options: AgentGatewayOptions): Promise<void> {
   const server = createServer((request, response) => {
-    handleHttpRequest(options.config, request, response);
+    handleHttpRequest(request, response);
   });
   const webSocketServer = new WebSocketServer({ noServer: true });
   const clients = new Set<WebSocket>();
@@ -281,86 +272,23 @@ async function getChat(database: AppDatabase, params: unknown): Promise<unknown>
   };
 }
 
-function handleHttpRequest(
-  config: AgentGatewayConfig,
-  request: IncomingMessage,
-  response: ServerResponse
-): void {
-  const parsed = new URL(request.url ?? '/', 'http://localhost');
+function handleHttpRequest(request: IncomingMessage, response: ServerResponse): void {
   if (request.method !== 'GET') {
     sendHttp(response, 405, 'text/plain; charset=utf-8', 'Method Not Allowed');
-    return;
-  }
-
-  if (parsed.pathname === '/ui' || parsed.pathname === '/ui/') {
-    if (!isAuthorized(request.url, config.token)) {
-      sendHttp(response, 401, 'text/plain; charset=utf-8', 'Unauthorized');
-      return;
-    }
-
-    sendUiAsset(response, 'index.html');
-    return;
-  }
-
-  if (parsed.pathname.startsWith('/ui/')) {
-    sendUiAsset(response, parsed.pathname.slice('/ui/'.length));
     return;
   }
 
   sendHttp(response, 404, 'text/plain; charset=utf-8', 'Not Found');
 }
 
-function sendUiAsset(response: ServerResponse, relativePath: string): void {
-  const assetPath = resolveUiAssetPath(relativePath.length === 0 ? 'index.html' : relativePath);
-  if (assetPath === undefined) {
-    sendHttp(response, 404, 'text/plain; charset=utf-8', 'Not Found');
-    return;
-  }
-
-  try {
-    sendHttp(response, 200, contentTypeForPath(assetPath), readFileSync(assetPath));
-  } catch {
-    sendHttp(response, 404, 'text/plain; charset=utf-8', 'Not Found');
-  }
-}
-
-function resolveUiAssetPath(relativePath: string): string | undefined {
-  let decodedPath: string;
-  try {
-    decodedPath = decodeURIComponent(relativePath);
-  } catch {
-    return undefined;
-  }
-
-  const normalizedPath = normalize(decodedPath);
-  if (normalizedPath === '.' || normalizedPath.startsWith('..') || isAbsolute(normalizedPath)) {
-    return undefined;
-  }
-
-  return join(uiDistDirectory, normalizedPath);
-}
-
-function contentTypeForPath(path: string): string {
-  if (path.endsWith('.html')) return 'text/html; charset=utf-8';
-  if (path.endsWith('.css')) return 'text/css; charset=utf-8';
-  if (path.endsWith('.js')) return 'text/javascript; charset=utf-8';
-  if (path.endsWith('.json')) return 'application/json; charset=utf-8';
-  if (path.endsWith('.svg')) return 'image/svg+xml';
-  if (path.endsWith('.png')) return 'image/png';
-  if (path.endsWith('.jpg') || path.endsWith('.jpeg')) return 'image/jpeg';
-  if (path.endsWith('.webp')) return 'image/webp';
-  if (path.endsWith('.ico')) return 'image/x-icon';
-  return 'application/octet-stream';
-}
-
 function sendHttp(
   response: ServerResponse,
   statusCode: number,
   contentType: string,
-  body: Buffer | string
+  body: string
 ): void {
   response.writeHead(statusCode, {
-    'content-length': typeof body === 'string' ? Buffer.byteLength(body) : body.byteLength,
+    'content-length': Buffer.byteLength(body),
     'content-type': contentType
   });
   response.end(body);

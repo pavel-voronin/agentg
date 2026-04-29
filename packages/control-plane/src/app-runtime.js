@@ -70,7 +70,7 @@ const EVENT_GROUPS = [
   }
 ];
 
-function createGatewayAppStore() {
+function createControlPlaneAppStore() {
   const state = reactive({
     events: [],
     overview: null
@@ -164,17 +164,17 @@ function formatEventTime(value) {
   return Number.isNaN(date.getTime()) ? '' : date.toLocaleTimeString();
 }
 
-function mountGatewayApp(appStore) {
+function mountControlPlaneApp(appStore) {
   const STORAGE_KEYS = {
-    chatFilter: 'agentg.ui.chatFilter',
-    chatListSelection: 'agentg.ui.chatListSelection',
-    dashboardCollapsed: 'agentg.ui.dashboardCollapsed',
-    defaultViewportDays: 'agentg.ui.defaultViewportDays',
-    eventFilters: 'agentg.ui.eventFilters',
-    eventLimit: 'agentg.ui.eventLimit',
-    eventsPanelCollapsed: 'agentg.ui.eventsPanelCollapsed',
-    selectedChatId: 'agentg.ui.selectedChatId',
-    viewportDays: 'agentg.ui.viewportDays'
+    chatFilter: 'agentg.controlPlane.chatFilter',
+    chatListSelection: 'agentg.controlPlane.chatListSelection',
+    dashboardCollapsed: 'agentg.controlPlane.dashboardCollapsed',
+    defaultViewportDays: 'agentg.controlPlane.defaultViewportDays',
+    eventFilters: 'agentg.controlPlane.eventFilters',
+    eventLimit: 'agentg.controlPlane.eventLimit',
+    eventsPanelCollapsed: 'agentg.controlPlane.eventsPanelCollapsed',
+    selectedChatId: 'agentg.controlPlane.selectedChatId',
+    viewportDays: 'agentg.controlPlane.viewportDays'
   };
 
   const DEFAULT_EVENT_LIMIT = 200;
@@ -237,9 +237,19 @@ function mountGatewayApp(appStore) {
 
   const $ = (id) => document.getElementById(id);
 
+  function gatewayWebSocketUrl() {
+    const configuredUrl = import.meta.env.VITE_AGENT_GATEWAY_WS_URL;
+    const url = new URL(
+      configuredUrl && configuredUrl.length > 0 ? configuredUrl : 'ws://127.0.0.1:8787/'
+    );
+    if (url.search.length === 0) {
+      url.search = location.search;
+    }
+    return url.toString();
+  }
+
   function connect() {
-    const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const socket = new WebSocket(protocol + '//' + location.host + '/' + location.search);
+    const socket = new WebSocket(gatewayWebSocketUrl());
     state.socket = socket;
 
     socket.addEventListener('open', () => {
@@ -2764,11 +2774,11 @@ function mountGatewayApp(appStore) {
   connect();
 }
 
-const gatewayAppStore = createGatewayAppStore();
-const dashboardView = createDashboardView(gatewayAppStore);
-const eventsView = createEventsView(gatewayAppStore);
+const controlPlaneAppStore = createControlPlaneAppStore();
+const dashboardView = createDashboardView(controlPlaneAppStore);
+const eventsView = createEventsView(controlPlaneAppStore);
 
-export function useGatewayAppView() {
+export function useControlPlaneAppView() {
   return {
     dashboardMetrics: dashboardView.dashboardMetrics,
     eventItems: eventsView.eventItems,
@@ -2776,6 +2786,6 @@ export function useGatewayAppView() {
   };
 }
 
-export function mountGatewayAppRuntime() {
-  mountGatewayApp(gatewayAppStore);
+export function mountControlPlaneAppRuntime() {
+  mountControlPlaneApp(controlPlaneAppStore);
 }

@@ -25,7 +25,7 @@ export default tseslint.config(
     extends: [tseslint.configs.disableTypeChecked]
   },
   {
-    files: ['packages/gateway/src/ui/app-runtime.js'],
+    files: ['packages/control-plane/src/app-runtime.js'],
     extends: [tseslint.configs.disableTypeChecked],
     languageOptions: {
       globals: {
@@ -33,6 +33,7 @@ export default tseslint.config(
         HTMLInputElement: 'readonly',
         HTMLElement: 'readonly',
         MouseEvent: 'readonly',
+        URL: 'readonly',
         WebSocket: 'readonly',
         clearTimeout: 'readonly',
         document: 'readonly',
