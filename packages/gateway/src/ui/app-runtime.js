@@ -1,22 +1,123 @@
-export const historyClientScript = String.raw`const { computed, reactive } = Vue;
+import { computed, nextTick, reactive } from 'vue';
 
-function createHistoryObservatoryStore() {
+const EVENT_GROUPS = [
+  {
+    color: '#7c3aed',
+    eventTypes: [
+      'history.coverage.changed',
+      'history.job.completed',
+      'history.job.failed',
+      'history.job.progress',
+      'history.job.started',
+      'history.reconcile.completed',
+      'history.sync.accepted',
+      'history.sync.completed',
+      'history.sync.failed',
+      'history.sync.requested',
+      'history.sync.started',
+      'history.target.auto_deleted',
+      'history.target.delete.completed',
+      'history.target.delete.failed',
+      'history.target.deleted',
+      'history.target.upsert.completed',
+      'history.target.upsert.failed',
+      'history.target.upserted'
+    ],
+    id: 'history',
+    label: 'History',
+    match: (type) => type.startsWith('history.')
+  },
+  {
+    color: '#0ea5e9',
+    eventTypes: [
+      'telegram.message.created',
+      'telegram.message.deleted',
+      'telegram.message.updated'
+    ],
+    id: 'telegram_messages',
+    label: 'Telegram messages',
+    match: (type) => type.startsWith('telegram.message.')
+  },
+  {
+    color: '#10b981',
+    eventTypes: ['telegram.chat.updated', 'telegram.chat_folders.updated'],
+    id: 'telegram_chats',
+    label: 'Telegram chats',
+    match: (type) => type.startsWith('telegram.chat.') || type.startsWith('telegram.chat_folders.')
+  },
+  {
+    color: '#f59e0b',
+    eventTypes: ['telegram.tdlib.status'],
+    id: 'telegram_status',
+    label: 'Telegram status',
+    match: (type) => type === 'telegram.tdlib.status'
+  },
+  {
+    color: '#ef4444',
+    eventTypes: ['ui.error'],
+    filterable: false,
+    id: 'ui',
+    label: 'UI',
+    match: (type) => type.startsWith('ui.')
+  },
+  {
+    color: '#dc2626',
+    eventTypes: ['other'],
+    filterable: false,
+    id: 'other',
+    label: 'Unexpected',
+    match: () => true
+  }
+];
+
+function createGatewayAppStore() {
   const state = reactive({
+    events: [],
     overview: null
   });
 
   return {
     state,
+    setEvents(events) {
+      state.events = events;
+    },
     setOverview(overview) {
       state.overview = overview;
     }
   };
 }
 
-function createHistoryDashboardView(store) {
+function createDashboardView(store) {
   return {
     dashboardMetrics: computed(() => dashboardMetricsFromOverview(store.state.overview || {}))
   };
+}
+
+function createEventsView(store) {
+  return {
+    eventItems: computed(() => store.state.events.map(eventListItem)),
+    hasEvents: computed(() => store.state.events.length > 0)
+  };
+}
+
+function eventListItem(event, index) {
+  const group = eventGroupForEvent(event);
+  const type = String(event?.type || '');
+  return {
+    color: group.color,
+    dataJson: JSON.stringify(event?.data || {}),
+    key: event?.id || event?.occurredAt + ':' + type + ':' + index,
+    occurredAt: formatEventTime(event?.occurredAt),
+    type
+  };
+}
+
+function eventGroupForEvent(event) {
+  return eventGroupForType(String(event?.type || ''));
+}
+
+function eventGroupForType(type) {
+  return EVENT_GROUPS.find((group) => group.match(type)) || EVENT_GROUPS[EVENT_GROUPS.length - 1];
 }
 
 function dashboardMetricsFromOverview(overview) {
@@ -58,17 +159,22 @@ function dashboardShortDate(value) {
   return Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(5, 16).replace('T', ' ');
 }
 
-function mountHistoryPage(observatoryStore) {
+function formatEventTime(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleTimeString();
+}
+
+function mountGatewayApp(appStore) {
   const STORAGE_KEYS = {
-    chatFilter: 'agentg.history.chatFilter',
-    chatListSelection: 'agentg.history.chatListSelection',
-    dashboardCollapsed: 'agentg.history.dashboardCollapsed',
-    defaultViewportDays: 'agentg.history.defaultViewportDays',
-    eventFilters: 'agentg.history.eventFilters',
-    eventLimit: 'agentg.history.eventLimit',
-    eventsPanelCollapsed: 'agentg.history.eventsPanelCollapsed',
-    selectedChatId: 'agentg.history.selectedChatId',
-    viewportDays: 'agentg.history.viewportDays'
+    chatFilter: 'agentg.ui.chatFilter',
+    chatListSelection: 'agentg.ui.chatListSelection',
+    dashboardCollapsed: 'agentg.ui.dashboardCollapsed',
+    defaultViewportDays: 'agentg.ui.defaultViewportDays',
+    eventFilters: 'agentg.ui.eventFilters',
+    eventLimit: 'agentg.ui.eventLimit',
+    eventsPanelCollapsed: 'agentg.ui.eventsPanelCollapsed',
+    selectedChatId: 'agentg.ui.selectedChatId',
+    viewportDays: 'agentg.ui.viewportDays'
   };
 
   const DEFAULT_EVENT_LIMIT = 200;
@@ -81,75 +187,6 @@ function mountHistoryPage(observatoryStore) {
   const TIMELINE_WHEEL_GESTURE_IDLE_MS = 180;
   const TIMELINE_WHEEL_AXIS_INTENT_PX = 8;
   const TIMELINE_WHEEL_AXIS_DOMINANCE = 1.35;
-  const EVENT_GROUPS = [
-    {
-      color: '#7c3aed',
-      eventTypes: [
-        'history.coverage.changed',
-        'history.job.completed',
-        'history.job.failed',
-        'history.job.progress',
-        'history.job.started',
-        'history.reconcile.completed',
-        'history.sync.accepted',
-        'history.sync.completed',
-        'history.sync.failed',
-        'history.sync.requested',
-        'history.sync.started',
-        'history.target.auto_deleted',
-        'history.target.delete.completed',
-        'history.target.delete.failed',
-        'history.target.deleted',
-        'history.target.upsert.completed',
-        'history.target.upsert.failed',
-        'history.target.upserted'
-      ],
-      id: 'history',
-      label: 'History',
-      match: (type) => type.startsWith('history.')
-    },
-    {
-      color: '#0ea5e9',
-      eventTypes: [
-        'telegram.message.created',
-        'telegram.message.deleted',
-        'telegram.message.updated'
-      ],
-      id: 'telegram_messages',
-      label: 'Telegram messages',
-      match: (type) => type.startsWith('telegram.message.')
-    },
-    {
-      color: '#10b981',
-      eventTypes: ['telegram.chat.updated', 'telegram.chat_folders.updated'],
-      id: 'telegram_chats',
-      label: 'Telegram chats',
-      match: (type) => type.startsWith('telegram.chat.') || type.startsWith('telegram.chat_folders.')
-    },
-    {
-      color: '#f59e0b',
-      eventTypes: ['telegram.tdlib.status'],
-      id: 'telegram_status',
-      label: 'Telegram status',
-      match: (type) => type === 'telegram.tdlib.status'
-    },
-    {
-      color: '#ef4444',
-      eventTypes: ['ui.error'],
-      filterable: false,
-      id: 'ui',
-      label: 'UI',
-      match: (type) => type.startsWith('ui.')
-    },
-    {
-      color: '#dc2626',
-      eventTypes: ['other'],
-      filterable: false,
-      id: 'other',
-      label: 'Unexpected',
-      match: () => true
-    }
-  ];
 
   const initialChatListSelection = readChatListSelection();
   const initialDefaultViewportDays = readScalePresetStorage(
@@ -160,12 +197,17 @@ function mountHistoryPage(observatoryStore) {
     chats: [],
     chatListMode: initialChatListSelection.mode,
     chatNavigation: { archiveCount: 0, folders: [], mainCount: 0 },
-    events: [],
+    get events() {
+      return appStore.state.events;
+    },
+    set events(value) {
+      appStore.setEvents(value);
+    },
     get overview() {
-      return observatoryStore.state.overview;
+      return appStore.state.overview;
     },
     set overview(value) {
-      observatoryStore.setOverview(value);
+      appStore.setOverview(value);
     },
     chatFilter: readStorage(STORAGE_KEYS.chatFilter) ?? '',
     chatFolderId: initialChatListSelection.folderId,
@@ -213,7 +255,9 @@ function mountHistoryPage(observatoryStore) {
       if (payload.id !== undefined && state.pending.has(payload.id)) {
         const pending = state.pending.get(payload.id);
         state.pending.delete(payload.id);
-        payload.error ? pending.reject(new Error(payload.error.message)) : pending.resolve(payload.result);
+        payload.error
+          ? pending.reject(new Error(payload.error.message))
+          : pending.resolve(payload.result);
         return;
       }
       if (payload.event) {
@@ -264,7 +308,11 @@ function mountHistoryPage(observatoryStore) {
     const result = await rpc('history.listChats', params);
     state.chats = result.chats;
     state.chatNavigation = result.navigation || { archiveCount: 0, folders: [], mainCount: 0 };
-    if (query.length === 0 && state.chatListMode === 'folder' && !chatFolderExists(state.chatFolderId)) {
+    if (
+      query.length === 0 &&
+      state.chatListMode === 'folder' &&
+      !chatFolderExists(state.chatFolderId)
+    ) {
       state.chatListMode = 'main';
       state.chatFolderId = null;
       writeChatListSelection();
@@ -281,7 +329,9 @@ function mountHistoryPage(observatoryStore) {
       return;
     }
     try {
-      state.selectedState = await rpc('history.getChatHistoryState', { chatId: state.selectedChatId });
+      state.selectedState = await rpc('history.getChatHistoryState', {
+        chatId: state.selectedChatId
+      });
     } catch (error) {
       if (isNotFoundLikeError(error)) {
         clearSelectedChat();
@@ -373,26 +423,47 @@ function mountHistoryPage(observatoryStore) {
   function renderChats() {
     const list = $('chatList');
     const queryActive = state.chatFilter.trim().length > 0;
-    const rows = state.chats.map((chat) => {
-      const active = chat.id === state.selectedChatId;
-      return '<button class="' + chatButtonClass(active) + '" data-chat-id="' + escapeHtml(chat.id) + '">' +
-        '<div class="flex min-w-0 items-center justify-between gap-2">' +
+    const rows = state.chats
+      .map((chat) => {
+        const active = chat.id === state.selectedChatId;
+        return (
+          '<button class="' +
+          chatButtonClass(active) +
+          '" data-chat-id="' +
+          escapeHtml(chat.id) +
+          '">' +
+          '<div class="flex min-w-0 items-center justify-between gap-2">' +
           '<div class="flex min-w-0 items-center gap-1.5">' +
-            chatTypeIcon(chat) +
-            '<div class="min-w-0 truncate font-semibold">' + escapeHtml(chat.title || chat.id) + '</div>' +
+          chatTypeIcon(chat) +
+          '<div class="min-w-0 truncate font-semibold">' +
+          escapeHtml(chat.title || chat.id) +
           '</div>' +
-        '</div>' +
-        '<div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-500">' +
-          '<span>targets ' + chat.targets + '</span>' +
-          '<span>coverage ' + chat.coverageIntervals + '</span>' +
-          '<span>jobs ' + chat.pendingJobs + '/' + chat.runningJobs + '</span>' +
-        '</div>' +
-      '</button>';
-    }).join('');
+          '</div>' +
+          '</div>' +
+          '<div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-500">' +
+          '<span>targets ' +
+          chat.targets +
+          '</span>' +
+          '<span>coverage ' +
+          chat.coverageIntervals +
+          '</span>' +
+          '<span>jobs ' +
+          chat.pendingJobs +
+          '/' +
+          chat.runningJobs +
+          '</span>' +
+          '</div>' +
+          '</button>'
+        );
+      })
+      .join('');
     const chrome = queryActive ? searchResultsHeader() : chatListChrome();
-    const empty = state.chats.length === 0
-      ? '<div class="p-6 text-center text-sm text-zinc-500">' + (queryActive ? 'No chats match this search.' : 'No chats in this list.') + '</div>'
-      : '';
+    const empty =
+      state.chats.length === 0
+        ? '<div class="p-6 text-center text-sm text-zinc-500">' +
+          (queryActive ? 'No chats match this search.' : 'No chats in this list.') +
+          '</div>'
+        : '';
     list.innerHTML = chrome + rows + empty;
     list.querySelectorAll('[data-open-archive]').forEach((button) => {
       button.addEventListener('click', () => openArchiveChats().catch(showError));
@@ -431,16 +502,18 @@ function mountHistoryPage(observatoryStore) {
         title: 'All chats',
         type: 'main'
       }) +
-      (navigation.folders || []).map((folder) =>
-        folderButton({
-          active: state.chatListMode === 'folder' && state.chatFolderId === folder.id,
-          badge: folder.count,
-          folderId: folder.id,
-          label: folder.title || ('#' + folder.id),
-          title: folder.title,
-          type: 'folder'
-        })
-      ).join('');
+      (navigation.folders || [])
+        .map((folder) =>
+          folderButton({
+            active: state.chatListMode === 'folder' && state.chatFolderId === folder.id,
+            badge: folder.count,
+            folderId: folder.id,
+            label: folder.title || '#' + folder.id,
+            title: folder.title,
+            type: 'folder'
+          })
+        )
+        .join('');
     nav.querySelectorAll('[data-folder-nav]').forEach((button) => {
       button.addEventListener('click', () => {
         if (button.getAttribute('data-folder-nav') === 'main') {
@@ -456,10 +529,26 @@ function mountHistoryPage(observatoryStore) {
     const activeClass = options.active
       ? 'bg-sky-500/20 text-sky-200'
       : 'text-slate-300 hover:bg-slate-700/70';
-    return '<button class="relative flex min-h-16 w-full flex-col items-center justify-center px-1 py-2 text-center text-[11px] font-medium ' + activeClass + '" data-folder-nav="' + escapeHtml(options.type) + '"' + (options.folderId === undefined ? '' : ' data-folder-id="' + options.folderId + '"') + ' title="' + escapeHtml(options.title) + '">' +
-      '<span class="truncate">' + escapeHtml(options.label) + '</span>' +
-      (options.badge > 0 ? '<span class="mt-1 rounded-full bg-slate-500 px-1.5 py-0.5 text-[10px] leading-none text-white">' + formatInteger(options.badge) + '</span>' : '') +
-    '</button>';
+    return (
+      '<button class="relative flex min-h-16 w-full flex-col items-center justify-center px-1 py-2 text-center text-[11px] font-medium ' +
+      activeClass +
+      '" data-folder-nav="' +
+      escapeHtml(options.type) +
+      '"' +
+      (options.folderId === undefined ? '' : ' data-folder-id="' + options.folderId + '"') +
+      ' title="' +
+      escapeHtml(options.title) +
+      '">' +
+      '<span class="truncate">' +
+      escapeHtml(options.label) +
+      '</span>' +
+      (options.badge > 0
+        ? '<span class="mt-1 rounded-full bg-slate-500 px-1.5 py-0.5 text-[10px] leading-none text-white">' +
+          formatInteger(options.badge) +
+          '</span>'
+        : '') +
+      '</button>'
+    );
   }
 
   function searchResultsHeader() {
@@ -469,21 +558,27 @@ function mountHistoryPage(observatoryStore) {
   function chatListChrome() {
     const navigation = state.chatNavigation || { archiveCount: 0 };
     if (state.chatListMode === 'archive') {
-      return '<div class="border-b border-zinc-100 p-3">' +
+      return (
+        '<div class="border-b border-zinc-100 p-3">' +
         '<div class="flex items-center justify-between gap-2">' +
-          '<div class="min-w-0"><div class="truncate text-sm font-semibold">Archived chats</div><div class="text-xs text-zinc-500">All chats folder</div></div>' +
-          '<button data-open-main class="shrink-0 rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 text-xs font-medium hover:bg-zinc-50">Main</button>' +
+        '<div class="min-w-0"><div class="truncate text-sm font-semibold">Archived chats</div><div class="text-xs text-zinc-500">All chats folder</div></div>' +
+        '<button data-open-main class="shrink-0 rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 text-xs font-medium hover:bg-zinc-50">Main</button>' +
         '</div>' +
-      '</div>';
+        '</div>'
+      );
     }
     if (state.chatListMode === 'main' && navigation.archiveCount > 0) {
-      return '<button data-open-archive class="block w-full border-b border-zinc-100 bg-zinc-50 px-3 py-3 text-left hover:bg-zinc-100">' +
+      return (
+        '<button data-open-archive class="block w-full border-b border-zinc-100 bg-zinc-50 px-3 py-3 text-left hover:bg-zinc-100">' +
         '<div class="flex min-w-0 items-center justify-between gap-2">' +
-          '<div class="min-w-0 truncate font-semibold">Archived chats</div>' +
-          '<span class="shrink-0 rounded-full bg-zinc-300 px-2 py-0.5 text-xs font-semibold text-white">' + formatInteger(navigation.archiveCount) + '</span>' +
+        '<div class="min-w-0 truncate font-semibold">Archived chats</div>' +
+        '<span class="shrink-0 rounded-full bg-zinc-300 px-2 py-0.5 text-xs font-semibold text-white">' +
+        formatInteger(navigation.archiveCount) +
+        '</span>' +
         '</div>' +
         '<div class="mt-1 text-xs text-zinc-500">Open archive</div>' +
-      '</button>';
+        '</button>'
+      );
     }
     return '';
   }
@@ -553,7 +648,13 @@ function mountHistoryPage(observatoryStore) {
   }
 
   function iconSvg(label, paths) {
-    return '<svg class="h-3.5 w-3.5 shrink-0 text-zinc-700" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="' + escapeHtml(label) + '">' + paths + '</svg>';
+    return (
+      '<svg class="h-3.5 w-3.5 shrink-0 text-zinc-700" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="' +
+      escapeHtml(label) +
+      '">' +
+      paths +
+      '</svg>'
+    );
   }
 
   function renderSelected() {
@@ -567,10 +668,10 @@ function mountHistoryPage(observatoryStore) {
       shell.className = 'flex min-h-0 flex-col overflow-hidden';
       panel.innerHTML =
         '<div class="p-8 text-center">' +
-          '<div class="mx-auto max-w-xl text-center">' +
-            '<div class="text-base font-semibold">No chat selected</div>' +
-            '<div class="mt-2 text-sm text-zinc-500">No chat is selected. Use the chat list to inspect one chat, or keep this global workspace open while watching metrics and history events.</div>' +
-          '</div>' +
+        '<div class="mx-auto max-w-xl text-center">' +
+        '<div class="text-base font-semibold">No chat selected</div>' +
+        '<div class="mt-2 text-sm text-zinc-500">No chat is selected. Use the chat list to inspect one chat, or keep this global workspace open while watching metrics and history events.</div>' +
+        '</div>' +
         '</div>';
       return;
     }
@@ -580,7 +681,8 @@ function mountHistoryPage(observatoryStore) {
       hideCoverageHoverPanel();
       state.coverageTableOpen = false;
       state.renderedSelectedChatId = null;
-      panel.innerHTML = '<div class="p-8 text-center text-sm text-zinc-500">Selected chat is not available.</div>';
+      panel.innerHTML =
+        '<div class="p-8 text-center text-sm text-zinc-500">Selected chat is not available.</div>';
       return;
     }
 
@@ -600,16 +702,16 @@ function mountHistoryPage(observatoryStore) {
   function renderSelectedShell() {
     return (
       '<div class="border-b border-zinc-200 p-4">' +
-        '<div class="flex flex-wrap items-stretch justify-between gap-3">' +
-          '<div id="selectedChatHeader" class="min-w-0"></div>' +
-          '<div class="flex shrink-0 items-center gap-2">' +
-            '<button id="closeChat" aria-label="Close chat" title="Close chat" class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-300 bg-white text-lg leading-none text-zinc-600 hover:bg-zinc-50">×</button>' +
-          '</div>' +
-        '</div>' +
+      '<div class="flex flex-wrap items-stretch justify-between gap-3">' +
+      '<div id="selectedChatHeader" class="min-w-0"></div>' +
+      '<div class="flex shrink-0 items-center gap-2">' +
+      '<button id="closeChat" aria-label="Close chat" title="Close chat" class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-300 bg-white text-lg leading-none text-zinc-600 hover:bg-zinc-50">×</button>' +
+      '</div>' +
+      '</div>' +
       '</div>' +
       '<div class="grid gap-4 p-4">' +
-        '<div id="targetManager"></div>' +
-        renderTimelineSection() +
+      '<div id="targetManager"></div>' +
+      renderTimelineSection() +
       '</div>'
     );
   }
@@ -657,12 +759,20 @@ function mountHistoryPage(observatoryStore) {
 
   function renderSelectedHeader(chat) {
     $('selectedChatHeader').innerHTML =
-      '<div class="truncate text-base font-semibold">' + escapeHtml(chat.title || chat.id) + '</div>' +
+      '<div class="truncate text-base font-semibold">' +
+      escapeHtml(chat.title || chat.id) +
+      '</div>' +
       '<div class="mt-1 flex flex-wrap gap-2 text-xs text-zinc-500">' +
-        '<code class="rounded bg-zinc-100 px-1.5 py-0.5">' + escapeHtml(chat.id) + '</code>' +
-        '<span>' + escapeHtml(chat.type) + '</span>' +
-        '<span>' + formatInteger(chat.messageCount || 0) + ' messages</span>' +
-        renderHistoryStartBadge(chat) +
+      '<code class="rounded bg-zinc-100 px-1.5 py-0.5">' +
+      escapeHtml(chat.id) +
+      '</code>' +
+      '<span>' +
+      escapeHtml(chat.type) +
+      '</span>' +
+      '<span>' +
+      formatInteger(chat.messageCount || 0) +
+      ' messages</span>' +
+      renderHistoryStartBadge(chat) +
       '</div>';
   }
 
@@ -690,21 +800,23 @@ function mountHistoryPage(observatoryStore) {
   }
 
   function renderTargetManager() {
-    return '<section class="grid gap-3">' +
+    return (
+      '<section class="grid gap-3">' +
       '<div class="flex flex-wrap items-center justify-between gap-2">' +
-        '<div><div class="text-sm font-semibold">Targets</div><div class="text-xs text-zinc-500">Target history coverage for this chat</div></div>' +
-        '<div class="flex flex-wrap gap-2">' +
-          '<button data-preset="last7d" class="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium hover:bg-zinc-50">Last 7d</button>' +
-          '<button data-preset="last30d" class="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium hover:bg-zinc-50">Last 30d</button>' +
-          '<button data-preset="full" class="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium hover:bg-zinc-50">Past..now</button>' +
-        '</div>' +
+      '<div><div class="text-sm font-semibold">Targets</div><div class="text-xs text-zinc-500">Target history coverage for this chat</div></div>' +
+      '<div class="flex flex-wrap gap-2">' +
+      '<button data-preset="last7d" class="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium hover:bg-zinc-50">Last 7d</button>' +
+      '<button data-preset="last30d" class="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium hover:bg-zinc-50">Last 30d</button>' +
+      '<button data-preset="full" class="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium hover:bg-zinc-50">Past..now</button>' +
+      '</div>' +
       '</div>' +
       '<div class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-2">' +
-        '<input id="customStart" class="rounded-lg border border-zinc-300 bg-white px-3 py-2 outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100" placeholder="Start: past, now-1y2mo, now-1h3s, 2026-01-01">' +
-        '<input id="customEnd" class="rounded-lg border border-zinc-300 bg-white px-3 py-2 outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100" placeholder="End: now, 2026-02-01">' +
-        '<button id="customTarget" class="rounded-lg border border-zinc-800 bg-zinc-800 px-3 py-2 font-medium text-white hover:bg-zinc-950">Add</button>' +
+      '<input id="customStart" class="rounded-lg border border-zinc-300 bg-white px-3 py-2 outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100" placeholder="Start: past, now-1y2mo, now-1h3s, 2026-01-01">' +
+      '<input id="customEnd" class="rounded-lg border border-zinc-300 bg-white px-3 py-2 outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100" placeholder="End: now, 2026-02-01">' +
+      '<button id="customTarget" class="rounded-lg border border-zinc-800 bg-zinc-800 px-3 py-2 font-medium text-white hover:bg-zinc-950">Add</button>' +
       '</div>' +
-    '</section>';
+      '</section>'
+    );
   }
 
   function renderHistoryStartBadge(chat) {
@@ -718,35 +830,51 @@ function mountHistoryPage(observatoryStore) {
   }
 
   function renderTimelineSection(data) {
-    return '<section class="grid gap-3 border-t border-zinc-200 pt-4">' +
+    return (
+      '<section class="grid gap-3 border-t border-zinc-200 pt-4">' +
       '<div class="flex flex-wrap items-center justify-between gap-2">' +
-        '<div class="text-sm font-semibold">History</div>' +
-        '<div class="flex flex-wrap items-center gap-2">' +
-          '<span class="text-xs text-zinc-500">Scale</span>' +
-          '<div id="viewportScaleButtons" class="flex flex-wrap gap-1.5">' +
-            viewportScaleButton(7, '7d') +
-            viewportScaleButton(30, '30d') +
-            viewportScaleButton(90, '90d') +
-            viewportScaleButton(365, '1y') +
-            viewportScaleButton(0, 'All') +
-          '</div>' +
-        '</div>' +
+      '<div class="text-sm font-semibold">History</div>' +
+      '<div class="flex flex-wrap items-center gap-2">' +
+      '<span class="text-xs text-zinc-500">Scale</span>' +
+      '<div id="viewportScaleButtons" class="flex flex-wrap gap-1.5">' +
+      viewportScaleButton(7, '7d') +
+      viewportScaleButton(30, '30d') +
+      viewportScaleButton(90, '90d') +
+      viewportScaleButton(365, '1y') +
+      viewportScaleButton(0, 'All') +
+      '</div>' +
+      '</div>' +
       '</div>' +
       '<div id="timeline"></div>' +
-    '</section>';
+      '</section>'
+    );
   }
 
   function viewportScaleButton(value, label) {
     const active = Number(value) === state.viewportDays;
     const isDefault = Number(value) === state.defaultViewportDays;
-    return '<button type="button" data-viewport-days="' + String(value) + '" data-default-scale="' + String(isDefault) + '" aria-pressed="' + String(active) + '" class="' + viewportScaleButtonClass(active, isDefault) + '">' + escapeHtml(label) + '</button>';
+    return (
+      '<button type="button" data-viewport-days="' +
+      String(value) +
+      '" data-default-scale="' +
+      String(isDefault) +
+      '" aria-pressed="' +
+      String(active) +
+      '" class="' +
+      viewportScaleButtonClass(active, isDefault) +
+      '">' +
+      escapeHtml(label) +
+      '</button>'
+    );
   }
 
   function viewportScaleButtonClass(active, isDefault) {
     const borderClass = active ? 'border-zinc-800' : 'border-zinc-300';
     return active
-      ? 'relative h-7 rounded-lg border bg-zinc-800 px-2.5 text-xs font-medium text-white shadow-sm ' + borderClass
-      : 'relative h-7 rounded-lg border bg-white px-2.5 text-xs font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 ' + borderClass;
+      ? 'relative h-7 rounded-lg border bg-zinc-800 px-2.5 text-xs font-medium text-white shadow-sm ' +
+          borderClass
+      : 'relative h-7 rounded-lg border bg-white px-2.5 text-xs font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 ' +
+          borderClass;
   }
 
   function renderTimeline() {
@@ -756,16 +884,17 @@ function mountHistoryPage(observatoryStore) {
     const bounds = computeTimelineBounds(data);
     if (!bounds) {
       hideCoverageHoverPanel();
-      container.innerHTML = '<div class="rounded-lg border border-dashed border-zinc-300 p-5 text-center text-sm text-zinc-500">No timeline intervals yet.</div>';
+      container.innerHTML =
+        '<div class="rounded-lg border border-dashed border-zinc-300 p-5 text-center text-sm text-zinc-500">No timeline intervals yet.</div>';
       return;
     }
     const min = bounds.min;
     const max = bounds.max;
     container.innerHTML =
       '<div class="grid gap-2">' +
-        layeredTimelineRow(data, min, max) +
-        renderTimelineDateLabels(min, max) +
-        renderHistoryDetails(data, min, max) +
+      layeredTimelineRow(data, min, max) +
+      renderTimelineDateLabels(min, max) +
+      renderHistoryDetails(data, min, max) +
       '</div>';
     const coverageToggle = container.querySelector('[data-toggle-coverage-table]');
     if (coverageToggle) {
@@ -784,10 +913,12 @@ function mountHistoryPage(observatoryStore) {
   }
 
   function renderTimelineDateLabels(min, max) {
-    return '<div class="flex justify-between pl-8 text-xs text-zinc-500">' +
+    return (
+      '<div class="flex justify-between pl-8 text-xs text-zinc-500">' +
       timelineDateLabel(min, min.getTime() - max.getTime(), 'left') +
       timelineDateLabel(max, max.getTime() - min.getTime(), 'right') +
-    '</div>';
+      '</div>'
+    );
   }
 
   function timelineDateLabel(date, deltaMilliseconds, align) {
@@ -795,7 +926,19 @@ function mountHistoryPage(observatoryStore) {
     const deltaLabel = formatSignedDuration(deltaMilliseconds);
     const width = Math.max(dateLabel.length, deltaLabel.length);
     const textAlignClass = align === 'right' ? 'text-right' : 'text-left';
-    return '<span class="inline-block cursor-default tabular-nums ' + textAlignClass + '" style="width:' + width + 'ch" data-timeline-date data-date-label="' + escapeHtml(dateLabel) + '" data-date-delta="' + escapeHtml(deltaLabel) + '">' + escapeHtml(dateLabel) + '</span>';
+    return (
+      '<span class="inline-block cursor-default tabular-nums ' +
+      textAlignClass +
+      '" style="width:' +
+      width +
+      'ch" data-timeline-date data-date-label="' +
+      escapeHtml(dateLabel) +
+      '" data-date-delta="' +
+      escapeHtml(deltaLabel) +
+      '">' +
+      escapeHtml(dateLabel) +
+      '</span>'
+    );
   }
 
   function computeTimelineBounds(data) {
@@ -811,8 +954,12 @@ function mountHistoryPage(observatoryStore) {
 
   function timelinePhysicalBounds(data) {
     const now = new Date();
-    const historyStart = data.chat?.historyStartAt ? new Date(data.chat.historyStartAt) : TELEGRAM_HISTORY_START_AT;
-    const startAt = Number.isNaN(historyStart.getTime()) ? TELEGRAM_HISTORY_START_AT.getTime() : historyStart.getTime();
+    const historyStart = data.chat?.historyStartAt
+      ? new Date(data.chat.historyStartAt)
+      : TELEGRAM_HISTORY_START_AT;
+    const startAt = Number.isNaN(historyStart.getTime())
+      ? TELEGRAM_HISTORY_START_AT.getTime()
+      : historyStart.getTime();
     const endAt = now.getTime();
     return {
       endAt,
@@ -826,7 +973,10 @@ function mountHistoryPage(observatoryStore) {
       return;
     }
     if (state.timelineViewport) {
-      state.timelineViewport = clampTimelineViewport(state.timelineViewport, timelinePhysicalBounds(data));
+      state.timelineViewport = clampTimelineViewport(
+        state.timelineViewport,
+        timelinePhysicalBounds(data)
+      );
       return;
     }
     resetTimelineViewportToPreset(data);
@@ -836,9 +986,7 @@ function mountHistoryPage(observatoryStore) {
     if (!data) return;
     const physical = timelinePhysicalBounds(data);
     const endAt = physical.endAt;
-    const startAt = state.viewportDays > 0
-      ? endAt - state.viewportDays * DAY_MS
-      : physical.startAt;
+    const startAt = state.viewportDays > 0 ? endAt - state.viewportDays * DAY_MS : physical.startAt;
     state.timelineViewport = clampTimelineViewport({ endAt, startAt }, physical);
   }
 
@@ -864,31 +1012,44 @@ function mountHistoryPage(observatoryStore) {
     const targetSegments =
       renderTargetUnionTimelineSegments(targetDetails, min, max) +
       renderTargetHighlightTimelineSegments(targetDetails, min, max);
-    const jobSegments = data.jobs
-      .map((job) => renderJobTimelineSegment(job, min, max))
-      .join('');
+    const jobSegments = data.jobs.map((job) => renderJobTimelineSegment(job, min, max)).join('');
     const coverageSegments = visibleCoverageIntervals(data.coverage, min, max)
       .map((interval) => renderCoverageTimelineSegment(interval, min, max))
       .join('');
     const gapSegments = timelineEmptyGaps(data, targetDetails, min, max)
       .map((gap) => renderCoverageGap(gap, min, max))
       .join('');
-    return timelineTrackRow(coverageLabel(), targetSegments + jobSegments + coverageSegments + gapSegments);
+    return timelineTrackRow(
+      coverageLabel(),
+      targetSegments + jobSegments + coverageSegments + gapSegments
+    );
   }
 
   function timelineTrackRow(labelHtml, segments) {
-    return '<div class="flex h-12 items-center gap-2">' +
-      '<div class="flex w-6 shrink-0 items-center justify-center">' + labelHtml + '</div>' +
-      '<div class="relative h-12 min-w-0 flex-1 touch-none select-none overflow-hidden rounded-lg border border-zinc-200 bg-zinc-100" data-timeline-track>' + segments + '<div class="timeline-selection" data-timeline-selection></div></div>' +
-    '</div>';
+    return (
+      '<div class="flex h-12 items-center gap-2">' +
+      '<div class="flex w-6 shrink-0 items-center justify-center">' +
+      labelHtml +
+      '</div>' +
+      '<div class="relative h-12 min-w-0 flex-1 touch-none select-none overflow-hidden rounded-lg border border-zinc-200 bg-zinc-100" data-timeline-track>' +
+      segments +
+      '<div class="timeline-selection" data-timeline-selection></div></div>' +
+      '</div>'
+    );
   }
 
   function coverageLabel() {
-    return '<button data-toggle-coverage-table class="inline-flex h-4 w-4 items-center justify-center rounded border border-zinc-300 bg-white text-[11px] font-semibold leading-none text-zinc-500 shadow-sm hover:bg-zinc-50 hover:text-zinc-700" aria-label="' + (state.coverageTableOpen ? 'Hide timeline intervals' : 'Show timeline intervals') + '" aria-expanded="' + String(state.coverageTableOpen) + '">' +
+    return (
+      '<button data-toggle-coverage-table class="inline-flex h-4 w-4 items-center justify-center rounded border border-zinc-300 bg-white text-[11px] font-semibold leading-none text-zinc-500 shadow-sm hover:bg-zinc-50 hover:text-zinc-700" aria-label="' +
+      (state.coverageTableOpen ? 'Hide timeline intervals' : 'Show timeline intervals') +
+      '" aria-expanded="' +
+      String(state.coverageTableOpen) +
+      '">' +
       '<svg class="h-3 w-3" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-        (state.coverageTableOpen ? '<path d="M4 6l4 4 4-4"/>' : '<path d="M6 4l4 4-4 4"/>') +
+      (state.coverageTableOpen ? '<path d="M4 6l4 4 4-4"/>' : '<path d="M6 4l4 4-4 4"/>') +
       '</svg>' +
-    '</button>';
+      '</button>'
+    );
   }
 
   function renderHistoryDetails(data, min, max) {
@@ -900,7 +1061,9 @@ function mountHistoryPage(observatoryStore) {
       return '<div class="mt-3 rounded-lg border border-dashed border-zinc-300 p-4 text-center text-xs text-zinc-500">No history items in the current scale.</div>';
     }
 
-    return '<div class="mt-3 grid gap-3">' + sections.map(renderHistoryDetailSection).join('') + '</div>';
+    return (
+      '<div class="mt-3 grid gap-3">' + sections.map(renderHistoryDetailSection).join('') + '</div>'
+    );
   }
 
   function historyDetailItems(data, min, max) {
@@ -992,23 +1155,41 @@ function mountHistoryPage(observatoryStore) {
     return renderHistoryDetailTableFrame(
       'Target',
       '<div class="overflow-hidden rounded-lg border border-zinc-200">' +
-      '<table class="w-full border-collapse text-left text-xs">' +
+        '<table class="w-full border-collapse text-left text-xs">' +
         '<thead class="bg-zinc-50 text-zinc-500"><tr><th class="px-3 py-2 font-semibold">Start</th><th class="px-3 py-2 font-semibold">End</th><th class="px-3 py-2 font-semibold">Duration</th><th class="px-3 py-2 font-semibold">Template</th><th class="px-3 py-2 font-semibold">Target id</th><th class="w-20 px-3 py-2"></th></tr></thead>' +
         '<tbody class="divide-y divide-zinc-100 bg-white">' +
-          targets.map((detail) => {
+        targets
+          .map((detail) => {
             const target = detail.item;
-            return '<tr class="history-table-row" tabindex="0" data-history-kind="target" data-history-key="' + escapeHtml(detail.key) + '">' +
-            '<td class="px-3 py-2 font-mono text-zinc-700">' + escapeHtml(formatTimelineDate(detail.startAt)) + '</td>' +
-            '<td class="px-3 py-2 font-mono text-zinc-700">' + escapeHtml(formatTimelineDate(detail.endAt)) + '</td>' +
-            '<td class="px-3 py-2 text-zinc-500">' + escapeHtml(formatDuration(detail.endAt.getTime() - detail.startAt.getTime())) + '</td>' +
-            '<td class="px-3 py-2 text-zinc-600">' + escapeHtml(target.templateId || '-') + '</td>' +
-            '<td class="px-3 py-2"><code class="break-all text-zinc-500">' + escapeHtml(target.id) + '</code></td>' +
-            '<td class="px-3 py-1 text-right"><button data-delete-target="' + escapeHtml(target.id) + '" class="rounded-md border border-red-200 bg-red-50 px-2 py-0.5 text-xs font-medium leading-5 text-red-700 hover:bg-red-100">Delete</button></td>' +
-          '</tr>';
-          }).join('') +
+            return (
+              '<tr class="timeline-table-row" tabindex="0" data-timeline-kind="target" data-timeline-key="' +
+              escapeHtml(detail.key) +
+              '">' +
+              '<td class="px-3 py-2 font-mono text-zinc-700">' +
+              escapeHtml(formatTimelineDate(detail.startAt)) +
+              '</td>' +
+              '<td class="px-3 py-2 font-mono text-zinc-700">' +
+              escapeHtml(formatTimelineDate(detail.endAt)) +
+              '</td>' +
+              '<td class="px-3 py-2 text-zinc-500">' +
+              escapeHtml(formatDuration(detail.endAt.getTime() - detail.startAt.getTime())) +
+              '</td>' +
+              '<td class="px-3 py-2 text-zinc-600">' +
+              escapeHtml(target.templateId || '-') +
+              '</td>' +
+              '<td class="px-3 py-2"><code class="break-all text-zinc-500">' +
+              escapeHtml(target.id) +
+              '</code></td>' +
+              '<td class="px-3 py-1 text-right"><button data-delete-target="' +
+              escapeHtml(target.id) +
+              '" class="rounded-md border border-red-200 bg-red-50 px-2 py-0.5 text-xs font-medium leading-5 text-red-700 hover:bg-red-100">Delete</button></td>' +
+              '</tr>'
+            );
+          })
+          .join('') +
         '</tbody>' +
-      '</table>' +
-      '</div>'
+        '</table>' +
+        '</div>'
     );
   }
 
@@ -1016,23 +1197,41 @@ function mountHistoryPage(observatoryStore) {
     return renderHistoryDetailTableFrame(
       'Jobs',
       '<div class="overflow-hidden rounded-lg border border-zinc-200">' +
-      '<table class="w-full border-collapse text-left text-xs">' +
+        '<table class="w-full border-collapse text-left text-xs">' +
         '<thead class="bg-zinc-50 text-zinc-500"><tr><th class="px-3 py-2 font-semibold">Start</th><th class="px-3 py-2 font-semibold">End</th><th class="px-3 py-2 font-semibold">Duration</th><th class="px-3 py-2 font-semibold">Status</th><th class="px-3 py-2 font-semibold">id</th><th class="px-3 py-2 font-semibold">cursor</th></tr></thead>' +
         '<tbody class="divide-y divide-zinc-100 bg-white">' +
-          jobs.map((detail) => {
+        jobs
+          .map((detail) => {
             const job = detail.item;
-            return '<tr class="history-table-row" tabindex="0" data-history-kind="job" data-history-key="' + escapeHtml(detail.key) + '">' +
-            '<td class="px-3 py-2 font-mono text-zinc-700">' + escapeHtml(formatTimelineDate(detail.startAt)) + '</td>' +
-            '<td class="px-3 py-2 font-mono text-zinc-700">' + escapeHtml(formatTimelineDate(detail.endAt)) + '</td>' +
-            '<td class="px-3 py-2 text-zinc-500">' + escapeHtml(formatDuration(detail.endAt.getTime() - detail.startAt.getTime())) + '</td>' +
-            '<td class="px-3 py-2 text-zinc-600">' + escapeHtml(job.status) + '</td>' +
-            '<td class="px-3 py-2"><code class="break-all text-zinc-500">' + escapeHtml(job.id) + '</code></td>' +
-            '<td class="px-3 py-2">' + (job.cursor ? '<code>yes</code>' : '') + '</td>' +
-          '</tr>';
-          }).join('') +
+            return (
+              '<tr class="timeline-table-row" tabindex="0" data-timeline-kind="job" data-timeline-key="' +
+              escapeHtml(detail.key) +
+              '">' +
+              '<td class="px-3 py-2 font-mono text-zinc-700">' +
+              escapeHtml(formatTimelineDate(detail.startAt)) +
+              '</td>' +
+              '<td class="px-3 py-2 font-mono text-zinc-700">' +
+              escapeHtml(formatTimelineDate(detail.endAt)) +
+              '</td>' +
+              '<td class="px-3 py-2 text-zinc-500">' +
+              escapeHtml(formatDuration(detail.endAt.getTime() - detail.startAt.getTime())) +
+              '</td>' +
+              '<td class="px-3 py-2 text-zinc-600">' +
+              escapeHtml(job.status) +
+              '</td>' +
+              '<td class="px-3 py-2"><code class="break-all text-zinc-500">' +
+              escapeHtml(job.id) +
+              '</code></td>' +
+              '<td class="px-3 py-2">' +
+              (job.cursor ? '<code>yes</code>' : '') +
+              '</td>' +
+              '</tr>'
+            );
+          })
+          .join('') +
         '</tbody>' +
-      '</table>' +
-      '</div>'
+        '</table>' +
+        '</div>'
     );
   }
 
@@ -1040,26 +1239,47 @@ function mountHistoryPage(observatoryStore) {
     return renderHistoryDetailTableFrame(
       'Coverage',
       '<div class="overflow-hidden rounded-lg border border-zinc-200">' +
-      '<table class="w-full border-collapse text-left text-xs">' +
+        '<table class="w-full border-collapse text-left text-xs">' +
         '<thead class="bg-zinc-50 text-zinc-500"><tr><th class="px-3 py-2 font-semibold">Start</th><th class="px-3 py-2 font-semibold">End</th><th class="px-3 py-2 font-semibold">Duration</th><th class="px-3 py-2 font-semibold">Messages</th></tr></thead>' +
         '<tbody class="divide-y divide-zinc-100 bg-white">' +
-          intervals.map((interval) => '<tr class="history-table-row coverage-table-row" tabindex="0" data-history-kind="coverage" data-history-key="' + escapeHtml(interval.key) + '" data-coverage-key="' + escapeHtml(interval.key) + '">' +
-            '<td class="px-3 py-2 font-mono text-zinc-700">' + escapeHtml(formatTimelineDate(interval.startAt)) + '</td>' +
-            '<td class="px-3 py-2 font-mono text-zinc-700">' + escapeHtml(formatTimelineDate(interval.endAt)) + '</td>' +
-            '<td class="px-3 py-2 text-zinc-500">' + escapeHtml(formatDuration(interval.endAt.getTime() - interval.startAt.getTime())) + '</td>' +
-            '<td class="px-3 py-2 text-zinc-500">' + escapeHtml(formatInteger(interval.messageCount || 0)) + '</td>' +
-          '</tr>').join('') +
+        intervals
+          .map(
+            (interval) =>
+              '<tr class="timeline-table-row coverage-table-row" tabindex="0" data-timeline-kind="coverage" data-timeline-key="' +
+              escapeHtml(interval.key) +
+              '" data-coverage-key="' +
+              escapeHtml(interval.key) +
+              '">' +
+              '<td class="px-3 py-2 font-mono text-zinc-700">' +
+              escapeHtml(formatTimelineDate(interval.startAt)) +
+              '</td>' +
+              '<td class="px-3 py-2 font-mono text-zinc-700">' +
+              escapeHtml(formatTimelineDate(interval.endAt)) +
+              '</td>' +
+              '<td class="px-3 py-2 text-zinc-500">' +
+              escapeHtml(formatDuration(interval.endAt.getTime() - interval.startAt.getTime())) +
+              '</td>' +
+              '<td class="px-3 py-2 text-zinc-500">' +
+              escapeHtml(formatInteger(interval.messageCount || 0)) +
+              '</td>' +
+              '</tr>'
+          )
+          .join('') +
         '</tbody>' +
-      '</table>' +
-      '</div>'
+        '</table>' +
+        '</div>'
     );
   }
 
   function renderHistoryDetailTableFrame(title, tableHtml) {
-    return '<section class="grid gap-1">' +
-      '<div class="text-xs font-semibold text-zinc-500">' + escapeHtml(title) + '</div>' +
+    return (
+      '<section class="grid gap-1">' +
+      '<div class="text-xs font-semibold text-zinc-500">' +
+      escapeHtml(title) +
+      '</div>' +
       tableHtml +
-    '</section>';
+      '</section>'
+    );
   }
 
   function visibleCoverageIntervals(intervals, min, max) {
@@ -1078,14 +1298,40 @@ function mountHistoryPage(observatoryStore) {
   function renderCoverageTimelineSegment(interval, min, max) {
     const position = timelinePosition(interval, min, max, 0.25);
     const tooltip = coverageSegmentTooltip(interval, interval);
-    return '<div class="timeline-segment segment-coverage" style="left:' + position.left + '%;width:' + position.width + '%" tabindex="0" aria-label="' + escapeHtml(tooltip.range + ', ' + tooltip.count) + '" data-history-kind="coverage" data-history-key="' + escapeHtml(interval.key) + '" data-coverage-key="' + escapeHtml(interval.key) + '" data-hover-from="' + escapeHtml(tooltip.from) + '" data-hover-to="' + escapeHtml(tooltip.to) + '" data-hover-duration="' + escapeHtml(tooltip.duration) + '" data-hover-messages="' + escapeHtml(tooltip.count) + '"></div>';
+    return (
+      '<div class="timeline-segment segment-coverage" style="left:' +
+      position.left +
+      '%;width:' +
+      position.width +
+      '%" tabindex="0" aria-label="' +
+      escapeHtml(tooltip.range + ', ' + tooltip.count) +
+      '" data-timeline-kind="coverage" data-timeline-key="' +
+      escapeHtml(interval.key) +
+      '" data-coverage-key="' +
+      escapeHtml(interval.key) +
+      '" data-hover-from="' +
+      escapeHtml(tooltip.from) +
+      '" data-hover-to="' +
+      escapeHtml(tooltip.to) +
+      '" data-hover-duration="' +
+      escapeHtml(tooltip.duration) +
+      '" data-hover-messages="' +
+      escapeHtml(tooltip.count) +
+      '"></div>'
+    );
   }
 
   function renderTargetUnionTimelineSegments(details, min, max) {
     return mergeHistoryDetailsForDisplay(details)
       .map((interval) => {
         const position = timelinePosition(interval, min, max, 0.25);
-        return '<div class="timeline-segment segment-target" style="left:' + position.left + '%;width:' + position.width + '%"></div>';
+        return (
+          '<div class="timeline-segment segment-target" style="left:' +
+          position.left +
+          '%;width:' +
+          position.width +
+          '%"></div>'
+        );
       })
       .join('');
   }
@@ -1095,7 +1341,15 @@ function mountHistoryPage(observatoryStore) {
       .map((interval) => {
         const position = timelinePosition(interval, min, max, 0);
         if (position.width <= 0) return '';
-        return '<div class="timeline-segment segment-target-highlight" style="left:' + position.left + '%;width:' + position.width + '%" data-history-keys="' + escapeHtml(interval.keys.join('|')) + '"></div>';
+        return (
+          '<div class="timeline-segment segment-target-highlight" style="left:' +
+          position.left +
+          '%;width:' +
+          position.width +
+          '%" data-timeline-keys="' +
+          escapeHtml(interval.keys.join('|')) +
+          '"></div>'
+        );
       })
       .join('');
   }
@@ -1118,7 +1372,9 @@ function mountHistoryPage(observatoryStore) {
   }
 
   function partitionTargetDetailsForDisplay(details) {
-    const points = [...new Set(details.flatMap((detail) => [detail.startAt.getTime(), detail.endAt.getTime()]))].sort((left, right) => left - right);
+    const points = [
+      ...new Set(details.flatMap((detail) => [detail.startAt.getTime(), detail.endAt.getTime()]))
+    ].sort((left, right) => left - right);
     const partitions = [];
     for (let index = 1; index < points.length; index += 1) {
       const startAt = points[index - 1];
@@ -1142,7 +1398,27 @@ function mountHistoryPage(observatoryStore) {
     if (!interval || interval.endAt <= min || interval.startAt >= max) return '';
     const position = timelinePosition(interval, min, max, 0.25);
     const tooltip = jobSegmentTooltip(job, interval);
-    return '<div class="timeline-segment ' + (job.status === 'running' ? 'segment-job-running' : 'segment-job-pending') + '" style="left:' + position.left + '%;width:' + position.width + '%" tabindex="0" aria-label="' + escapeHtml(tooltip.range + ', ' + tooltip.count) + '" data-history-kind="job" data-history-key="' + escapeHtml(jobKey(job)) + '" data-hover-from="' + escapeHtml(tooltip.from) + '" data-hover-to="' + escapeHtml(tooltip.to) + '" data-hover-duration="' + escapeHtml(tooltip.duration) + '" data-hover-extra="' + escapeHtml(tooltip.count) + '"></div>';
+    return (
+      '<div class="timeline-segment ' +
+      (job.status === 'running' ? 'segment-job-running' : 'segment-job-pending') +
+      '" style="left:' +
+      position.left +
+      '%;width:' +
+      position.width +
+      '%" tabindex="0" aria-label="' +
+      escapeHtml(tooltip.range + ', ' + tooltip.count) +
+      '" data-timeline-kind="job" data-timeline-key="' +
+      escapeHtml(jobKey(job)) +
+      '" data-hover-from="' +
+      escapeHtml(tooltip.from) +
+      '" data-hover-to="' +
+      escapeHtml(tooltip.to) +
+      '" data-hover-duration="' +
+      escapeHtml(tooltip.duration) +
+      '" data-hover-extra="' +
+      escapeHtml(tooltip.count) +
+      '"></div>'
+    );
   }
 
   function renderTimelineSegment(raw, min, max, className, tooltipFactory) {
@@ -1152,9 +1428,25 @@ function mountHistoryPage(observatoryStore) {
     const css = typeof className === 'function' ? className(raw) : className;
     const tooltip = tooltipFactory ? tooltipFactory(raw, interval) : null;
     const tooltipAttrs = tooltip
-      ? ' tabindex="0" aria-label="' + escapeHtml(tooltip.range + ', ' + tooltip.count) + '" data-hover-range="' + escapeHtml(tooltip.range) + '" data-hover-count="' + escapeHtml(tooltip.count) + '"'
+      ? ' tabindex="0" aria-label="' +
+        escapeHtml(tooltip.range + ', ' + tooltip.count) +
+        '" data-hover-range="' +
+        escapeHtml(tooltip.range) +
+        '" data-hover-count="' +
+        escapeHtml(tooltip.count) +
+        '"'
       : '';
-    return '<div class="timeline-segment ' + css + '" style="left:' + position.left + '%;width:' + position.width + '%"' + tooltipAttrs + '></div>';
+    return (
+      '<div class="timeline-segment ' +
+      css +
+      '" style="left:' +
+      position.left +
+      '%;width:' +
+      position.width +
+      '%"' +
+      tooltipAttrs +
+      '></div>'
+    );
   }
 
   function renderCoverageGap(gap, min, max) {
@@ -1162,7 +1454,19 @@ function mountHistoryPage(observatoryStore) {
     const position = timelinePosition(gap, min, max, 0);
     if (position.width <= 0) return '';
     const label = 'Add target for ' + formatDate(gap.startAt) + ' -> ' + formatDate(gap.endAt);
-    return '<button class="coverage-gap" style="left:' + position.left + '%;width:' + position.width + '%" aria-label="' + escapeHtml(label) + '" data-gap-start="' + escapeHtml(gap.startAt.toISOString()) + '" data-gap-end="' + escapeHtml(gap.endAt.toISOString()) + '"></button>';
+    return (
+      '<button class="coverage-gap" style="left:' +
+      position.left +
+      '%;width:' +
+      position.width +
+      '%" aria-label="' +
+      escapeHtml(label) +
+      '" data-gap-start="' +
+      escapeHtml(gap.startAt.toISOString()) +
+      '" data-gap-end="' +
+      escapeHtml(gap.endAt.toISOString()) +
+      '"></button>'
+    );
   }
 
   function timelinePosition(interval, min, max, minWidth) {
@@ -1214,7 +1518,8 @@ function mountHistoryPage(observatoryStore) {
         if (interval.endAt > previous.endAt) {
           previous.endAt = interval.endAt;
         }
-        previous.messageCount = Number(previous.messageCount || 0) + Number(interval.messageCount || 0);
+        previous.messageCount =
+          Number(previous.messageCount || 0) + Number(interval.messageCount || 0);
         return acc;
       }, []);
   }
@@ -1291,7 +1596,11 @@ function mountHistoryPage(observatoryStore) {
     container.querySelectorAll('[data-hover-range]').forEach((segment) => {
       segment.addEventListener('focus', () => {
         const rect = segment.getBoundingClientRect();
-        showHistoryHoverPanel([historyItemFromElement(segment)], rect.left + rect.width / 2, rect.bottom);
+        showHistoryHoverPanel(
+          [historyItemFromElement(segment)],
+          rect.left + rect.width / 2,
+          rect.bottom
+        );
         highlightHistoryItems(container, [historyItemFromElement(segment)]);
       });
       segment.addEventListener('blur', () => {
@@ -1313,14 +1622,16 @@ function mountHistoryPage(observatoryStore) {
   }
 
   function historyHoverItem(detail) {
-    const tooltip = detail.type === 'coverage'
-      ? coverageSegmentTooltip(detail.item, detail.item)
-      : detail.type === 'target'
-        ? targetSegmentTooltip(detail.item, detail)
-        : jobSegmentTooltip(detail.item, detail);
+    const tooltip =
+      detail.type === 'coverage'
+        ? coverageSegmentTooltip(detail.item, detail.item)
+        : detail.type === 'target'
+          ? targetSegmentTooltip(detail.item, detail)
+          : jobSegmentTooltip(detail.item, detail);
     return {
       duration: tooltip.duration,
-      extra: detail.type === 'coverage' ? tooltip.count : detail.type === 'job' ? tooltip.count : '',
+      extra:
+        detail.type === 'coverage' ? tooltip.count : detail.type === 'job' ? tooltip.count : '',
       from: tooltip.from,
       key: detail.key,
       kind: detail.type,
@@ -1332,11 +1643,14 @@ function mountHistoryPage(observatoryStore) {
   function historyItemFromElement(element) {
     return {
       duration: element.getAttribute('data-hover-duration') || '',
-      extra: element.getAttribute('data-hover-messages') || element.getAttribute('data-hover-extra') || '',
+      extra:
+        element.getAttribute('data-hover-messages') ||
+        element.getAttribute('data-hover-extra') ||
+        '',
       from: element.getAttribute('data-hover-from') || '',
-      key: element.getAttribute('data-history-key') || '',
-      kind: element.getAttribute('data-history-kind') || '',
-      label: historyKindLabel(element.getAttribute('data-history-kind') || ''),
+      key: element.getAttribute('data-timeline-key') || '',
+      kind: element.getAttribute('data-timeline-kind') || '',
+      label: historyKindLabel(element.getAttribute('data-timeline-kind') || ''),
       to: element.getAttribute('data-hover-to') || ''
     };
   }
@@ -1359,7 +1673,7 @@ function mountHistoryPage(observatoryStore) {
   }
 
   function bindHistoryLinkedHover(container) {
-    container.querySelectorAll('[data-history-key]').forEach((element) => {
+    container.querySelectorAll('[data-timeline-key]').forEach((element) => {
       element.addEventListener('pointerenter', (event) => {
         if (event.altKey) return;
         highlightHistoryItems(container, [historyItemFromElement(element)]);
@@ -1378,20 +1692,26 @@ function mountHistoryPage(observatoryStore) {
 
   function highlightHistoryItems(container, items) {
     const keys = new Set(items.map((item) => item.key));
-    container.querySelectorAll('[data-history-key]').forEach((element) => {
-      const active = keys.has(element.getAttribute('data-history-key'));
-      element.classList.toggle('history-linked-hover', active);
-      element.classList.toggle('coverage-linked-hover', active && element.hasAttribute('data-coverage-key'));
+    container.querySelectorAll('[data-timeline-key]').forEach((element) => {
+      const active = keys.has(element.getAttribute('data-timeline-key'));
+      element.classList.toggle('timeline-linked-hover', active);
+      element.classList.toggle(
+        'coverage-linked-hover',
+        active && element.hasAttribute('data-coverage-key')
+      );
     });
-    container.querySelectorAll('[data-history-keys]').forEach((element) => {
-      const elementKeys = (element.getAttribute('data-history-keys') || '').split('|');
-      element.classList.toggle('history-linked-hover', elementKeys.some((key) => keys.has(key)));
+    container.querySelectorAll('[data-timeline-keys]').forEach((element) => {
+      const elementKeys = (element.getAttribute('data-timeline-keys') || '').split('|');
+      element.classList.toggle(
+        'timeline-linked-hover',
+        elementKeys.some((key) => keys.has(key))
+      );
     });
   }
 
   function clearHistoryHighlight(container) {
-    container.querySelectorAll('.history-linked-hover').forEach((element) => {
-      element.classList.remove('history-linked-hover');
+    container.querySelectorAll('.timeline-linked-hover').forEach((element) => {
+      element.classList.remove('timeline-linked-hover');
     });
     container.querySelectorAll('.coverage-linked-hover').forEach((element) => {
       element.classList.remove('coverage-linked-hover');
@@ -1409,18 +1729,22 @@ function mountHistoryPage(observatoryStore) {
   function bindTimelineViewportGestures(container, min, max) {
     const track = container.querySelector('[data-timeline-track]');
     if (!track) return;
-    track.addEventListener('wheel', (event) => {
-      const axis = timelineWheelGestureAxis(event);
-      if (axis === null) {
-        event.preventDefault();
-        return;
-      }
-      if (axis === 'vertical') {
-        zoomTimelineViewport(event, min, max);
-        return;
-      }
-      panTimelineViewport(event, min, max);
-    }, { passive: false });
+    track.addEventListener(
+      'wheel',
+      (event) => {
+        const axis = timelineWheelGestureAxis(event);
+        if (axis === null) {
+          event.preventDefault();
+          return;
+        }
+        if (axis === 'vertical') {
+          zoomTimelineViewport(event, min, max);
+          return;
+        }
+        panTimelineViewport(event, min, max);
+      },
+      { passive: false }
+    );
   }
 
   function timelineWheelGestureAxis(event) {
@@ -1474,12 +1798,19 @@ function mountHistoryPage(observatoryStore) {
     const pointerRatio = clamp((event.clientX - rect.left) / rect.width, 0, 1);
     const anchorAt = startAt + span * pointerRatio;
     const zoomFactor = Math.exp(event.deltaY * 0.002);
-    const nextSpan = clamp(span * zoomFactor, TIMELINE_MIN_WINDOW_MS, physical.endAt - physical.startAt);
+    const nextSpan = clamp(
+      span * zoomFactor,
+      TIMELINE_MIN_WINDOW_MS,
+      physical.endAt - physical.startAt
+    );
     state.viewportDays = null;
-    state.timelineViewport = clampTimelineViewport({
-      endAt: anchorAt + nextSpan * (1 - pointerRatio),
-      startAt: anchorAt - nextSpan * pointerRatio
-    }, physical);
+    state.timelineViewport = clampTimelineViewport(
+      {
+        endAt: anchorAt + nextSpan * (1 - pointerRatio),
+        startAt: anchorAt - nextSpan * pointerRatio
+      },
+      physical
+    );
     syncViewportButtons();
     renderTimeline();
   }
@@ -1493,10 +1824,13 @@ function mountHistoryPage(observatoryStore) {
     const shift = (event.deltaX / rect.width) * span;
     const physical = timelinePhysicalBounds(state.selectedState);
     state.viewportDays = null;
-    state.timelineViewport = clampTimelineViewport({
-      endAt: max.getTime() + shift,
-      startAt: min.getTime() + shift
-    }, physical);
+    state.timelineViewport = clampTimelineViewport(
+      {
+        endAt: max.getTime() + shift,
+        startAt: min.getTime() + shift
+      },
+      physical
+    );
     syncViewportButtons();
     renderTimeline();
   }
@@ -1507,7 +1841,11 @@ function mountHistoryPage(observatoryStore) {
     if (!track || !selection) return;
     track.addEventListener('pointerdown', (event) => {
       if (event.button !== 0) return;
-      if (!event.altKey && event.target instanceof Element && event.target.closest('.segment-coverage')) {
+      if (
+        !event.altKey &&
+        event.target instanceof Element &&
+        event.target.closest('.segment-coverage')
+      ) {
         return;
       }
       event.preventDefault();
@@ -1543,12 +1881,16 @@ function mountHistoryPage(observatoryStore) {
     track.addEventListener('pointercancel', (event) => {
       cancelTimelineSelection(track, selection, event.pointerId);
     });
-    track.addEventListener('click', (event) => {
-      if (!state.suppressTimelineClick) return;
-      event.preventDefault();
-      event.stopPropagation();
-      state.suppressTimelineClick = false;
-    }, true);
+    track.addEventListener(
+      'click',
+      (event) => {
+        if (!state.suppressTimelineClick) return;
+        event.preventDefault();
+        event.stopPropagation();
+        state.suppressTimelineClick = false;
+      },
+      true
+    );
   }
 
   function updateTimelineSelection(selection, startX, currentX) {
@@ -1622,20 +1964,30 @@ function mountHistoryPage(observatoryStore) {
   }
 
   function renderHistoryHoverPopover(item) {
-    return '<div class="history-hover-popover">' +
-      '<div class="font-semibold text-zinc-900">' + escapeHtml(item.label) + '</div>' +
-      '<div class="mt-1 grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-0.5">' +
-        hoverField('from', item.from) +
-        hoverField('to', item.to) +
-        hoverField('duration', item.duration) +
-        (item.extra ? hoverField(item.kind === 'coverage' ? 'messages' : 'status', item.extra) : '') +
+    return (
+      '<div class="app-hover-popover">' +
+      '<div class="font-semibold text-zinc-900">' +
+      escapeHtml(item.label) +
       '</div>' +
-    '</div>';
+      '<div class="mt-1 grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-0.5">' +
+      hoverField('from', item.from) +
+      hoverField('to', item.to) +
+      hoverField('duration', item.duration) +
+      (item.extra ? hoverField(item.kind === 'coverage' ? 'messages' : 'status', item.extra) : '') +
+      '</div>' +
+      '</div>'
+    );
   }
 
   function hoverField(label, value) {
-    return '<div class="text-zinc-400">' + escapeHtml(label) + '</div>' +
-      '<div class="font-mono text-zinc-700">' + escapeHtml(value) + '</div>';
+    return (
+      '<div class="text-zinc-400">' +
+      escapeHtml(label) +
+      '</div>' +
+      '<div class="font-mono text-zinc-700">' +
+      escapeHtml(value) +
+      '</div>'
+    );
   }
 
   function positionCoverageHoverPanel(x, y) {
@@ -1653,7 +2005,8 @@ function mountHistoryPage(observatoryStore) {
     if (top + height > window.innerHeight - padding) {
       top = y - height - offset;
     }
-    panel.style.transform = 'translate(' + Math.max(padding, left) + 'px, ' + Math.max(padding, top) + 'px)';
+    panel.style.transform =
+      'translate(' + Math.max(padding, left) + 'px, ' + Math.max(padding, top) + 'px)';
   }
 
   function hideCoverageHoverPanel() {
@@ -1665,31 +2018,10 @@ function mountHistoryPage(observatoryStore) {
   function renderEvents() {
     const containers = [$('events'), $('eventsPreview')];
     const scrollState = captureEventScrollState(containers);
-    if (state.events.length === 0) {
-      const empty = '<div class="p-6 text-center text-sm text-zinc-500">No events yet.</div>';
-      containers.forEach((container) => {
-        container.innerHTML = empty;
-      });
+    nextTick(() => {
       restoreEventScrollState(scrollState);
       renderEventFilters();
-      return;
-    }
-    const html = state.events.map((event) => {
-      const group = eventGroupForEvent(event);
-      return '<div class="relative border-b border-zinc-200 bg-white py-2 pl-4 pr-3 font-mono text-xs leading-relaxed">' +
-        '<div class="absolute left-0 top-0 h-full w-1.5" style="background:' + group.color + '"></div>' +
-        '<div class="mb-1 flex flex-wrap items-center gap-2">' +
-          '<span class="text-zinc-500">' + escapeHtml(formatTime(event.occurredAt)) + '</span>' +
-          '<span class="font-semibold text-zinc-900">' + escapeHtml(event.type) + '</span>' +
-        '</div>' +
-        '<pre class="m-0 whitespace-pre-wrap break-words text-zinc-700">' + escapeHtml(JSON.stringify(event.data || {})) + '</pre>' +
-      '</div>';
-    }).join('');
-    containers.forEach((container) => {
-      container.innerHTML = html;
     });
-    restoreEventScrollState(scrollState);
-    renderEventFilters();
   }
 
   function captureEventScrollState(containers) {
@@ -1707,16 +2039,19 @@ function mountHistoryPage(observatoryStore) {
         state.container.scrollTop = 0;
         return;
       }
-      state.container.scrollTop = state.scrollTop + state.container.scrollHeight - state.scrollHeight;
+      state.container.scrollTop =
+        state.scrollTop + state.container.scrollHeight - state.scrollHeight;
     });
   }
 
   function renderEventFilters() {
     const html =
       '<div class="grid gap-3 p-3">' +
-        filterableEventGroups().map((group) => renderEventFilterGroup(group)).join('') +
-        renderEventLimitControl() +
-        '<button data-close-event-filters class="mt-1 h-9 rounded-lg border border-zinc-800 bg-zinc-800 px-3 text-sm font-medium text-white hover:bg-zinc-950">Close Filters</button>' +
+      filterableEventGroups()
+        .map((group) => renderEventFilterGroup(group))
+        .join('') +
+      renderEventLimitControl() +
+      '<button data-close-event-filters class="mt-1 h-9 rounded-lg border border-zinc-800 bg-zinc-800 px-3 text-sm font-medium text-white hover:bg-zinc-950">Close Filters</button>' +
       '</div>';
     [$('eventFilters'), $('eventFiltersPreview')].forEach((container) => {
       container.innerHTML = html;
@@ -1727,33 +2062,63 @@ function mountHistoryPage(observatoryStore) {
   function renderEventFilterGroup(group) {
     const state = eventGroupFilterState(group);
     const checked = state.checked ? ' checked' : '';
-    return '<section class="rounded-lg border border-zinc-200 bg-white p-3">' +
+    return (
+      '<section class="rounded-lg border border-zinc-200 bg-white p-3">' +
       '<label class="flex cursor-pointer items-center gap-2">' +
-        '<input data-event-group-filter="' + escapeHtml(group.id) + '" type="checkbox" class="h-4 w-4 rounded border-zinc-300"' + checked + '>' +
-        '<span class="h-3 w-3 rounded-sm" style="background:' + group.color + '"></span>' +
-        '<span class="min-w-0 flex-1 text-sm font-semibold">' + escapeHtml(group.label) + '</span>' +
+      '<input data-event-group-filter="' +
+      escapeHtml(group.id) +
+      '" type="checkbox" class="h-4 w-4 rounded border-zinc-300"' +
+      checked +
+      '>' +
+      '<span class="h-3 w-3 rounded-sm" style="background:' +
+      group.color +
+      '"></span>' +
+      '<span class="min-w-0 flex-1 text-sm font-semibold">' +
+      escapeHtml(group.label) +
+      '</span>' +
       '</label>' +
       '<div class="mt-2 flex flex-wrap gap-1.5 pl-6">' +
-        eventTypesForGroup(group).map((type) => eventTypeLegendChip(group, type)).join('') +
+      eventTypesForGroup(group)
+        .map((type) => eventTypeLegendChip(group, type))
+        .join('') +
       '</div>' +
-    '</section>';
+      '</section>'
+    );
   }
 
   function renderEventLimitControl() {
-    return '<section class="rounded-lg border border-zinc-200 bg-white p-3">' +
+    return (
+      '<section class="rounded-lg border border-zinc-200 bg-white p-3">' +
       '<label class="grid gap-2">' +
-        '<span class="text-sm font-semibold">Event limit</span>' +
-        '<input data-event-limit type="number" min="' + MIN_EVENT_LIMIT + '" max="' + MAX_EVENT_LIMIT + '" step="20" value="' + state.eventLimit + '" class="h-9 rounded-lg border border-zinc-300 bg-white px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100">' +
+      '<span class="text-sm font-semibold">Event limit</span>' +
+      '<input data-event-limit type="number" min="' +
+      MIN_EVENT_LIMIT +
+      '" max="' +
+      MAX_EVENT_LIMIT +
+      '" step="20" value="' +
+      state.eventLimit +
+      '" class="h-9 rounded-lg border border-zinc-300 bg-white px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100">' +
       '</label>' +
-    '</section>';
+      '</section>'
+    );
   }
 
   function eventTypeLegendChip(group, type) {
     const checked = isEventTypeEnabled(group, type) ? ' checked' : '';
-    return '<label class="inline-flex min-w-0 cursor-pointer items-center gap-1 rounded border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 font-mono text-[10px] text-zinc-600">' +
-      '<input data-event-type-filter="' + escapeHtml(type) + '" data-event-type-group="' + escapeHtml(group.id) + '" type="checkbox" class="h-3 w-3 rounded border-zinc-300"' + checked + '>' +
-      '<span class="truncate">' + escapeHtml(type) + '</span>' +
-    '</label>';
+    return (
+      '<label class="inline-flex min-w-0 cursor-pointer items-center gap-1 rounded border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 font-mono text-[10px] text-zinc-600">' +
+      '<input data-event-type-filter="' +
+      escapeHtml(type) +
+      '" data-event-type-group="' +
+      escapeHtml(group.id) +
+      '" type="checkbox" class="h-3 w-3 rounded border-zinc-300"' +
+      checked +
+      '>' +
+      '<span class="truncate">' +
+      escapeHtml(type) +
+      '</span>' +
+      '</label>'
+    );
   }
 
   function eventTypesForGroup(group) {
@@ -1793,7 +2158,9 @@ function mountHistoryPage(observatoryStore) {
     });
     document.querySelectorAll('[data-event-group-filter]').forEach((input) => {
       if (!(input instanceof HTMLInputElement)) return;
-      const group = EVENT_GROUPS.find((item) => item.id === input.getAttribute('data-event-group-filter'));
+      const group = EVENT_GROUPS.find(
+        (item) => item.id === input.getAttribute('data-event-group-filter')
+      );
       if (!group) return;
       const state = eventGroupFilterState(group);
       input.checked = state.checked;
@@ -1891,18 +2258,10 @@ function mountHistoryPage(observatoryStore) {
     return EVENT_GROUPS.filter((group) => group.filterable !== false);
   }
 
-  function eventGroupForEvent(event) {
-    return eventGroupForType(String(event?.type || ''));
-  }
-
-  function eventGroupForType(type) {
-    return EVENT_GROUPS.find((group) => group.match(type)) || EVENT_GROUPS[EVENT_GROUPS.length - 1];
-  }
-
-  function setHistoryEventsCollapsed(collapsed) {
+  function setEventsPanelCollapsed(collapsed) {
     state.eventsPanelCollapsed = collapsed;
     writeStorage(STORAGE_KEYS.eventsPanelCollapsed, collapsed ? '1' : '0');
-    applyHistoryEventsPanelState();
+    applyEventsPanelState();
   }
 
   function setDashboardCollapsed(collapsed) {
@@ -1924,21 +2283,17 @@ function mountHistoryPage(observatoryStore) {
     }
   }
 
-  function applyHistoryEventsPanelState() {
+  function applyEventsPanelState() {
     const collapsed = state.eventsPanelCollapsed === true;
     $('mainLayout').className = collapsed
       ? 'grid min-h-0 flex-1 grid-cols-[380px_minmax(0,1fr)] gap-4 overflow-hidden bg-zinc-100 p-4 pt-0'
       : 'grid min-h-0 flex-1 grid-cols-[380px_minmax(0,1fr)_400px] gap-4 overflow-hidden bg-zinc-100 p-4 pt-0';
-    $('historyEventsPanel').classList.toggle('hidden', collapsed);
+    $('eventsPanel').classList.toggle('hidden', collapsed);
 
     const topToggle = $('toggleEventsPanelTop');
-    setHeaderActionButtonState(
-      topToggle,
-      !collapsed,
-      collapsed ? 'Show events' : 'Hide events'
-    );
+    setHeaderActionButtonState(topToggle, !collapsed, collapsed ? 'Show events' : 'Hide events');
     if (!collapsed) {
-      hidePreview('historyEventsPreviewPanel', 'flex');
+      hidePreview('eventsPreviewPanel', 'flex');
     }
   }
 
@@ -1994,7 +2349,7 @@ function mountHistoryPage(observatoryStore) {
     const paddingTop = parseFloat(styles.paddingTop) || 0;
     const paddingRight = parseFloat(styles.paddingRight) || 0;
     const paddingBottom = parseFloat(styles.paddingBottom) || 0;
-    const panel = $('historyEventsPreviewPanel');
+    const panel = $('eventsPreviewPanel');
     panel.style.top = rect.top + paddingTop + 'px';
     panel.style.right = window.innerWidth - rect.right + paddingRight + 'px';
     panel.style.width = '400px';
@@ -2005,7 +2360,7 @@ function mountHistoryPage(observatoryStore) {
     if (!$('dashboardPreviewPanel').classList.contains('hidden')) {
       positionDashboardPreview();
     }
-    if (!$('historyEventsPreviewPanel').classList.contains('hidden')) {
+    if (!$('eventsPreviewPanel').classList.contains('hidden')) {
       positionEventsPreview();
     }
   }
@@ -2028,8 +2383,12 @@ function mountHistoryPage(observatoryStore) {
     };
     el.className = 'inline-flex items-center gap-1.5 text-xs font-medium text-zinc-600';
     el.innerHTML =
-      '<span class="h-2 w-2 rounded-full ' + (classes[kind] || classes.warn) + '"></span>' +
-      '<span>' + escapeHtml(text) + '</span>';
+      '<span class="h-2 w-2 rounded-full ' +
+      (classes[kind] || classes.warn) +
+      '"></span>' +
+      '<span>' +
+      escapeHtml(text) +
+      '</span>';
   }
 
   function updateTdlibStatus() {
@@ -2173,8 +2532,7 @@ function mountHistoryPage(observatoryStore) {
           }
         }
       }
-    } catch {
-    }
+    } catch {}
     return filters;
   }
 
@@ -2185,7 +2543,10 @@ function mountHistoryPage(observatoryStore) {
   function writeEventFilters() {
     const filters = {
       groups: Object.fromEntries(
-        filterableEventGroups().map((group) => [group.id, state.eventFilters.groups[group.id] !== false])
+        filterableEventGroups().map((group) => [
+          group.id,
+          state.eventFilters.groups[group.id] !== false
+        ])
       ),
       types: Object.fromEntries(
         Object.entries(state.eventFilters.types || {}).filter(
@@ -2206,17 +2567,14 @@ function mountHistoryPage(observatoryStore) {
       if (parsed?.mode === 'folder' && Number.isSafeInteger(parsed.folderId)) {
         return { folderId: parsed.folderId, mode: 'folder' };
       }
-    } catch {
-    }
+    } catch {}
     return { folderId: null, mode: 'main' };
   }
 
   function writeChatListSelection(selection = state) {
     const mode = selection.mode ?? selection.chatListMode;
     const rawFolderId = selection.folderId ?? selection.chatFolderId;
-    const folderId = mode === 'folder' && Number.isSafeInteger(rawFolderId)
-      ? rawFolderId
-      : null;
+    const folderId = mode === 'folder' && Number.isSafeInteger(rawFolderId) ? rawFolderId : null;
     writeStorage(
       STORAGE_KEYS.chatListSelection,
       JSON.stringify(folderId === null ? { mode: 'main' } : { folderId, mode: 'folder' })
@@ -2224,8 +2582,10 @@ function mountHistoryPage(observatoryStore) {
   }
 
   function chatFolderExists(folderId) {
-    return Number.isSafeInteger(folderId) &&
-      (state.chatNavigation?.folders || []).some((folder) => folder.id === folderId);
+    return (
+      Number.isSafeInteger(folderId) &&
+      (state.chatNavigation?.folders || []).some((folder) => folder.id === folderId)
+    );
   }
 
   function writeStorage(key, value) {
@@ -2235,15 +2595,13 @@ function mountHistoryPage(observatoryStore) {
       } else {
         localStorage.setItem(key, value);
       }
-    } catch {
-    }
+    } catch {}
   }
 
   function removeStorage(key) {
     try {
       localStorage.removeItem(key);
-    } catch {
-    }
+    } catch {}
   }
 
   function toDates(raw) {
@@ -2312,11 +2670,6 @@ function mountHistoryPage(observatoryStore) {
     return Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 19).replace('T', ' ');
   }
 
-  function formatTime(value) {
-    const date = value instanceof Date ? value : new Date(value);
-    return Number.isNaN(date.getTime()) ? '' : date.toLocaleTimeString();
-  }
-
   function escapeHtml(value) {
     return String(value)
       .replaceAll('&', '&amp;')
@@ -2344,7 +2697,7 @@ function mountHistoryPage(observatoryStore) {
     setDashboardCollapsed(!state.dashboardCollapsed);
   });
   $('toggleEventsPanelTop').addEventListener('click', () => {
-    setHistoryEventsCollapsed(!state.eventsPanelCollapsed);
+    setEventsPanelCollapsed(!state.eventsPanelCollapsed);
   });
   [$('eventFilters'), $('eventFiltersPreview')].forEach((container) => {
     container.addEventListener('change', (event) => {
@@ -2397,13 +2750,13 @@ function mountHistoryPage(observatoryStore) {
   );
   bindHoverPreview(
     'toggleEventsPanelTop',
-    'historyEventsPreviewPanel',
+    'eventsPreviewPanel',
     () => state.eventsPanelCollapsed === true,
     positionEventsPreview,
     'flex'
   );
   applyDashboardPanelState();
-  applyHistoryEventsPanelState();
+  applyEventsPanelState();
   startTdlibStatusWatchdog();
   renderEvents();
   applyEventsPanelMode();
@@ -2411,18 +2764,18 @@ function mountHistoryPage(observatoryStore) {
   connect();
 }
 
-const historyObservatoryStore = createHistoryObservatoryStore();
-const historyDashboardView = createHistoryDashboardView(historyObservatoryStore);
+const gatewayAppStore = createGatewayAppStore();
+const dashboardView = createDashboardView(gatewayAppStore);
+const eventsView = createEventsView(gatewayAppStore);
 
-Vue.createApp({
-  template: HISTORY_APP_TEMPLATE,
-  setup() {
-    return {
-      dashboardMetrics: historyDashboardView.dashboardMetrics
-    };
-  },
-  mounted() {
-    mountHistoryPage(historyObservatoryStore);
-  }
-}).mount('#historyApp');
-`;
+export function useGatewayAppView() {
+  return {
+    dashboardMetrics: dashboardView.dashboardMetrics,
+    eventItems: eventsView.eventItems,
+    hasEvents: eventsView.hasEvents
+  };
+}
+
+export function mountGatewayAppRuntime() {
+  mountGatewayApp(gatewayAppStore);
+}
