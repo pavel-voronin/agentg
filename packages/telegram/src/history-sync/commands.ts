@@ -102,7 +102,11 @@ export function boundaryFromText(value: string): HistoryBoundary {
     throw new Error('History boundary cannot be empty');
   }
 
-  if (trimmed === 'now' || trimmed === 'past' || /^now-\d+d$/.test(trimmed)) {
+  if (
+    trimmed === 'now' ||
+    trimmed === 'past' ||
+    /^(?:now|past)(?:\s*[+-]\s*\d+(?:y|mo|w|d|h|m|s)(?:\s*\d+(?:y|mo|w|d|h|m|s))*)+$/.test(trimmed)
+  ) {
     return expressionBoundary(trimmed);
   }
 

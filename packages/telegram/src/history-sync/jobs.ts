@@ -2,12 +2,14 @@ import type { JsonObject } from '@agentg/shared/json';
 
 import { addCoverageInterval } from './coverage.js';
 import { orderIntervalsClosestToPresent } from './ranges.js';
+import { normalizeTelegramHistoryInterval } from './time.js';
 import type { BackfillJob, HistoryCoverageInterval } from './types.js';
 
 export function claimNextBackfillJob(jobs: BackfillJob[]): BackfillJob | undefined {
-  return orderIntervalsClosestToPresent(jobs.filter((job) => job.status === 'pending'))[0] as
-    | BackfillJob
-    | undefined;
+  const job = orderIntervalsClosestToPresent(
+    jobs.filter((candidate) => candidate.status === 'pending')
+  )[0] as BackfillJob | undefined;
+  return job === undefined ? undefined : normalizeTelegramHistoryInterval(job);
 }
 
 export function updateBackfillJobCursor(job: BackfillJob, cursor: JsonObject): BackfillJob {
@@ -26,9 +28,11 @@ export function completeBackfillJob(
 } {
   return {
     coverage: addCoverageInterval(coverage, {
-      chatId: job.chatId,
-      endAt: job.endAt,
-      startAt: job.startAt
+      ...normalizeTelegramHistoryInterval({
+        chatId: job.chatId,
+        endAt: job.endAt,
+        startAt: job.startAt
+      })
     })
   };
 }

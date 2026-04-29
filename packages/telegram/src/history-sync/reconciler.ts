@@ -38,6 +38,22 @@ export function reconcileChat(options: ReconcileChatOptions): BackfillJobInput[]
   }));
 }
 
+export function completedOneShotTargets(options: ReconcileChatOptions): HistoryTarget[] {
+  const coverage = normalizeCoverageIntervals(options.coverage).filter(
+    (interval) => interval.chatId === options.chatId
+  );
+
+  return options.targets
+    .filter((target) => target.chatId === options.chatId)
+    .filter(isOneShotHistoryTarget)
+    .filter((target) => {
+      const projected = projectHistoryRange(target.range, options);
+      return coverage.some(
+        (interval) => interval.startAt <= projected.startAt && interval.endAt >= projected.endAt
+      );
+    });
+}
+
 export function projectTargetsForChat(
   targets: HistoryTarget[],
   chatId: string,
@@ -47,5 +63,13 @@ export function projectTargetsForChat(
     targets
       .filter((target) => target.chatId === chatId)
       .map((target) => projectHistoryRange(target.range, context))
+  );
+}
+
+function isOneShotHistoryTarget(target: HistoryTarget): boolean {
+  return (
+    target.templateId === undefined &&
+    target.range.start.kind === 'absolute' &&
+    target.range.end.kind === 'absolute'
   );
 }

@@ -9,6 +9,7 @@ import { and, asc, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
 
 import type { JsonObject } from '@agentg/shared/json';
 import { liveMessageCoverageInterval, normalizeCoverageIntervals } from './coverage.js';
+import { canonicalizeHistoryRange } from './ranges.js';
 import { normalizeTelegramHistoryInterval, TELEGRAM_HISTORY_TICK_MS } from './time.js';
 import type {
   BackfillJob,
@@ -34,7 +35,7 @@ export async function listHistoryTemplates(database: AppDatabase): Promise<Histo
   return rows.map((row) => ({
     id: row.id,
     match: row.match,
-    range: row.range as HistoryRange
+    range: canonicalizeHistoryRange(row.range as HistoryRange)
   }));
 }
 
@@ -42,17 +43,18 @@ export async function upsertHistoryTemplate(
   database: AppDatabase,
   template: HistoryTemplate
 ): Promise<void> {
+  const range = canonicalizeHistoryRange(template.range);
   await database
     .insert(historyTemplates)
     .values({
       id: template.id,
       match: template.match,
-      range: template.range
+      range
     })
     .onConflictDoUpdate({
       set: {
         match: template.match,
-        range: template.range,
+        range,
         updatedAt: sql`now()`
       },
       target: historyTemplates.id
@@ -73,7 +75,7 @@ export async function listHistoryTargets(database: AppDatabase): Promise<History
   return rows.map((row) => ({
     chatId: row.telegramChatId,
     id: row.id,
-    range: row.range as HistoryRange,
+    range: canonicalizeHistoryRange(row.range as HistoryRange),
     ...(row.templateId === null ? {} : { templateId: row.templateId })
   }));
 }
@@ -82,17 +84,18 @@ export async function upsertHistoryTarget(
   database: AppDatabase,
   target: HistoryTarget
 ): Promise<void> {
+  const range = canonicalizeHistoryRange(target.range);
   await database
     .insert(historyTargets)
     .values({
       id: target.id,
-      range: target.range,
+      range,
       telegramChatId: target.chatId,
       templateId: target.templateId
     })
     .onConflictDoUpdate({
       set: {
-        range: target.range,
+        range,
         telegramChatId: target.chatId,
         templateId: target.templateId,
         updatedAt: sql`now()`
@@ -122,7 +125,7 @@ export async function deleteHistoryTarget(
   return {
     chatId: deleted.telegramChatId,
     id: deleted.id,
-    range: deleted.range as HistoryRange,
+    range: canonicalizeHistoryRange(deleted.range as HistoryRange),
     ...(deleted.templateId === null ? {} : { templateId: deleted.templateId })
   };
 }
@@ -242,13 +245,17 @@ export async function createBackfillJobs(
 ): Promise<number> {
   let created = 0;
   for (const job of jobs) {
+    const normalizedJob = normalizeTelegramHistoryInterval(job);
+    if (normalizedJob.startAt >= normalizedJob.endAt) {
+      continue;
+    }
     const inserted = await database
       .insert(backfillJobs)
       .values({
-        endAt: job.endAt,
-        startAt: job.startAt,
+        endAt: normalizedJob.endAt,
+        startAt: normalizedJob.startAt,
         status: 'pending',
-        telegramChatId: job.chatId
+        telegramChatId: normalizedJob.chatId
       })
       .onConflictDoNothing({
         target: [backfillJobs.telegramChatId, backfillJobs.startAt, backfillJobs.endAt]
@@ -294,9 +301,11 @@ export async function claimNextBackfillJob(
   return {
     chatId: row.telegramChatId,
     ...(row.cursor === null ? {} : { cursor: row.cursor }),
-    endAt: row.endAt,
+    ...normalizeTelegramHistoryInterval({
+      endAt: row.endAt,
+      startAt: row.startAt
+    }),
     id: String(row.id),
-    startAt: row.startAt,
     status: 'running'
   };
 }

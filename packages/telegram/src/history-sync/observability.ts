@@ -16,12 +16,14 @@ import { and, asc, desc, eq, gte, ilike, inArray, isNotNull, lt, sql } from 'dri
 
 import { TELEGRAM_HISTORY_PAST_BOUNDARY } from './constants.js';
 import {
+  canonicalizeHistoryRange,
   projectHistoryRange,
   subtractIntervals,
   type HistoryRangeProjectionContext
 } from './ranges.js';
 import { normalizeCoverageIntervals } from './coverage.js';
 import { projectTargetsForChat } from './reconciler.js';
+import { floorToTelegramSecond, normalizeTelegramHistoryInterval } from './time.js';
 import {
   deleteManualHistoryTargetFromCommand,
   upsertManualHistoryTargetFromCommand
@@ -367,7 +369,7 @@ async function getChatHistoryState(database: AppDatabase, params: unknown): Prom
     ]);
 
   const targetModels = targetRows.map(toHistoryTarget);
-  const now = new Date();
+  const now = floorToTelegramSecond(new Date());
   const projectionContext = {
     literals: {
       past: TELEGRAM_HISTORY_PAST_BOUNDARY
@@ -786,7 +788,7 @@ function toTargetResponse(
   },
   projectionContext: HistoryRangeProjectionContext
 ): HistoryTargetResponse {
-  const range = row.range as unknown as HistoryRange;
+  const range = canonicalizeHistoryRange(row.range as unknown as HistoryRange);
   const projected = projectHistoryRange(range, projectionContext);
   return {
     chatId: row.telegramChatId,
@@ -806,15 +808,16 @@ function toHistoryTarget(row: {
   return {
     chatId: row.telegramChatId,
     id: row.id,
-    range: row.range as unknown as HistoryRange,
+    range: canonicalizeHistoryRange(row.range as unknown as HistoryRange),
     ...(row.templateId === null ? {} : { templateId: row.templateId })
   };
 }
 
 function intervalToResponse(interval: HistoryInterval): { endAt: string; startAt: string } {
+  const normalized = normalizeTelegramHistoryInterval(interval);
   return {
-    endAt: interval.endAt.toISOString(),
-    startAt: interval.startAt.toISOString()
+    endAt: normalized.endAt.toISOString(),
+    startAt: normalized.startAt.toISOString()
   };
 }
 

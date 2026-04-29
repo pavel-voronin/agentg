@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { TELEGRAM_HISTORY_PAST_BOUNDARY } from '../../src/history-sync/constants.js';
-import { reconcileChat } from '../../src/history-sync/reconciler.js';
+import { completedOneShotTargets, reconcileChat } from '../../src/history-sync/reconciler.js';
 import {
   absoluteBoundary,
   expressionBoundary,
@@ -166,6 +166,54 @@ describe('history reconciler', () => {
       job('2026-01-01', '2026-01-05')
     ]);
   });
+
+  it('normalizes created jobs to Telegram-second boundaries', () => {
+    expect(
+      reconcile({
+        targets: [
+          {
+            chatId,
+            id: 'target-1',
+            range: historyRange(
+              absoluteBoundary('2026-01-01T00:00:00.250Z'),
+              absoluteBoundary('2026-01-01T00:00:01.250Z')
+            )
+          }
+        ]
+      })
+    ).toEqual([jobAt('2026-01-01T00:00:00.000Z', '2026-01-01T00:00:02.000Z')]);
+  });
+
+  it('marks fully covered standalone absolute targets as completed one-shot targets', () => {
+    const absoluteTarget = target('2026-01-01', '2026-01-31');
+
+    expect(
+      completedTargets({
+        coverage: [coverage('2026-01-01', '2026-01-31')],
+        targets: [absoluteTarget]
+      })
+    ).toEqual([absoluteTarget]);
+  });
+
+  it('does not complete relative or template-owned targets automatically', () => {
+    const relativeTarget: HistoryTarget = {
+      chatId,
+      id: 'relative',
+      range: historyRange(expressionBoundary('now-30d'), expressionBoundary('now'))
+    };
+    const linkedAbsoluteTarget: HistoryTarget = {
+      ...target('2026-01-01', '2026-01-31'),
+      id: 'linked',
+      templateId: 'template-1'
+    };
+
+    expect(
+      completedTargets({
+        coverage: [coverage('2026-01-01', '2026-01-31'), coverage('2026-03-29', '2026-04-28')],
+        targets: [relativeTarget, linkedAbsoluteTarget]
+      })
+    ).toEqual([]);
+  });
 });
 
 const chatId = 'chat-a';
@@ -188,6 +236,22 @@ function reconcile(options: {
     ...(options.jobWindowMilliseconds === undefined
       ? {}
       : { jobWindowMilliseconds: options.jobWindowMilliseconds })
+  });
+}
+
+function completedTargets(options: {
+  coverage?: HistoryCoverageInterval[];
+  now?: Date;
+  targets: HistoryTarget[];
+}): HistoryTarget[] {
+  return completedOneShotTargets({
+    chatId,
+    coverage: options.coverage ?? [],
+    literals: {
+      past: TELEGRAM_HISTORY_PAST_BOUNDARY
+    },
+    now: options.now ?? date('2026-04-28'),
+    targets: options.targets
   });
 }
 
@@ -228,6 +292,14 @@ function job(startAt: string, endAt: string): BackfillJobInput {
     chatId,
     endAt: date(endAt),
     startAt: date(startAt)
+  };
+}
+
+function jobAt(startAt: string, endAt: string): BackfillJobInput {
+  return {
+    chatId,
+    endAt: new Date(endAt),
+    startAt: new Date(startAt)
   };
 }
 

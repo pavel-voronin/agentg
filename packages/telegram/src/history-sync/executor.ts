@@ -13,11 +13,12 @@ import {
 import { persistTelegramUpdate, upsertChat } from '../store.js';
 import { TELEGRAM_HISTORY_PAST_BOUNDARY } from './constants.js';
 import { materializeTemplatesForChat } from './materialization.js';
-import { reconcileChat } from './reconciler.js';
+import { completedOneShotTargets, reconcileChat } from './reconciler.js';
 import {
   claimNextBackfillJob,
   completeBackfillJob,
   createBackfillJobs,
+  deleteHistoryTarget,
   listHistoryCoverage,
   listHistoryTargets,
   listHistoryTemplates,
@@ -103,9 +104,30 @@ async function reconcileHistoryTargets(
 ): Promise<number> {
   let createdJobs = 0;
   const chatIds = [...new Set(targets.map((target) => target.chatId))];
+  let activeTargets = targets;
 
   for (const chatId of chatIds) {
     const coverage = await listHistoryCoverage(database, chatId);
+    const completedTargets = completedOneShotTargets({
+      chatId,
+      coverage,
+      jobWindowMilliseconds: options.jobWindowDays * 24 * 60 * 60 * 1000,
+      literals: {
+        past: TELEGRAM_HISTORY_PAST_BOUNDARY
+      },
+      now,
+      targets: activeTargets
+    });
+    for (const target of completedTargets) {
+      const deleted = await deleteHistoryTarget(database, target.id);
+      if (deleted !== undefined) {
+        activeTargets = activeTargets.filter((existing) => existing.id !== target.id);
+        emitHistoryEvent(options, 'history.target.auto_deleted', {
+          chatId: target.chatId,
+          targetId: target.id
+        });
+      }
+    }
     const jobs = reconcileChat({
       chatId,
       coverage,
@@ -114,7 +136,7 @@ async function reconcileHistoryTargets(
         past: TELEGRAM_HISTORY_PAST_BOUNDARY
       },
       now,
-      targets
+      targets: activeTargets
     });
 
     createdJobs += await createBackfillJobs(database, jobs.slice(0, 1));

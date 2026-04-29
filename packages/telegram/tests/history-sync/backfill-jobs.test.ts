@@ -19,6 +19,12 @@ describe('backfill jobs', () => {
     ).toEqual(job('newer', '2026-01-20', '2026-01-31'));
   });
 
+  it('normalizes claimed job intervals to Telegram-second boundaries', () => {
+    expect(
+      claimNextBackfillJob([jobAt('job-1', '2026-01-01T00:00:00.250Z', '2026-01-01T00:00:01.250Z')])
+    ).toEqual(jobAt('job-1', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:02.000Z'));
+  });
+
   it('stores paging position while a job is in progress', () => {
     expect(
       updateBackfillJobCursor(job('job-1', '2026-01-01', '2026-01-10'), { messageId: 123 })
@@ -66,6 +72,16 @@ function job(id: string, startAt: string, endAt: string): BackfillJob {
     endAt: date(endAt),
     id,
     startAt: date(startAt),
+    status: 'pending'
+  };
+}
+
+function jobAt(id: string, startAt: string, endAt: string): BackfillJob {
+  return {
+    chatId: 'chat-a',
+    endAt: new Date(endAt),
+    id,
+    startAt: new Date(startAt),
     status: 'pending'
   };
 }

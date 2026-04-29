@@ -1,7 +1,16 @@
-import { normalizeTelegramHistoryInterval } from './time.js';
+import {
+  ceilToTelegramSecond,
+  floorToTelegramSecond,
+  normalizeTelegramHistoryInterval
+} from './time.js';
 import type { HistoryBoundary, HistoryInterval, HistoryRange } from './types.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const HOUR_MS = 60 * 60 * 1000;
+const MINUTE_MS = 60 * 1000;
+const SECOND_MS = 1000;
+const WEEK_MS = 7 * DAY_MS;
+const DURATION_UNIT_ORDER = ['y', 'mo', 'w', 'd', 'h', 'm', 's'] as const;
 
 export type HistoryRangeProjectionContext = {
   literals?: Record<string, Date>;
@@ -38,8 +47,8 @@ export function historyRange(start: HistoryBoundary, end: HistoryBoundary): Hist
 
 export function canonicalizeHistoryRange(range: HistoryRange): HistoryRange {
   return {
-    end: canonicalizeBoundary(range.end),
-    start: canonicalizeBoundary(range.start)
+    end: canonicalizeBoundary(range.end, 'end'),
+    start: canonicalizeBoundary(range.start, 'start')
   };
 }
 
@@ -164,9 +173,12 @@ export function historyRangeKey(range: HistoryRange): string {
   return JSON.stringify(canonicalizeHistoryRange(range));
 }
 
-function canonicalizeBoundary(boundary: HistoryBoundary): HistoryBoundary {
+function canonicalizeBoundary(boundary: HistoryBoundary, edge: 'end' | 'start'): HistoryBoundary {
   if (boundary.kind === 'absolute') {
-    return absoluteBoundary(boundary.at);
+    const date = parseDateBoundary(boundary.at);
+    return absoluteBoundary(
+      edge === 'start' ? floorToTelegramSecond(date) : ceilToTelegramSecond(date)
+    );
   }
 
   return expressionBoundary(boundary.expression);
@@ -187,12 +199,155 @@ function resolveBoundary(boundary: HistoryBoundary, context: HistoryRangeProject
     return context.now;
   }
 
-  const nowMinusDays = /^now-(\d+)d$/.exec(expression);
-  if (nowMinusDays?.[1] !== undefined) {
-    return new Date(context.now.getTime() - Number.parseInt(nowMinusDays[1], 10) * DAY_MS);
+  const relativeDate = resolveRelativeExpression(expression, context);
+  if (relativeDate !== undefined) {
+    return relativeDate;
   }
 
   return parseDateBoundary(expression);
+}
+
+function resolveRelativeExpression(
+  expression: string,
+  context: HistoryRangeProjectionContext
+): Date | undefined {
+  const compact = expression.replace(/\s+/g, '');
+  const base = relativeExpressionBase(compact, context);
+  if (base === undefined) {
+    return undefined;
+  }
+
+  let date = new Date(base.date);
+  let offset = base.expression.length;
+  const operationPattern = /([+-])([^+-]+)/g;
+  operationPattern.lastIndex = offset;
+  for (;;) {
+    const operation = operationPattern.exec(compact);
+    if (operation === null) {
+      break;
+    }
+    if (operation.index !== offset || operation[1] === undefined || operation[2] === undefined) {
+      return undefined;
+    }
+    const duration = parseDuration(operation[2]);
+    if (duration === undefined) {
+      return undefined;
+    }
+    date = applyDuration(date, duration, operation[1] === '+' ? 1 : -1);
+    offset = operation.index + operation[0].length;
+  }
+
+  return offset === compact.length && offset > base.expression.length ? date : undefined;
+}
+
+function relativeExpressionBase(
+  expression: string,
+  context: HistoryRangeProjectionContext
+): { date: Date; expression: string } | undefined {
+  const candidates = [
+    { date: context.now, expression: 'now' },
+    ...Object.entries(context.literals ?? {}).map(([literal, date]) => ({
+      date,
+      expression: literal
+    }))
+  ].sort((left, right) => right.expression.length - left.expression.length);
+
+  return candidates.find(
+    (candidate) =>
+      expression.startsWith(candidate.expression) &&
+      ['+', '-'].includes(expression[candidate.expression.length] ?? '')
+  );
+}
+
+function applyDuration(
+  date: Date,
+  duration: {
+    d: number;
+    h: number;
+    m: number;
+    mo: number;
+    s: number;
+    w: number;
+    y: number;
+  },
+  direction: -1 | 1
+): Date {
+  const shifted = shiftCalendarDuration(date, direction * duration.y, direction * duration.mo);
+  const fixedMilliseconds =
+    duration.w * WEEK_MS +
+    duration.d * DAY_MS +
+    duration.h * HOUR_MS +
+    duration.m * MINUTE_MS +
+    duration.s * SECOND_MS;
+  return new Date(shifted.getTime() + direction * fixedMilliseconds);
+}
+
+function parseDuration(value: string):
+  | {
+      d: number;
+      h: number;
+      m: number;
+      mo: number;
+      s: number;
+      w: number;
+      y: number;
+    }
+  | undefined {
+  const compact = value.replace(/\s+/g, '');
+  if (compact.length === 0) {
+    return undefined;
+  }
+
+  const duration = { d: 0, h: 0, m: 0, mo: 0, s: 0, w: 0, y: 0 };
+  let offset = 0;
+  let previousOrder = -1;
+  const tokenPattern = /(\d+)(y|mo|w|d|h|m|s)/g;
+  for (;;) {
+    const token = tokenPattern.exec(compact);
+    if (token === null) {
+      break;
+    }
+    if (token.index !== offset || token[1] === undefined || token[2] === undefined) {
+      return undefined;
+    }
+    const unit = token[2] as keyof typeof duration;
+    const order = DURATION_UNIT_ORDER.indexOf(unit);
+    const amount = Number.parseInt(token[1], 10);
+    if (!Number.isSafeInteger(amount) || amount <= 0 || order <= previousOrder) {
+      return undefined;
+    }
+    duration[unit] = amount;
+    previousOrder = order;
+    offset = token.index + token[0].length;
+  }
+
+  return offset === compact.length && offset > 0 ? duration : undefined;
+}
+
+function shiftCalendarDuration(date: Date, years: number, months: number): Date {
+  if (years === 0 && months === 0) {
+    return new Date(date);
+  }
+
+  const totalMonths = date.getUTCFullYear() * 12 + date.getUTCMonth() + years * 12 + months;
+  const targetYear = Math.floor(totalMonths / 12);
+  const targetMonth = totalMonths - targetYear * 12;
+  const targetDay = Math.min(date.getUTCDate(), daysInUtcMonth(targetYear, targetMonth));
+  return new Date(
+    Date.UTC(
+      targetYear,
+      targetMonth,
+      targetDay,
+      date.getUTCHours(),
+      date.getUTCMinutes(),
+      date.getUTCSeconds(),
+      date.getUTCMilliseconds()
+    )
+  );
+}
+
+function daysInUtcMonth(year: number, month: number): number {
+  return new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
 }
 
 function parseDateBoundary(value: string): Date {

@@ -15,54 +15,108 @@ export const historyPageHtml = `<!doctype html>
       bottom: 0;
       min-width: 2px;
     }
-    .segment-target { background: rgba(113, 113, 122, .42); z-index: 1; }
+    .segment-target {
+      background: repeating-linear-gradient(
+        135deg,
+        rgba(14, 116, 144, .72) 0,
+        rgba(14, 116, 144, .72) 2px,
+        transparent 2px,
+        transparent 7px
+      );
+      background-attachment: fixed;
+      pointer-events: none;
+      z-index: 6;
+    }
+    .segment-target-highlight {
+      pointer-events: none;
+      z-index: 8;
+    }
+    .segment-target-highlight.history-linked-hover {
+      background: repeating-linear-gradient(
+        135deg,
+        rgba(21, 94, 117, .9) 0,
+        rgba(21, 94, 117, .9) 2px,
+        transparent 2px,
+        transparent 7px
+      );
+      background-attachment: fixed;
+    }
     .segment-coverage { background: #10b981; z-index: 3; }
     .segment-coverage.coverage-linked-hover {
       background: #059669;
-      box-shadow: inset 0 0 0 2px rgba(6, 78, 59, .42);
       z-index: 5;
     }
+    .timeline-segment.history-linked-hover:not(.segment-target):not(.segment-target-highlight):not(.segment-coverage) {
+      box-shadow: inset 0 0 0 2px rgba(24, 24, 27, .32);
+    }
+    .history-table-row.history-linked-hover,
     .coverage-table-row.coverage-linked-hover {
       background: #ecfdf5;
     }
     .segment-job-pending { background: rgba(124, 58, 237, .42); z-index: 2; }
     .segment-job-running { background: #7c3aed; z-index: 2; }
     .coverage-gap {
-      align-items: center;
       bottom: 0;
       cursor: pointer;
-      display: flex;
-      justify-content: center;
       position: absolute;
       top: 0;
       z-index: 4;
     }
-    .coverage-gap::after {
-      align-items: center;
-      background: #ffffff;
-      border: 1px solid #10b981;
-      border-radius: 9999px;
-      color: #047857;
-      content: '+';
-      display: flex;
-      font-weight: 700;
-      height: 18px;
-      justify-content: center;
-      line-height: 1;
-      opacity: 0;
-      transform: scale(.92);
-      transition: opacity .08s ease, transform .08s ease;
-      width: 18px;
-    }
     .coverage-gap:hover,
     .coverage-gap:focus-visible {
-      background: rgba(16, 185, 129, .10);
+      background: repeating-linear-gradient(
+        135deg,
+        rgba(14, 116, 144, .30) 0,
+        rgba(14, 116, 144, .30) 2px,
+        transparent 2px,
+        transparent 7px
+      );
       outline: none;
+      z-index: 6;
     }
-    .coverage-gap:hover::after,
-    .coverage-gap:focus-visible::after {
-      opacity: 1;
-      transform: scale(1);
+    .timeline-selection {
+      background: rgba(14, 165, 233, .16);
+      border-left: 1px solid #0284c7;
+      border-right: 1px solid #0284c7;
+      bottom: 0;
+      display: none;
+      pointer-events: none;
+      position: absolute;
+      top: 0;
+      z-index: 6;
+    }
+    .timeline-selection.is-active {
+      display: block;
+    }
+    .history-hover-stack {
+      display: grid;
+      gap: 6px;
+      left: 0;
+      max-width: min(36rem, calc(100vw - 16px));
+      pointer-events: none;
+      position: fixed;
+      top: 0;
+      z-index: 50;
+    }
+    .history-hover-popover {
+      background: #ffffff;
+      border: 1px solid #e4e4e7;
+      border-radius: 8px;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, .10), 0 4px 6px -4px rgba(0, 0, 0, .10);
+      color: #18181b;
+      font-size: 12px;
+      max-width: 100%;
+      padding: 8px 12px;
+      white-space: nowrap;
+    }
+    [data-default-scale="true"]::after {
+      background: #38bdf8;
+      bottom: -6px;
+      content: '';
+      height: 1px;
+      left: 0;
+      position: absolute;
+      right: 0;
     }
   </style>
 </head>
@@ -140,10 +194,7 @@ export const historyPageHtml = `<!doctype html>
       </aside>
     </main>
   </div>
-  <div id="coverageHoverPanel" class="pointer-events-none fixed left-0 top-0 z-50 hidden max-w-xs rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs shadow-lg ring-1 ring-black/5">
-    <div id="coverageHoverRange" class="whitespace-nowrap font-medium text-zinc-900"></div>
-    <div id="coverageHoverCount" class="mt-0.5 text-zinc-500"></div>
-  </div>
+  <div id="coverageHoverPanel" class="history-hover-stack hidden"></div>
   <section id="dashboardPreviewPanel" class="fixed left-0 right-0 z-40 hidden bg-zinc-100 p-4 pt-0">
     <div id="dashboardPreviewMetrics" class="grid grid-cols-4 gap-3"></div>
   </section>
@@ -170,6 +221,7 @@ export const historyPageHtml = `<!doctype html>
       chatFilter: 'agentg.history.chatFilter',
       chatListSelection: 'agentg.history.chatListSelection',
       dashboardCollapsed: 'agentg.history.dashboardCollapsed',
+      defaultViewportDays: 'agentg.history.defaultViewportDays',
       eventFilters: 'agentg.history.eventFilters',
       eventLimit: 'agentg.history.eventLimit',
       eventsPanelCollapsed: 'agentg.history.eventsPanelCollapsed',
@@ -180,6 +232,13 @@ export const historyPageHtml = `<!doctype html>
     const DEFAULT_EVENT_LIMIT = 200;
     const MAX_EVENT_LIMIT = 2000;
     const MIN_EVENT_LIMIT = 20;
+    const DAY_MS = 86400000;
+    const TELEGRAM_HISTORY_START_AT = new Date('2013-08-14T00:00:00.000Z');
+    const TIMELINE_MIN_WINDOW_MS = 1000;
+    const TIMELINE_SELECTION_MIN_PX = 3;
+    const TIMELINE_WHEEL_GESTURE_IDLE_MS = 180;
+    const TIMELINE_WHEEL_AXIS_INTENT_PX = 8;
+    const TIMELINE_WHEEL_AXIS_DOMINANCE = 1.35;
     const EVENT_GROUPS = [
       {
         color: '#7c3aed',
@@ -195,6 +254,7 @@ export const historyPageHtml = `<!doctype html>
           'history.sync.failed',
           'history.sync.requested',
           'history.sync.started',
+          'history.target.auto_deleted',
           'history.target.delete.completed',
           'history.target.delete.failed',
           'history.target.deleted',
@@ -250,6 +310,10 @@ export const historyPageHtml = `<!doctype html>
     ];
 
     const initialChatListSelection = readChatListSelection();
+    const initialDefaultViewportDays = readScalePresetStorage(
+      STORAGE_KEYS.defaultViewportDays,
+      readScalePresetStorage(STORAGE_KEYS.viewportDays, 30)
+    );
     const state = {
       chats: [],
       chatListMode: initialChatListSelection.mode,
@@ -274,7 +338,12 @@ export const historyPageHtml = `<!doctype html>
       tdlibConnected: false,
       tdlibStatusStartedAt: Date.now(),
       tdlibStatusWatchdog: null,
-      viewportDays: readNumberStorage(STORAGE_KEYS.viewportDays, 30)
+      defaultViewportDays: initialDefaultViewportDays,
+      viewportDays: initialDefaultViewportDays,
+      timelineWheelGesture: null,
+      timelineViewport: null,
+      timelineSelection: null,
+      suppressTimelineClick: false
     };
 
     const $ = (id) => document.getElementById(id);
@@ -382,6 +451,7 @@ export const historyPageHtml = `<!doctype html>
         await loadChats();
         return;
       }
+      ensureTimelineViewport(state.selectedState);
       renderSelected();
     }
 
@@ -523,6 +593,8 @@ export const historyPageHtml = `<!doctype html>
             return;
           }
           state.coverageTableOpen = false;
+          state.viewportDays = state.defaultViewportDays;
+          state.timelineViewport = null;
           state.selectedChatId = chatId;
           writeStorage(STORAGE_KEYS.selectedChatId, state.selectedChatId);
           renderChats();
@@ -754,8 +826,13 @@ export const historyPageHtml = `<!doctype html>
         if (!(target instanceof Element)) return;
         const button = target.closest('[data-viewport-days]');
         if (!button) return;
-        state.viewportDays = Number(button.getAttribute('data-viewport-days'));
-        writeStorage(STORAGE_KEYS.viewportDays, String(state.viewportDays));
+        const nextViewportDays = Number(button.getAttribute('data-viewport-days'));
+        if (state.viewportDays === nextViewportDays) {
+          state.defaultViewportDays = nextViewportDays;
+          writeStorage(STORAGE_KEYS.defaultViewportDays, String(nextViewportDays));
+        }
+        state.viewportDays = nextViewportDays;
+        resetTimelineViewportToPreset();
         syncViewportButtons();
         renderTimeline();
       });
@@ -786,11 +863,12 @@ export const historyPageHtml = `<!doctype html>
       const container = $('viewportScaleButtons');
       if (!container) return;
       container.querySelectorAll('[data-viewport-days]').forEach((button) => {
-        const active = Number(button.getAttribute('data-viewport-days')) === state.viewportDays;
+        const value = Number(button.getAttribute('data-viewport-days'));
+        const active = state.viewportDays !== null && value === state.viewportDays;
+        const isDefault = value === state.defaultViewportDays;
         button.setAttribute('aria-pressed', String(active));
-        button.className = active
-          ? 'h-7 rounded-lg border border-zinc-800 bg-zinc-800 px-2.5 text-xs font-medium text-white shadow-sm'
-          : 'h-7 rounded-lg border border-zinc-300 bg-white px-2.5 text-xs font-medium text-zinc-700 shadow-sm hover:bg-zinc-50';
+        button.setAttribute('data-default-scale', String(isDefault));
+        button.className = viewportScaleButtonClass(active, isDefault);
       });
     }
 
@@ -805,7 +883,7 @@ export const historyPageHtml = `<!doctype html>
           '</div>' +
         '</div>' +
         '<div class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-2">' +
-          '<input id="customStart" class="rounded-lg border border-zinc-300 bg-white px-3 py-2 outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100" placeholder="Start: past, now-30d, 2026-01-01">' +
+          '<input id="customStart" class="rounded-lg border border-zinc-300 bg-white px-3 py-2 outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100" placeholder="Start: past, now-1y2mo, now-1h3s, 2026-01-01">' +
           '<input id="customEnd" class="rounded-lg border border-zinc-300 bg-white px-3 py-2 outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100" placeholder="End: now, 2026-02-01">' +
           '<button id="customTarget" class="rounded-lg border border-zinc-800 bg-zinc-800 px-3 py-2 font-medium text-white hover:bg-zinc-950">Add</button>' +
         '</div>' +
@@ -843,10 +921,15 @@ export const historyPageHtml = `<!doctype html>
 
     function viewportScaleButton(value, label) {
       const active = Number(value) === state.viewportDays;
-      const className = active
-        ? 'h-7 rounded-lg border border-zinc-800 bg-zinc-800 px-2.5 text-xs font-medium text-white shadow-sm'
-        : 'h-7 rounded-lg border border-zinc-300 bg-white px-2.5 text-xs font-medium text-zinc-700 shadow-sm hover:bg-zinc-50';
-      return '<button type="button" data-viewport-days="' + String(value) + '" aria-pressed="' + String(active) + '" class="' + className + '">' + escapeHtml(label) + '</button>';
+      const isDefault = Number(value) === state.defaultViewportDays;
+      return '<button type="button" data-viewport-days="' + String(value) + '" data-default-scale="' + String(isDefault) + '" aria-pressed="' + String(active) + '" class="' + viewportScaleButtonClass(active, isDefault) + '">' + escapeHtml(label) + '</button>';
+    }
+
+    function viewportScaleButtonClass(active, isDefault) {
+      const borderClass = active ? 'border-zinc-800' : 'border-zinc-300';
+      return active
+        ? 'relative h-7 rounded-lg border bg-zinc-800 px-2.5 text-xs font-medium text-white shadow-sm ' + borderClass
+        : 'relative h-7 rounded-lg border bg-white px-2.5 text-xs font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 ' + borderClass;
     }
 
     function renderTimeline() {
@@ -874,9 +957,11 @@ export const historyPageHtml = `<!doctype html>
           renderTimeline();
         });
       }
-      bindCoverageHoverPanel(container);
-      bindCoverageLinkedHover(container);
+      bindHistoryHoverPanel(container, min, max);
+      bindHistoryLinkedHover(container);
       bindCoverageGapTargets(container);
+      bindTimelineViewportGestures(container, min, max);
+      bindTimelineSelection(container, min, max);
       bindHistoryDetailsActions(container);
       bindTimelineDateDeltas(container);
     }
@@ -897,49 +982,87 @@ export const historyPageHtml = `<!doctype html>
     }
 
     function computeTimelineBounds(data) {
-      const intervals = [
-        ...data.desired,
-        ...data.coverage,
-        ...data.jobs
-      ].map(toDates).filter(Boolean);
-      if (intervals.length === 0) {
-        return null;
-      }
+      const physical = timelinePhysicalBounds(data);
+      ensureTimelineViewport(data);
+      const viewport = clampTimelineViewport(state.timelineViewport, physical);
+      state.timelineViewport = viewport;
+      return {
+        max: new Date(viewport.endAt),
+        min: new Date(viewport.startAt)
+      };
+    }
+
+    function timelinePhysicalBounds(data) {
       const now = new Date();
-      let min = intervals.reduce((acc, interval) => interval.startAt < acc ? interval.startAt : acc, intervals[0].startAt);
-      let max = intervals.reduce((acc, interval) => interval.endAt > acc ? interval.endAt : acc, intervals[0].endAt);
-      if (state.viewportDays > 0 && now > max) {
-        max = now;
+      const historyStart = data.chat?.historyStartAt ? new Date(data.chat.historyStartAt) : TELEGRAM_HISTORY_START_AT;
+      const startAt = Number.isNaN(historyStart.getTime()) ? TELEGRAM_HISTORY_START_AT.getTime() : historyStart.getTime();
+      const endAt = now.getTime();
+      return {
+        endAt,
+        startAt: Math.min(startAt, endAt - TIMELINE_MIN_WINDOW_MS)
+      };
+    }
+
+    function ensureTimelineViewport(data) {
+      if (state.viewportDays !== null) {
+        resetTimelineViewportToPreset(data);
+        return;
       }
-      if (state.viewportDays > 0) {
-        min = new Date(max.getTime() - state.viewportDays * 86400000);
+      if (state.timelineViewport) {
+        state.timelineViewport = clampTimelineViewport(state.timelineViewport, timelinePhysicalBounds(data));
+        return;
       }
-      if (max <= min) {
-        max = new Date(min.getTime() + 86400000);
+      resetTimelineViewportToPreset(data);
+    }
+
+    function resetTimelineViewportToPreset(data = state.selectedState) {
+      if (!data) return;
+      const physical = timelinePhysicalBounds(data);
+      const endAt = physical.endAt;
+      const startAt = state.viewportDays > 0
+        ? endAt - state.viewportDays * DAY_MS
+        : physical.startAt;
+      state.timelineViewport = clampTimelineViewport({ endAt, startAt }, physical);
+    }
+
+    function clampTimelineViewport(viewport, physical) {
+      const physicalSpan = physical.endAt - physical.startAt;
+      let span = Math.max(TIMELINE_MIN_WINDOW_MS, viewport.endAt - viewport.startAt);
+      span = Math.min(span, physicalSpan);
+      let startAt = viewport.startAt;
+      let endAt = startAt + span;
+      if (endAt > physical.endAt) {
+        endAt = physical.endAt;
+        startAt = endAt - span;
       }
-      return { min, max };
+      if (startAt < physical.startAt) {
+        startAt = physical.startAt;
+        endAt = startAt + span;
+      }
+      return { endAt, startAt };
     }
 
     function layeredTimelineRow(data, min, max) {
-      const targetSegments = data.desired
-        .map((raw) => renderTimelineSegment(raw, min, max, 'segment-target'))
-        .join('');
+      const targetDetails = visibleTargetDetails(data.targets, min, max);
+      const targetSegments =
+        renderTargetUnionTimelineSegments(targetDetails, min, max) +
+        renderTargetHighlightTimelineSegments(targetDetails, min, max);
       const jobSegments = data.jobs
-        .map((job) => renderTimelineSegment(job, min, max, job.status === 'running' ? 'segment-job-running' : 'segment-job-pending', jobSegmentTooltip))
+        .map((job) => renderJobTimelineSegment(job, min, max))
         .join('');
       const coverageSegments = visibleCoverageIntervals(data.coverage, min, max)
         .map((interval) => renderCoverageTimelineSegment(interval, min, max))
         .join('');
-      const gapSegments = coverageGaps(data.coverage)
+      const gapSegments = timelineEmptyGaps(data, targetDetails, min, max)
         .map((gap) => renderCoverageGap(gap, min, max))
         .join('');
       return timelineTrackRow(coverageLabel(), targetSegments + jobSegments + coverageSegments + gapSegments);
     }
 
     function timelineTrackRow(labelHtml, segments) {
-      return '<div class="flex h-6 items-center gap-2">' +
+      return '<div class="flex h-12 items-center gap-2">' +
         '<div class="flex w-6 shrink-0 items-center justify-center">' + labelHtml + '</div>' +
-        '<div class="relative h-6 min-w-0 flex-1 overflow-hidden rounded-lg border border-zinc-200 bg-zinc-100">' + segments + '</div>' +
+        '<div class="relative h-12 min-w-0 flex-1 touch-none select-none overflow-hidden rounded-lg border border-zinc-200 bg-zinc-100" data-timeline-track>' + segments + '<div class="timeline-selection" data-timeline-selection></div></div>' +
       '</div>';
     }
 
@@ -970,6 +1093,7 @@ export const historyPageHtml = `<!doctype html>
         ...visibleCoverageIntervals(data.coverage, min, max).map((interval) => ({
           endAt: interval.endAt,
           item: interval,
+          key: interval.key,
           startAt: interval.startAt,
           type: 'coverage'
         }))
@@ -984,6 +1108,7 @@ export const historyPageHtml = `<!doctype html>
           return {
             endAt: interval.endAt,
             item: target,
+            key: targetKey(target),
             startAt: interval.startAt,
             type: 'target'
           };
@@ -999,6 +1124,7 @@ export const historyPageHtml = `<!doctype html>
           return {
             endAt: interval.endAt,
             item: job,
+            key: jobKey(job),
             startAt: interval.startAt,
             type: 'job'
           };
@@ -1037,10 +1163,10 @@ export const historyPageHtml = `<!doctype html>
 
     function renderHistoryDetailSection(section) {
       if (section.type === 'target') {
-        return renderTargetDetailsTable(section.items.map((item) => item.item));
+        return renderTargetDetailsTable(section.items);
       }
       if (section.type === 'job') {
-        return renderJobDetailsTable(section.items.map((item) => item.item));
+        return renderJobDetailsTable(section.items);
       }
       return renderCoverageDetailsTable(section.items.map((item) => item.item));
     }
@@ -1050,14 +1176,19 @@ export const historyPageHtml = `<!doctype html>
         'Target',
         '<div class="overflow-hidden rounded-lg border border-zinc-200">' +
         '<table class="w-full border-collapse text-left text-xs">' +
-          '<thead class="bg-zinc-50 text-zinc-500"><tr><th class="px-3 py-2 font-semibold">Target range</th><th class="px-3 py-2 font-semibold">Owner</th><th class="px-3 py-2 font-semibold">Target id</th><th class="w-20 px-3 py-2"></th></tr></thead>' +
+          '<thead class="bg-zinc-50 text-zinc-500"><tr><th class="px-3 py-2 font-semibold">Start</th><th class="px-3 py-2 font-semibold">End</th><th class="px-3 py-2 font-semibold">Duration</th><th class="px-3 py-2 font-semibold">Template</th><th class="px-3 py-2 font-semibold">Target id</th><th class="w-20 px-3 py-2"></th></tr></thead>' +
           '<tbody class="divide-y divide-zinc-100 bg-white">' +
-            targets.map((target) => '<tr>' +
-              '<td class="px-3 py-2"><code class="rounded bg-zinc-100 px-1.5 py-0.5">' + escapeHtml(rangeLabel(target.range)) + '</code></td>' +
-              '<td class="px-3 py-2 text-zinc-600">' + escapeHtml(target.templateId || 'standalone') + '</td>' +
+            targets.map((detail) => {
+              const target = detail.item;
+              return '<tr class="history-table-row" tabindex="0" data-history-kind="target" data-history-key="' + escapeHtml(detail.key) + '">' +
+              '<td class="px-3 py-2 font-mono text-zinc-700">' + escapeHtml(formatTimelineDate(detail.startAt)) + '</td>' +
+              '<td class="px-3 py-2 font-mono text-zinc-700">' + escapeHtml(formatTimelineDate(detail.endAt)) + '</td>' +
+              '<td class="px-3 py-2 text-zinc-500">' + escapeHtml(formatDuration(detail.endAt.getTime() - detail.startAt.getTime())) + '</td>' +
+              '<td class="px-3 py-2 text-zinc-600">' + escapeHtml(target.templateId || '-') + '</td>' +
               '<td class="px-3 py-2"><code class="break-all text-zinc-500">' + escapeHtml(target.id) + '</code></td>' +
-              '<td class="px-3 py-2 text-right"><button data-delete-target="' + escapeHtml(target.id) + '" class="rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-100">Delete</button></td>' +
-            '</tr>').join('') +
+              '<td class="px-3 py-1 text-right"><button data-delete-target="' + escapeHtml(target.id) + '" class="rounded-md border border-red-200 bg-red-50 px-2 py-0.5 text-xs font-medium leading-5 text-red-700 hover:bg-red-100">Delete</button></td>' +
+            '</tr>';
+            }).join('') +
           '</tbody>' +
         '</table>' +
         '</div>'
@@ -1069,9 +1200,19 @@ export const historyPageHtml = `<!doctype html>
         'Jobs',
         '<div class="overflow-hidden rounded-lg border border-zinc-200">' +
         '<table class="w-full border-collapse text-left text-xs">' +
-          '<thead class="bg-zinc-50 text-zinc-500"><tr><th class="px-3 py-2 font-semibold">id</th><th class="px-3 py-2 font-semibold">status</th><th class="px-3 py-2 font-semibold">interval</th><th class="px-3 py-2 font-semibold">cursor</th></tr></thead>' +
+          '<thead class="bg-zinc-50 text-zinc-500"><tr><th class="px-3 py-2 font-semibold">Start</th><th class="px-3 py-2 font-semibold">End</th><th class="px-3 py-2 font-semibold">Duration</th><th class="px-3 py-2 font-semibold">Status</th><th class="px-3 py-2 font-semibold">id</th><th class="px-3 py-2 font-semibold">cursor</th></tr></thead>' +
           '<tbody class="divide-y divide-zinc-100 bg-white">' +
-            jobs.map((job) => '<tr><td class="px-3 py-2"><code>' + escapeHtml(job.id) + '</code></td><td class="px-3 py-2">' + escapeHtml(job.status) + '</td><td class="px-3 py-2 whitespace-nowrap">' + formatPreciseDate(job.startAt) + ' -> ' + formatPreciseDate(job.endAt) + '</td><td class="px-3 py-2">' + (job.cursor ? '<code>yes</code>' : '') + '</td></tr>').join('') +
+            jobs.map((detail) => {
+              const job = detail.item;
+              return '<tr class="history-table-row" tabindex="0" data-history-kind="job" data-history-key="' + escapeHtml(detail.key) + '">' +
+              '<td class="px-3 py-2 font-mono text-zinc-700">' + escapeHtml(formatTimelineDate(detail.startAt)) + '</td>' +
+              '<td class="px-3 py-2 font-mono text-zinc-700">' + escapeHtml(formatTimelineDate(detail.endAt)) + '</td>' +
+              '<td class="px-3 py-2 text-zinc-500">' + escapeHtml(formatDuration(detail.endAt.getTime() - detail.startAt.getTime())) + '</td>' +
+              '<td class="px-3 py-2 text-zinc-600">' + escapeHtml(job.status) + '</td>' +
+              '<td class="px-3 py-2"><code class="break-all text-zinc-500">' + escapeHtml(job.id) + '</code></td>' +
+              '<td class="px-3 py-2">' + (job.cursor ? '<code>yes</code>' : '') + '</td>' +
+            '</tr>';
+            }).join('') +
           '</tbody>' +
         '</table>' +
         '</div>'
@@ -1085,9 +1226,9 @@ export const historyPageHtml = `<!doctype html>
         '<table class="w-full border-collapse text-left text-xs">' +
           '<thead class="bg-zinc-50 text-zinc-500"><tr><th class="px-3 py-2 font-semibold">Start</th><th class="px-3 py-2 font-semibold">End</th><th class="px-3 py-2 font-semibold">Duration</th><th class="px-3 py-2 font-semibold">Messages</th></tr></thead>' +
           '<tbody class="divide-y divide-zinc-100 bg-white">' +
-            intervals.map((interval) => '<tr class="coverage-table-row" tabindex="0" data-coverage-key="' + escapeHtml(interval.key) + '">' +
-              '<td class="px-3 py-2 font-mono text-zinc-700">' + escapeHtml(formatPreciseDate(interval.startAt)) + '</td>' +
-              '<td class="px-3 py-2 font-mono text-zinc-700">' + escapeHtml(formatPreciseDate(interval.endAt)) + '</td>' +
+            intervals.map((interval) => '<tr class="history-table-row coverage-table-row" tabindex="0" data-history-kind="coverage" data-history-key="' + escapeHtml(interval.key) + '" data-coverage-key="' + escapeHtml(interval.key) + '">' +
+              '<td class="px-3 py-2 font-mono text-zinc-700">' + escapeHtml(formatTimelineDate(interval.startAt)) + '</td>' +
+              '<td class="px-3 py-2 font-mono text-zinc-700">' + escapeHtml(formatTimelineDate(interval.endAt)) + '</td>' +
               '<td class="px-3 py-2 text-zinc-500">' + escapeHtml(formatDuration(interval.endAt.getTime() - interval.startAt.getTime())) + '</td>' +
               '<td class="px-3 py-2 text-zinc-500">' + escapeHtml(formatInteger(interval.messageCount || 0)) + '</td>' +
             '</tr>').join('') +
@@ -1120,7 +1261,71 @@ export const historyPageHtml = `<!doctype html>
     function renderCoverageTimelineSegment(interval, min, max) {
       const position = timelinePosition(interval, min, max, 0.25);
       const tooltip = coverageSegmentTooltip(interval, interval);
-      return '<div class="timeline-segment segment-coverage" style="left:' + position.left + '%;width:' + position.width + '%" tabindex="0" aria-label="' + escapeHtml(tooltip.range + ', ' + tooltip.count) + '" data-coverage-key="' + escapeHtml(interval.key) + '" data-hover-range="' + escapeHtml(tooltip.range) + '" data-hover-count="' + escapeHtml(tooltip.count) + '"></div>';
+      return '<div class="timeline-segment segment-coverage" style="left:' + position.left + '%;width:' + position.width + '%" tabindex="0" aria-label="' + escapeHtml(tooltip.range + ', ' + tooltip.count) + '" data-history-kind="coverage" data-history-key="' + escapeHtml(interval.key) + '" data-coverage-key="' + escapeHtml(interval.key) + '" data-hover-from="' + escapeHtml(tooltip.from) + '" data-hover-to="' + escapeHtml(tooltip.to) + '" data-hover-duration="' + escapeHtml(tooltip.duration) + '" data-hover-messages="' + escapeHtml(tooltip.count) + '"></div>';
+    }
+
+    function renderTargetUnionTimelineSegments(details, min, max) {
+      return mergeHistoryDetailsForDisplay(details)
+        .map((interval) => {
+          const position = timelinePosition(interval, min, max, 0.25);
+          return '<div class="timeline-segment segment-target" style="left:' + position.left + '%;width:' + position.width + '%"></div>';
+        })
+        .join('');
+    }
+
+    function renderTargetHighlightTimelineSegments(details, min, max) {
+      return partitionTargetDetailsForDisplay(details)
+        .map((interval) => {
+          const position = timelinePosition(interval, min, max, 0);
+          if (position.width <= 0) return '';
+          return '<div class="timeline-segment segment-target-highlight" style="left:' + position.left + '%;width:' + position.width + '%" data-history-keys="' + escapeHtml(interval.keys.join('|')) + '"></div>';
+        })
+        .join('');
+    }
+
+    function mergeHistoryDetailsForDisplay(details) {
+      return details
+        .map((detail) => ({ endAt: detail.endAt, startAt: detail.startAt }))
+        .sort((left, right) => left.startAt.getTime() - right.startAt.getTime())
+        .reduce((merged, interval) => {
+          const previous = merged[merged.length - 1];
+          if (!previous || interval.startAt > previous.endAt) {
+            merged.push({ ...interval });
+            return merged;
+          }
+          if (interval.endAt > previous.endAt) {
+            previous.endAt = interval.endAt;
+          }
+          return merged;
+        }, []);
+    }
+
+    function partitionTargetDetailsForDisplay(details) {
+      const points = [...new Set(details.flatMap((detail) => [detail.startAt.getTime(), detail.endAt.getTime()]))].sort((left, right) => left - right);
+      const partitions = [];
+      for (let index = 1; index < points.length; index += 1) {
+        const startAt = points[index - 1];
+        const endAt = points[index];
+        if (startAt === undefined || endAt === undefined || startAt >= endAt) continue;
+        const keys = details
+          .filter((detail) => detail.startAt.getTime() < endAt && detail.endAt.getTime() > startAt)
+          .map((detail) => detail.key);
+        if (keys.length === 0) continue;
+        partitions.push({
+          endAt: new Date(endAt),
+          keys,
+          startAt: new Date(startAt)
+        });
+      }
+      return partitions;
+    }
+
+    function renderJobTimelineSegment(job, min, max) {
+      const interval = toDates(job);
+      if (!interval || interval.endAt <= min || interval.startAt >= max) return '';
+      const position = timelinePosition(interval, min, max, 0.25);
+      const tooltip = jobSegmentTooltip(job, interval);
+      return '<div class="timeline-segment ' + (job.status === 'running' ? 'segment-job-running' : 'segment-job-pending') + '" style="left:' + position.left + '%;width:' + position.width + '%" tabindex="0" aria-label="' + escapeHtml(tooltip.range + ', ' + tooltip.count) + '" data-history-kind="job" data-history-key="' + escapeHtml(jobKey(job)) + '" data-hover-from="' + escapeHtml(tooltip.from) + '" data-hover-to="' + escapeHtml(tooltip.to) + '" data-hover-duration="' + escapeHtml(tooltip.duration) + '" data-hover-extra="' + escapeHtml(tooltip.count) + '"></div>';
     }
 
     function renderTimelineSegment(raw, min, max, className, tooltipFactory) {
@@ -1153,8 +1358,13 @@ export const historyPageHtml = `<!doctype html>
       };
     }
 
-    function coverageGaps(intervals) {
-      const normalized = normalizeIntervals(intervals);
+    function timelineEmptyGaps(data, targetDetails, min, max) {
+      const blocks = [
+        ...visibleCoverageIntervals(data.coverage, min, max),
+        ...targetDetails,
+        ...visibleJobDetails(data.jobs, min, max)
+      ];
+      const normalized = normalizeIntervals(blocks);
       const gaps = [];
       for (let index = 1; index < normalized.length; index += 1) {
         const previous = normalized[index - 1];
@@ -1193,16 +1403,36 @@ export const historyPageHtml = `<!doctype html>
     }
 
     function coverageSegmentTooltip(raw, interval) {
+      const startAt = interval.originalStartAt || interval.startAt;
+      const endAt = interval.originalEndAt || interval.endAt;
       return {
         count: formatInteger(raw.messageCount || 0) + ' messages',
-        range: formatDate(interval.originalStartAt || interval.startAt) + ' -> ' + formatDate(interval.originalEndAt || interval.endAt)
+        duration: formatDuration(endAt.getTime() - startAt.getTime()),
+        from: formatTimelineDate(startAt),
+        kind: 'Coverage',
+        range: formatTimelineDate(startAt) + ' -> ' + formatTimelineDate(endAt),
+        to: formatTimelineDate(endAt)
+      };
+    }
+
+    function targetSegmentTooltip(target, interval) {
+      return {
+        duration: formatDuration(interval.endAt.getTime() - interval.startAt.getTime()),
+        from: formatTimelineDate(interval.startAt),
+        kind: 'Target',
+        range: formatTimelineDate(interval.startAt) + ' -> ' + formatTimelineDate(interval.endAt),
+        to: formatTimelineDate(interval.endAt)
       };
     }
 
     function jobSegmentTooltip(job, interval) {
       return {
         count: job.status + ' job #' + job.id,
-        range: formatDate(interval.startAt) + ' -> ' + formatDate(interval.endAt)
+        duration: formatDuration(interval.endAt.getTime() - interval.startAt.getTime()),
+        from: formatTimelineDate(interval.startAt),
+        kind: 'Job',
+        range: formatTimelineDate(interval.startAt) + ' -> ' + formatTimelineDate(interval.endAt),
+        to: formatTimelineDate(interval.endAt)
       };
     }
 
@@ -1210,47 +1440,142 @@ export const historyPageHtml = `<!doctype html>
       return interval.startAt.toISOString() + '|' + interval.endAt.toISOString();
     }
 
-    function bindCoverageHoverPanel(container) {
+    function targetKey(target) {
+      return target.id;
+    }
+
+    function jobKey(job) {
+      return job.id;
+    }
+
+    function bindHistoryHoverPanel(container, min, max) {
+      const track = container.querySelector('[data-timeline-track]');
+      if (track) {
+        track.addEventListener('pointermove', (event) => {
+          if (event.altKey || state.timelineSelection) {
+            hideCoverageHoverPanel();
+            clearHistoryHighlight(container);
+            return;
+          }
+          const items = historyItemsAtPointer(track, min, max, event.clientX);
+          if (items.length === 0) {
+            hideCoverageHoverPanel();
+            clearHistoryHighlight(container);
+            return;
+          }
+          showHistoryHoverPanel(items, event.clientX, event.clientY);
+          highlightHistoryItems(container, items);
+        });
+        track.addEventListener('pointerleave', () => {
+          hideCoverageHoverPanel();
+          clearHistoryHighlight(container);
+        });
+      }
       container.querySelectorAll('[data-hover-range]').forEach((segment) => {
-        segment.addEventListener('pointerenter', (event) => {
-          showCoverageHoverPanel(segment, event.clientX, event.clientY);
-        });
-        segment.addEventListener('pointermove', (event) => {
-          positionCoverageHoverPanel(event.clientX, event.clientY);
-        });
-        segment.addEventListener('pointerleave', hideCoverageHoverPanel);
         segment.addEventListener('focus', () => {
           const rect = segment.getBoundingClientRect();
-          showCoverageHoverPanel(segment, rect.left + rect.width / 2, rect.bottom);
+          showHistoryHoverPanel([historyItemFromElement(segment)], rect.left + rect.width / 2, rect.bottom);
+          highlightHistoryItems(container, [historyItemFromElement(segment)]);
         });
-        segment.addEventListener('blur', hideCoverageHoverPanel);
+        segment.addEventListener('blur', () => {
+          hideCoverageHoverPanel();
+          clearHistoryHighlight(container);
+        });
       });
     }
 
-    function bindCoverageLinkedHover(container) {
-      container.querySelectorAll('[data-coverage-key]').forEach((element) => {
-        element.addEventListener('pointerenter', () => {
-          highlightCoverageKey(container, element.getAttribute('data-coverage-key'));
+    function historyItemsAtPointer(track, min, max, clientX) {
+      const rect = track.getBoundingClientRect();
+      if (rect.width <= 0) return [];
+      const ratio = clamp((clientX - rect.left) / rect.width, 0, 1);
+      const at = min.getTime() + (max.getTime() - min.getTime()) * ratio;
+      return historyDetailItems(state.selectedState, min, max)
+        .filter((detail) => detail.startAt.getTime() <= at && detail.endAt.getTime() >= at)
+        .map(historyHoverItem)
+        .sort(compareHistoryHoverItems);
+    }
+
+    function historyHoverItem(detail) {
+      const tooltip = detail.type === 'coverage'
+        ? coverageSegmentTooltip(detail.item, detail.item)
+        : detail.type === 'target'
+          ? targetSegmentTooltip(detail.item, detail)
+          : jobSegmentTooltip(detail.item, detail);
+      return {
+        duration: tooltip.duration,
+        extra: detail.type === 'coverage' ? tooltip.count : detail.type === 'job' ? tooltip.count : '',
+        from: tooltip.from,
+        key: detail.key,
+        kind: detail.type,
+        label: tooltip.kind,
+        to: tooltip.to
+      };
+    }
+
+    function historyItemFromElement(element) {
+      return {
+        duration: element.getAttribute('data-hover-duration') || '',
+        extra: element.getAttribute('data-hover-messages') || element.getAttribute('data-hover-extra') || '',
+        from: element.getAttribute('data-hover-from') || '',
+        key: element.getAttribute('data-history-key') || '',
+        kind: element.getAttribute('data-history-kind') || '',
+        label: historyKindLabel(element.getAttribute('data-history-kind') || ''),
+        to: element.getAttribute('data-hover-to') || ''
+      };
+    }
+
+    function compareHistoryHoverItems(left, right) {
+      return historyHoverTypeOrder(left.kind) - historyHoverTypeOrder(right.kind);
+    }
+
+    function historyHoverTypeOrder(kind) {
+      if (kind === 'coverage') return 0;
+      if (kind === 'target') return 1;
+      if (kind === 'job') return 2;
+      return 3;
+    }
+
+    function historyKindLabel(kind) {
+      if (kind === 'target') return 'Target';
+      if (kind === 'job') return 'Job';
+      return 'Coverage';
+    }
+
+    function bindHistoryLinkedHover(container) {
+      container.querySelectorAll('[data-history-key]').forEach((element) => {
+        element.addEventListener('pointerenter', (event) => {
+          if (event.altKey) return;
+          highlightHistoryItems(container, [historyItemFromElement(element)]);
         });
         element.addEventListener('pointerleave', () => {
-          clearCoverageHighlight(container);
+          clearHistoryHighlight(container);
         });
         element.addEventListener('focus', () => {
-          highlightCoverageKey(container, element.getAttribute('data-coverage-key'));
+          highlightHistoryItems(container, [historyItemFromElement(element)]);
         });
         element.addEventListener('blur', () => {
-          clearCoverageHighlight(container);
+          clearHistoryHighlight(container);
         });
       });
     }
 
-    function highlightCoverageKey(container, key) {
-      container.querySelectorAll('[data-coverage-key]').forEach((element) => {
-        element.classList.toggle('coverage-linked-hover', element.getAttribute('data-coverage-key') === key);
+    function highlightHistoryItems(container, items) {
+      const keys = new Set(items.map((item) => item.key));
+      container.querySelectorAll('[data-history-key]').forEach((element) => {
+        const active = keys.has(element.getAttribute('data-history-key'));
+        element.classList.toggle('history-linked-hover', active);
+        element.classList.toggle('coverage-linked-hover', active && element.hasAttribute('data-coverage-key'));
+      });
+      container.querySelectorAll('[data-history-keys]').forEach((element) => {
+        const elementKeys = (element.getAttribute('data-history-keys') || '').split('|');
+        element.classList.toggle('history-linked-hover', elementKeys.some((key) => keys.has(key)));
       });
     }
 
-    function clearCoverageHighlight(container) {
+    function clearHistoryHighlight(container) {
+      container.querySelectorAll('.history-linked-hover').forEach((element) => {
+        element.classList.remove('history-linked-hover');
+      });
       container.querySelectorAll('.coverage-linked-hover').forEach((element) => {
         element.classList.remove('coverage-linked-hover');
       });
@@ -1258,10 +1583,199 @@ export const historyPageHtml = `<!doctype html>
 
     function bindCoverageGapTargets(container) {
       container.querySelectorAll('[data-gap-start][data-gap-end]').forEach((gap) => {
-        gap.addEventListener('click', () => {
-          addCoverageGapTarget(gap.getAttribute('data-gap-start'), gap.getAttribute('data-gap-end')).catch(showError);
+        gap.addEventListener('click', (event) => {
+          event.preventDefault();
         });
       });
+    }
+
+    function bindTimelineViewportGestures(container, min, max) {
+      const track = container.querySelector('[data-timeline-track]');
+      if (!track) return;
+      track.addEventListener('wheel', (event) => {
+        const axis = timelineWheelGestureAxis(event);
+        if (axis === null) {
+          event.preventDefault();
+          return;
+        }
+        if (axis === 'vertical') {
+          zoomTimelineViewport(event, min, max);
+          return;
+        }
+        panTimelineViewport(event, min, max);
+      }, { passive: false });
+    }
+
+    function timelineWheelGestureAxis(event) {
+      if (state.timelineWheelGesture?.timeoutId !== undefined) {
+        clearTimeout(state.timelineWheelGesture.timeoutId);
+      }
+      const gesture = state.timelineWheelGesture ?? {
+        axis: null,
+        deltaX: 0,
+        deltaY: 0,
+        timeoutId: undefined
+      };
+      gesture.deltaX += event.deltaX;
+      gesture.deltaY += event.deltaY;
+      const axis = gesture.axis ?? dominantTimelineWheelAxis(gesture.deltaX, gesture.deltaY);
+      state.timelineWheelGesture = {
+        axis,
+        deltaX: gesture.deltaX,
+        deltaY: gesture.deltaY,
+        timeoutId: setTimeout(() => {
+          state.timelineWheelGesture = null;
+        }, TIMELINE_WHEEL_GESTURE_IDLE_MS)
+      };
+      return axis;
+    }
+
+    function dominantTimelineWheelAxis(deltaX, deltaY) {
+      const absoluteX = Math.abs(deltaX);
+      const absoluteY = Math.abs(deltaY);
+      if (Math.max(absoluteX, absoluteY) < TIMELINE_WHEEL_AXIS_INTENT_PX) {
+        return null;
+      }
+      if (absoluteY >= absoluteX * TIMELINE_WHEEL_AXIS_DOMINANCE) {
+        return 'vertical';
+      }
+      if (absoluteX >= absoluteY * TIMELINE_WHEEL_AXIS_DOMINANCE) {
+        return 'horizontal';
+      }
+      return null;
+    }
+
+    function zoomTimelineViewport(event, min, max) {
+      event.preventDefault();
+      const track = event.currentTarget;
+      const rect = track.getBoundingClientRect();
+      if (rect.width <= 0) return;
+      const physical = timelinePhysicalBounds(state.selectedState);
+      const startAt = min.getTime();
+      const endAt = max.getTime();
+      const span = endAt - startAt;
+      const pointerRatio = clamp((event.clientX - rect.left) / rect.width, 0, 1);
+      const anchorAt = startAt + span * pointerRatio;
+      const zoomFactor = Math.exp(event.deltaY * 0.002);
+      const nextSpan = clamp(span * zoomFactor, TIMELINE_MIN_WINDOW_MS, physical.endAt - physical.startAt);
+      state.viewportDays = null;
+      state.timelineViewport = clampTimelineViewport({
+        endAt: anchorAt + nextSpan * (1 - pointerRatio),
+        startAt: anchorAt - nextSpan * pointerRatio
+      }, physical);
+      syncViewportButtons();
+      renderTimeline();
+    }
+
+    function panTimelineViewport(event, min, max) {
+      event.preventDefault();
+      const track = event.currentTarget;
+      const rect = track.getBoundingClientRect();
+      if (rect.width <= 0) return;
+      const span = max.getTime() - min.getTime();
+      const shift = (event.deltaX / rect.width) * span;
+      const physical = timelinePhysicalBounds(state.selectedState);
+      state.viewportDays = null;
+      state.timelineViewport = clampTimelineViewport({
+        endAt: max.getTime() + shift,
+        startAt: min.getTime() + shift
+      }, physical);
+      syncViewportButtons();
+      renderTimeline();
+    }
+
+    function bindTimelineSelection(container, min, max) {
+      const track = container.querySelector('[data-timeline-track]');
+      const selection = container.querySelector('[data-timeline-selection]');
+      if (!track || !selection) return;
+      track.addEventListener('pointerdown', (event) => {
+        if (event.button !== 0) return;
+        if (!event.altKey && event.target instanceof Element && event.target.closest('.segment-coverage')) {
+          return;
+        }
+        event.preventDefault();
+        hideCoverageHoverPanel();
+        clearHistoryHighlight(container);
+        const rect = track.getBoundingClientRect();
+        const startX = clamp(event.clientX - rect.left, 0, rect.width);
+        const gap = event.target instanceof Element ? event.target.closest('.coverage-gap') : null;
+        state.timelineSelection = {
+          clickGapEnd: gap?.getAttribute('data-gap-end') || null,
+          clickGapStart: gap?.getAttribute('data-gap-start') || null,
+          maxAt: max.getTime(),
+          minAt: min.getTime(),
+          pointerId: event.pointerId,
+          startX,
+          trackWidth: rect.width
+        };
+        track.setPointerCapture(event.pointerId);
+      });
+      track.addEventListener('pointermove', (event) => {
+        const current = state.timelineSelection;
+        if (!current || current.pointerId !== event.pointerId) return;
+        const rect = track.getBoundingClientRect();
+        const currentX = clamp(event.clientX - rect.left, 0, rect.width);
+        if (Math.abs(currentX - current.startX) < TIMELINE_SELECTION_MIN_PX) {
+          return;
+        }
+        updateTimelineSelection(selection, current.startX, currentX);
+      });
+      track.addEventListener('pointerup', (event) => {
+        finishTimelineSelection(track, selection, event);
+      });
+      track.addEventListener('pointercancel', (event) => {
+        cancelTimelineSelection(track, selection, event.pointerId);
+      });
+      track.addEventListener('click', (event) => {
+        if (!state.suppressTimelineClick) return;
+        event.preventDefault();
+        event.stopPropagation();
+        state.suppressTimelineClick = false;
+      }, true);
+    }
+
+    function updateTimelineSelection(selection, startX, currentX) {
+      const left = Math.min(startX, currentX);
+      const width = Math.abs(currentX - startX);
+      selection.style.left = left + 'px';
+      selection.style.width = width + 'px';
+      selection.classList.add('is-active');
+    }
+
+    function finishTimelineSelection(track, selection, event) {
+      const current = state.timelineSelection;
+      if (!current || current.pointerId !== event.pointerId) return;
+      const rect = track.getBoundingClientRect();
+      const endX = clamp(event.clientX - rect.left, 0, rect.width);
+      const width = Math.abs(endX - current.startX);
+      cancelTimelineSelection(track, selection, event.pointerId);
+      if (width < TIMELINE_SELECTION_MIN_PX || current.trackWidth <= 0) {
+        if (current.clickGapStart && current.clickGapEnd) {
+          addCoverageGapTarget(current.clickGapStart, current.clickGapEnd).catch(showError);
+        }
+        return;
+      }
+      state.suppressTimelineClick = true;
+      setTimeout(() => {
+        state.suppressTimelineClick = false;
+      }, 250);
+      const leftRatio = Math.min(current.startX, endX) / current.trackWidth;
+      const rightRatio = Math.max(current.startX, endX) / current.trackWidth;
+      const span = current.maxAt - current.minAt;
+      const startAt = new Date(current.minAt + span * leftRatio);
+      const endAt = new Date(current.minAt + span * rightRatio);
+      addCoverageGapTarget(startAt.toISOString(), endAt.toISOString()).catch(showError);
+    }
+
+    function cancelTimelineSelection(track, selection, pointerId) {
+      if (state.timelineSelection?.pointerId === pointerId) {
+        state.timelineSelection = null;
+      }
+      selection.classList.remove('is-active');
+      selection.style.width = '0px';
+      try {
+        track.releasePointerCapture(pointerId);
+      } catch {}
     }
 
     function bindHistoryDetailsActions(container) {
@@ -1283,12 +1797,28 @@ export const historyPageHtml = `<!doctype html>
       });
     }
 
-    function showCoverageHoverPanel(segment, x, y) {
+    function showHistoryHoverPanel(items, x, y) {
       const panel = $('coverageHoverPanel');
-      $('coverageHoverRange').textContent = segment.dataset.hoverRange || '';
-      $('coverageHoverCount').textContent = segment.dataset.hoverCount || '';
+      panel.innerHTML = items.map(renderHistoryHoverPopover).join('');
       panel.classList.remove('hidden');
       positionCoverageHoverPanel(x, y);
+    }
+
+    function renderHistoryHoverPopover(item) {
+      return '<div class="history-hover-popover">' +
+        '<div class="font-semibold text-zinc-900">' + escapeHtml(item.label) + '</div>' +
+        '<div class="mt-1 grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-0.5">' +
+          hoverField('from', item.from) +
+          hoverField('to', item.to) +
+          hoverField('duration', item.duration) +
+          (item.extra ? hoverField(item.kind === 'coverage' ? 'messages' : 'status', item.extra) : '') +
+        '</div>' +
+      '</div>';
+    }
+
+    function hoverField(label, value) {
+      return '<div class="text-zinc-400">' + escapeHtml(label) + '</div>' +
+        '<div class="font-mono text-zinc-700">' + escapeHtml(value) + '</div>';
     }
 
     function positionCoverageHoverPanel(x, y) {
@@ -1298,17 +1828,21 @@ export const historyPageHtml = `<!doctype html>
       const offset = 12;
       let left = x + offset;
       let top = y + offset;
-      if (left + panel.offsetWidth > window.innerWidth - padding) {
-        left = x - panel.offsetWidth - offset;
+      const width = panel.offsetWidth;
+      const height = panel.offsetHeight;
+      if (left + width > window.innerWidth - padding) {
+        left = x - width - offset;
       }
-      if (top + panel.offsetHeight > window.innerHeight - padding) {
-        top = y - panel.offsetHeight - offset;
+      if (top + height > window.innerHeight - padding) {
+        top = y - height - offset;
       }
       panel.style.transform = 'translate(' + Math.max(padding, left) + 'px, ' + Math.max(padding, top) + 'px)';
     }
 
     function hideCoverageHoverPanel() {
-      $('coverageHoverPanel').classList.add('hidden');
+      const panel = $('coverageHoverPanel');
+      panel.classList.add('hidden');
+      panel.innerHTML = '';
     }
 
     function renderEvents() {
@@ -1723,6 +2257,9 @@ export const historyPageHtml = `<!doctype html>
       state.selectedState = null;
       state.coverageTableOpen = false;
       state.renderedSelectedChatId = null;
+      state.timelineSelection = null;
+      state.timelineWheelGesture = null;
+      state.timelineViewport = null;
       removeStorage(STORAGE_KEYS.selectedChatId);
     }
 
@@ -1753,8 +2290,17 @@ export const historyPageHtml = `<!doctype html>
     }
 
     function readNumberStorage(key, fallback) {
-      const value = Number(readStorage(key));
+      const raw = readStorage(key);
+      if (raw === null) {
+        return fallback;
+      }
+      const value = Number(raw);
       return Number.isFinite(value) ? value : fallback;
+    }
+
+    function readScalePresetStorage(key, fallback) {
+      const value = readNumberStorage(key, fallback);
+      return [0, 7, 30, 90, 365].includes(value) ? value : fallback;
     }
 
     function readBooleanStorage(key, fallback) {
@@ -1890,6 +2436,10 @@ export const historyPageHtml = `<!doctype html>
       return { ...raw, startAt, endAt };
     }
 
+    function clamp(value, min, max) {
+      return Math.min(Math.max(value, min), max);
+    }
+
     function rangeLabel(range) {
       return boundaryLabel(range.start) + ' -> ' + boundaryLabel(range.end);
     }
@@ -1938,6 +2488,11 @@ export const historyPageHtml = `<!doctype html>
     function formatPreciseDate(value) {
       const date = value instanceof Date ? value : new Date(value);
       return Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 23).replace('T', ' ');
+    }
+
+    function formatTimelineDate(value) {
+      const date = value instanceof Date ? value : new Date(value);
+      return Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 19).replace('T', ' ');
     }
 
     function formatTime(value) {
