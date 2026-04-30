@@ -24,6 +24,7 @@ import type {
 } from './types.js';
 
 const coverageLocks = new Map<string, Promise<void>>();
+const HISTORY_COVERAGE_BATCH_CHUNK_SIZE = 5000;
 
 export type BackfillJobCheckpoint = {
   complete?: boolean;
@@ -204,6 +205,29 @@ export async function addHistoryCoverage(
   });
 }
 
+export async function addHistoryCoverageBatch(
+  database: AppDatabase,
+  intervals: HistoryCoverageInterval[]
+): Promise<void> {
+  const normalizedIntervals = normalizeCoverageIntervals(
+    intervals
+      .map(normalizeTelegramHistoryInterval)
+      .filter((interval) => interval.startAt < interval.endAt)
+  );
+  if (normalizedIntervals.length === 0) {
+    return;
+  }
+
+  await withCoverageLocks(
+    uniqueSortedStrings(normalizedIntervals.map((interval) => interval.chatId)),
+    async () => {
+      await database.transaction(async (transaction) => {
+        await mergeHistoryCoverageBatchInTransaction(transaction, normalizedIntervals);
+      });
+    }
+  );
+}
+
 async function mergeHistoryCoverageInTransaction(
   database: AppDatabase,
   interval: HistoryCoverageInterval
@@ -244,6 +268,127 @@ async function mergeHistoryCoverageInTransaction(
     startAt: mergedStartAt,
     telegramChatId: interval.chatId
   });
+}
+
+async function mergeHistoryCoverageBatchInTransaction(
+  database: AppDatabase,
+  intervals: HistoryCoverageInterval[]
+): Promise<void> {
+  const chatIds = uniqueSortedStrings(intervals.map((interval) => interval.chatId));
+  const searchStartAt = new Date(
+    minDateFromList(intervals.map((interval) => interval.startAt)).getTime() -
+      TELEGRAM_HISTORY_TICK_MS
+  );
+  const searchEndAt = new Date(
+    maxDateFromList(intervals.map((interval) => interval.endAt)).getTime() +
+      TELEGRAM_HISTORY_TICK_MS
+  );
+  const overlappingRows = await database
+    .select({
+      endAt: historyCoverage.endAt,
+      id: historyCoverage.id,
+      startAt: historyCoverage.startAt,
+      telegramChatId: historyCoverage.telegramChatId
+    })
+    .from(historyCoverage)
+    .where(
+      and(
+        inArray(historyCoverage.telegramChatId, chatIds),
+        lte(historyCoverage.startAt, searchEndAt),
+        gte(historyCoverage.endAt, searchStartAt)
+      )
+    );
+
+  const overlappingRowsByChat = groupBy(overlappingRows, (row) => row.telegramChatId);
+  const intervalsByChat = groupBy(intervals, (interval) => interval.chatId);
+  const deleteIds = new Set<number>();
+  const insertIntervals: HistoryCoverageInterval[] = [];
+  const updateEndAtByTime = new Map<number, { endAt: Date; ids: number[] }>();
+
+  for (const [chatId, chatIntervals] of intervalsByChat.entries()) {
+    const chatOverlappingRows = (overlappingRowsByChat.get(chatId) ?? []).filter((row) =>
+      chatIntervals.some((interval) => intervalsTouch(interval, row))
+    );
+    const mergedIntervals = normalizeCoverageIntervals([
+      ...chatIntervals,
+      ...chatOverlappingRows.map((row) => ({
+        chatId,
+        endAt: row.endAt,
+        startAt: row.startAt
+      }))
+    ]);
+
+    if (canExtendSingleCoverageRow(chatId, chatOverlappingRows, mergedIntervals)) {
+      const row = chatOverlappingRows[0];
+      const interval = mergedIntervals[0];
+      if (row !== undefined && interval !== undefined && interval.endAt > row.endAt) {
+        const key = interval.endAt.getTime();
+        const group = updateEndAtByTime.get(key) ?? { endAt: interval.endAt, ids: [] };
+        group.ids.push(row.id);
+        updateEndAtByTime.set(key, group);
+      }
+      continue;
+    }
+
+    for (const row of chatOverlappingRows) {
+      deleteIds.add(row.id);
+    }
+
+    insertIntervals.push(...mergedIntervals);
+  }
+
+  for (const group of updateEndAtByTime.values()) {
+    for (const ids of chunks(group.ids, HISTORY_COVERAGE_BATCH_CHUNK_SIZE)) {
+      if (ids.length > 0) {
+        await database
+          .update(historyCoverage)
+          .set({
+            endAt: group.endAt,
+            updatedAt: sql`now()`
+          })
+          .where(inArray(historyCoverage.id, ids));
+      }
+    }
+  }
+
+  for (const ids of chunks([...deleteIds], HISTORY_COVERAGE_BATCH_CHUNK_SIZE)) {
+    if (ids.length > 0) {
+      await database.delete(historyCoverage).where(inArray(historyCoverage.id, ids));
+    }
+  }
+
+  for (const values of chunks(insertIntervals, HISTORY_COVERAGE_BATCH_CHUNK_SIZE)) {
+    if (values.length > 0) {
+      await database.insert(historyCoverage).values(
+        values.map((interval) => ({
+          endAt: interval.endAt,
+          startAt: interval.startAt,
+          telegramChatId: interval.chatId
+        }))
+      );
+    }
+  }
+}
+
+function canExtendSingleCoverageRow(
+  chatId: string,
+  rows: { endAt: Date; id: number; startAt: Date; telegramChatId: string }[],
+  intervals: HistoryCoverageInterval[]
+): boolean {
+  if (rows.length !== 1 || intervals.length !== 1) {
+    return false;
+  }
+  const row = rows[0];
+  const interval = intervals[0];
+  if (row === undefined || interval === undefined) {
+    return false;
+  }
+  const normalizedRow = normalizeTelegramHistoryInterval({
+    chatId,
+    endAt: row.endAt,
+    startAt: row.startAt
+  });
+  return interval.startAt.getTime() === normalizedRow.startAt.getTime();
 }
 
 export async function extendHistoryCoverageFromMessage(
@@ -433,12 +578,69 @@ export async function resetRunningBackfillJobs(database: AppDatabase): Promise<v
     .where(eq(backfillJobs.status, 'running'));
 }
 
-function minDate(first: Date, ...rest: Date[]): Date {
+function chunks<T>(items: T[], size: number): T[][] {
+  const result: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    result.push(items.slice(index, index + size));
+  }
+  return result;
+}
+
+function groupBy<T, K>(items: T[], keyForItem: (item: T) => K): Map<K, T[]> {
+  const grouped = new Map<K, T[]>();
+  for (const item of items) {
+    const key = keyForItem(item);
+    const existing = grouped.get(key);
+    if (existing === undefined) {
+      grouped.set(key, [item]);
+    } else {
+      existing.push(item);
+    }
+  }
+  return grouped;
+}
+
+function intervalsTouch(
+  interval: HistoryCoverageInterval,
+  row: { endAt: Date; startAt: Date }
+): boolean {
+  const searchStartAt = new Date(interval.startAt.getTime() - TELEGRAM_HISTORY_TICK_MS);
+  const searchEndAt = new Date(interval.endAt.getTime() + TELEGRAM_HISTORY_TICK_MS);
+  return row.startAt <= searchEndAt && row.endAt >= searchStartAt;
+}
+
+function minDate(first: Date, ...rest: Date[]): Date;
+function minDate(...dates: Date[]): Date {
+  const [first, ...rest] = dates;
+  if (first === undefined) {
+    throw new Error('minDate requires at least one date');
+  }
   return rest.reduce((minimum, date) => (date < minimum ? date : minimum), first);
 }
 
-function maxDate(first: Date, ...rest: Date[]): Date {
+function minDateFromList(dates: Date[]): Date {
+  const [first, ...rest] = dates;
+  if (first === undefined) {
+    throw new Error('minDateFromList requires at least one date');
+  }
+  return minDate(first, ...rest);
+}
+
+function maxDate(first: Date, ...rest: Date[]): Date;
+function maxDate(...dates: Date[]): Date {
+  const [first, ...rest] = dates;
+  if (first === undefined) {
+    throw new Error('maxDate requires at least one date');
+  }
   return rest.reduce((maximum, date) => (date > maximum ? date : maximum), first);
+}
+
+function maxDateFromList(dates: Date[]): Date {
+  const [first, ...rest] = dates;
+  if (first === undefined) {
+    throw new Error('maxDateFromList requires at least one date');
+  }
+  return maxDate(first, ...rest);
 }
 
 function normalizeRemainingEndAt(job: BackfillJob, remainingEndAt: Date): Date {
@@ -464,4 +666,20 @@ async function withCoverageLock<T>(chatId: string, operation: () => Promise<T>):
       coverageLocks.delete(chatId);
     }
   }
+}
+
+async function withCoverageLocks<T>(
+  chatIds: string[],
+  operation: () => Promise<T>,
+  index = 0
+): Promise<T> {
+  const chatId = chatIds[index];
+  if (chatId === undefined) {
+    return operation();
+  }
+  return withCoverageLock(chatId, () => withCoverageLocks(chatIds, operation, index + 1));
+}
+
+function uniqueSortedStrings(values: string[]): string[] {
+  return [...new Set(values)].sort();
 }

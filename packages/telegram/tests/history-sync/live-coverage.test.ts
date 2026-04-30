@@ -6,12 +6,13 @@ import type { HistoryCoverageInterval } from '../../src/history-sync/types.js';
 describe('live history coverage observer', () => {
   it('covers all known chats with empty live intervals while connected', async () => {
     const coverage: HistoryCoverageInterval[] = [];
-    const published: HistoryCoverageInterval[] = [];
+    const batches: HistoryCoverageInterval[][] = [];
+    const published: HistoryCoverageInterval[][] = [];
     const observer = createLiveCoverageObserver({
-      addCoverage: appendCoverageTo(coverage),
+      addCoverageBatch: appendCoverageBatchTo(coverage, batches),
       listChatIds: listChatIds('chat-a', 'chat-a', 'chat-b'),
-      publishCoverageChanged: (interval) => {
-        published.push(interval);
+      publishCoverageChanged: (intervals) => {
+        published.push(intervals);
       }
     });
 
@@ -22,13 +23,14 @@ describe('live history coverage observer', () => {
       interval('chat-a', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:05.000Z'),
       interval('chat-b', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:05.000Z')
     ]);
-    expect(published).toEqual(coverage);
+    expect(batches).toEqual([coverage]);
+    expect(published).toEqual([coverage]);
   });
 
   it('does not cover silent intervals before the stream is connected', async () => {
     const coverage: HistoryCoverageInterval[] = [];
     const observer = createLiveCoverageObserver({
-      addCoverage: appendCoverageTo(coverage),
+      addCoverageBatch: appendCoverageBatchTo(coverage),
       listChatIds: listChatIds('chat-a')
     });
 
@@ -45,7 +47,7 @@ describe('live history coverage observer', () => {
   it('leaves a coverage gap across disconnects', async () => {
     const coverage: HistoryCoverageInterval[] = [];
     const observer = createLiveCoverageObserver({
-      addCoverage: appendCoverageTo(coverage),
+      addCoverageBatch: appendCoverageBatchTo(coverage),
       listChatIds: listChatIds('chat-a')
     });
 
@@ -65,7 +67,7 @@ describe('live history coverage observer', () => {
   it('does not reset the checkpoint for duplicate connected signals', async () => {
     const coverage: HistoryCoverageInterval[] = [];
     const observer = createLiveCoverageObserver({
-      addCoverage: appendCoverageTo(coverage),
+      addCoverageBatch: appendCoverageBatchTo(coverage),
       listChatIds: listChatIds('chat-a')
     });
 
@@ -82,7 +84,7 @@ describe('live history coverage observer', () => {
     const coverage: HistoryCoverageInterval[] = [];
     let chatIds: string[] = [];
     const observer = createLiveCoverageObserver({
-      addCoverage: appendCoverageTo(coverage),
+      addCoverageBatch: appendCoverageBatchTo(coverage),
       listChatIds: () => Promise.resolve(chatIds)
     });
 
@@ -99,7 +101,7 @@ describe('live history coverage observer', () => {
   it('clamps stale live message coverage to the current connected session', async () => {
     const coverage: HistoryCoverageInterval[] = [];
     const observer = createLiveCoverageObserver({
-      addCoverage: appendCoverageTo(coverage),
+      addCoverageBatch: appendCoverageBatchTo(coverage),
       listChatIds: listChatIds('chat-a')
     });
 
@@ -119,7 +121,7 @@ describe('live history coverage observer', () => {
   it('keeps message-specific coverage for chats without targets', async () => {
     const coverage: HistoryCoverageInterval[] = [];
     const observer = createLiveCoverageObserver({
-      addCoverage: appendCoverageTo(coverage),
+      addCoverageBatch: appendCoverageBatchTo(coverage),
       listChatIds: listChatIds('chat-a')
     });
 
@@ -139,11 +141,13 @@ describe('live history coverage observer', () => {
   });
 });
 
-function appendCoverageTo(
-  coverage: HistoryCoverageInterval[]
-): (interval: HistoryCoverageInterval) => Promise<void> {
-  return (interval) => {
-    coverage.push(interval);
+function appendCoverageBatchTo(
+  coverage: HistoryCoverageInterval[],
+  batches: HistoryCoverageInterval[][] = []
+): (intervals: HistoryCoverageInterval[]) => Promise<void> {
+  return (intervals) => {
+    coverage.push(...intervals);
+    batches.push(intervals);
     return Promise.resolve();
   };
 }
