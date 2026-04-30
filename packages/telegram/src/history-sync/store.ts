@@ -3,7 +3,8 @@ import {
   backfillJobs,
   historyCoverage,
   historyTargets,
-  historyTemplates
+  historyTemplates,
+  telegramChats
 } from '@agentg/database/schema';
 import { and, asc, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
 
@@ -92,6 +93,17 @@ export async function listHistoryTargets(database: AppDatabase): Promise<History
     range: canonicalizeHistoryRange(row.range as HistoryRange),
     ...(row.templateId === null ? {} : { templateId: row.templateId })
   }));
+}
+
+export async function listKnownTelegramChatIds(database: AppDatabase): Promise<string[]> {
+  const rows = await database
+    .select({
+      telegramChatId: telegramChats.telegramChatId
+    })
+    .from(telegramChats)
+    .orderBy(asc(telegramChats.telegramChatId));
+
+  return rows.map((row) => row.telegramChatId);
 }
 
 export async function upsertHistoryTarget(
@@ -187,7 +199,7 @@ export async function addHistoryCoverage(
 
   await withCoverageLock(normalizedInterval.chatId, async () => {
     await database.transaction(async (transaction) => {
-      await mergeHistoryCoverageInTransaction(transaction as AppDatabase, normalizedInterval);
+      await mergeHistoryCoverageInTransaction(transaction, normalizedInterval);
     });
   });
 }
@@ -351,7 +363,7 @@ export async function checkpointBackfillJob(
       let storedMessages = 0;
 
       for (const update of updates) {
-        const result = await persistTelegramUpdate(transaction as AppDatabase, update);
+        const result = await persistTelegramUpdate(transaction, update);
         if (result.message) {
           storedMessages += 1;
         }
@@ -361,7 +373,7 @@ export async function checkpointBackfillJob(
         normalizedCoverage !== undefined &&
         normalizedCoverage.startAt < normalizedCoverage.endAt
       ) {
-        await mergeHistoryCoverageInTransaction(transaction as AppDatabase, normalizedCoverage);
+        await mergeHistoryCoverageInTransaction(transaction, normalizedCoverage);
       }
 
       if (checkpoint.complete === true) {

@@ -271,9 +271,8 @@ async function executeBackfillJob(
 
   let fetchedMessages = 0;
   let storedMessages = 0;
-  let reachedBeginning = false;
 
-  while (cursorMessageId !== undefined) {
+  for (;;) {
     await delay(options.requestDelayMs);
 
     const history = asTdObject(
@@ -291,14 +290,13 @@ async function executeBackfillJob(
     const concreteMessages = messages.filter(isTdObject);
 
     if (concreteMessages.length === 0) {
-      reachedBeginning = true;
       await completeJobWithCoverage(database, job, options, {
         endAt: remainingEndAt,
         startAt: TELEGRAM_HISTORY_PAST_BOUNDARY
       });
       return {
         fetchedMessages,
-        reachedBeginning,
+        reachedBeginning: true,
         storedMessages
       };
     }
@@ -320,7 +318,7 @@ async function executeBackfillJob(
 
     const crossedStart = concreteMessages.some((message) => isBeforeInterval(message, job.startAt));
     const nextCursor = oldestMessageIdOlderThan(concreteMessages, cursorMessageId);
-    reachedBeginning = nextCursor === undefined;
+    const reachedBeginning = nextCursor === undefined;
     const oldestFetchedMessageDate =
       nextCursor === undefined ? undefined : messageDateForId(concreteMessages, nextCursor);
     const checkpoint = checkpointBackfillPage(job, {
@@ -374,12 +372,6 @@ async function executeBackfillJob(
       storedMessages
     });
   }
-
-  return {
-    fetchedMessages,
-    reachedBeginning,
-    storedMessages
-  };
 }
 
 async function completeJobWithCoverage(

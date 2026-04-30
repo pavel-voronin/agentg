@@ -9,8 +9,10 @@ import {
   type BackfillOptions,
   type HistorySyncController
 } from './history-sync/controller.js';
-import { extendHistoryCoverageFromMessage } from './history-sync/store.js';
-import { ceilToTelegramSecond } from './history-sync/time.js';
+import {
+  createDatabaseLiveCoverageObserver,
+  type LiveCoverageObserver
+} from './history-sync/live-coverage.js';
 import {
   asTdObject,
   normalizeChat,
@@ -45,6 +47,18 @@ type TelegramClient = Awaited<ReturnType<typeof createTelegramClient>>;
 
 type ChatListKind = 'main' | 'archive';
 
+type TdlibStatusState = {
+  authenticated: boolean;
+  connected: boolean;
+};
+
+type TdlibStatusTracker = {
+  markAuthenticated(authenticated: boolean): void;
+  markConnectionState(connectionState: string): boolean;
+  markDisconnected(): void;
+  publish(): void;
+};
+
 const TDLIB_STATUS_HEARTBEAT_MS = 5000;
 const TELEGRAM_SHUTDOWN_FORCE_EXIT_MS = 4500;
 const TELEGRAM_SHUTDOWN_STEP_TIMEOUT_MS = 2000;
@@ -56,6 +70,11 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
 
   const client = await createTelegramClient(options.telegram);
   const persistenceStats = createPersistenceStats();
+  const liveCoverageObserver = createDatabaseLiveCoverageObserver(
+    options.database,
+    options.eventBus
+  );
+  const tdlibStatus = createTdlibStatusTracker(options.eventBus);
   let shuttingDown = false;
   let tdlibStatusHeartbeat: ReturnType<typeof setInterval> | undefined;
   const historySyncController = createHistorySyncController(
@@ -71,18 +90,23 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
   });
   client.on('update', (update: unknown) => {
     logSafeTelegramUpdate(update);
+    handleTdlibConnectionUpdate(update, tdlibStatus, liveCoverageObserver);
     void persistLiveUpdate(
       options.database,
       update,
       persistenceStats,
       options.eventBus,
-      historySyncController
+      historySyncController,
+      liveCoverageObserver
     );
   });
 
   await client.login();
   await persistAndLogAuthenticatedClient(options.database, client);
-  tdlibStatusHeartbeat = startTdlibStatusHeartbeat(options.eventBus);
+  tdlibStatus.markAuthenticated(true);
+  tdlibStatus.markConnectionState('connectionStateReady');
+  await liveCoverageObserver.markConnected();
+  tdlibStatusHeartbeat = startTdlibStatusHeartbeat(tdlibStatus, liveCoverageObserver);
   await syncInitialChats(options.database, client);
 
   const historySyncSubscriptions = subscribeHistorySyncCommands({
@@ -99,41 +123,72 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
       clearInterval(tdlibStatusHeartbeat);
       tdlibStatusHeartbeat = undefined;
     }
-    publishTdlibStatus(options.eventBus, false);
+    tdlibStatus.markDisconnected();
+    await liveCoverageObserver.markDisconnected();
     for (const subscription of historySyncSubscriptions) {
       subscription.unsubscribe();
     }
     historySyncController.stop();
-    const [tdlibClosed, historySyncStopped] = await Promise.all([
+    const [tdlibClosed, historySyncStopped, liveCoverageStopped] = await Promise.all([
       runShutdownStep('telegram.tdlib_close', () => client.close()),
-      runShutdownStep('telegram.history_sync_wait', () => historySyncController.wait())
+      runShutdownStep('telegram.history_sync_wait', () => historySyncController.wait()),
+      runShutdownStep('telegram.live_coverage_wait', () => liveCoverageObserver.wait())
     ]);
     const eventBusClosed = await runShutdownStep('telegram.event_bus_close', () =>
       options.eventBus.close()
     );
 
-    return tdlibClosed && historySyncStopped && eventBusClosed;
+    return tdlibClosed && historySyncStopped && liveCoverageStopped && eventBusClosed;
   });
 }
 
-function startTdlibStatusHeartbeat(eventBus: EventBus): ReturnType<typeof setInterval> {
-  publishTdlibStatus(eventBus, true);
+function startTdlibStatusHeartbeat(
+  status: TdlibStatusTracker,
+  liveCoverageObserver: LiveCoverageObserver
+): ReturnType<typeof setInterval> {
+  status.publish();
   return setInterval(() => {
-    publishTdlibStatus(eventBus, true);
+    status.publish();
+    void liveCoverageObserver.tick();
   }, TDLIB_STATUS_HEARTBEAT_MS);
 }
 
-function publishTdlibStatus(eventBus: EventBus, connected: boolean): void {
-  eventBus.publish(
-    createIntegrationEvent({
-      data: {
-        authenticated: connected,
-        connected
-      },
-      source: 'telegram.tdlib',
-      type: 'telegram.tdlib.status'
-    })
-  );
+function createTdlibStatusTracker(eventBus: EventBus): TdlibStatusTracker {
+  const state: TdlibStatusState = {
+    authenticated: false,
+    connected: false
+  };
+
+  const publish = (): void => {
+    eventBus.publish(
+      createIntegrationEvent({
+        data: {
+          authenticated: state.authenticated,
+          connected: state.connected
+        },
+        source: 'telegram.tdlib',
+        type: 'telegram.tdlib.status'
+      })
+    );
+  };
+
+  return {
+    markAuthenticated(authenticated: boolean): void {
+      state.authenticated = authenticated;
+      state.connected = authenticated;
+      publish();
+    },
+    markConnectionState(connectionState: string): boolean {
+      state.connected = state.authenticated;
+      publish();
+      return isTdlibLiveCoverageConnectionState(connectionState);
+    },
+    markDisconnected(): void {
+      state.connected = false;
+      publish();
+    },
+    publish
+  };
 }
 
 async function persistAndLogAuthenticatedClient(
@@ -168,7 +223,8 @@ async function persistLiveUpdate(
   update: unknown,
   stats: PersistenceStats,
   eventBus: EventBus,
-  historySyncController: HistorySyncController
+  historySyncController: HistorySyncController,
+  liveCoverageObserver: LiveCoverageObserver
 ): Promise<void> {
   const normalized = normalizeTelegramUpdate(update);
   if (normalized?.event === undefined) {
@@ -195,23 +251,9 @@ async function persistLiveUpdate(
     normalized.message?.messageDate !== undefined &&
     normalized.event.tdlibUpdateType === 'updateNewMessage'
   ) {
-    const observedUntil = ceilToTelegramSecond(new Date());
-    await extendHistoryCoverageFromMessage(
-      database,
+    await liveCoverageObserver.recordLiveMessage(
       normalized.message.chatId,
-      normalized.message.messageDate,
-      observedUntil
-    );
-    eventBus.publish(
-      createIntegrationEvent({
-        data: {
-          chatId: normalized.message.chatId,
-          endAt: observedUntil.toISOString(),
-          startAt: normalized.message.messageDate.toISOString()
-        },
-        source: 'telegram.live',
-        type: 'history.coverage.changed'
-      })
+      normalized.message.messageDate
     );
   }
 
@@ -236,6 +278,25 @@ function createPersistenceStats(): PersistenceStats {
     rawEvents: 0,
     users: 0
   };
+}
+
+function handleTdlibConnectionUpdate(
+  update: unknown,
+  status: TdlibStatusTracker,
+  liveCoverageObserver: LiveCoverageObserver
+): void {
+  const connectionState = extractTdlibConnectionState(update);
+  if (connectionState === undefined) {
+    return;
+  }
+
+  const connected = status.markConnectionState(connectionState);
+  if (connected) {
+    void liveCoverageObserver.markConnected();
+    return;
+  }
+
+  void liveCoverageObserver.markDisconnected();
 }
 
 async function syncInitialChats(
@@ -458,6 +519,20 @@ function logSafeTelegramUpdate(update: unknown): void {
       })
     );
   }
+}
+
+function extractTdlibConnectionState(update: unknown): string | undefined {
+  const tdObject = asTdObject(update);
+  if (tdObject?._ !== 'updateConnectionState') {
+    return undefined;
+  }
+
+  const connectionState = asTdObject(tdObject.state);
+  return typeof connectionState?._ === 'string' ? connectionState._ : undefined;
+}
+
+function isTdlibLiveCoverageConnectionState(connectionState: string): boolean {
+  return connectionState === 'connectionStateReady';
 }
 
 function summarizeCurrentUser(user: TdObject | undefined): Record<string, unknown> {

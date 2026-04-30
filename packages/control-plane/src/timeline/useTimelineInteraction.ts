@@ -75,6 +75,11 @@ type TimelineSelection = {
   trackWidth: number;
 };
 
+type HoverPointer = {
+  x: number;
+  y: number;
+};
+
 type WheelGesture = {
   axis: 'horizontal' | 'vertical' | null;
   deltaX: number;
@@ -87,6 +92,7 @@ export function useTimelineInteraction(options: TimelineInteractionOptions) {
   const highlightedKeys = ref<string[]>([]);
   const hoverItems = ref<TimelineHoverItem[]>([]);
   const hoverPanel = ref<TimelineHoverPanelElement | null>(null);
+  const hoverPointer = ref<HoverPointer | null>(null);
   const hoverTransform = ref('translate(0px, 0px)');
   const selection = ref<TimelineSelection | null>(null);
   const suppressTimelineClick = ref(false);
@@ -128,7 +134,11 @@ export function useTimelineInteraction(options: TimelineInteractionOptions) {
       }
       syncViewport({ resetToPreset: chatChanged || scaleChanged });
       lastViewportDays.value = options.viewportDays.value;
-      clearHover();
+      if (chatChanged || scaleChanged) {
+        clearHover();
+        return;
+      }
+      refreshHover();
     },
     { immediate: true }
   );
@@ -138,6 +148,7 @@ export function useTimelineInteraction(options: TimelineInteractionOptions) {
   }
 
   function clearHover(): void {
+    hoverPointer.value = null;
     hoverItems.value = [];
     clearHighlight();
   }
@@ -274,6 +285,10 @@ export function useTimelineInteraction(options: TimelineInteractionOptions) {
       clearHover();
       return;
     }
+    hoverPointer.value = {
+      x: pointer.clientX,
+      y: pointer.clientY
+    };
     hoverItems.value = items;
     highlightItems(items);
     positionHover(pointer.clientX, pointer.clientY);
@@ -339,6 +354,31 @@ export function useTimelineInteraction(options: TimelineInteractionOptions) {
   function positionHoverFromEvent(event: Event): void {
     const pointer = pointerEvent(event);
     positionHover(pointer.clientX, pointer.clientY);
+  }
+
+  function refreshHover(): void {
+    const pointer = hoverPointer.value;
+    if (pointer === null) return;
+    const items = hoverItemsAtPosition(pointer.x);
+    if (items === null) return;
+    if (items.length === 0) {
+      clearHover();
+      return;
+    }
+    hoverItems.value = items;
+    highlightItems(items);
+    positionHover(pointer.x, pointer.y);
+  }
+
+  function hoverItemsAtPosition(x: number): TimelineHoverItem[] | null {
+    const model = view.value;
+    const currentTrack = track.value;
+    if (!model || !currentTrack) return null;
+    const rect = currentTrack.getBoundingClientRect();
+    if (rect.width <= 0) return null;
+    const ratio = clamp((x - rect.left) / rect.width, 0, 1);
+    const at = model.min.getTime() + (model.max.getTime() - model.min.getTime()) * ratio;
+    return historyItemsAtTime(options.data.value, model.min, model.max, at);
   }
 
   function syncViewport(optionsForSync: { resetToPreset: boolean }): void {
