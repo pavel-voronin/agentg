@@ -1,11 +1,5 @@
 <script setup lang="ts">
-export type AppEventItem = {
-  color: string;
-  dataJson: string;
-  key: string;
-  occurredAt: string;
-  type: string;
-};
+import type { AppEventItem } from '../stores/controlPlaneStore.js';
 
 defineProps<{
   events: AppEventItem[];

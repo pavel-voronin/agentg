@@ -1,185 +1,64 @@
-import { computed, nextTick, reactive } from 'vue';
+import { nextTick } from 'vue';
 
-const EVENT_GROUPS = [
-  {
-    color: '#7c3aed',
-    eventTypes: [
-      'history.coverage.changed',
-      'history.job.completed',
-      'history.job.failed',
-      'history.job.progress',
-      'history.job.started',
-      'history.reconcile.completed',
-      'history.sync.accepted',
-      'history.sync.completed',
-      'history.sync.failed',
-      'history.sync.requested',
-      'history.sync.started',
-      'history.target.auto_deleted',
-      'history.target.delete.completed',
-      'history.target.delete.failed',
-      'history.target.deleted',
-      'history.target.upsert.completed',
-      'history.target.upsert.failed',
-      'history.target.upserted'
-    ],
-    id: 'history',
-    label: 'History',
-    match: (type) => type.startsWith('history.')
-  },
-  {
-    color: '#0ea5e9',
-    eventTypes: [
-      'telegram.message.created',
-      'telegram.message.deleted',
-      'telegram.message.updated'
-    ],
-    id: 'telegram_messages',
-    label: 'Telegram messages',
-    match: (type) => type.startsWith('telegram.message.')
-  },
-  {
-    color: '#10b981',
-    eventTypes: ['telegram.chat.updated', 'telegram.chat_folders.updated'],
-    id: 'telegram_chats',
-    label: 'Telegram chats',
-    match: (type) => type.startsWith('telegram.chat.') || type.startsWith('telegram.chat_folders.')
-  },
-  {
-    color: '#f59e0b',
-    eventTypes: ['telegram.tdlib.status'],
-    id: 'telegram_status',
-    label: 'Telegram status',
-    match: (type) => type === 'telegram.tdlib.status'
-  },
-  {
-    color: '#ef4444',
-    eventTypes: ['ui.error'],
-    filterable: false,
-    id: 'ui',
-    label: 'UI',
-    match: (type) => type.startsWith('ui.')
-  },
-  {
-    color: '#dc2626',
-    eventTypes: ['other'],
-    filterable: false,
-    id: 'other',
-    label: 'Unexpected',
-    match: () => true
+import { controlPlaneStore, useControlPlaneAppView } from './stores/controlPlaneStore.ts';
+
+export { useControlPlaneAppView };
+
+let mountedRuntimeActions = null;
+
+export function addCustomTarget(start, end) {
+  runtimeActions().addCustomTarget(start, end);
+}
+
+export function addPresetTarget(preset) {
+  runtimeActions().addPresetTarget(preset);
+}
+
+export function clearChatSearch() {
+  runtimeActions().clearChatSearch();
+}
+
+export function closeSelectedChat() {
+  runtimeActions().closeSelectedChat();
+}
+
+export function openArchiveChats() {
+  runtimeActions().openArchiveChats();
+}
+
+export function openFolderChats(folderId) {
+  runtimeActions().openFolderChats(folderId);
+}
+
+export function openMainChats() {
+  runtimeActions().openMainChats();
+}
+
+export function searchChats(value) {
+  runtimeActions().searchChats(value);
+}
+
+export function selectTimelineScale(value) {
+  runtimeActions().selectTimelineScale(value);
+}
+
+export function toggleChat(chatId) {
+  runtimeActions().toggleChat(chatId);
+}
+
+function runtimeActions() {
+  if (mountedRuntimeActions === null) {
+    throw new Error('Control Plane runtime is not mounted');
   }
-];
-
-function createControlPlaneAppStore() {
-  const state = reactive({
-    events: [],
-    overview: null
-  });
-
-  return {
-    state,
-    setEvents(events) {
-      state.events = events;
-    },
-    setOverview(overview) {
-      state.overview = overview;
-    }
-  };
-}
-
-function createDashboardView(store) {
-  return {
-    dashboardMetrics: computed(() => dashboardMetricsFromOverview(store.state.overview || {}))
-  };
-}
-
-function createEventsView(store) {
-  return {
-    eventItems: computed(() => store.state.events.map(eventListItem)),
-    hasEvents: computed(() => store.state.events.length > 0)
-  };
-}
-
-function eventListItem(event, index) {
-  const group = eventGroupForEvent(event);
-  const type = String(event?.type || '');
-  return {
-    color: group.color,
-    dataJson: JSON.stringify(event?.data || {}),
-    key: event?.id || event?.occurredAt + ':' + type + ':' + index,
-    occurredAt: formatEventTime(event?.occurredAt),
-    type
-  };
-}
-
-function eventGroupForEvent(event) {
-  return eventGroupForType(String(event?.type || ''));
-}
-
-function eventGroupForType(type) {
-  return EVENT_GROUPS.find((group) => group.match(type)) || EVENT_GROUPS[EVENT_GROUPS.length - 1];
-}
-
-function dashboardMetricsFromOverview(overview) {
-  const activeJob = overview.activeJob;
-  return [
-    dashboardMetric('Chats', overview.chats ?? 0),
-    dashboardMetric('Targets', overview.targets ?? 0),
-    dashboardMetric('Coverage intervals', overview.coverageIntervals ?? 0),
-    dashboardMetric(
-      'Current job',
-      activeJob ? activeJob.status : '—',
-      activeJob ? activeJob.chatId + ' · ' + dashboardShortInterval(activeJob) : 'idle'
-    )
-  ];
-}
-
-function dashboardMetric(label, value, detail = '') {
-  return {
-    detail,
-    label,
-    value: formatDashboardMetricValue(value)
-  };
-}
-
-function formatDashboardMetricValue(value) {
-  return typeof value === 'number' ? formatDashboardInteger(value) : String(value);
-}
-
-function formatDashboardInteger(value) {
-  return new Intl.NumberFormat().format(Number(value) || 0);
-}
-
-function dashboardShortInterval(interval) {
-  return dashboardShortDate(interval.startAt) + ' → ' + dashboardShortDate(interval.endAt);
-}
-
-function dashboardShortDate(value) {
-  const date = value instanceof Date ? value : new Date(value);
-  return Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(5, 16).replace('T', ' ');
-}
-
-function formatEventTime(value) {
-  const date = value instanceof Date ? value : new Date(value);
-  return Number.isNaN(date.getTime()) ? '' : date.toLocaleTimeString();
+  return mountedRuntimeActions;
 }
 
 function mountControlPlaneApp(appStore) {
   const STORAGE_KEYS = {
-    chatFilter: 'agentg.controlPlane.chatFilter',
-    chatListSelection: 'agentg.controlPlane.chatListSelection',
     dashboardCollapsed: 'agentg.controlPlane.dashboardCollapsed',
-    defaultViewportDays: 'agentg.controlPlane.defaultViewportDays',
-    eventFilters: 'agentg.controlPlane.eventFilters',
-    eventLimit: 'agentg.controlPlane.eventLimit',
-    eventsPanelCollapsed: 'agentg.controlPlane.eventsPanelCollapsed',
-    selectedChatId: 'agentg.controlPlane.selectedChatId',
-    viewportDays: 'agentg.controlPlane.viewportDays'
+    eventsPanelCollapsed: 'agentg.controlPlane.eventsPanelCollapsed'
   };
 
-  const DEFAULT_EVENT_LIMIT = 200;
-  const MAX_EVENT_LIMIT = 2000;
-  const MIN_EVENT_LIMIT = 20;
   const DAY_MS = 86400000;
   const TELEGRAM_HISTORY_START_AT = new Date('2013-08-14T00:00:00.000Z');
   const TIMELINE_MIN_WINDOW_MS = 1000;
@@ -188,15 +67,16 @@ function mountControlPlaneApp(appStore) {
   const TIMELINE_WHEEL_AXIS_INTENT_PX = 8;
   const TIMELINE_WHEEL_AXIS_DOMINANCE = 1.35;
 
-  const initialChatListSelection = readChatListSelection();
-  const initialDefaultViewportDays = readScalePresetStorage(
-    STORAGE_KEYS.defaultViewportDays,
-    readScalePresetStorage(STORAGE_KEYS.viewportDays, 30)
-  );
   const state = {
-    chats: [],
-    chatListMode: initialChatListSelection.mode,
-    chatNavigation: { archiveCount: 0, folders: [], mainCount: 0 },
+    get chatFilter() {
+      return appStore.state.chatFilter;
+    },
+    get chatFolderId() {
+      return appStore.state.chatFolderId;
+    },
+    get chatListMode() {
+      return appStore.state.chatListMode;
+    },
     get events() {
       return appStore.state.events;
     },
@@ -209,15 +89,26 @@ function mountControlPlaneApp(appStore) {
     set overview(value) {
       appStore.setOverview(value);
     },
-    chatFilter: readStorage(STORAGE_KEYS.chatFilter) ?? '',
-    chatFolderId: initialChatListSelection.folderId,
+    get selectedChatId() {
+      return appStore.state.selectedChatId;
+    },
+    get selectedState() {
+      return appStore.state.selectedHistoryState;
+    },
+    get defaultViewportDays() {
+      return appStore.state.defaultViewportDays;
+    },
+    set defaultViewportDays(value) {
+      appStore.setDefaultViewportDays(value);
+    },
+    get viewportDays() {
+      return appStore.state.viewportDays;
+    },
+    set viewportDays(value) {
+      appStore.setViewportDays(value);
+    },
     dashboardCollapsed: readBooleanStorage(STORAGE_KEYS.dashboardCollapsed, false),
-    eventFilters: readEventFilters(),
-    eventLimit: readEventLimit(),
-    eventsPanelMode: 'events',
     eventsPanelCollapsed: readBooleanStorage(STORAGE_KEYS.eventsPanelCollapsed, false),
-    selectedChatId: readStorage(STORAGE_KEYS.selectedChatId),
-    selectedState: null,
     coverageTableOpen: false,
     renderedSelectedChatId: null,
     socket: null,
@@ -227,8 +118,6 @@ function mountControlPlaneApp(appStore) {
     tdlibConnected: false,
     tdlibStatusStartedAt: Date.now(),
     tdlibStatusWatchdog: null,
-    defaultViewportDays: initialDefaultViewportDays,
-    viewportDays: initialDefaultViewportDays,
     timelineWheelGesture: null,
     timelineViewport: null,
     timelineSelection: null,
@@ -316,21 +205,19 @@ function mountControlPlaneApp(appStore) {
       }
     }
     const result = await rpc('history.listChats', params);
-    state.chats = result.chats;
-    state.chatNavigation = result.navigation || { archiveCount: 0, folders: [], mainCount: 0 };
+    appStore.setChatListData({
+      chats: result.chats,
+      navigation: result.navigation || { archiveCount: 0, folders: [], mainCount: 0 }
+    });
     if (
       query.length === 0 &&
       state.chatListMode === 'folder' &&
-      !chatFolderExists(state.chatFolderId)
+      !appStore.hasChatFolder(state.chatFolderId)
     ) {
-      state.chatListMode = 'main';
-      state.chatFolderId = null;
-      writeChatListSelection();
+      appStore.selectMainChatList();
       await loadChats();
       return;
     }
-    renderChatFolders();
-    renderChats();
   }
 
   async function loadSelectedState() {
@@ -338,10 +225,13 @@ function mountControlPlaneApp(appStore) {
       renderSelected();
       return;
     }
+    appStore.markSelectedHistoryLoading();
     try {
-      state.selectedState = await rpc('history.getChatHistoryState', {
-        chatId: state.selectedChatId
-      });
+      appStore.setSelectedHistoryState(
+        await rpc('history.getChatHistoryState', {
+          chatId: state.selectedChatId
+        })
+      );
     } catch (error) {
       if (isNotFoundLikeError(error)) {
         clearSelectedChat();
@@ -361,16 +251,14 @@ function mountControlPlaneApp(appStore) {
     renderSelected();
   }
 
-  async function addPresetTarget(preset) {
+  async function upsertPresetTarget(preset) {
     if (!state.selectedChatId) return;
     await rpc('history.upsertTarget', { chatId: state.selectedChatId, preset });
     await refreshAll();
   }
 
-  async function addCustomTarget() {
+  async function upsertCustomTarget(start, end) {
     if (!state.selectedChatId) return;
-    const start = $('customStart').value.trim();
-    const end = $('customEnd').value.trim();
     await rpc('history.upsertTarget', { chatId: state.selectedChatId, start, end });
     await refreshAll();
   }
@@ -422,469 +310,91 @@ function mountControlPlaneApp(appStore) {
   }
 
   function pushEvent(event) {
-    if (!isEventEnabled(event)) {
+    if (!appStore.pushEvent(event)) {
       return;
     }
-    state.events.unshift(event);
-    state.events = state.events.slice(0, state.eventLimit);
     renderEvents();
   }
 
-  function renderChats() {
-    const list = $('chatList');
-    const queryActive = state.chatFilter.trim().length > 0;
-    const rows = state.chats
-      .map((chat) => {
-        const active = chat.id === state.selectedChatId;
-        return (
-          '<button class="' +
-          chatButtonClass(active) +
-          '" data-chat-id="' +
-          escapeHtml(chat.id) +
-          '">' +
-          '<div class="flex min-w-0 items-center justify-between gap-2">' +
-          '<div class="flex min-w-0 items-center gap-1.5">' +
-          chatTypeIcon(chat) +
-          '<div class="min-w-0 truncate font-semibold">' +
-          escapeHtml(chat.title || chat.id) +
-          '</div>' +
-          '</div>' +
-          '</div>' +
-          '<div class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-500">' +
-          '<span>targets ' +
-          chat.targets +
-          '</span>' +
-          '<span>coverage ' +
-          chat.coverageIntervals +
-          '</span>' +
-          '<span>jobs ' +
-          chat.pendingJobs +
-          '/' +
-          chat.runningJobs +
-          '</span>' +
-          '</div>' +
-          '</button>'
-        );
-      })
-      .join('');
-    const chrome = queryActive ? searchResultsHeader() : chatListChrome();
-    const empty =
-      state.chats.length === 0
-        ? '<div class="p-6 text-center text-sm text-zinc-500">' +
-          (queryActive ? 'No chats match this search.' : 'No chats in this list.') +
-          '</div>'
-        : '';
-    list.innerHTML = chrome + rows + empty;
-    list.querySelectorAll('[data-open-archive]').forEach((button) => {
-      button.addEventListener('click', () => openArchiveChats().catch(showError));
-    });
-    list.querySelectorAll('[data-open-main]').forEach((button) => {
-      button.addEventListener('click', () => openMainChats().catch(showError));
-    });
-    list.querySelectorAll('[data-chat-id]').forEach((button) => {
-      button.addEventListener('click', async () => {
-        const chatId = button.getAttribute('data-chat-id');
-        if (state.selectedChatId === chatId) {
-          clearSelectedChat();
-          renderChats();
-          renderSelected();
-          return;
-        }
-        state.coverageTableOpen = false;
-        state.viewportDays = state.defaultViewportDays;
-        state.timelineViewport = null;
-        state.selectedChatId = chatId;
-        writeStorage(STORAGE_KEYS.selectedChatId, state.selectedChatId);
-        renderChats();
-        await loadSelectedState().catch(showError);
-      });
-    });
-  }
-
-  function renderChatFolders() {
-    const nav = $('chatFolders');
-    const navigation = state.chatNavigation || { archiveCount: 0, folders: [], mainCount: 0 };
-    nav.innerHTML =
-      folderButton({
-        active: state.chatListMode !== 'folder',
-        badge: navigation.mainCount,
-        label: 'All',
-        title: 'All chats',
-        type: 'main'
-      }) +
-      (navigation.folders || [])
-        .map((folder) =>
-          folderButton({
-            active: state.chatListMode === 'folder' && state.chatFolderId === folder.id,
-            badge: folder.count,
-            folderId: folder.id,
-            label: folder.title || '#' + folder.id,
-            title: folder.title,
-            type: 'folder'
-          })
-        )
-        .join('');
-    nav.querySelectorAll('[data-folder-nav]').forEach((button) => {
-      button.addEventListener('click', () => {
-        if (button.getAttribute('data-folder-nav') === 'main') {
-          openMainChats().catch(showError);
-          return;
-        }
-        openFolderChats(Number(button.getAttribute('data-folder-id'))).catch(showError);
-      });
-    });
-  }
-
-  function folderButton(options) {
-    const activeClass = options.active
-      ? 'bg-sky-500/20 text-sky-200'
-      : 'text-slate-300 hover:bg-slate-700/70';
-    return (
-      '<button class="relative flex min-h-16 w-full flex-col items-center justify-center px-1 py-2 text-center text-[11px] font-medium ' +
-      activeClass +
-      '" data-folder-nav="' +
-      escapeHtml(options.type) +
-      '"' +
-      (options.folderId === undefined ? '' : ' data-folder-id="' + options.folderId + '"') +
-      ' title="' +
-      escapeHtml(options.title) +
-      '">' +
-      '<span class="truncate">' +
-      escapeHtml(options.label) +
-      '</span>' +
-      (options.badge > 0
-        ? '<span class="mt-1 rounded-full bg-slate-500 px-1.5 py-0.5 text-[10px] leading-none text-white">' +
-          formatInteger(options.badge) +
-          '</span>'
-        : '') +
-      '</button>'
-    );
-  }
-
-  function searchResultsHeader() {
-    return '<div class="border-b border-zinc-100 px-3 py-2 text-xs text-zinc-500">Search results across all chats</div>';
-  }
-
-  function chatListChrome() {
-    const navigation = state.chatNavigation || { archiveCount: 0 };
-    if (state.chatListMode === 'archive') {
-      return (
-        '<div class="border-b border-zinc-100 p-3">' +
-        '<div class="flex items-center justify-between gap-2">' +
-        '<div class="min-w-0"><div class="truncate text-sm font-semibold">Archived chats</div><div class="text-xs text-zinc-500">All chats folder</div></div>' +
-        '<button data-open-main class="shrink-0 rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 text-xs font-medium hover:bg-zinc-50">Main</button>' +
-        '</div>' +
-        '</div>'
-      );
-    }
-    if (state.chatListMode === 'main' && navigation.archiveCount > 0) {
-      return (
-        '<button data-open-archive class="block w-full border-b border-zinc-100 bg-zinc-50 px-3 py-3 text-left hover:bg-zinc-100">' +
-        '<div class="flex min-w-0 items-center justify-between gap-2">' +
-        '<div class="min-w-0 truncate font-semibold">Archived chats</div>' +
-        '<span class="shrink-0 rounded-full bg-zinc-300 px-2 py-0.5 text-xs font-semibold text-white">' +
-        formatInteger(navigation.archiveCount) +
-        '</span>' +
-        '</div>' +
-        '<div class="mt-1 text-xs text-zinc-500">Open archive</div>' +
-        '</button>'
-      );
-    }
-    return '';
-  }
-
   async function openMainChats() {
-    state.chatListMode = 'main';
-    state.chatFolderId = null;
-    state.chatFilter = '';
-    setChatSearchValue('');
-    writeStorage(STORAGE_KEYS.chatFilter, '');
-    writeChatListSelection();
+    appStore.selectMainChatList();
     await loadChats();
   }
 
   async function openArchiveChats() {
-    state.chatListMode = 'archive';
-    state.chatFolderId = null;
-    state.chatFilter = '';
-    setChatSearchValue('');
-    writeStorage(STORAGE_KEYS.chatFilter, '');
-    writeChatListSelection({ mode: 'main', folderId: null });
+    appStore.selectArchiveChatList();
     await loadChats();
   }
 
   async function openFolderChats(folderId) {
     if (!Number.isSafeInteger(folderId)) return;
-    state.chatListMode = 'folder';
-    state.chatFolderId = folderId;
-    state.chatFilter = '';
-    setChatSearchValue('');
-    writeStorage(STORAGE_KEYS.chatFilter, '');
-    writeChatListSelection();
+    appStore.selectFolderChatList(folderId);
     await loadChats();
   }
 
-  function chatButtonClass(active) {
-    const base = 'block w-full border-b border-zinc-100 px-3 py-3 text-left hover:bg-zinc-50';
-    return active ? base + ' bg-teal-50 ring-1 ring-inset ring-teal-200' : base + ' bg-white';
+  async function toggleChat(chatId) {
+    if (state.selectedChatId === chatId) {
+      clearSelectedChat();
+      renderSelected();
+      return;
+    }
+    state.coverageTableOpen = false;
+    state.viewportDays = state.defaultViewportDays;
+    state.timelineViewport = null;
+    appStore.selectChat(chatId);
+    await loadSelectedState();
   }
 
-  function chatTypeIcon(chat) {
-    if (chat.isBot) {
-      return iconSvg(
-        'Bot',
-        '<path d="M5.5 7.5h7a3 3 0 0 1 3 3v3a3 3 0 0 1-3 3h-7a3 3 0 0 1-3-3v-3a3 3 0 0 1 3-3Z"/><path d="M9 7.5V4.75"/><path d="M6.5 11.25h.01"/><path d="M11.5 11.25h.01"/>'
-      );
-    }
-    if (chat.type === 'channel') {
-      return iconSvg(
-        'Channel',
-        '<path d="M3 10.5 15.5 5v14L3 13.5v-3Z"/><path d="M6.5 14.75 8 19"/>'
-      );
-    }
-    if (chat.type === 'group') {
-      return iconSvg(
-        'Group',
-        '<path d="M8 11.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M14.5 10.5a2.5 2.5 0 1 0 0-5"/><path d="M2.5 18a5.5 5.5 0 0 1 11 0"/><path d="M13.5 13.5A4.5 4.5 0 0 1 18 18"/>'
-      );
-    }
-    if (chat.type === 'secret') {
-      return iconSvg(
-        'Secret chat',
-        '<path d="M5.5 9.5V7a3.5 3.5 0 0 1 7 0v2.5"/><path d="M4.5 9.5h9v7h-9v-7Z"/>'
-      );
-    }
-    return '';
+  function searchChats(value) {
+    appStore.setChatFilter(value);
+    clearTimeout(refreshTimer);
+    refreshTimer = setTimeout(() => loadChats().catch(showError), 250);
   }
 
-  function iconSvg(label, paths) {
-    return (
-      '<svg class="h-3.5 w-3.5 shrink-0 text-zinc-700" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="' +
-      escapeHtml(label) +
-      '">' +
-      paths +
-      '</svg>'
-    );
+  function clearChatSearch() {
+    appStore.clearChatFilter();
+    clearTimeout(refreshTimer);
+    loadChats().catch(showError);
+  }
+
+  function closeSelectedChat() {
+    clearSelectedChat();
+    renderSelected();
+  }
+
+  function selectTimelineScale(nextViewportDays) {
+    if (state.viewportDays === nextViewportDays) {
+      state.defaultViewportDays = nextViewportDays;
+    }
+    state.viewportDays = nextViewportDays;
+    resetTimelineViewportToPreset();
+    renderTimeline();
   }
 
   function renderSelected() {
-    const shell = $('workspaceShell');
-    const panel = $('selectedPanel');
     const data = state.selectedState;
     if (!state.selectedChatId) {
       hideCoverageHoverPanel();
       state.coverageTableOpen = false;
       state.renderedSelectedChatId = null;
-      shell.className = 'flex min-h-0 flex-col overflow-hidden';
-      panel.innerHTML =
-        '<div class="p-8 text-center">' +
-        '<div class="mx-auto max-w-xl text-center">' +
-        '<div class="text-base font-semibold">No chat selected</div>' +
-        '<div class="mt-2 text-sm text-zinc-500">No chat is selected. Use the chat list to inspect one chat, or keep this global workspace open while watching metrics and history events.</div>' +
-        '</div>' +
-        '</div>';
       return;
     }
-    shell.className =
-      'flex min-h-0 flex-col overflow-hidden rounded-lg border border-zinc-200 bg-white';
     if (!data || !data.chat) {
       hideCoverageHoverPanel();
       state.coverageTableOpen = false;
       state.renderedSelectedChatId = null;
-      panel.innerHTML =
-        '<div class="p-8 text-center text-sm text-zinc-500">Selected chat is not available.</div>';
+      appStore.setSelectedHistoryUnavailable();
       return;
     }
 
-    if (state.renderedSelectedChatId !== data.chat.id || !$('selectedChatHeader')) {
+    if (state.renderedSelectedChatId !== data.chat.id) {
       state.coverageTableOpen = false;
-      panel.innerHTML = renderSelectedShell();
       state.renderedSelectedChatId = data.chat.id;
-      bindSelectedShell(panel);
     }
 
-    renderSelectedHeader(data.chat);
-    renderTargetManagerInto();
-    syncViewportButtons();
-    renderTimeline();
-  }
-
-  function renderSelectedShell() {
-    return (
-      '<div class="border-b border-zinc-200 p-4">' +
-      '<div class="flex flex-wrap items-stretch justify-between gap-3">' +
-      '<div id="selectedChatHeader" class="min-w-0"></div>' +
-      '<div class="flex shrink-0 items-center gap-2">' +
-      '<button id="closeChat" aria-label="Close chat" title="Close chat" class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-300 bg-white text-lg leading-none text-zinc-600 hover:bg-zinc-50">×</button>' +
-      '</div>' +
-      '</div>' +
-      '</div>' +
-      '<div class="grid gap-4 p-4">' +
-      '<div id="targetManager"></div>' +
-      renderTimelineSection() +
-      '</div>'
-    );
-  }
-
-  function bindSelectedShell(panel) {
-    $('closeChat').addEventListener('click', () => {
-      clearSelectedChat();
-      renderChats();
-      renderSelected();
-    });
-    $('targetManager').addEventListener('click', (event) => {
-      const target = event.target;
-      if (!(target instanceof Element)) return;
-      const customButton = target.closest('#customTarget');
-      if (customButton) {
-        addCustomTarget().catch(showError);
-        return;
-      }
-      const presetButton = target.closest('[data-preset]');
-      if (presetButton) {
-        addPresetTarget(presetButton.getAttribute('data-preset')).catch(showError);
-        return;
-      }
-      const deleteButton = target.closest('[data-delete-target]');
-      if (deleteButton) {
-        deleteTarget(deleteButton.getAttribute('data-delete-target')).catch(showError);
-      }
-    });
-    $('viewportScaleButtons').addEventListener('click', (event) => {
-      const target = event.target;
-      if (!(target instanceof Element)) return;
-      const button = target.closest('[data-viewport-days]');
-      if (!button) return;
-      const nextViewportDays = Number(button.getAttribute('data-viewport-days'));
-      if (state.viewportDays === nextViewportDays) {
-        state.defaultViewportDays = nextViewportDays;
-        writeStorage(STORAGE_KEYS.defaultViewportDays, String(nextViewportDays));
-      }
-      state.viewportDays = nextViewportDays;
-      resetTimelineViewportToPreset();
-      syncViewportButtons();
+    nextTick(() => {
       renderTimeline();
     });
-  }
-
-  function renderSelectedHeader(chat) {
-    $('selectedChatHeader').innerHTML =
-      '<div class="truncate text-base font-semibold">' +
-      escapeHtml(chat.title || chat.id) +
-      '</div>' +
-      '<div class="mt-1 flex flex-wrap gap-2 text-xs text-zinc-500">' +
-      '<code class="rounded bg-zinc-100 px-1.5 py-0.5">' +
-      escapeHtml(chat.id) +
-      '</code>' +
-      '<span>' +
-      escapeHtml(chat.type) +
-      '</span>' +
-      '<span>' +
-      formatInteger(chat.messageCount || 0) +
-      ' messages</span>' +
-      renderHistoryStartBadge(chat) +
-      '</div>';
-  }
-
-  function renderTargetManagerInto() {
-    const container = $('targetManager');
-    const signature = 'target-form';
-    if (container.dataset.signature === signature) {
-      return;
-    }
-    container.dataset.signature = signature;
-    container.innerHTML = renderTargetManager();
-  }
-
-  function syncViewportButtons() {
-    const container = $('viewportScaleButtons');
-    if (!container) return;
-    container.querySelectorAll('[data-viewport-days]').forEach((button) => {
-      const value = Number(button.getAttribute('data-viewport-days'));
-      const active = state.viewportDays !== null && value === state.viewportDays;
-      const isDefault = value === state.defaultViewportDays;
-      button.setAttribute('aria-pressed', String(active));
-      button.setAttribute('data-default-scale', String(isDefault));
-      button.className = viewportScaleButtonClass(active, isDefault);
-    });
-  }
-
-  function renderTargetManager() {
-    return (
-      '<section class="grid gap-3">' +
-      '<div class="flex flex-wrap items-center justify-between gap-2">' +
-      '<div><div class="text-sm font-semibold">Targets</div><div class="text-xs text-zinc-500">Target history coverage for this chat</div></div>' +
-      '<div class="flex flex-wrap gap-2">' +
-      '<button data-preset="last7d" class="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium hover:bg-zinc-50">Last 7d</button>' +
-      '<button data-preset="last30d" class="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium hover:bg-zinc-50">Last 30d</button>' +
-      '<button data-preset="full" class="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium hover:bg-zinc-50">Past..now</button>' +
-      '</div>' +
-      '</div>' +
-      '<div class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-2">' +
-      '<input id="customStart" class="rounded-lg border border-zinc-300 bg-white px-3 py-2 outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100" placeholder="Start: past, now-1y2mo, now-1h3s, 2026-01-01">' +
-      '<input id="customEnd" class="rounded-lg border border-zinc-300 bg-white px-3 py-2 outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100" placeholder="End: now, 2026-02-01">' +
-      '<button id="customTarget" class="rounded-lg border border-zinc-800 bg-zinc-800 px-3 py-2 font-medium text-white hover:bg-zinc-950">Add</button>' +
-      '</div>' +
-      '</section>'
-    );
-  }
-
-  function renderHistoryStartBadge(chat) {
-    if (chat.historyStartAt) {
-      return '<span>history starts ' + escapeHtml(formatDate(chat.historyStartAt)) + '</span>';
-    }
-    if (chat.historyBeginningReached) {
-      return '<span>history beginning reached</span>';
-    }
-    return '';
-  }
-
-  function renderTimelineSection(data) {
-    return (
-      '<section class="grid gap-3 border-t border-zinc-200 pt-4">' +
-      '<div class="flex flex-wrap items-center justify-between gap-2">' +
-      '<div class="text-sm font-semibold">History</div>' +
-      '<div class="flex flex-wrap items-center gap-2">' +
-      '<span class="text-xs text-zinc-500">Scale</span>' +
-      '<div id="viewportScaleButtons" class="flex flex-wrap gap-1.5">' +
-      viewportScaleButton(7, '7d') +
-      viewportScaleButton(30, '30d') +
-      viewportScaleButton(90, '90d') +
-      viewportScaleButton(365, '1y') +
-      viewportScaleButton(0, 'All') +
-      '</div>' +
-      '</div>' +
-      '</div>' +
-      '<div id="timeline"></div>' +
-      '</section>'
-    );
-  }
-
-  function viewportScaleButton(value, label) {
-    const active = Number(value) === state.viewportDays;
-    const isDefault = Number(value) === state.defaultViewportDays;
-    return (
-      '<button type="button" data-viewport-days="' +
-      String(value) +
-      '" data-default-scale="' +
-      String(isDefault) +
-      '" aria-pressed="' +
-      String(active) +
-      '" class="' +
-      viewportScaleButtonClass(active, isDefault) +
-      '">' +
-      escapeHtml(label) +
-      '</button>'
-    );
-  }
-
-  function viewportScaleButtonClass(active, isDefault) {
-    const borderClass = active ? 'border-zinc-800' : 'border-zinc-300';
-    return active
-      ? 'relative h-7 rounded-lg border bg-zinc-800 px-2.5 text-xs font-medium text-white shadow-sm ' +
-          borderClass
-      : 'relative h-7 rounded-lg border bg-white px-2.5 text-xs font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 ' +
-          borderClass;
   }
 
   function renderTimeline() {
@@ -1821,7 +1331,6 @@ function mountControlPlaneApp(appStore) {
       },
       physical
     );
-    syncViewportButtons();
     renderTimeline();
   }
 
@@ -1841,7 +1350,6 @@ function mountControlPlaneApp(appStore) {
       },
       physical
     );
-    syncViewportButtons();
     renderTimeline();
   }
 
@@ -2030,7 +1538,6 @@ function mountControlPlaneApp(appStore) {
     const scrollState = captureEventScrollState(containers);
     nextTick(() => {
       restoreEventScrollState(scrollState);
-      renderEventFilters();
     });
   }
 
@@ -2052,220 +1559,6 @@ function mountControlPlaneApp(appStore) {
       state.container.scrollTop =
         state.scrollTop + state.container.scrollHeight - state.scrollHeight;
     });
-  }
-
-  function renderEventFilters() {
-    const html =
-      '<div class="grid gap-3 p-3">' +
-      filterableEventGroups()
-        .map((group) => renderEventFilterGroup(group))
-        .join('') +
-      renderEventLimitControl() +
-      '<button data-close-event-filters class="mt-1 h-9 rounded-lg border border-zinc-800 bg-zinc-800 px-3 text-sm font-medium text-white hover:bg-zinc-950">Close Filters</button>' +
-      '</div>';
-    [$('eventFilters'), $('eventFiltersPreview')].forEach((container) => {
-      container.innerHTML = html;
-    });
-    renderEventFilterControls();
-  }
-
-  function renderEventFilterGroup(group) {
-    const state = eventGroupFilterState(group);
-    const checked = state.checked ? ' checked' : '';
-    return (
-      '<section class="rounded-lg border border-zinc-200 bg-white p-3">' +
-      '<label class="flex cursor-pointer items-center gap-2">' +
-      '<input data-event-group-filter="' +
-      escapeHtml(group.id) +
-      '" type="checkbox" class="h-4 w-4 rounded border-zinc-300"' +
-      checked +
-      '>' +
-      '<span class="h-3 w-3 rounded-sm" style="background:' +
-      group.color +
-      '"></span>' +
-      '<span class="min-w-0 flex-1 text-sm font-semibold">' +
-      escapeHtml(group.label) +
-      '</span>' +
-      '</label>' +
-      '<div class="mt-2 flex flex-wrap gap-1.5 pl-6">' +
-      eventTypesForGroup(group)
-        .map((type) => eventTypeLegendChip(group, type))
-        .join('') +
-      '</div>' +
-      '</section>'
-    );
-  }
-
-  function renderEventLimitControl() {
-    return (
-      '<section class="rounded-lg border border-zinc-200 bg-white p-3">' +
-      '<label class="grid gap-2">' +
-      '<span class="text-sm font-semibold">Event limit</span>' +
-      '<input data-event-limit type="number" min="' +
-      MIN_EVENT_LIMIT +
-      '" max="' +
-      MAX_EVENT_LIMIT +
-      '" step="20" value="' +
-      state.eventLimit +
-      '" class="h-9 rounded-lg border border-zinc-300 bg-white px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100">' +
-      '</label>' +
-      '</section>'
-    );
-  }
-
-  function eventTypeLegendChip(group, type) {
-    const checked = isEventTypeEnabled(group, type) ? ' checked' : '';
-    return (
-      '<label class="inline-flex min-w-0 cursor-pointer items-center gap-1 rounded border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 font-mono text-[10px] text-zinc-600">' +
-      '<input data-event-type-filter="' +
-      escapeHtml(type) +
-      '" data-event-type-group="' +
-      escapeHtml(group.id) +
-      '" type="checkbox" class="h-3 w-3 rounded border-zinc-300"' +
-      checked +
-      '>' +
-      '<span class="truncate">' +
-      escapeHtml(type) +
-      '</span>' +
-      '</label>'
-    );
-  }
-
-  function eventTypesForGroup(group) {
-    const observed = state.events
-      .filter((event) => eventGroupForEvent(event).id === group.id)
-      .map((event) => String(event.type || 'unknown'));
-    const configured = Object.keys(state.eventFilters.types || {}).filter(
-      (type) => eventGroupForType(type).id === group.id
-    );
-    return [...new Set([...group.eventTypes, ...observed, ...configured])].sort();
-  }
-
-  function setEventsPanelMode(mode) {
-    state.eventsPanelMode = mode === 'filters' ? 'filters' : 'events';
-    applyEventsPanelMode();
-  }
-
-  function applyEventsPanelMode() {
-    const filtersVisible = state.eventsPanelMode === 'filters';
-    $('events').classList.toggle('hidden', filtersVisible);
-    $('eventsPreview').classList.toggle('hidden', filtersVisible);
-    $('eventFilters').classList.toggle('hidden', !filtersVisible);
-    $('eventFiltersPreview').classList.toggle('hidden', !filtersVisible);
-    renderEventFilterControls();
-  }
-
-  function renderEventFilterControls() {
-    const enabled = enabledEventFiltersCount();
-    document.querySelectorAll('[data-event-filter-count]').forEach((element) => {
-      element.textContent = String(enabled);
-    });
-    document.querySelectorAll('[data-event-filter-toggle]').forEach((button) => {
-      const active = state.eventsPanelMode === 'filters';
-      button.className = active
-        ? 'inline-flex h-8 items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-800 px-2.5 text-sm font-medium text-white hover:bg-zinc-950'
-        : 'inline-flex h-8 items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50';
-    });
-    document.querySelectorAll('[data-event-group-filter]').forEach((input) => {
-      if (!(input instanceof HTMLInputElement)) return;
-      const group = EVENT_GROUPS.find(
-        (item) => item.id === input.getAttribute('data-event-group-filter')
-      );
-      if (!group) return;
-      const state = eventGroupFilterState(group);
-      input.checked = state.checked;
-      input.indeterminate = state.indeterminate;
-    });
-  }
-
-  function setEventGroupEnabled(groupId, enabled) {
-    const group = EVENT_GROUPS.find((item) => item.id === groupId);
-    if (!group || group.filterable === false) {
-      return;
-    }
-    state.eventFilters.groups[groupId] = enabled;
-    for (const type of eventTypesForGroup(group)) {
-      state.eventFilters.types[type] = enabled;
-    }
-    writeEventFilters();
-    if (!enabled) {
-      state.events = state.events.filter((event) => eventGroupForEvent(event).id !== groupId);
-    }
-    renderEvents();
-    applyEventsPanelMode();
-  }
-
-  function setEventTypeEnabled(type, enabled) {
-    const group = eventGroupForType(type);
-    if (group.filterable === false) {
-      return;
-    }
-    state.eventFilters.types[type] = enabled;
-    const groupState = eventGroupFilterState(group);
-    state.eventFilters.groups[group.id] = groupState.checked || groupState.indeterminate;
-    writeEventFilters();
-    if (!enabled) {
-      state.events = state.events.filter((event) => String(event.type || '') !== type);
-    }
-    renderEvents();
-    applyEventsPanelMode();
-  }
-
-  function setEventLimit(value) {
-    state.eventLimit = normalizeEventLimit(value);
-    writeStorage(STORAGE_KEYS.eventLimit, String(state.eventLimit));
-    state.events = state.events.slice(0, state.eventLimit);
-    renderEvents();
-    applyEventsPanelMode();
-  }
-
-  function normalizeEventLimit(value) {
-    const limit = Number(value);
-    if (!Number.isFinite(limit)) {
-      return DEFAULT_EVENT_LIMIT;
-    }
-    return Math.min(MAX_EVENT_LIMIT, Math.max(MIN_EVENT_LIMIT, Math.round(limit)));
-  }
-
-  function isEventEnabled(event) {
-    const type = String(event?.type || '');
-    const group = eventGroupForType(type);
-    if (group.filterable === false) {
-      return true;
-    }
-    return isEventTypeEnabled(group, type);
-  }
-
-  function isEventTypeEnabled(group, type) {
-    if (group.filterable === false) {
-      return true;
-    }
-    const stored = state.eventFilters.types?.[type];
-    if (typeof stored === 'boolean') {
-      return stored;
-    }
-    return state.eventFilters.groups?.[group.id] !== false;
-  }
-
-  function eventGroupFilterState(group) {
-    const types = eventTypesForGroup(group);
-    const enabled = types.filter((type) => isEventTypeEnabled(group, type)).length;
-    return {
-      checked: types.length > 0 && enabled === types.length,
-      indeterminate: enabled > 0 && enabled < types.length
-    };
-  }
-
-  function enabledEventFiltersCount() {
-    return filterableEventGroups().reduce(
-      (count, group) =>
-        count + eventTypesForGroup(group).filter((type) => isEventTypeEnabled(group, type)).length,
-      0
-    );
-  }
-
-  function filterableEventGroups() {
-    return EVENT_GROUPS.filter((group) => group.filterable !== false);
   }
 
   function setEventsPanelCollapsed(collapsed) {
@@ -2428,7 +1721,6 @@ function mountControlPlaneApp(appStore) {
   function showError(error) {
     if (state.selectedChatId && isNotFoundLikeError(error)) {
       clearSelectedChat();
-      renderChats();
       renderSelected();
       refreshAll().catch((refreshError) => {
         pushLocalEvent('ui.error', { message: refreshError.message || String(refreshError) });
@@ -2439,27 +1731,12 @@ function mountControlPlaneApp(appStore) {
   }
 
   function clearSelectedChat() {
-    state.selectedChatId = null;
-    state.selectedState = null;
+    appStore.clearSelectedChat();
     state.coverageTableOpen = false;
     state.renderedSelectedChatId = null;
     state.timelineSelection = null;
     state.timelineWheelGesture = null;
     state.timelineViewport = null;
-    removeStorage(STORAGE_KEYS.selectedChatId);
-  }
-
-  function setChatSearchValue(value) {
-    const input = $('chatSearch');
-    input.value = value;
-    updateChatSearchClear();
-  }
-
-  function updateChatSearchClear() {
-    const button = $('chatSearchClear');
-    const hasValue = $('chatSearch').value.trim().length > 0;
-    button.classList.toggle('hidden', !hasValue);
-    button.classList.toggle('inline-flex', hasValue);
   }
 
   function isNotFoundLikeError(error) {
@@ -2473,20 +1750,6 @@ function mountControlPlaneApp(appStore) {
     } catch {
       return null;
     }
-  }
-
-  function readNumberStorage(key, fallback) {
-    const raw = readStorage(key);
-    if (raw === null) {
-      return fallback;
-    }
-    const value = Number(raw);
-    return Number.isFinite(value) ? value : fallback;
-  }
-
-  function readScalePresetStorage(key, fallback) {
-    const value = readNumberStorage(key, fallback);
-    return [0, 7, 30, 90, 365].includes(value) ? value : fallback;
   }
 
   function readBooleanStorage(key, fallback) {
@@ -2503,101 +1766,6 @@ function mountControlPlaneApp(appStore) {
     return fallback;
   }
 
-  function readEventFilters() {
-    const filters = {
-      groups: Object.fromEntries(EVENT_GROUPS.map((group) => [group.id, true])),
-      types: {}
-    };
-    const raw = readStorage(STORAGE_KEYS.eventFilters);
-    if (!raw) {
-      return filters;
-    }
-    try {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        for (const group of filterableEventGroups()) {
-          filters.groups[group.id] = parsed.includes(group.id);
-        }
-        return filters;
-      }
-      if (parsed && typeof parsed === 'object') {
-        if (parsed.groups && typeof parsed.groups === 'object') {
-          for (const group of filterableEventGroups()) {
-            if (typeof parsed.groups[group.id] === 'boolean') {
-              filters.groups[group.id] = parsed.groups[group.id];
-            }
-          }
-        }
-        if (parsed.types && typeof parsed.types === 'object') {
-          for (const [type, enabled] of Object.entries(parsed.types)) {
-            if (typeof enabled === 'boolean' && eventGroupForType(type).filterable !== false) {
-              filters.types[type] = enabled;
-            }
-          }
-          return filters;
-        }
-        for (const group of filterableEventGroups()) {
-          if (typeof parsed[group.id] === 'boolean') {
-            filters.groups[group.id] = parsed[group.id];
-          }
-        }
-      }
-    } catch {}
-    return filters;
-  }
-
-  function readEventLimit() {
-    return normalizeEventLimit(readStorage(STORAGE_KEYS.eventLimit) ?? DEFAULT_EVENT_LIMIT);
-  }
-
-  function writeEventFilters() {
-    const filters = {
-      groups: Object.fromEntries(
-        filterableEventGroups().map((group) => [
-          group.id,
-          state.eventFilters.groups[group.id] !== false
-        ])
-      ),
-      types: Object.fromEntries(
-        Object.entries(state.eventFilters.types || {}).filter(
-          ([type]) => eventGroupForType(type).filterable !== false
-        )
-      )
-    };
-    writeStorage(STORAGE_KEYS.eventFilters, JSON.stringify(filters));
-  }
-
-  function readChatListSelection() {
-    const raw = readStorage(STORAGE_KEYS.chatListSelection);
-    if (!raw) {
-      return { folderId: null, mode: 'main' };
-    }
-    try {
-      const parsed = JSON.parse(raw);
-      if (parsed?.mode === 'folder' && Number.isSafeInteger(parsed.folderId)) {
-        return { folderId: parsed.folderId, mode: 'folder' };
-      }
-    } catch {}
-    return { folderId: null, mode: 'main' };
-  }
-
-  function writeChatListSelection(selection = state) {
-    const mode = selection.mode ?? selection.chatListMode;
-    const rawFolderId = selection.folderId ?? selection.chatFolderId;
-    const folderId = mode === 'folder' && Number.isSafeInteger(rawFolderId) ? rawFolderId : null;
-    writeStorage(
-      STORAGE_KEYS.chatListSelection,
-      JSON.stringify(folderId === null ? { mode: 'main' } : { folderId, mode: 'folder' })
-    );
-  }
-
-  function chatFolderExists(folderId) {
-    return (
-      Number.isSafeInteger(folderId) &&
-      (state.chatNavigation?.folders || []).some((folder) => folder.id === folderId)
-    );
-  }
-
   function writeStorage(key, value) {
     try {
       if (value === null || value === undefined || value === '') {
@@ -2605,12 +1773,6 @@ function mountControlPlaneApp(appStore) {
       } else {
         localStorage.setItem(key, value);
       }
-    } catch {}
-  }
-
-  function removeStorage(key) {
-    try {
-      localStorage.removeItem(key);
     } catch {}
   }
 
@@ -2689,6 +1851,31 @@ function mountControlPlaneApp(appStore) {
       .replaceAll("'", '&#039;');
   }
 
+  mountedRuntimeActions = {
+    addCustomTarget(start, end) {
+      upsertCustomTarget(start, end).catch(showError);
+    },
+    addPresetTarget(preset) {
+      upsertPresetTarget(preset).catch(showError);
+    },
+    clearChatSearch,
+    closeSelectedChat,
+    openArchiveChats() {
+      openArchiveChats().catch(showError);
+    },
+    openFolderChats(folderId) {
+      openFolderChats(folderId).catch(showError);
+    },
+    openMainChats() {
+      openMainChats().catch(showError);
+    },
+    searchChats,
+    selectTimelineScale,
+    toggleChat(chatId) {
+      toggleChat(chatId).catch(showError);
+    }
+  };
+
   $('clearEvents').addEventListener('click', () => {
     state.events = [];
     renderEvents();
@@ -2697,61 +1884,13 @@ function mountControlPlaneApp(appStore) {
     state.events = [];
     renderEvents();
   });
-  $('eventFiltersToggle').addEventListener('click', () => {
-    setEventsPanelMode(state.eventsPanelMode === 'filters' ? 'events' : 'filters');
-  });
-  document.querySelector('[data-preview-filter-events]').addEventListener('click', () => {
-    setEventsPanelMode(state.eventsPanelMode === 'filters' ? 'events' : 'filters');
-  });
   $('toggleDashboardTop').addEventListener('click', () => {
     setDashboardCollapsed(!state.dashboardCollapsed);
   });
   $('toggleEventsPanelTop').addEventListener('click', () => {
     setEventsPanelCollapsed(!state.eventsPanelCollapsed);
   });
-  [$('eventFilters'), $('eventFiltersPreview')].forEach((container) => {
-    container.addEventListener('change', (event) => {
-      const target = event.target;
-      if (!(target instanceof HTMLInputElement)) return;
-      if (target.hasAttribute('data-event-limit')) {
-        setEventLimit(target.value);
-        return;
-      }
-      const eventType = target.getAttribute('data-event-type-filter');
-      if (eventType) {
-        setEventTypeEnabled(eventType, target.checked);
-        return;
-      }
-      const groupId = target.getAttribute('data-event-group-filter');
-      if (groupId) {
-        setEventGroupEnabled(groupId, target.checked);
-      }
-    });
-    container.addEventListener('click', (event) => {
-      const target = event.target;
-      if (!(target instanceof Element)) return;
-      if (target.closest('[data-close-event-filters]')) {
-        setEventsPanelMode('events');
-      }
-    });
-  });
-  $('chatSearch').addEventListener('input', () => {
-    state.chatFilter = $('chatSearch').value;
-    writeStorage(STORAGE_KEYS.chatFilter, state.chatFilter);
-    updateChatSearchClear();
-    clearTimeout(refreshTimer);
-    refreshTimer = setTimeout(() => loadChats().catch(showError), 250);
-  });
-  $('chatSearchClear').addEventListener('click', () => {
-    state.chatFilter = '';
-    writeStorage(STORAGE_KEYS.chatFilter, '');
-    setChatSearchValue('');
-    $('chatSearch').focus();
-    clearTimeout(refreshTimer);
-    loadChats().catch(showError);
-  });
   window.addEventListener('resize', repositionVisiblePreviews);
-  setChatSearchValue(state.chatFilter || '');
   bindHoverPreview(
     'toggleDashboardTop',
     'dashboardPreviewPanel',
@@ -2769,23 +1908,10 @@ function mountControlPlaneApp(appStore) {
   applyEventsPanelState();
   startTdlibStatusWatchdog();
   renderEvents();
-  applyEventsPanelMode();
   renderSelected();
   connect();
 }
 
-const controlPlaneAppStore = createControlPlaneAppStore();
-const dashboardView = createDashboardView(controlPlaneAppStore);
-const eventsView = createEventsView(controlPlaneAppStore);
-
-export function useControlPlaneAppView() {
-  return {
-    dashboardMetrics: dashboardView.dashboardMetrics,
-    eventItems: eventsView.eventItems,
-    hasEvents: eventsView.hasEvents
-  };
-}
-
 export function mountControlPlaneAppRuntime() {
-  mountControlPlaneApp(controlPlaneAppStore);
+  mountControlPlaneApp(controlPlaneStore);
 }

@@ -1,9 +1,5 @@
 <script setup lang="ts">
-export type DashboardMetric = {
-  detail?: string;
-  label: string;
-  value: string;
-};
+import type { DashboardMetric } from '../stores/controlPlaneStore.js';
 
 defineProps<{
   metrics: DashboardMetric[];

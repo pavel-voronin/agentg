@@ -1,11 +1,62 @@
 <script setup lang="ts">
-import { onMounted } from 'vue';
+import { computed, onMounted } from 'vue';
 
-import { mountControlPlaneAppRuntime, useControlPlaneAppView } from '../app-runtime.js';
+import {
+  addCustomTarget,
+  addPresetTarget,
+  clearChatSearch,
+  closeSelectedChat,
+  mountControlPlaneAppRuntime,
+  openArchiveChats,
+  openFolderChats,
+  openMainChats,
+  searchChats,
+  selectTimelineScale,
+  toggleChat,
+  useControlPlaneAppView
+} from '../app-runtime.js';
+import { controlPlaneStore } from '../stores/controlPlaneStore.js';
+import ChatSidebar from './ChatSidebar.vue';
 import DashboardMetrics from './DashboardMetrics.vue';
+import EventFilters from './EventFilters.vue';
 import EventsList from './EventsList.vue';
+import SelectedWorkspace from './SelectedWorkspace.vue';
 
-const { dashboardMetrics, eventItems, hasEvents } = useControlPlaneAppView();
+const {
+  chatSidebar,
+  dashboardMetrics,
+  eventFiltersPanel,
+  eventFiltersVisible,
+  eventItems,
+  hasEvents,
+  selectedWorkspace
+} = useControlPlaneAppView();
+
+const eventFilterToggleClass = computed(() =>
+  eventFiltersVisible.value
+    ? 'inline-flex h-8 items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-800 px-2.5 text-sm font-medium text-white hover:bg-zinc-950'
+    : 'inline-flex h-8 items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50'
+);
+
+function toggleEventFilters(): void {
+  controlPlaneStore.toggleEventsPanelMode();
+}
+
+function closeEventFilters(): void {
+  controlPlaneStore.setEventsPanelMode('events');
+}
+
+function setEventGroupEnabled(groupId: string, enabled: boolean): void {
+  controlPlaneStore.setEventGroupEnabled(groupId, enabled);
+}
+
+function setEventLimit(value: string): void {
+  controlPlaneStore.setEventLimit(value);
+}
+
+function setEventTypeEnabled(type: string, enabled: boolean): void {
+  controlPlaneStore.setEventTypeEnabled(type, enabled);
+}
 
 onMounted(() => {
   mountControlPlaneAppRuntime();
@@ -17,10 +68,7 @@ onMounted(() => {
     <header class="shrink-0 bg-zinc-100 px-4 py-3">
       <div class="flex flex-wrap items-center justify-between gap-3">
         <div class="min-w-0">
-          <h1 class="truncate text-base font-semibold tracking-normal">AgenTG Control Plane</h1>
-          <div class="text-xs text-zinc-500">
-            Chats, messages, targets, coverage, jobs, and events
-          </div>
+          <h1 class="truncate text-lg font-semibold tracking-normal">AgenTG Control Plane</h1>
         </div>
         <div class="flex flex-wrap items-center justify-end gap-3">
           <div class="flex flex-wrap items-center justify-end gap-2">
@@ -134,39 +182,23 @@ onMounted(() => {
       id="mainLayout"
       class="grid min-h-0 flex-1 grid-cols-[380px_minmax(0,1fr)_400px] gap-4 overflow-hidden bg-zinc-100 p-4 pt-0"
     >
-      <aside
-        class="flex min-h-0 flex-col overflow-hidden rounded-lg border border-zinc-200 bg-white"
-      >
-        <div class="grid shrink-0 gap-2 border-b border-zinc-200 p-3">
-          <div class="relative">
-            <input
-              id="chatSearch"
-              class="w-full rounded-lg border border-zinc-300 bg-white py-2 pl-3 pr-9 outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
-              placeholder="Search title or id"
-            />
-            <button
-              id="chatSearchClear"
-              type="button"
-              aria-label="Clear search"
-              title="Clear search"
-              class="absolute right-2 top-1/2 hidden h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-lg leading-none text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700"
-            >
-              ×
-            </button>
-          </div>
-        </div>
-        <div class="grid min-h-0 flex-1 grid-cols-[76px_minmax(0,1fr)] overflow-hidden">
-          <nav id="chatFolders" class="min-h-0 overflow-auto bg-slate-800"></nav>
-          <div id="chatList" class="min-h-0 overflow-auto"></div>
-        </div>
-      </aside>
+      <ChatSidebar
+        :view="chatSidebar"
+        @archive-open="openArchiveChats"
+        @chat-toggle="toggleChat"
+        @folder-open="openFolderChats"
+        @main-open="openMainChats"
+        @search-clear="clearChatSearch"
+        @search-input="searchChats"
+      />
 
-      <section
-        id="workspaceShell"
-        class="flex min-h-0 flex-col overflow-hidden rounded-lg border border-zinc-200 bg-white"
-      >
-        <div id="selectedPanel" class="min-h-0 flex-1 overflow-auto"></div>
-      </section>
+      <SelectedWorkspace
+        :view="selectedWorkspace"
+        @close="closeSelectedChat"
+        @custom-target="addCustomTarget"
+        @preset-target="addPresetTarget"
+        @scale-select="selectTimelineScale"
+      />
 
       <aside
         id="eventsPanel"
@@ -179,9 +211,9 @@ onMounted(() => {
           <div class="flex shrink-0 items-center gap-2">
             <button
               id="eventFiltersToggle"
-              data-event-filter-toggle
               type="button"
-              class="inline-flex h-8 items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+              :class="eventFilterToggleClass"
+              @click="toggleEventFilters"
             >
               <svg
                 class="h-3.5 w-3.5"
@@ -199,10 +231,10 @@ onMounted(() => {
               </svg>
               <span>Filters</span>
               <span
-                data-event-filter-count
                 class="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] leading-none text-zinc-500"
-                >0/0</span
               >
+                {{ eventFiltersPanel.enabledCount }}
+              </span>
             </button>
             <button
               id="clearEvents"
@@ -212,8 +244,21 @@ onMounted(() => {
             </button>
           </div>
         </div>
-        <EventsList id="events" :events="eventItems" :has-events="hasEvents" />
-        <div id="eventFilters" class="hidden min-h-0 flex-1 overflow-auto bg-white"></div>
+        <EventsList
+          v-show="!eventFiltersVisible"
+          id="events"
+          :events="eventItems"
+          :has-events="hasEvents"
+        />
+        <EventFilters
+          v-show="eventFiltersVisible"
+          id="eventFilters"
+          :view="eventFiltersPanel"
+          @close="closeEventFilters"
+          @group-change="setEventGroupEnabled"
+          @limit-change="setEventLimit"
+          @type-change="setEventTypeEnabled"
+        />
       </aside>
     </main>
   </div>
@@ -230,12 +275,7 @@ onMounted(() => {
         <div class="text-sm font-semibold">Events</div>
       </div>
       <div class="flex shrink-0 items-center gap-2">
-        <button
-          data-preview-filter-events
-          data-event-filter-toggle
-          type="button"
-          class="inline-flex h-8 items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
-        >
+        <button type="button" :class="eventFilterToggleClass" @click="toggleEventFilters">
           <svg
             class="h-3.5 w-3.5"
             viewBox="0 0 20 20"
@@ -251,11 +291,9 @@ onMounted(() => {
             <path d="M8 15h4" />
           </svg>
           <span>Filters</span>
-          <span
-            data-event-filter-count
-            class="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] leading-none text-zinc-500"
-            >0/0</span
-          >
+          <span class="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] leading-none text-zinc-500">
+            {{ eventFiltersPanel.enabledCount }}
+          </span>
         </button>
         <button
           data-preview-clear-events
@@ -265,7 +303,20 @@ onMounted(() => {
         </button>
       </div>
     </div>
-    <EventsList id="eventsPreview" :events="eventItems" :has-events="hasEvents" />
-    <div id="eventFiltersPreview" class="hidden min-h-0 flex-1 overflow-auto bg-white"></div>
+    <EventsList
+      v-show="!eventFiltersVisible"
+      id="eventsPreview"
+      :events="eventItems"
+      :has-events="hasEvents"
+    />
+    <EventFilters
+      v-show="eventFiltersVisible"
+      id="eventFiltersPreview"
+      :view="eventFiltersPanel"
+      @close="closeEventFilters"
+      @group-change="setEventGroupEnabled"
+      @limit-change="setEventLimit"
+      @type-change="setEventTypeEnabled"
+    />
   </aside>
 </template>
