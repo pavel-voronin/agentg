@@ -6,6 +6,8 @@ const CHAT_FILTER_STORAGE_KEY = 'agentg.controlPlane.chatFilter';
 const CHAT_LIST_SELECTION_STORAGE_KEY = 'agentg.controlPlane.chatListSelection';
 const SELECTED_CHAT_ID_STORAGE_KEY = 'agentg.controlPlane.selectedChatId';
 const DEFAULT_VIEWPORT_DAYS_STORAGE_KEY = 'agentg.controlPlane.defaultViewportDays';
+const DASHBOARD_COLLAPSED_STORAGE_KEY = 'agentg.controlPlane.dashboardCollapsed';
+const EVENTS_PANEL_COLLAPSED_STORAGE_KEY = 'agentg.controlPlane.eventsPanelCollapsed';
 export const DEFAULT_EVENT_LIMIT = 200;
 export const MAX_EVENT_LIMIT = 2000;
 export const MIN_EVENT_LIMIT = 20;
@@ -51,6 +53,20 @@ export type DashboardMetric = {
   detail?: string;
   label: string;
   value: string;
+};
+
+export type StatusBadgeKind = 'bad' | 'ok' | 'warn';
+
+export type StatusBadgeView = {
+  kind: StatusBadgeKind;
+  label: string;
+};
+
+export type AppShellView = {
+  dashboardCollapsed: boolean;
+  eventsPanelCollapsed: boolean;
+  gatewayStatus: StatusBadgeView;
+  tdlibStatus: StatusBadgeView;
 };
 
 export type AppEventItem = {
@@ -178,8 +194,10 @@ export type SelectedWorkspaceView =
     }
   | {
       chat: SelectedChatHeaderView;
+      historyState: SelectedHistoryState;
       scaleButtons: TimelineScaleButtonView[];
       status: 'ready';
+      viewportDays: number | null;
     };
 
 export type EventFiltersState = {
@@ -219,20 +237,25 @@ export type ControlPlaneState = {
   chatListMode: ChatListMode;
   chatNavigation: ChatNavigation;
   chats: ControlPlaneChat[];
+  dashboardCollapsed: boolean;
   defaultViewportDays: number;
   eventFilters: EventFiltersState;
   eventLimit: number;
   events: ControlPlaneEvent[];
   eventsPanelMode: EventsPanelMode;
+  eventsPanelCollapsed: boolean;
+  gatewayStatus: StatusBadgeKind;
   overview: HistoryOverview | null;
   selectedChatId: string | null;
   selectedHistoryState: SelectedHistoryState | null;
   selectedHistoryStatus: 'idle' | 'loading' | 'ready' | 'unavailable';
+  tdlibStatus: StatusBadgeKind;
   viewportDays: number | null;
 };
 
 export type ControlPlaneStore = {
   clearChatFilter: () => void;
+  clearEvents: () => void;
   clearSelectedChat: () => void;
   clearSelectedHistoryState: () => void;
   hasChatFolder: (folderId: number | null) => boolean;
@@ -245,15 +268,19 @@ export type ControlPlaneStore = {
   selectMainChatList: () => void;
   setChatFilter: (value: string) => void;
   setChatListData: (data: { chats: ControlPlaneChat[]; navigation: ChatNavigation }) => void;
+  setDashboardCollapsed: (collapsed: boolean) => void;
   setDefaultViewportDays: (value: number) => void;
   setEventGroupEnabled: (groupId: string, enabled: boolean) => void;
   setEventLimit: (value: number | string) => void;
   setEventTypeEnabled: (type: string, enabled: boolean) => void;
+  setEventsPanelCollapsed: (collapsed: boolean) => void;
   setEventsPanelMode: (mode: EventsPanelMode) => void;
   setEvents: (events: ControlPlaneEvent[]) => void;
+  setGatewayStatus: (status: StatusBadgeKind) => void;
   setOverview: (overview: HistoryOverview | null) => void;
   setSelectedHistoryState: (selectedState: SelectedHistoryState | null) => void;
   setSelectedHistoryUnavailable: () => void;
+  setTdlibStatus: (status: StatusBadgeKind) => void;
   setViewportDays: (value: number | null) => void;
   state: ControlPlaneState;
   toggleEventsPanelMode: () => void;
@@ -331,6 +358,7 @@ export const EVENT_GROUPS: EventGroup[] = [
 
 export const controlPlaneStore = createControlPlaneStore();
 
+const appShell = computed(() => appShellView(controlPlaneStore.state));
 const dashboardMetrics = computed(() =>
   dashboardMetricsFromOverview(controlPlaneStore.state.overview ?? {})
 );
@@ -349,15 +377,19 @@ export function createControlPlaneStore(): ControlPlaneStore {
     chatListMode: initialChatListSelection.mode,
     chatNavigation: emptyChatNavigation(),
     chats: [],
+    dashboardCollapsed: readStoredBoolean(DASHBOARD_COLLAPSED_STORAGE_KEY, false),
     defaultViewportDays: readStoredViewportDays(),
     eventFilters: readStoredEventFilters(),
     eventLimit: readStoredEventLimit(),
     events: [],
     eventsPanelMode: 'events',
+    eventsPanelCollapsed: readStoredBoolean(EVENTS_PANEL_COLLAPSED_STORAGE_KEY, false),
+    gatewayStatus: 'warn',
     overview: null,
     selectedChatId: readSelectedChatId(),
     selectedHistoryState: null,
     selectedHistoryStatus: 'idle',
+    tdlibStatus: 'warn',
     viewportDays: readStoredViewportDays()
   });
 
@@ -365,6 +397,9 @@ export function createControlPlaneStore(): ControlPlaneStore {
     clearChatFilter() {
       state.chatFilter = '';
       writeStorage(CHAT_FILTER_STORAGE_KEY, '');
+    },
+    clearEvents() {
+      state.events = [];
     },
     clearSelectedChat() {
       state.selectedChatId = null;
@@ -386,8 +421,17 @@ export function createControlPlaneStore(): ControlPlaneStore {
       return isEventEnabledInState(state, event);
     },
     markSelectedHistoryLoading() {
+      if (state.selectedChatId === null) {
+        state.selectedHistoryState = null;
+        state.selectedHistoryStatus = 'idle';
+        return;
+      }
+      if (state.selectedHistoryState?.chat) {
+        state.selectedHistoryStatus = 'ready';
+        return;
+      }
       state.selectedHistoryState = null;
-      state.selectedHistoryStatus = state.selectedChatId === null ? 'idle' : 'loading';
+      state.selectedHistoryStatus = 'loading';
     },
     pushEvent(event) {
       if (!isEventEnabledInState(state, event)) {
@@ -407,6 +451,7 @@ export function createControlPlaneStore(): ControlPlaneStore {
       state.selectedChatId = chatId;
       state.selectedHistoryState = null;
       state.selectedHistoryStatus = 'loading';
+      state.viewportDays = state.defaultViewportDays;
       writeStorage(SELECTED_CHAT_ID_STORAGE_KEY, chatId);
     },
     selectFolderChatList(folderId) {
@@ -433,6 +478,10 @@ export function createControlPlaneStore(): ControlPlaneStore {
     setChatListData(data) {
       state.chats = data.chats;
       state.chatNavigation = normalizeChatNavigation(data.navigation);
+    },
+    setDashboardCollapsed(collapsed) {
+      state.dashboardCollapsed = collapsed;
+      writeStorage(DASHBOARD_COLLAPSED_STORAGE_KEY, collapsed ? '1' : '0');
     },
     setDefaultViewportDays(value) {
       state.defaultViewportDays = normalizeViewportDays(value);
@@ -470,12 +519,19 @@ export function createControlPlaneStore(): ControlPlaneStore {
         state.events = state.events.filter((event) => (event.type ?? '') !== type);
       }
     },
+    setEventsPanelCollapsed(collapsed) {
+      state.eventsPanelCollapsed = collapsed;
+      writeStorage(EVENTS_PANEL_COLLAPSED_STORAGE_KEY, collapsed ? '1' : '0');
+    },
     setEventsPanelMode(mode) {
       state.eventsPanelMode = mode === 'filters' ? 'filters' : 'events';
     },
     state,
     setEvents(events) {
       state.events = events.slice(0, state.eventLimit);
+    },
+    setGatewayStatus(status) {
+      state.gatewayStatus = status;
     },
     setOverview(overview) {
       state.overview = overview;
@@ -488,6 +544,9 @@ export function createControlPlaneStore(): ControlPlaneStore {
       state.selectedHistoryState = null;
       state.selectedHistoryStatus = state.selectedChatId === null ? 'idle' : 'unavailable';
     },
+    setTdlibStatus(status) {
+      state.tdlibStatus = status;
+    },
     setViewportDays(value) {
       state.viewportDays = value === null ? null : normalizeViewportDays(value);
     },
@@ -498,6 +557,7 @@ export function createControlPlaneStore(): ControlPlaneStore {
 }
 
 export function useControlPlaneAppView(): {
+  appShell: ComputedRef<AppShellView>;
   chatSidebar: ComputedRef<ChatSidebarView>;
   dashboardMetrics: ComputedRef<DashboardMetric[]>;
   eventFiltersPanel: ComputedRef<EventFiltersPanelView>;
@@ -507,6 +567,7 @@ export function useControlPlaneAppView(): {
   selectedWorkspace: ComputedRef<SelectedWorkspaceView>;
 } {
   return {
+    appShell,
     chatSidebar,
     dashboardMetrics,
     eventFiltersPanel,
@@ -541,6 +602,22 @@ export function normalizeEventLimit(value: number | string): number {
   return Math.min(MAX_EVENT_LIMIT, Math.max(MIN_EVENT_LIMIT, Math.round(limit)));
 }
 
+function appShellView(state: ControlPlaneState): AppShellView {
+  return {
+    dashboardCollapsed: state.dashboardCollapsed,
+    eventsPanelCollapsed: state.eventsPanelCollapsed,
+    gatewayStatus: statusBadgeView('GATEWAY', state.gatewayStatus),
+    tdlibStatus: statusBadgeView('TDLIB', state.tdlibStatus)
+  };
+}
+
+function statusBadgeView(label: string, kind: StatusBadgeKind): StatusBadgeView {
+  return {
+    kind,
+    label
+  };
+}
+
 function selectedWorkspaceView(state: ControlPlaneState): SelectedWorkspaceView {
   if (state.selectedChatId === null) {
     return { status: 'empty' };
@@ -553,8 +630,10 @@ function selectedWorkspaceView(state: ControlPlaneState): SelectedWorkspaceView 
   }
   return {
     chat: selectedChatHeaderView(state.selectedHistoryState.chat),
+    historyState: state.selectedHistoryState,
     scaleButtons: timelineScaleButtons(state),
-    status: 'ready'
+    status: 'ready',
+    viewportDays: state.viewportDays
   };
 }
 
@@ -901,6 +980,20 @@ function readStoredViewportDays(): number {
   return normalizeViewportDays(
     readStorage(DEFAULT_VIEWPORT_DAYS_STORAGE_KEY) ?? DEFAULT_VIEWPORT_DAYS
   );
+}
+
+function readStoredBoolean(key: string, fallback: boolean): boolean {
+  const value = readStorage(key);
+  if (value === null) {
+    return fallback;
+  }
+  if (value === '1' || value === 'true') {
+    return true;
+  }
+  if (value === '0' || value === 'false') {
+    return false;
+  }
+  return fallback;
 }
 
 function readSelectedChatId(): string | null {

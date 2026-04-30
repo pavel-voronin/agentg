@@ -5,6 +5,7 @@ import type {
   SelectedWorkspaceView,
   TimelineScaleButtonView
 } from '../stores/controlPlaneStore.js';
+import HistoryTimeline from './HistoryTimeline.vue';
 
 defineProps<{
   view: SelectedWorkspaceView;
@@ -13,6 +14,8 @@ defineProps<{
 const emit = defineEmits<{
   close: [];
   customTarget: [start: string, end: string];
+  deleteTarget: [targetId: string];
+  freeformScale: [];
   presetTarget: [preset: string];
   scaleSelect: [value: number];
 }>();
@@ -164,7 +167,13 @@ function scaleButtonClass(scale: TimelineScaleButtonView): string {
               </div>
             </div>
           </div>
-          <div id="timeline"></div>
+          <HistoryTimeline
+            :data="view.historyState"
+            :viewport-days="view.viewportDays"
+            @add-target="(start, end) => emit('customTarget', start, end)"
+            @delete-target="(targetId) => emit('deleteTarget', targetId)"
+            @freeform-scale="emit('freeformScale')"
+          />
         </section>
       </div>
     </div>

@@ -72,12 +72,12 @@ function inputTarget(event: Event): InputEventTarget | null {
 
 <template>
   <aside class="flex min-h-0 flex-col overflow-hidden rounded-lg border border-zinc-200 bg-white">
-    <div class="grid shrink-0 gap-2 border-b border-zinc-200 p-3">
+    <div class="grid shrink-0 gap-1.5 border-b border-zinc-200 px-2.5 py-2">
       <div class="relative">
         <input
           ref="searchInput"
           :value="view.search"
-          class="w-full rounded-lg border border-zinc-300 bg-white py-2 pl-3 pr-9 outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
+          class="w-full rounded-md border border-zinc-300 bg-white py-1.5 pl-2.5 pr-8 outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
           placeholder="Search title or id"
           @input="onSearchInput"
         />
@@ -86,7 +86,7 @@ function inputTarget(event: Event): InputEventTarget | null {
           aria-label="Clear search"
           title="Clear search"
           :class="[
-            'absolute right-2 top-1/2 h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-lg leading-none text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700',
+            'absolute right-1.5 top-1/2 h-5 w-5 -translate-y-1/2 items-center justify-center rounded text-base leading-none text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700',
             view.hasSearch ? 'inline-flex' : 'hidden'
           ]"
           @click="clearSearch"

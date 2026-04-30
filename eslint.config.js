@@ -23,37 +23,5 @@ export default tseslint.config(
   {
     files: ['eslint.config.js'],
     extends: [tseslint.configs.disableTypeChecked]
-  },
-  {
-    files: ['packages/control-plane/src/app-runtime.js'],
-    extends: [tseslint.configs.disableTypeChecked],
-    languageOptions: {
-      globals: {
-        Element: 'readonly',
-        HTMLInputElement: 'readonly',
-        HTMLElement: 'readonly',
-        MouseEvent: 'readonly',
-        URL: 'readonly',
-        WebSocket: 'readonly',
-        clearTimeout: 'readonly',
-        document: 'readonly',
-        getComputedStyle: 'readonly',
-        localStorage: 'readonly',
-        location: 'readonly',
-        requestAnimationFrame: 'readonly',
-        setInterval: 'readonly',
-        setTimeout: 'readonly',
-        window: 'readonly'
-      },
-      parserOptions: {
-        projectService: false
-      }
-    },
-    rules: {
-      '@typescript-eslint/no-unused-expressions': 'off',
-      '@typescript-eslint/no-unused-vars': 'off',
-      'no-empty': 'off',
-      'no-unused-vars': 'off'
-    }
   }
 );

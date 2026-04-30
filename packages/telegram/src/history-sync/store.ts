@@ -8,6 +8,8 @@ import {
 import { and, asc, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
 
 import type { JsonObject } from '@agentg/shared/json';
+import type { NormalizedTelegramUpdate } from '../normalize.js';
+import { persistTelegramUpdate } from '../store.js';
 import { liveMessageCoverageInterval, normalizeCoverageIntervals } from './coverage.js';
 import { canonicalizeHistoryRange } from './ranges.js';
 import { normalizeTelegramHistoryInterval, TELEGRAM_HISTORY_TICK_MS } from './time.js';
@@ -21,6 +23,18 @@ import type {
 } from './types.js';
 
 const coverageLocks = new Map<string, Promise<void>>();
+
+export type BackfillJobCheckpoint = {
+  complete?: boolean;
+  coveredInterval?: HistoryCoverageInterval;
+  cursor?: JsonObject;
+  remainingEndAt?: Date;
+  updates?: NormalizedTelegramUpdate[];
+};
+
+export type BackfillJobCheckpointResult = {
+  storedMessages: number;
+};
 
 export async function listHistoryTemplates(database: AppDatabase): Promise<HistoryTemplate[]> {
   const rows = await database
@@ -172,54 +186,51 @@ export async function addHistoryCoverage(
   }
 
   await withCoverageLock(normalizedInterval.chatId, async () => {
-    await mergeHistoryCoverage(database, normalizedInterval);
+    await database.transaction(async (transaction) => {
+      await mergeHistoryCoverageInTransaction(transaction as AppDatabase, normalizedInterval);
+    });
   });
 }
 
-async function mergeHistoryCoverage(
+async function mergeHistoryCoverageInTransaction(
   database: AppDatabase,
   interval: HistoryCoverageInterval
 ): Promise<void> {
-  await database.transaction(async (transaction) => {
-    const searchStartAt = new Date(interval.startAt.getTime() - TELEGRAM_HISTORY_TICK_MS);
-    const searchEndAt = new Date(interval.endAt.getTime() + TELEGRAM_HISTORY_TICK_MS);
-    const overlappingRows = await transaction
-      .select({
-        endAt: historyCoverage.endAt,
-        id: historyCoverage.id,
-        startAt: historyCoverage.startAt
-      })
-      .from(historyCoverage)
-      .where(
-        and(
-          eq(historyCoverage.telegramChatId, interval.chatId),
-          lte(historyCoverage.startAt, searchEndAt),
-          gte(historyCoverage.endAt, searchStartAt)
-        )
-      );
-
-    const normalizedOverlappingRows = overlappingRows.map((row) =>
-      normalizeTelegramHistoryInterval(row)
+  const searchStartAt = new Date(interval.startAt.getTime() - TELEGRAM_HISTORY_TICK_MS);
+  const searchEndAt = new Date(interval.endAt.getTime() + TELEGRAM_HISTORY_TICK_MS);
+  const overlappingRows = await database
+    .select({
+      endAt: historyCoverage.endAt,
+      id: historyCoverage.id,
+      startAt: historyCoverage.startAt
+    })
+    .from(historyCoverage)
+    .where(
+      and(
+        eq(historyCoverage.telegramChatId, interval.chatId),
+        lte(historyCoverage.startAt, searchEndAt),
+        gte(historyCoverage.endAt, searchStartAt)
+      )
     );
-    const mergedStartAt = minDate(
-      interval.startAt,
-      ...normalizedOverlappingRows.map((row) => row.startAt)
-    );
-    const mergedEndAt = maxDate(
-      interval.endAt,
-      ...normalizedOverlappingRows.map((row) => row.endAt)
-    );
-    const overlappingIds = overlappingRows.map((row) => row.id);
 
-    if (overlappingIds.length > 0) {
-      await transaction.delete(historyCoverage).where(inArray(historyCoverage.id, overlappingIds));
-    }
+  const normalizedOverlappingRows = overlappingRows.map((row) =>
+    normalizeTelegramHistoryInterval(row)
+  );
+  const mergedStartAt = minDate(
+    interval.startAt,
+    ...normalizedOverlappingRows.map((row) => row.startAt)
+  );
+  const mergedEndAt = maxDate(interval.endAt, ...normalizedOverlappingRows.map((row) => row.endAt));
+  const overlappingIds = overlappingRows.map((row) => row.id);
 
-    await transaction.insert(historyCoverage).values({
-      endAt: mergedEndAt,
-      startAt: mergedStartAt,
-      telegramChatId: interval.chatId
-    });
+  if (overlappingIds.length > 0) {
+    await database.delete(historyCoverage).where(inArray(historyCoverage.id, overlappingIds));
+  }
+
+  await database.insert(historyCoverage).values({
+    endAt: mergedEndAt,
+    startAt: mergedStartAt,
+    telegramChatId: interval.chatId
   });
 }
 
@@ -324,13 +335,70 @@ export async function updateBackfillJobCursor(
     .where(eq(backfillJobs.id, Number(jobId)));
 }
 
+export async function checkpointBackfillJob(
+  database: AppDatabase,
+  job: BackfillJob,
+  checkpoint: BackfillJobCheckpoint
+): Promise<BackfillJobCheckpointResult> {
+  const normalizedCoverage =
+    checkpoint.coveredInterval === undefined
+      ? undefined
+      : normalizeTelegramHistoryInterval(checkpoint.coveredInterval);
+  const updates = checkpoint.updates ?? [];
+
+  const operation = async (): Promise<BackfillJobCheckpointResult> =>
+    database.transaction(async (transaction) => {
+      let storedMessages = 0;
+
+      for (const update of updates) {
+        const result = await persistTelegramUpdate(transaction as AppDatabase, update);
+        if (result.message) {
+          storedMessages += 1;
+        }
+      }
+
+      if (
+        normalizedCoverage !== undefined &&
+        normalizedCoverage.startAt < normalizedCoverage.endAt
+      ) {
+        await mergeHistoryCoverageInTransaction(transaction as AppDatabase, normalizedCoverage);
+      }
+
+      if (checkpoint.complete === true) {
+        await transaction.delete(backfillJobs).where(eq(backfillJobs.id, Number(job.id)));
+      } else {
+        await transaction
+          .update(backfillJobs)
+          .set({
+            ...(checkpoint.cursor === undefined ? {} : { cursor: checkpoint.cursor }),
+            ...(checkpoint.remainingEndAt === undefined
+              ? {}
+              : { endAt: normalizeRemainingEndAt(job, checkpoint.remainingEndAt) }),
+            status: 'running',
+            updatedAt: sql`now()`
+          })
+          .where(eq(backfillJobs.id, Number(job.id)));
+      }
+
+      return {
+        storedMessages
+      };
+    });
+
+  return normalizedCoverage === undefined
+    ? operation()
+    : withCoverageLock(normalizedCoverage.chatId, operation);
+}
+
 export async function completeBackfillJob(
   database: AppDatabase,
   job: BackfillJob,
   coveredInterval: HistoryCoverageInterval
 ): Promise<void> {
-  await addHistoryCoverage(database, coveredInterval);
-  await database.delete(backfillJobs).where(eq(backfillJobs.id, Number(job.id)));
+  await checkpointBackfillJob(database, job, {
+    complete: true,
+    coveredInterval
+  });
 }
 
 export async function resetBackfillJob(database: AppDatabase, job: BackfillJob): Promise<void> {
@@ -359,6 +427,13 @@ function minDate(first: Date, ...rest: Date[]): Date {
 
 function maxDate(first: Date, ...rest: Date[]): Date {
   return rest.reduce((maximum, date) => (date > maximum ? date : maximum), first);
+}
+
+function normalizeRemainingEndAt(job: BackfillJob, remainingEndAt: Date): Date {
+  return normalizeTelegramHistoryInterval({
+    endAt: remainingEndAt,
+    startAt: job.startAt
+  }).endAt;
 }
 
 async function withCoverageLock<T>(chatId: string, operation: () => Promise<T>): Promise<T> {

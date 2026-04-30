@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  checkpointBackfillPage,
   claimNextBackfillJob,
   completeBackfillJob,
   completeBackfillJobAfterPersistingMessages,
   updateBackfillJobCursor
 } from '../../src/history-sync/jobs.js';
+import { TELEGRAM_HISTORY_PAST_BOUNDARY } from '../../src/history-sync/constants.js';
 import type { BackfillJob, HistoryCoverageInterval } from '../../src/history-sync/types.js';
 
 describe('backfill jobs', () => {
@@ -64,6 +66,54 @@ describe('backfill jobs', () => {
   it('leaves coverage unchanged for an incomplete job', () => {
     expect([coverage('2026-01-01', '2026-01-10')]).toEqual([coverage('2026-01-01', '2026-01-10')]);
   });
+
+  it('checkpoints page coverage without claiming the oldest fetched second', () => {
+    expect(
+      checkpointBackfillPage(job('job-1', '2026-01-01', '2026-02-01'), {
+        crossedStart: false,
+        oldestFetchedMessageDate: dateTime('2026-01-25T12:00:00.000Z'),
+        reachedBeginning: false,
+        remainingEndAt: date('2026-02-01')
+      })
+    ).toEqual({
+      complete: false,
+      coveredInterval: coverageAt('2026-01-25T12:00:01.000Z', '2026-02-01T00:00:00.000Z'),
+      remainingEndAt: dateTime('2026-01-25T12:00:01.000Z')
+    });
+  });
+
+  it('completes page coverage at the job start after crossing the start boundary', () => {
+    expect(
+      checkpointBackfillPage(job('job-1', '2026-01-01', '2026-02-01'), {
+        crossedStart: true,
+        oldestFetchedMessageDate: dateTime('2025-12-31T23:59:59.000Z'),
+        reachedBeginning: false,
+        remainingEndAt: dateTime('2026-01-25T12:00:01.000Z')
+      })
+    ).toEqual({
+      complete: true,
+      coveredInterval: coverageAt('2026-01-01T00:00:00.000Z', '2026-01-25T12:00:01.000Z'),
+      remainingEndAt: dateTime('2026-01-25T12:00:01.000Z')
+    });
+  });
+
+  it('covers from the Telegram beginning when a page reaches history start', () => {
+    expect(
+      checkpointBackfillPage(job('job-1', '2026-01-01', '2026-02-01'), {
+        crossedStart: false,
+        reachedBeginning: true,
+        remainingEndAt: dateTime('2026-01-25T12:00:01.000Z')
+      })
+    ).toEqual({
+      complete: true,
+      coveredInterval: {
+        chatId: 'chat-a',
+        endAt: dateTime('2026-01-25T12:00:01.000Z'),
+        startAt: TELEGRAM_HISTORY_PAST_BOUNDARY
+      },
+      remainingEndAt: dateTime('2026-01-25T12:00:01.000Z')
+    });
+  });
 });
 
 function job(id: string, startAt: string, endAt: string): BackfillJob {
@@ -94,6 +144,18 @@ function coverage(startAt: string, endAt: string): HistoryCoverageInterval {
   };
 }
 
+function coverageAt(startAt: string, endAt: string): HistoryCoverageInterval {
+  return {
+    chatId: 'chat-a',
+    endAt: dateTime(endAt),
+    startAt: dateTime(startAt)
+  };
+}
+
 function date(value: string): Date {
   return new Date(`${value}T00:00:00.000Z`);
+}
+
+function dateTime(value: string): Date {
+  return new Date(value);
 }
