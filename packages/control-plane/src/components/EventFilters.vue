@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { EventFiltersPanelView } from '../stores/controlPlaneStore.js';
+import type { EventFiltersPanelView } from '../stores/controlPlaneTypes.js';
 
 defineProps<{
   view: EventFiltersPanelView;

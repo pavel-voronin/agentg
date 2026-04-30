@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 
-import type { StatusBadgeView } from '../stores/controlPlaneStore.js';
+import type { StatusBadgeView } from '../stores/controlPlaneTypes.js';
 
 const props = defineProps<{
   badge: StatusBadgeView;

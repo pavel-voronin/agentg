@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { nextTick, ref, watch } from 'vue';
 
-import type { AppEventItem } from '../stores/controlPlaneStore.js';
+import type { AppEventItem } from '../stores/controlPlaneTypes.js';
 
 const props = defineProps<{
   events: AppEventItem[];

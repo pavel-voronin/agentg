@@ -1,4 +1,4 @@
-import type { SelectedHistoryState } from '../stores/controlPlaneStore.js';
+import type { SelectedHistoryState } from '../stores/controlPlaneTypes.js';
 
 const DAY_MS = 86400000;
 const TELEGRAM_HISTORY_START_AT = new Date('2013-08-14T00:00:00.000Z');
@@ -249,6 +249,25 @@ export function historyItemsAtTime(
     .filter((detail) => detail.startAt.getTime() <= at && detail.endAt.getTime() >= at)
     .map(historyHoverItem)
     .sort(compareHistoryHoverItems);
+}
+
+export function timelineDetailHoverItem(detail: TimelineDetail): TimelineHoverItem {
+  return {
+    duration: detail.duration,
+    extra:
+      detail.type === 'coverage'
+        ? (detail.count ?? '')
+        : detail.type === 'job'
+          ? (detail.status ?? '')
+          : '',
+    from: detail.startValue,
+    key: detail.key,
+    kind: detail.type,
+    label: detail.type === 'target' ? 'Target' : detail.type === 'job' ? 'Job' : 'Coverage',
+    to: detail.endValue,
+    ...(detail.startNote === undefined ? {} : { fromNote: detail.startNote }),
+    ...(detail.endNote === undefined ? {} : { toNote: detail.endNote })
+  };
 }
 
 export function timelinePhysicalBounds(data: SelectedHistoryState): TimelineViewport {

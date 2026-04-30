@@ -5,7 +5,7 @@ import type {
   ChatFolderNavItem,
   ChatListItemView,
   ChatSidebarView
-} from '../stores/controlPlaneStore.js';
+} from '../stores/controlPlaneTypes.js';
 
 defineProps<{
   view: ChatSidebarView;

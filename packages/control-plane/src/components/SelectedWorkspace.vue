@@ -4,7 +4,7 @@ import { ref } from 'vue';
 import type {
   SelectedWorkspaceView,
   TimelineScaleButtonView
-} from '../stores/controlPlaneStore.js';
+} from '../stores/controlPlaneTypes.js';
 import HistoryTimeline from './HistoryTimeline.vue';
 
 defineProps<{

@@ -2,11 +2,12 @@ import { onBeforeUnmount, onMounted } from 'vue';
 
 import { createGatewayClient, type GatewayEvent } from '../gateway/gatewayClient.js';
 import { createHistoryApi } from '../gateway/historyApi.js';
-import {
-  controlPlaneStore,
-  type ControlPlaneStore,
-  type StatusBadgeKind
-} from '../stores/controlPlaneStore.js';
+import type { StatusBadgeKind } from '../stores/controlPlaneTypes.js';
+import { useAppShellStore } from '../stores/appShell.js';
+import { useChatStore } from '../stores/chat.js';
+import { useEventsStore } from '../stores/events.js';
+import { useOverviewStore } from '../stores/overview.js';
+import { useSelectedHistoryStore } from '../stores/selectedHistory.js';
 
 export type ControlPlaneActions = {
   addCustomTarget: (start: string, end: string) => void;
@@ -21,7 +22,12 @@ export type ControlPlaneActions = {
   toggleChat: (chatId: string) => void;
 };
 
-export function useControlPlaneRuntime(appStore: ControlPlaneStore = controlPlaneStore) {
+export function useControlPlaneRuntime() {
+  const appShellStore = useAppShellStore();
+  const chatStore = useChatStore();
+  const eventsStore = useEventsStore();
+  const overviewStore = useOverviewStore();
+  const selectedHistoryStore = useSelectedHistoryStore();
   let runtimeStarted = false;
   let refreshTimer: ReturnType<typeof setTimeout> | null = null;
   let tdlibConnected = false;
@@ -52,50 +58,50 @@ export function useControlPlaneRuntime(appStore: ControlPlaneStore = controlPlan
 
   async function refreshAll(): Promise<void> {
     await Promise.all([loadOverview(), loadChats()]);
-    if (appStore.state.selectedChatId) {
+    if (selectedHistoryStore.selectedChatId) {
       await loadSelectedState();
     }
   }
 
   async function loadOverview(): Promise<void> {
-    appStore.setOverview(await historyApi.getOverview());
+    overviewStore.setOverview(await historyApi.getOverview());
   }
 
   async function loadChats(): Promise<void> {
-    const query = appStore.state.chatFilter.trim();
+    const query = chatStore.chatFilter.trim();
     const result = await historyApi.listChats({
-      folderId: appStore.state.chatFolderId,
-      listMode: appStore.state.chatListMode,
+      folderId: chatStore.chatFolderId,
+      listMode: chatStore.chatListMode,
       query
     });
-    appStore.setChatListData({
+    chatStore.setChatListData({
       chats: result.chats,
       navigation: result.navigation
     });
     if (
       query.length === 0 &&
-      appStore.state.chatListMode === 'folder' &&
-      !appStore.hasChatFolder(appStore.state.chatFolderId)
+      chatStore.chatListMode === 'folder' &&
+      !chatStore.hasChatFolder(chatStore.chatFolderId)
     ) {
-      appStore.selectMainChatList();
+      chatStore.selectMainChatList();
       await loadChats();
     }
   }
 
   async function loadSelectedState(): Promise<void> {
-    const selectedChatId = appStore.state.selectedChatId;
+    const selectedChatId = selectedHistoryStore.selectedChatId;
     if (!selectedChatId) {
       return;
     }
-    appStore.markSelectedHistoryLoading();
+    selectedHistoryStore.markSelectedHistoryLoading();
     try {
       const selectedState = await historyApi.getChatHistoryState(selectedChatId);
-      if (appStore.state.selectedChatId !== selectedChatId) {
+      if (selectedHistoryStore.selectedChatId !== selectedChatId) {
         return;
       }
-      appStore.setSelectedHistoryState(selectedState);
+      selectedHistoryStore.setSelectedHistoryState(selectedState);
     } catch (error) {
-      if (appStore.state.selectedChatId !== selectedChatId) {
+      if (selectedHistoryStore.selectedChatId !== selectedChatId) {
         return;
       }
       if (isNotFoundLikeError(error)) {
@@ -105,14 +111,14 @@ export function useControlPlaneRuntime(appStore: ControlPlaneStore = controlPlan
       }
       throw error;
     }
-    if (!appStore.state.selectedHistoryState?.chat) {
+    if (!selectedHistoryStore.selectedHistoryState?.chat) {
       clearSelectedChat();
       await loadChats();
     }
   }
 
   async function upsertPresetTarget(preset: string): Promise<void> {
-    const chatId = appStore.state.selectedChatId;
+    const chatId = selectedHistoryStore.selectedChatId;
     if (!chatId) {
       return;
     }
@@ -121,7 +127,7 @@ export function useControlPlaneRuntime(appStore: ControlPlaneStore = controlPlan
   }
 
   async function upsertCustomTarget(start: string, end: string): Promise<void> {
-    const chatId = appStore.state.selectedChatId;
+    const chatId = selectedHistoryStore.selectedChatId;
     if (!chatId) {
       return;
     }
@@ -142,7 +148,7 @@ export function useControlPlaneRuntime(appStore: ControlPlaneStore = controlPlan
       receiveTdlibStatus(event);
     }
     if (event.type) {
-      appStore.pushEvent(event);
+      eventsStore.pushEvent(event);
     }
     if (shouldRefreshForEvent(event)) {
       debounceRefresh();
@@ -172,12 +178,12 @@ export function useControlPlaneRuntime(appStore: ControlPlaneStore = controlPlan
   }
 
   async function openMainChats(): Promise<void> {
-    appStore.selectMainChatList();
+    chatStore.selectMainChatList();
     await loadChats();
   }
 
   async function openArchiveChats(): Promise<void> {
-    appStore.selectArchiveChatList();
+    chatStore.selectArchiveChatList();
     await loadChats();
   }
 
@@ -185,21 +191,21 @@ export function useControlPlaneRuntime(appStore: ControlPlaneStore = controlPlan
     if (!Number.isSafeInteger(folderId)) {
       return;
     }
-    appStore.selectFolderChatList(folderId);
+    chatStore.selectFolderChatList(folderId);
     await loadChats();
   }
 
   async function toggleChat(chatId: string): Promise<void> {
-    if (appStore.state.selectedChatId === chatId) {
+    if (selectedHistoryStore.selectedChatId === chatId) {
       clearSelectedChat();
       return;
     }
-    appStore.selectChat(chatId);
+    selectedHistoryStore.selectChat(chatId);
     await loadSelectedState();
   }
 
   function searchChats(value: string): void {
-    appStore.setChatFilter(value);
+    chatStore.setChatFilter(value);
     clearRefreshTimer();
     refreshTimer = setTimeout(() => {
       void loadChats().catch(showError);
@@ -207,17 +213,17 @@ export function useControlPlaneRuntime(appStore: ControlPlaneStore = controlPlan
   }
 
   function clearChatSearch(): void {
-    appStore.clearChatFilter();
+    chatStore.clearChatFilter();
     clearRefreshTimer();
     void loadChats().catch(showError);
   }
 
   function setGatewayStatus(kind: StatusBadgeKind): void {
-    appStore.setGatewayStatus(kind);
+    appShellStore.setGatewayStatus(kind);
   }
 
   function setTdlibStatus(kind: StatusBadgeKind): void {
-    appStore.setTdlibStatus(kind);
+    appShellStore.setTdlibStatus(kind);
   }
 
   function updateTdlibStatus(): void {
@@ -237,7 +243,7 @@ export function useControlPlaneRuntime(appStore: ControlPlaneStore = controlPlan
   }
 
   function showError(error: unknown): void {
-    if (appStore.state.selectedChatId && isNotFoundLikeError(error)) {
+    if (selectedHistoryStore.selectedChatId && isNotFoundLikeError(error)) {
       clearSelectedChat();
       void refreshAll().catch((refreshError: unknown) => {
         pushLocalError(refreshError);
@@ -248,7 +254,7 @@ export function useControlPlaneRuntime(appStore: ControlPlaneStore = controlPlan
   }
 
   function pushLocalError(error: unknown): void {
-    appStore.pushEvent({
+    eventsStore.pushEvent({
       data: { message: errorMessage(error) },
       occurredAt: new Date().toISOString(),
       type: 'ui.error'
@@ -256,7 +262,7 @@ export function useControlPlaneRuntime(appStore: ControlPlaneStore = controlPlan
   }
 
   function clearSelectedChat(): void {
-    appStore.clearSelectedChat();
+    selectedHistoryStore.clearSelectedChat();
   }
 
   function startRuntime(): void {

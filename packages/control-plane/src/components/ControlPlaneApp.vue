@@ -1,8 +1,17 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
-import { useControlPlaneRuntime } from '../runtime/controlPlaneRuntime.js';
-import { controlPlaneStore, useControlPlaneAppView } from '../stores/controlPlaneStore.js';
+import { useControlPlaneRuntime } from '../runtime/useControlPlaneRuntime.js';
+import { useAppShellStore } from '../stores/appShell.js';
+import { useChatStore } from '../stores/chat.js';
+import { useEventsStore } from '../stores/events.js';
+import { useOverviewStore } from '../stores/overview.js';
+import { useSelectedHistoryStore } from '../stores/selectedHistory.js';
+import { appShellView } from '../view-models/appShellView.js';
+import { chatSidebarView } from '../view-models/chatSidebarView.js';
+import { dashboardMetricsFromOverview } from '../view-models/dashboardView.js';
+import { eventFiltersPanelView, eventListItem } from '../view-models/eventsPanelView.js';
+import { selectedWorkspaceView } from '../view-models/selectedWorkspaceView.js';
 import ChatSidebar from './ChatSidebar.vue';
 import DashboardMetrics from './DashboardMetrics.vue';
 import EventFilters from './EventFilters.vue';
@@ -11,16 +20,19 @@ import SelectedWorkspace from './SelectedWorkspace.vue';
 import ShellStatusBadge from './ShellStatusBadge.vue';
 import ShellToggleButton from './ShellToggleButton.vue';
 
-const {
-  appShell,
-  chatSidebar,
-  dashboardMetrics,
-  eventFiltersPanel,
-  eventFiltersVisible,
-  eventItems,
-  hasEvents,
-  selectedWorkspace
-} = useControlPlaneAppView();
+const appShellStore = useAppShellStore();
+const chatStore = useChatStore();
+const eventsStore = useEventsStore();
+const overviewStore = useOverviewStore();
+const selectedHistoryStore = useSelectedHistoryStore();
+const appShell = computed(() => appShellView(appShellStore));
+const chatSidebar = computed(() => chatSidebarView(chatStore, selectedHistoryStore.selectedChatId));
+const dashboardMetrics = computed(() => dashboardMetricsFromOverview(overviewStore.overview ?? {}));
+const eventFiltersPanel = computed(() => eventFiltersPanelView(eventsStore));
+const eventFiltersVisible = computed(() => eventsStore.eventsPanelMode === 'filters');
+const eventItems = computed(() => eventsStore.events.map(eventListItem));
+const hasEvents = computed(() => eventsStore.events.length > 0);
+const selectedWorkspace = computed(() => selectedWorkspaceView(selectedHistoryStore));
 const {
   addCustomTarget,
   addPresetTarget,
@@ -74,7 +86,7 @@ const mainLayoutClass = computed(() =>
 );
 
 function clearEvents(): void {
-  controlPlaneStore.clearEvents();
+  eventsStore.clearEvents();
 }
 
 function hideDashboardPreview(): void {
@@ -134,7 +146,7 @@ function showEventsPreview(): void {
 
 function toggleDashboardPanel(): void {
   const collapsed = !appShell.value.dashboardCollapsed;
-  controlPlaneStore.setDashboardCollapsed(collapsed);
+  appShellStore.setDashboardCollapsed(collapsed);
   if (!collapsed) {
     hideDashboardPreview();
   }
@@ -142,7 +154,7 @@ function toggleDashboardPanel(): void {
 
 function toggleEventsPanel(): void {
   const collapsed = !appShell.value.eventsPanelCollapsed;
-  controlPlaneStore.setEventsPanelCollapsed(collapsed);
+  appShellStore.setEventsPanelCollapsed(collapsed);
   if (!collapsed) {
     hideEventsPreview();
   }
@@ -153,34 +165,34 @@ function browserGlobal(): BrowserGlobal {
 }
 
 function toggleEventFilters(): void {
-  controlPlaneStore.toggleEventsPanelMode();
+  eventsStore.toggleEventsPanelMode();
 }
 
 function closeEventFilters(): void {
-  controlPlaneStore.setEventsPanelMode('events');
+  eventsStore.setEventsPanelMode('events');
 }
 
 function setEventGroupEnabled(groupId: string, enabled: boolean): void {
-  controlPlaneStore.setEventGroupEnabled(groupId, enabled);
+  eventsStore.setEventGroupEnabled(groupId, enabled);
 }
 
 function setEventLimit(value: string): void {
-  controlPlaneStore.setEventLimit(value);
+  eventsStore.setEventLimit(value);
 }
 
 function setEventTypeEnabled(type: string, enabled: boolean): void {
-  controlPlaneStore.setEventTypeEnabled(type, enabled);
+  eventsStore.setEventTypeEnabled(type, enabled);
 }
 
 function clearTimelineScale(): void {
-  controlPlaneStore.setViewportDays(null);
+  selectedHistoryStore.setViewportDays(null);
 }
 
 function selectTimelineScale(value: number): void {
-  if (controlPlaneStore.state.viewportDays === value) {
-    controlPlaneStore.setDefaultViewportDays(value);
+  if (selectedHistoryStore.viewportDays === value) {
+    selectedHistoryStore.setDefaultViewportDays(value);
   }
-  controlPlaneStore.setViewportDays(value);
+  selectedHistoryStore.setViewportDays(value);
 }
 
 onMounted(() => {

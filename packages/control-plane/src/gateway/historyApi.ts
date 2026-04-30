@@ -4,7 +4,7 @@ import type {
   ControlPlaneChat,
   HistoryOverview,
   SelectedHistoryState
-} from '../stores/controlPlaneStore.js';
+} from '../stores/controlPlaneTypes.js';
 
 export type GatewayRpcClient = {
   rpc<T = unknown>(method: string, params?: Record<string, unknown>): Promise<T>;
