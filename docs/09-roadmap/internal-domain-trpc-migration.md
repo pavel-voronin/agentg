@@ -195,7 +195,7 @@ Purpose: remove the old transport, schema, generated code, and dependencies afte
 all internal RPC flows have moved to tRPC.
 
 Stage re-plan:
-required before implementation.
+[Internal Domain tRPC Stage 4 Plan](internal-domain-trpc-stage-4-plan.md).
 
 Scope:
 

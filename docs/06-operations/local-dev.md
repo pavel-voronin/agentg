@@ -22,8 +22,6 @@ npm run dev:gateway
 `npm run db:migrate` applies versioned Drizzle migrations from
 `packages/database/drizzle/`.
 
-`npm run proto:generate` regenerates TypeScript from Protobuf contracts.
-
 `npm run dev:telegram` runs the `@agentg/telegram` ingestion package. It owns the
 TDLib session, receives live Telegram updates, writes Telegram-shaped records to
 Postgres, publishes live integration events to NATS, and serves the narrow
@@ -31,26 +29,26 @@ Telegram history fetch RPC surface used by History Sync.
 
 `npm run dev:history-sync` runs the `@agentg/history-sync` package. It owns
 history templates, concrete chat targets, coverage intervals, backfill jobs, and
-the history sync lifecycle. It talks to Telegram ingestion through internal gRPC.
+the history sync lifecycle. It talks to Telegram ingestion through internal tRPC.
 
 `npm run dev:control-plane-server` runs the server-side Control Plane boundary.
 It serves the browser-facing operator WebSocket on `127.0.0.1:8789`, subscribes
-to live NATS events, and calls History Sync through internal gRPC.
+to live NATS events, and calls History Sync through internal tRPC.
 
 `npm run dev:control-plane` runs the Vite browser UI on `127.0.0.1:8788`. Its
 `/ws` path is proxied to the Control Plane server during development.
 
 `npm run dev:gateway` runs the `@agentg/gateway` package. It subscribes to live
 NATS events, serves external agent WebSocket clients with Postgres-backed
-Telegram reads, and calls History Sync through internal gRPC. Operator views do
+Telegram reads, and calls History Sync through internal tRPC. Operator views do
 not require Gateway.
 
 ## Internal RPC Addresses
 
-Telegram now starts the Telegram History gRPC server. History Sync calls that
-server for chat discovery and historical page fetches. History's own gRPC server
-address is configured for the later History Domain RPC stage, but the server is
-not started yet.
+Telegram and History Sync start package-owned internal tRPC HTTP servers. History
+Sync calls Telegram for chat discovery and historical page fetches. Gateway and
+Control Plane server call History Sync for history commands and reads while
+keeping their external WebSocket protocols unchanged.
 
 Local development defaults:
 

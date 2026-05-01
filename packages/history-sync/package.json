@@ -19,7 +19,6 @@
   },
   "dependencies": {
     "@agentg/database": "file:../database",
-    "@agentg/proto": "file:../proto",
     "@agentg/shared": "file:../shared",
     "@agentg/telegram": "file:../telegram",
     "@trpc/client": "^11.17.0",

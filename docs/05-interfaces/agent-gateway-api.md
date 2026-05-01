@@ -7,7 +7,7 @@ Agent Gateway is the external API boundary for an agent-side MCP plugin.
 The plugin connects to Gateway over WebSocket. Gateway keeps NATS internal,
 applies the external protocol boundary, forwards live integration events, serves
 Telegram read commands against Postgres, and calls History Sync through internal
-gRPC for history commands and reads.
+tRPC for history commands and reads.
 
 Gateway is a separate workspace package at `packages/gateway`. Telegram
 ingestion is a separate workspace package at `packages/telegram`. History Sync
@@ -22,13 +22,13 @@ Telegram ingestion
 
 History Sync
   -> Postgres history tables
-  <-> gRPC to Telegram ingestion
+  <-> tRPC to Telegram ingestion
 
 Agent Gateway
   <- NATS Core subjects
   -> WebSocket clients
   -> Postgres read RPC for Telegram reads
-  <-> gRPC to History Sync
+  <-> tRPC to History Sync
 ```
 
 Start locally:
@@ -94,7 +94,7 @@ Current event-plane subjects are documented in
 
 These events are live integration signals. They are not durable and are not a
 replay log. Reconnect recovery should use Gateway RPC methods backed by Postgres
-and History gRPC.
+and History tRPC.
 
 ## RPC Protocol
 
@@ -177,7 +177,7 @@ Errors:
 
 Gateway exposes these methods over WebSocket, but the API implementation belongs
 to the History Sync domain. Gateway sends `history.*` methods to History Sync's
-internal gRPC API and does not own history range, coverage, target, or job
+internal tRPC API and does not own history range, coverage, target, or job
 semantics.
 
 `history.getOverview`
@@ -216,7 +216,7 @@ missing intervals, and jobs.
 Supported presets are `last7d`, `last30d`, and `full`. A custom target can use
 `start` and `end` strings such as `past`, `now-30d`, `now`, or an absolute date.
 Gateway does not write `history_targets` directly. It calls History Sync over
-gRPC and returns success only after the History Sync process writes the target.
+tRPC and returns success only after the History Sync process writes the target.
 History Sync also emits `history.target.upserted` and wakes its reconciler.
 
 `history.requestSync`
@@ -227,7 +227,7 @@ History Sync also emits `history.target.upserted` and wakes its reconciler.
 }
 ```
 
-`chatId` is optional. Gateway calls History Sync through internal gRPC. History
+`chatId` is optional. Gateway calls History Sync through internal tRPC. History
 Sync wakes its own controller in-process and may publish
 `history.sync.requested` as a live notification event.
 
@@ -238,13 +238,12 @@ There is no periodic polling loop.
 
 ## Telegram History RPC
 
-History Sync talks to Telegram ingestion through a narrow internal gRPC surface.
+History Sync talks to Telegram ingestion through a narrow internal tRPC surface.
 History jobs are not exposed to Telegram ingestion.
 
-- `agentg.telegram.v1.TelegramHistoryService/ListChats`: optionally asks
-  Telegram ingestion to discover chats through TDLib and returns
-  Telegram-shaped chat metadata.
-- `agentg.telegram.v1.TelegramHistoryService/FetchPage`: asks Telegram
-  ingestion to fetch and persist one history page for `{ chatId, startAt, endAt,
-  cursorMessageId, limit }`. The response is a compact page summary used by
-  History Sync to checkpoint its own backfill job and coverage state.
+- `listChats`: optionally asks Telegram ingestion to discover chats through
+  TDLib and returns Telegram-shaped chat metadata.
+- `fetchPage`: asks Telegram ingestion to fetch and persist one history page for
+  `{ chatId, startAt, endAt, cursorMessageId, limit }`. The response is a
+  compact page summary used by History Sync to checkpoint its own backfill job
+  and coverage state.

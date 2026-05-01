@@ -6,7 +6,7 @@ NATS Core is the internal live event plane. It carries notifications that a
 domain fact happened. It does not carry addressed reads, commands, or
 request/reply RPC.
 
-Internal reads and commands use generated gRPC domain APIs. Browser and external
+Internal reads and commands use domain-owned tRPC APIs. Browser and external
 agent protocols are separate edge protocols owned by Control Plane and Gateway.
 
 ## Envelope
@@ -90,10 +90,10 @@ live events to browser clients.
 After reconnecting, consumers must rebuild state through these surfaces:
 
 - Gateway external clients: Gateway WebSocket RPC methods backed by Postgres and
-  History gRPC.
+  History tRPC.
 - Control Plane browser clients: Control Plane WebSocket RPC methods backed by
-  History gRPC.
-- History Sync: its own Postgres tables plus Telegram History gRPC.
+  History tRPC.
+- History Sync: its own Postgres tables plus Telegram History tRPC.
 - Telegram ingestion: TDLib session state and Telegram-shaped Postgres storage.
 
 ## Removed Command Subjects
@@ -103,5 +103,5 @@ These subjects are intentionally removed:
 - `history.target.upsert.requested`
 - `history.target.delete.requested`
 
-Target changes now go through History Sync's generated gRPC API. History Sync
+Target changes now go through History Sync's domain-owned tRPC API. History Sync
 publishes `history.target.upserted` and `history.target.deleted` after the write.
