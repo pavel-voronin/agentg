@@ -117,6 +117,9 @@ Stage 2 must be re-planned before implementation.
 
 Purpose: make History Sync expose its command and read surface through domain RPC.
 
+Stage re-plan:
+[Internal Domain RPC Stage 3 Plan](internal-domain-rpc-stage-3-plan.md).
+
 Scope:
 
 - Define History Protobuf service.

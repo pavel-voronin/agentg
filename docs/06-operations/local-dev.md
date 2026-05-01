@@ -32,7 +32,8 @@ history templates, concrete chat targets, coverage intervals, backfill jobs, and
 the history sync lifecycle. It talks to Telegram ingestion through internal gRPC.
 
 `npm run dev:gateway` runs the `@agentg/gateway` package. It subscribes to live
-NATS events and serves WebSocket clients with Postgres-backed read RPCs.
+NATS events, serves WebSocket clients with Postgres-backed Telegram reads, and
+calls History Sync through internal gRPC.
 
 ## Internal RPC Addresses
 

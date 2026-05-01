@@ -1,5 +1,5 @@
 import type { AppDatabase } from '@agentg/database/client';
-import type { InternalRpcClientConfig } from '@agentg/proto/rpc/config';
+import type { InternalRpcBindConfig, InternalRpcClientConfig } from '@agentg/proto/rpc/config';
 import type { EventBus, EventSubscription } from '@agentg/shared/events/bus';
 import { createIntegrationEvent } from '@agentg/shared/events/envelope';
 
@@ -10,7 +10,7 @@ import {
 } from './controller.js';
 import { createLiveCoverageObserver, type LiveCoverageObserver } from './live-coverage.js';
 import { subscribeHistorySyncCommands } from './commands-adapter.js';
-import { subscribeHistoryRpc } from './rpc-adapter.js';
+import { startHistoryGrpcServer, stopHistoryGrpcServer } from './history-api.js';
 import { addHistoryCoverageBatch } from './store.js';
 import { createGrpcTelegramHistoryClient } from './telegram-client.js';
 
@@ -18,6 +18,7 @@ export type HistorySyncServiceOptions = {
   backfill: BackfillOptions;
   database: AppDatabase;
   eventBus: EventBus;
+  internalRpc: InternalRpcBindConfig;
   services: {
     telegram: InternalRpcClientConfig;
   };
@@ -29,6 +30,7 @@ const HISTORY_SYNC_SHUTDOWN_STEP_TIMEOUT_MS = 2000;
 
 export async function runHistorySyncService(options: HistorySyncServiceOptions): Promise<void> {
   let shuttingDown = false;
+  let historyRpcServer: Awaited<ReturnType<typeof startHistoryGrpcServer>> | undefined;
   let liveCoverageTick: ReturnType<typeof setInterval> | undefined;
   const telegram = createGrpcTelegramHistoryClient(options.services.telegram);
   const controller = createHistorySyncController(
@@ -67,6 +69,11 @@ export async function runHistorySyncService(options: HistorySyncServiceOptions):
   liveCoverageTick = setInterval(() => {
     void liveCoverageObserver.tick();
   }, HISTORY_SYNC_STATUS_TICK_MS);
+  historyRpcServer = await startHistoryGrpcServer({
+    bind: options.internalRpc,
+    database: options.database,
+    eventBus: options.eventBus
+  });
   controller.request('startup');
 
   console.log(JSON.stringify({ event: 'history_sync.ready' }));
@@ -80,6 +87,16 @@ export async function runHistorySyncService(options: HistorySyncServiceOptions):
     for (const subscription of subscriptions) {
       subscription.unsubscribe();
     }
+    const activeHistoryRpcServer = historyRpcServer;
+    const historyRpcStopped =
+      activeHistoryRpcServer === undefined
+        ? true
+        : await runShutdownStep('history_sync.rpc_close', () =>
+            stopHistoryGrpcServer(activeHistoryRpcServer)
+          );
+    if (historyRpcStopped) {
+      historyRpcServer = undefined;
+    }
     telegram.close?.();
     controller.stop();
     const [historySyncStopped, liveCoverageStopped] = await Promise.all([
@@ -90,7 +107,7 @@ export async function runHistorySyncService(options: HistorySyncServiceOptions):
       options.eventBus.close()
     );
 
-    return historySyncStopped && liveCoverageStopped && eventBusClosed;
+    return historyRpcStopped && historySyncStopped && liveCoverageStopped && eventBusClosed;
   });
 }
 
@@ -102,7 +119,6 @@ function subscribeHistorySyncService(options: {
 }): EventSubscription[] {
   return [
     ...subscribeHistorySyncCommands(options),
-    subscribeHistoryRpc(options),
     options.eventBus.subscribe('telegram.chat.updated', () => {
       options.controller.request('chat-updated');
     }),

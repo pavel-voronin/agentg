@@ -2,12 +2,16 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 
 import type { AppDatabase } from '@agentg/database/client';
 import { telegramChats, telegramMessages } from '@agentg/database/schema';
+import type { InternalRpcClientConfig } from '@agentg/proto/rpc/config';
 import type { EventBus, EventSubscription } from '@agentg/shared/events/bus';
 import type { IntegrationEvent } from '@agentg/shared/events/envelope';
 import { and, desc, eq, ilike, sql } from 'drizzle-orm';
 import { WebSocket, WebSocketServer, type RawData } from 'ws';
 
-import { callHistoryMethod } from './history-observability.js';
+import {
+  createGrpcGatewayHistoryClient,
+  type GatewayHistoryClient
+} from './history-observability.js';
 
 export type AgentGatewayConfig = {
   host: string;
@@ -19,6 +23,13 @@ export type AgentGatewayOptions = {
   config: AgentGatewayConfig;
   database: AppDatabase;
   eventBus: EventBus;
+  services: {
+    history: InternalRpcClientConfig;
+  };
+};
+
+type AgentGatewayRuntime = AgentGatewayOptions & {
+  historyClient: GatewayHistoryClient;
 };
 
 type RpcRequest = {
@@ -37,6 +48,11 @@ type RpcResponse = {
 };
 
 export async function runAgentGateway(options: AgentGatewayOptions): Promise<void> {
+  const historyClient = createGrpcGatewayHistoryClient(options.services.history);
+  const runtime: AgentGatewayRuntime = {
+    ...options,
+    historyClient
+  };
   const server = createServer((request, response) => {
     handleHttpRequest(request, response);
   });
@@ -59,7 +75,7 @@ export async function runAgentGateway(options: AgentGatewayOptions): Promise<voi
     clients.add(client);
 
     client.on('message', (payload) => {
-      void handleClientMessage(options, client, rawDataToString(payload));
+      void handleClientMessage(runtime, client, rawDataToString(payload));
     });
     client.on('close', () => {
       clients.delete(client);
@@ -88,11 +104,11 @@ export async function runAgentGateway(options: AgentGatewayOptions): Promise<voi
     })
   );
 
-  await waitForShutdown(server, webSocketServer, subscriptions, options.eventBus);
+  await waitForShutdown(server, webSocketServer, subscriptions, options.eventBus, historyClient);
 }
 
 async function handleClientMessage(
-  options: AgentGatewayOptions,
+  options: AgentGatewayRuntime,
   client: WebSocket,
   payload: string
 ): Promise<void> {
@@ -149,12 +165,12 @@ async function handleClientMessage(
 }
 
 async function callMethod(
-  options: AgentGatewayOptions,
+  options: AgentGatewayRuntime,
   method: string,
   params: unknown
 ): Promise<unknown> {
   if (method.startsWith('history.')) {
-    const result = await callHistoryMethod(options, method, params);
+    const result = await options.historyClient.call(method, params);
     if (result !== undefined) {
       return result;
     }
@@ -382,13 +398,15 @@ async function waitForShutdown(
   server: Server,
   webSocketServer: WebSocketServer,
   subscriptions: EventSubscription[],
-  eventBus: EventBus
+  eventBus: EventBus,
+  historyClient: GatewayHistoryClient
 ): Promise<void> {
   await new Promise<void>((resolve) => {
     const shutdown = (): void => {
       for (const subscription of subscriptions) {
         subscription.unsubscribe();
       }
+      historyClient.close();
       webSocketServer.close();
       server.close(() => {
         void eventBus.close().finally(resolve);

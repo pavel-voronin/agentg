@@ -4,7 +4,10 @@
 
 Agent Gateway is the external API boundary for an agent-side MCP plugin.
 
-The plugin connects to Gateway over WebSocket. Gateway keeps NATS internal, applies the external protocol boundary, forwards live integration events, and serves small RPC-style read commands against Postgres.
+The plugin connects to Gateway over WebSocket. Gateway keeps NATS internal,
+applies the external protocol boundary, forwards live integration events, serves
+Telegram read commands against Postgres, and calls History Sync through internal
+gRPC for history commands and reads.
 
 Gateway is a separate workspace package at `packages/gateway`. Telegram
 ingestion is a separate workspace package at `packages/telegram`. History Sync
@@ -25,7 +28,7 @@ Agent Gateway
   <- NATS Core subjects
   -> WebSocket clients
   -> Postgres read RPC for Telegram reads
-  <-> NATS RPC for History Sync
+  <-> gRPC to History Sync
 ```
 
 Start locally:
@@ -172,9 +175,9 @@ Errors:
 ## History Observability Methods
 
 Gateway exposes these methods over WebSocket, but the API implementation belongs
-to the History Sync domain. Gateway sends `history.*` methods to
-`agentg.command.history.rpc` over NATS and does not own history range, coverage,
-target, or job semantics.
+to the History Sync domain. Gateway sends `history.*` methods to History Sync's
+internal gRPC API and does not own history range, coverage, target, or job
+semantics.
 
 `history.getOverview`
 
@@ -211,8 +214,8 @@ missing intervals, and jobs.
 
 Supported presets are `last7d`, `last30d`, and `full`. A custom target can use
 `start` and `end` strings such as `past`, `now-30d`, `now`, or an absolute date.
-Gateway does not write `history_targets` directly. It sends History Sync RPC over
-NATS and returns success only after the History Sync process writes the target.
+Gateway does not write `history_targets` directly. It calls History Sync over
+gRPC and returns success only after the History Sync process writes the target.
 History Sync also emits `history.target.upserted` and wakes its reconciler.
 
 `history.requestSync`

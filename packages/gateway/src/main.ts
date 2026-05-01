@@ -14,7 +14,8 @@ try {
   await runAgentGateway({
     config: config.gateway,
     database,
-    eventBus
+    eventBus,
+    services: config.services
   });
 } catch (error) {
   console.error(

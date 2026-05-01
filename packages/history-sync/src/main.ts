@@ -26,6 +26,7 @@ try {
     backfill: config.backfill,
     database,
     eventBus,
+    internalRpc: config.internalRpc,
     services: config.services
   });
 } catch (error) {
