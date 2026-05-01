@@ -1,19 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import { completeBackfillJob } from '../../src/history-sync/jobs.js';
-import { TELEGRAM_HISTORY_PAST_BOUNDARY } from '../../src/history-sync/constants.js';
+import { completeBackfillJob } from '../../src/jobs.js';
+import { TELEGRAM_HISTORY_PAST_BOUNDARY } from '../../src/constants.js';
 import {
   editHistoryTargetDirectly,
   materializeTemplatesForChat,
   updateLinkedTargetsForTemplate
-} from '../../src/history-sync/materialization.js';
-import { reconcileChat } from '../../src/history-sync/reconciler.js';
-import { expressionBoundary, historyRange } from '../../src/history-sync/ranges.js';
-import type {
-  HistoryCoverageInterval,
-  HistoryTarget,
-  HistoryTemplate
-} from '../../src/history-sync/types.js';
+} from '../../src/materialization.js';
+import { reconcileChat } from '../../src/reconciler.js';
+import { expressionBoundary, historyRange } from '../../src/ranges.js';
+import type { HistoryCoverageInterval, HistoryTarget, HistoryTemplate } from '../../src/types.js';
 
 describe('history sync acceptance', () => {
   it('materializes a target for a newly discovered matching chat and reconciles it into a job', () => {

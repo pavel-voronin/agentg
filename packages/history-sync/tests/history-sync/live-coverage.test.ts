@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { createLiveCoverageObserver } from '../../src/history-sync/live-coverage.js';
-import type { HistoryCoverageInterval } from '../../src/history-sync/types.js';
+import { createLiveCoverageObserver } from '../../src/live-coverage.js';
+import type { HistoryCoverageInterval } from '../../src/types.js';
 
 describe('live history coverage observer', () => {
   it('covers all known chats with empty live intervals while connected', async () => {

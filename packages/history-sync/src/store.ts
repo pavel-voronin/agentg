@@ -3,14 +3,11 @@ import {
   backfillJobs,
   historyCoverage,
   historyTargets,
-  historyTemplates,
-  telegramChats
+  historyTemplates
 } from '@agentg/database/schema';
 import { and, asc, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
 
 import type { JsonObject } from '@agentg/shared/json';
-import type { NormalizedTelegramUpdate } from '../normalize.js';
-import { persistTelegramUpdate } from '../store.js';
 import { liveMessageCoverageInterval, normalizeCoverageIntervals } from './coverage.js';
 import { canonicalizeHistoryRange } from './ranges.js';
 import { normalizeTelegramHistoryInterval, TELEGRAM_HISTORY_TICK_MS } from './time.js';
@@ -31,7 +28,6 @@ export type BackfillJobCheckpoint = {
   coveredInterval?: HistoryCoverageInterval;
   cursor?: JsonObject;
   remainingEndAt?: Date;
-  updates?: NormalizedTelegramUpdate[];
 };
 
 export type BackfillJobCheckpointResult = {
@@ -94,17 +90,6 @@ export async function listHistoryTargets(database: AppDatabase): Promise<History
     range: canonicalizeHistoryRange(row.range as HistoryRange),
     ...(row.templateId === null ? {} : { templateId: row.templateId })
   }));
-}
-
-export async function listKnownTelegramChatIds(database: AppDatabase): Promise<string[]> {
-  const rows = await database
-    .select({
-      telegramChatId: telegramChats.telegramChatId
-    })
-    .from(telegramChats)
-    .orderBy(asc(telegramChats.telegramChatId));
-
-  return rows.map((row) => row.telegramChatId);
 }
 
 export async function upsertHistoryTarget(
@@ -501,19 +486,9 @@ export async function checkpointBackfillJob(
     checkpoint.coveredInterval === undefined
       ? undefined
       : normalizeTelegramHistoryInterval(checkpoint.coveredInterval);
-  const updates = checkpoint.updates ?? [];
 
   const operation = async (): Promise<BackfillJobCheckpointResult> =>
     database.transaction(async (transaction) => {
-      let storedMessages = 0;
-
-      for (const update of updates) {
-        const result = await persistTelegramUpdate(transaction, update);
-        if (result.message) {
-          storedMessages += 1;
-        }
-      }
-
       if (
         normalizedCoverage !== undefined &&
         normalizedCoverage.startAt < normalizedCoverage.endAt
@@ -538,7 +513,7 @@ export async function checkpointBackfillJob(
       }
 
       return {
-        storedMessages
+        storedMessages: 0
       };
     });
 

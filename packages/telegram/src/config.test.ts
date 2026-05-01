@@ -11,12 +11,6 @@ describe('loadTelegramIngestionConfig', () => {
     const config = loadTelegramIngestionConfig({});
 
     expect(config).toMatchObject({
-      backfill: {
-        chatLoadBatchSize: 100,
-        messageLimit: 100,
-        requestDelayMs: 1000,
-        windowDays: 31
-      },
       databaseUrl: 'postgres://agentg:agentg@localhost:5432/agentg',
       nats: {
         url: 'nats://localhost:4222'

@@ -1,8 +1,6 @@
 import { createHash } from 'node:crypto';
 
 import type { AppDatabase } from '@agentg/database/client';
-import { telegramChats } from '@agentg/database/schema';
-import { eq } from 'drizzle-orm';
 
 import { parseHistoryTargetUpsertCommand } from './commands.js';
 import { historyRangeKey } from './ranges.js';
@@ -16,15 +14,6 @@ export async function upsertManualHistoryTargetFromCommand(
   const input = parseHistoryTargetUpsertCommand(command, 'history.target.upsert.requested');
   const chatId = input.chatId;
   const range = input.range;
-  const [chat] = await database
-    .select({ telegramChatId: telegramChats.telegramChatId })
-    .from(telegramChats)
-    .where(eq(telegramChats.telegramChatId, chatId))
-    .limit(1);
-  if (chat === undefined) {
-    throw new Error(`Unknown chat: ${chatId}`);
-  }
-
   const existingTargets = await listHistoryTargets(database);
   const rangeKey = historyRangeKey(range);
   const existingSameRange = existingTargets.find(

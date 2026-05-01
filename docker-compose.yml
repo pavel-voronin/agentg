@@ -44,6 +44,27 @@ services:
       - '${AGENT_GATEWAY_PORT:-8787}:${AGENT_GATEWAY_PORT:-8787}'
     restart: 'no'
 
+  history-sync:
+    profiles:
+      - history-sync
+    build:
+      context: .
+      target: runtime
+    command: ['npm', '--workspace', '@agentg/history-sync', 'run', 'start']
+    depends_on:
+      nats:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    environment:
+      BACKFILL_CHAT_LOAD_BATCH_SIZE: ${BACKFILL_CHAT_LOAD_BATCH_SIZE:-100}
+      BACKFILL_MESSAGE_LIMIT: ${BACKFILL_MESSAGE_LIMIT:-100}
+      BACKFILL_REQUEST_DELAY_MS: ${BACKFILL_REQUEST_DELAY_MS:-1000}
+      BACKFILL_WINDOW_DAYS: ${BACKFILL_WINDOW_DAYS:-31}
+      DATABASE_URL: postgres://agentg:agentg@postgres:5432/agentg
+      NATS_URL: nats://nats:4222
+    restart: 'no'
+
   nats:
     image: nats:2.12-alpine
     ports:

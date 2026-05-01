@@ -6,8 +6,9 @@ Agent Gateway is the external API boundary for an agent-side MCP plugin.
 
 The plugin connects to Gateway over WebSocket. Gateway keeps NATS internal, applies the external protocol boundary, forwards live integration events, and serves small RPC-style read commands against Postgres.
 
-Gateway is a separate workspace package at `packages/gateway`. Telegram ingestion
-is a separate workspace package at `packages/telegram`.
+Gateway is a separate workspace package at `packages/gateway`. Telegram
+ingestion is a separate workspace package at `packages/telegram`. History Sync
+is a separate workspace package at `packages/history-sync`.
 
 ## Runtime
 
@@ -16,10 +17,15 @@ Telegram ingestion
   -> Postgres
   -> NATS Core subjects
 
+History Sync
+  -> Postgres history tables
+  <-> NATS RPC to Telegram ingestion
+
 Agent Gateway
   <- NATS Core subjects
   -> WebSocket clients
-  -> Postgres read RPC
+  -> Postgres read RPC for Telegram reads
+  <-> NATS RPC for History Sync
 ```
 
 Start locally:
@@ -27,6 +33,7 @@ Start locally:
 ```sh
 docker compose up -d postgres nats
 npm run dev:telegram
+npm run dev:history-sync
 npm run dev:gateway
 ```
 
@@ -165,9 +172,9 @@ Errors:
 ## History Observability Methods
 
 Gateway exposes these methods over WebSocket, but the API implementation belongs
-to the Telegram history-sync domain. Gateway delegates to
-`@agentg/telegram/history-sync/observability` and does not own history range,
-coverage, target, or job semantics.
+to the History Sync domain. Gateway sends `history.*` methods to
+`agentg.command.history.rpc` over NATS and does not own history range, coverage,
+target, or job semantics.
 
 `history.getOverview`
 
@@ -204,10 +211,9 @@ missing intervals, and jobs.
 
 Supported presets are `last7d`, `last30d`, and `full`. A custom target can use
 `start` and `end` strings such as `past`, `now-30d`, `now`, or an absolute date.
-Gateway does not write `history_targets` directly. It sends a NATS request on
-`history.target.upsert.requested` and returns success only after the Telegram
-history domain writes the target. Telegram also emits `history.target.upserted`
-and wakes the reconciler in the same process.
+Gateway does not write `history_targets` directly. It sends History Sync RPC over
+NATS and returns success only after the History Sync process writes the target.
+History Sync also emits `history.target.upserted` and wakes its reconciler.
 
 `history.requestSync`
 
@@ -218,9 +224,21 @@ and wakes the reconciler in the same process.
 ```
 
 `chatId` is optional. The command is sent through NATS and consumed by the
-Telegram process when it is running.
+History Sync process when it is running.
 
-The Telegram history-sync actor is event-driven and single-flight. Startup,
+The History Sync actor is event-driven and single-flight. Startup,
 target changes, chat changes, and explicit sync requests wake it. If another
 wake-up arrives during a run, it performs another pass after the current run.
 There is no periodic polling loop.
+
+## Telegram History RPC
+
+History Sync talks to Telegram ingestion through a narrow internal NATS RPC
+surface. History jobs are not exposed to Telegram ingestion.
+
+- `agentg.command.telegram.history.list_chats`: optionally asks Telegram ingestion to
+  discover chats through TDLib and returns Telegram-shaped chat metadata.
+- `agentg.command.telegram.history.fetch_page`: asks Telegram ingestion to fetch and
+  persist one history page for `{ chatId, startAt, endAt, cursorMessageId,
+  limit }`. The response is a compact page summary used by History Sync to
+  checkpoint its own backfill job and coverage state.

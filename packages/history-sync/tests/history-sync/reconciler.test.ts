@@ -1,17 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { TELEGRAM_HISTORY_PAST_BOUNDARY } from '../../src/history-sync/constants.js';
-import { completedOneShotTargets, reconcileChat } from '../../src/history-sync/reconciler.js';
-import {
-  absoluteBoundary,
-  expressionBoundary,
-  historyRange
-} from '../../src/history-sync/ranges.js';
-import type {
-  BackfillJobInput,
-  HistoryCoverageInterval,
-  HistoryTarget
-} from '../../src/history-sync/types.js';
+import { TELEGRAM_HISTORY_PAST_BOUNDARY } from '../../src/constants.js';
+import { completedOneShotTargets, reconcileChat } from '../../src/reconciler.js';
+import { absoluteBoundary, expressionBoundary, historyRange } from '../../src/ranges.js';
+import type { BackfillJobInput, HistoryCoverageInterval, HistoryTarget } from '../../src/types.js';
 
 describe('history reconciler', () => {
   it('creates one job when an absolute target has no coverage', () => {

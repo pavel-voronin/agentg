@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { addCoverageFromLiveUpdate, addCoverageInterval } from '../../src/history-sync/coverage.js';
-import type { HistoryCoverageInterval } from '../../src/history-sync/types.js';
+import { addCoverageFromLiveUpdate, addCoverageInterval } from '../../src/coverage.js';
+import type { HistoryCoverageInterval } from '../../src/types.js';
 
 describe('history coverage', () => {
   it('creates the first coverage interval for a chat', () => {

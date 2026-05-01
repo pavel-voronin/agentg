@@ -9,6 +9,7 @@
     "packages/gateway",
     "packages/control-plane",
     "packages/telegram",
+    "packages/history-sync",
     "packages/claude-plugin"
   ],
   "engines": {
@@ -19,6 +20,7 @@
     "dev": "npm run dev:telegram",
     "dev:control-plane": "npm --workspace @agentg/control-plane run dev",
     "dev:gateway": "npm --workspace @agentg/gateway run dev",
+    "dev:history-sync": "npm --workspace @agentg/history-sync run dev",
     "dev:claude": "npm --workspace @agentg/claude-plugin run start",
     "dev:telegram": "npm --workspace @agentg/telegram run dev",
     "build": "npm --workspaces --if-present run build",
@@ -30,6 +32,7 @@
     "db:logs": "docker compose logs --tail=50 postgres",
     "backfill:status": "bash scripts/backfill-status.sh",
     "infra:up": "docker compose up -d postgres nats --quiet-pull",
+    "compose:history-sync": "docker compose --profile history-sync up --build history-sync",
     "compose:telegram": "docker compose --profile container-client up --build telegram",
     "lint": "eslint .",
     "format": "prettier --write .",

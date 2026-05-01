@@ -41,11 +41,16 @@ The agent-facing integration adds a separate live boundary:
 TDLib sidecar
   -> Postgres
   -> NATS Core live integration events
+  <-> NATS Core history fetch RPC
+  -> History Sync service
   -> Agent Gateway WebSocket API
   -> agent MCP plugin
 ```
 
 NATS Core is used as an internal, non-durable event bus. Postgres remains the source of recovery and replayable Telegram facts.
+History Sync is a separate process from Telegram ingestion: it owns targets,
+coverage, and backfill jobs, while Telegram ingestion owns TDLib and
+Telegram-shaped persistence.
 
 The preferred starting runtime is TypeScript/Node.js, provided TDLib can be integrated reliably through its JSON/C interface or a maintained wrapper. Go or Rust remain fallback choices if the Node.js integration becomes the risky part of the project.
 

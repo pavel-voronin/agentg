@@ -3,9 +3,10 @@
 ## Core Domains
 
 - [Telegram Client](telegram-client.md): implement the user-client, Telegram event model, and Telegram API surface.
-- [Ingestion](ingestion.md): get Telegram events and historical fetch results into durable storage.
+- [Ingestion](ingestion.md): get Telegram events and historical fetch results into durable Telegram-shaped storage.
 - [History Sync](history-sync.md): manage templates, concrete chat targets, timeline coverage, reconciliation, and backfill jobs.
-- Storage: persist raw events and current message state in Postgres.
+- Telegram Storage: persist raw events and current Telegram message state in Postgres.
+- History Storage: persist templates, targets, coverage, and backfill queue state in Postgres.
 
 ## Supporting Domains
 

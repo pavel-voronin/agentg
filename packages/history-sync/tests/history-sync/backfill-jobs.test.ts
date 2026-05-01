@@ -6,9 +6,9 @@ import {
   completeBackfillJob,
   completeBackfillJobAfterPersistingMessages,
   updateBackfillJobCursor
-} from '../../src/history-sync/jobs.js';
-import { TELEGRAM_HISTORY_PAST_BOUNDARY } from '../../src/history-sync/constants.js';
-import type { BackfillJob, HistoryCoverageInterval } from '../../src/history-sync/types.js';
+} from '../../src/jobs.js';
+import { TELEGRAM_HISTORY_PAST_BOUNDARY } from '../../src/constants.js';
+import type { BackfillJob, HistoryCoverageInterval } from '../../src/types.js';
 
 describe('backfill jobs', () => {
   it('claims a runnable job without calling Telegram during reconciliation', () => {

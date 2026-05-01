@@ -1,9 +1,8 @@
-import type { AppDatabase } from '@agentg/database/client';
 import type { EventBus } from '@agentg/shared/events/bus';
-import { callTelegramHistoryMethod } from '@agentg/telegram/history-sync/observability';
+import { createIntegrationEvent } from '@agentg/shared/events/envelope';
+import type { JsonValue } from '@agentg/shared/json';
 
 type HistoryRuntime = {
-  database: AppDatabase;
   eventBus: EventBus;
 };
 
@@ -12,5 +11,29 @@ export async function callHistoryMethod(
   method: string,
   params: unknown
 ): Promise<unknown> {
-  return callTelegramHistoryMethod(runtime, method, params);
+  const response = await runtime.eventBus.request(
+    createIntegrationEvent({
+      data: {
+        method,
+        params: params as JsonValue
+      },
+      source: 'agent-gateway',
+      type: 'agentg.command.history.rpc'
+    }),
+    {
+      timeoutMs: 15000
+    }
+  );
+  const data = asRecord(response.data);
+  if (typeof data?.error === 'string') {
+    throw new Error(data.error);
+  }
+
+  return data?.result;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === 'object' && value !== null
+    ? (value as Record<string, unknown>)
+    : undefined;
 }

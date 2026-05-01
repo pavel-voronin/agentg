@@ -4,6 +4,7 @@ COPY package.json package-lock.json* ./
 COPY packages/shared/package.json packages/shared/package.json
 COPY packages/database/package.json packages/database/package.json
 COPY packages/gateway/package.json packages/gateway/package.json
+COPY packages/history-sync/package.json packages/history-sync/package.json
 COPY packages/telegram/package.json packages/telegram/package.json
 RUN npm install
 
@@ -19,10 +20,12 @@ COPY package.json package-lock.json* ./
 COPY packages/shared/package.json packages/shared/package.json
 COPY packages/database/package.json packages/database/package.json
 COPY packages/gateway/package.json packages/gateway/package.json
+COPY packages/history-sync/package.json packages/history-sync/package.json
 COPY packages/telegram/package.json packages/telegram/package.json
 RUN npm install --omit=dev && npm cache clean --force
 COPY --from=build --chown=agentg:agentg /app/packages/database/dist ./packages/database/dist
 COPY --from=build --chown=agentg:agentg /app/packages/gateway/dist ./packages/gateway/dist
+COPY --from=build --chown=agentg:agentg /app/packages/history-sync/dist ./packages/history-sync/dist
 COPY --from=build --chown=agentg:agentg /app/packages/telegram/dist ./packages/telegram/dist
 RUN mkdir -p /app/td-data/database /app/td-data/files && chown -R agentg:agentg /app
 USER agentg

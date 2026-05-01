@@ -86,15 +86,15 @@ type ChatListFilter =
       kind: 'folder';
     };
 
-export type TelegramHistoryRuntime = {
+export type HistoryRuntime = {
   database: AppDatabase;
   eventBus: EventBus;
 };
 
 const activeBackfillJobStatuses = ['pending', 'running'];
 
-export async function callTelegramHistoryMethod(
-  runtime: TelegramHistoryRuntime,
+export async function callHistoryMethod(
+  runtime: HistoryRuntime,
   method: string,
   params: unknown
 ): Promise<unknown> {
@@ -429,10 +429,7 @@ async function getChatHistoryState(database: AppDatabase, params: unknown): Prom
   };
 }
 
-async function upsertHistoryTarget(
-  runtime: TelegramHistoryRuntime,
-  params: unknown
-): Promise<unknown> {
+async function upsertHistoryTarget(runtime: HistoryRuntime, params: unknown): Promise<unknown> {
   const command = requireJsonObject(params, 'history.upsertTarget requires an object params');
   const target = await upsertManualHistoryTargetFromCommand(runtime.database, command);
   runtime.eventBus.publish(
@@ -440,7 +437,7 @@ async function upsertHistoryTarget(
       data: {
         target
       },
-      source: 'telegram.history-sync',
+      source: 'history-sync',
       type: 'history.target.upserted'
     })
   );
@@ -452,10 +449,7 @@ async function upsertHistoryTarget(
   };
 }
 
-async function deleteHistoryTarget(
-  runtime: TelegramHistoryRuntime,
-  params: unknown
-): Promise<unknown> {
+async function deleteHistoryTarget(runtime: HistoryRuntime, params: unknown): Promise<unknown> {
   const command = requireJsonObject(params, 'history.deleteTarget requires an object params');
   const target = await deleteManualHistoryTargetFromCommand(runtime.database, command);
   runtime.eventBus.publish(
@@ -463,7 +457,7 @@ async function deleteHistoryTarget(
       data: {
         target
       },
-      source: 'telegram.history-sync',
+      source: 'history-sync',
       type: 'history.target.deleted'
     })
   );
@@ -488,7 +482,7 @@ function publishHistorySyncRequested(eventBus: EventBus, reason: string, chatId?
   );
 }
 
-function requestHistorySync(runtime: TelegramHistoryRuntime, params: unknown): unknown {
+function requestHistorySync(runtime: HistoryRuntime, params: unknown): unknown {
   const input = asRecord(params);
   publishHistorySyncRequested(runtime.eventBus, 'manual', asString(input?.chatId));
 

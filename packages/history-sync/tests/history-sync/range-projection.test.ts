@@ -6,7 +6,7 @@ import {
   expressionBoundary,
   historyRange,
   projectHistoryRange
-} from '../../src/history-sync/ranges.js';
+} from '../../src/ranges.js';
 
 describe('history range projection', () => {
   const now = new Date('2026-04-28T00:00:00.000Z');

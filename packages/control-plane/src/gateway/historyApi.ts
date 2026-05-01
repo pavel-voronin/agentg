@@ -38,7 +38,7 @@ export type HistoryApi = {
   upsertPresetTarget: (chatId: string, preset: string) => Promise<unknown>;
 };
 
-const DEFAULT_CHAT_LIMIT = 200;
+const DEFAULT_CHAT_LIMIT = 500;
 
 export function createHistoryApi(client: GatewayRpcClient): HistoryApi {
   return {

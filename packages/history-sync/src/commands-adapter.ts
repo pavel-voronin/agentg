@@ -48,7 +48,7 @@ async function handleHistoryTargetUpsertCommand(
       data: {
         target
       },
-      source: 'telegram.history-sync',
+      source: 'history-sync',
       type: 'history.target.upserted'
     });
     options.eventBus.publish(upserted);
@@ -58,7 +58,7 @@ async function handleHistoryTargetUpsertCommand(
       data: {
         target
       },
-      source: 'telegram.history-sync',
+      source: 'history-sync',
       type: 'history.target.upsert.completed'
     });
   } catch (error) {
@@ -66,7 +66,7 @@ async function handleHistoryTargetUpsertCommand(
       data: {
         error: error instanceof Error ? error.message : String(error)
       },
-      source: 'telegram.history-sync',
+      source: 'history-sync',
       type: 'history.target.upsert.failed'
     });
     options.eventBus.publish(failed);
@@ -90,7 +90,7 @@ async function handleHistoryTargetDeleteCommand(
       data: {
         target
       },
-      source: 'telegram.history-sync',
+      source: 'history-sync',
       type: 'history.target.deleted'
     });
     options.eventBus.publish(deleted);
@@ -100,7 +100,7 @@ async function handleHistoryTargetDeleteCommand(
       data: {
         target
       },
-      source: 'telegram.history-sync',
+      source: 'history-sync',
       type: 'history.target.delete.completed'
     });
   } catch (error) {
@@ -108,7 +108,7 @@ async function handleHistoryTargetDeleteCommand(
       data: {
         error: error instanceof Error ? error.message : String(error)
       },
-      source: 'telegram.history-sync',
+      source: 'history-sync',
       type: 'history.target.delete.failed'
     });
     options.eventBus.publish(failed);

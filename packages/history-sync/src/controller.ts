@@ -3,6 +3,7 @@ import type { EventBus } from '@agentg/shared/events/bus';
 import { createIntegrationEvent } from '@agentg/shared/events/envelope';
 
 import { runHistorySync } from './executor.js';
+import type { TelegramHistoryClient } from './telegram-client.js';
 
 export type BackfillOptions = {
   chatLoadBatchSize: number;
@@ -17,15 +18,11 @@ export type HistorySyncController = {
   wait(): Promise<void>;
 };
 
-type TelegramClient = {
-  invoke(request: Record<string, unknown>): Promise<unknown>;
-};
-
 const HISTORY_SYNC_RETRY_DELAY_MS = 5000;
 
 export function createHistorySyncController(
   database: AppDatabase,
-  client: TelegramClient,
+  client: TelegramHistoryClient,
   options: BackfillOptions,
   eventBus: EventBus,
   isShuttingDown: () => boolean
@@ -56,7 +53,7 @@ export function createHistorySyncController(
         eventBus.publish(
           createIntegrationEvent({
             data: { reason: currentReason },
-            source: 'telegram.history-sync',
+            source: 'history-sync',
             type: 'history.sync.accepted'
           })
         );
@@ -69,7 +66,7 @@ export function createHistorySyncController(
           console.error(
             JSON.stringify({
               error: message,
-              event: 'telegram.history_sync_failed'
+              event: 'history_sync.failed_pass'
             })
           );
           eventBus.publish(
@@ -78,7 +75,7 @@ export function createHistorySyncController(
                 error: message,
                 reason: currentReason
               },
-              source: 'telegram.history-sync',
+              source: 'history-sync',
               type: 'history.sync.failed'
             })
           );
@@ -124,7 +121,7 @@ export function createHistorySyncController(
 
 async function runHistorySyncPass(
   database: AppDatabase,
-  client: TelegramClient,
+  client: TelegramHistoryClient,
   options: BackfillOptions,
   eventBus: EventBus,
   passOptions: {

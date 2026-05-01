@@ -12,7 +12,6 @@
   "dependencies": {
     "@agentg/database": "file:../database",
     "@agentg/shared": "file:../shared",
-    "@agentg/telegram": "file:../telegram",
     "dotenv": "17.4.2",
     "drizzle-orm": "^0.45.2",
     "nats": "^2.29.3",

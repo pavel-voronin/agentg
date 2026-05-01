@@ -1,12 +1,12 @@
 {
-  "name": "@agentg/telegram",
+  "name": "@agentg/history-sync",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "exports": {
-    "./config": "./src/config.ts",
-    "./ingestion": "./src/ingestion.ts",
-    "./normalize": "./src/normalize.ts"
+    "./commands": "./src/commands.ts",
+    "./observability": "./src/observability.ts",
+    "./types": "./src/types.ts"
   },
   "scripts": {
     "dev": "tsx watch --clear-screen=false src/main.ts",
@@ -22,9 +22,7 @@
     "dotenv": "17.4.2",
     "drizzle-orm": "^0.45.2",
     "nats": "^2.29.3",
-    "pg": "8.20.0",
-    "prebuilt-tdlib": "0.1008063.0",
-    "tdl": "8.1.0"
+    "pg": "8.20.0"
   },
   "devDependencies": {
     "@types/node": "24.10.0",

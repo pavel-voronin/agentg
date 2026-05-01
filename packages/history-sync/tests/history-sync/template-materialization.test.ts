@@ -4,9 +4,9 @@ import {
   editHistoryTargetDirectly,
   materializeTemplatesForChat,
   updateLinkedTargetsForTemplate
-} from '../../src/history-sync/materialization.js';
-import { expressionBoundary, historyRange } from '../../src/history-sync/ranges.js';
-import type { HistoryRange, HistoryTarget, HistoryTemplate } from '../../src/history-sync/types.js';
+} from '../../src/materialization.js';
+import { expressionBoundary, historyRange } from '../../src/ranges.js';
+import type { HistoryRange, HistoryTarget, HistoryTemplate } from '../../src/types.js';
 
 describe('history template materialization', () => {
   it('creates a linked target when a discovered chat matches a template', () => {
