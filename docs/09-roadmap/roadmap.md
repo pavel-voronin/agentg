@@ -15,10 +15,12 @@
 
 ## After Phase 1
 
-The next architecture migration is tracked separately because it changes internal
-domain boundaries rather than product scope.
+The current architecture migration is tracked separately because it changes
+internal domain boundaries rather than product scope.
 
-- [Internal Domain RPC Migration](internal-domain-rpc-migration.md)
+- [Internal Domain tRPC Migration](internal-domain-trpc-migration.md)
+- [Internal Domain RPC Migration](internal-domain-rpc-migration.md) is historical
+  gRPC/Protobuf context superseded by the tRPC migration plan.
 
 Do not advance between migration stages without re-planning the stage and meeting
 its Definition of Done.
