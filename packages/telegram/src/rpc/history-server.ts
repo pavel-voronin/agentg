@@ -1,0 +1,51 @@
+import type { Server } from 'node:http';
+
+import type { AppDatabase } from '@agentg/database/client';
+import { createHTTPServer } from '@trpc/server/adapters/standalone';
+
+import { createTelegramHistoryRouter } from './history-router.js';
+import { formatInternalTrpcBindAddress, type InternalTrpcBindConfig } from './config.js';
+import { createTelegramRpcContext } from './trpc.js';
+
+type TelegramClient = {
+  invoke(request: Record<string, unknown>): Promise<unknown>;
+};
+
+export async function startTelegramHistoryTrpcServer(options: {
+  bind: InternalTrpcBindConfig;
+  client: TelegramClient;
+  database: AppDatabase;
+}): Promise<Server> {
+  const server = createHTTPServer({
+    createContext: createTelegramRpcContext,
+    router: createTelegramHistoryRouter({
+      client: options.client,
+      database: options.database
+    })
+  });
+  const address = formatInternalTrpcBindAddress(options.bind);
+
+  await listen(server, options.bind.host, options.bind.port);
+
+  console.log(JSON.stringify({ address, event: 'telegram.history_trpc.ready' }));
+  return server;
+}
+
+export function stopTelegramHistoryTrpcServer(server: Server): Promise<void> {
+  return new Promise((resolve, reject) => {
+    server.close((error) => {
+      if (error !== undefined) {
+        reject(error);
+        return;
+      }
+
+      resolve();
+    });
+  });
+}
+
+function listen(server: Server, host: string, port: number): Promise<void> {
+  return new Promise((resolve) => {
+    server.listen(port, host, resolve);
+  });
+}

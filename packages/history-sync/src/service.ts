@@ -1,5 +1,5 @@
 import type { AppDatabase } from '@agentg/database/client';
-import type { InternalRpcBindConfig, InternalRpcClientConfig } from '@agentg/proto/rpc/config';
+import type { InternalRpcBindConfig } from '@agentg/proto/rpc/config';
 import type { EventBus, EventSubscription } from '@agentg/shared/events/bus';
 import { createIntegrationEvent } from '@agentg/shared/events/envelope';
 
@@ -10,8 +10,9 @@ import {
 } from './controller.js';
 import { createLiveCoverageObserver, type LiveCoverageObserver } from './live-coverage.js';
 import { startHistoryGrpcServer, stopHistoryGrpcServer } from './history-api.js';
+import type { InternalTrpcClientConfig } from './rpc/config.js';
 import { addHistoryCoverageBatch } from './store.js';
-import { createGrpcTelegramHistoryClient } from './telegram-client.js';
+import { createTrpcTelegramHistoryClient } from './telegram-client.js';
 
 export type HistorySyncServiceOptions = {
   backfill: BackfillOptions;
@@ -19,7 +20,7 @@ export type HistorySyncServiceOptions = {
   eventBus: EventBus;
   internalRpc: InternalRpcBindConfig;
   services: {
-    telegram: InternalRpcClientConfig;
+    telegram: InternalTrpcClientConfig;
   };
 };
 
@@ -31,7 +32,7 @@ export async function runHistorySyncService(options: HistorySyncServiceOptions):
   let shuttingDown = false;
   let historyRpcServer: Awaited<ReturnType<typeof startHistoryGrpcServer>> | undefined;
   let liveCoverageTick: ReturnType<typeof setInterval> | undefined;
-  const telegram = createGrpcTelegramHistoryClient(options.services.telegram);
+  const telegram = createTrpcTelegramHistoryClient(options.services.telegram);
   const controller = createHistorySyncController(
     options.database,
     telegram,

@@ -19,7 +19,6 @@
   },
   "dependencies": {
     "@agentg/database": "file:../database",
-    "@agentg/proto": "file:../proto",
     "@agentg/shared": "file:../shared",
     "@trpc/server": "^11.17.0",
     "dotenv": "17.4.2",

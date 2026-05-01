@@ -1,48 +1,48 @@
-import { Server } from '@grpc/grpc-js';
-import { describe, expect, it } from 'vitest';
+import type { Server } from 'node:http';
 
 import {
-  TelegramHistoryFetchPageKind,
-  TelegramHistoryServiceService,
-  type TelegramHistoryServiceServer
-} from '@agentg/proto/agentg/telegram/v1/history';
-import { createInsecureInternalRpcServerCredentials } from '@agentg/proto/rpc/grpc';
+  telegramHistoryChatSchema,
+  telegramHistoryFetchPageInputSchema,
+  telegramHistoryFetchPageResultSchema,
+  telegramHistoryListChatsInputSchema,
+  telegramRpcProcedure,
+  telegramRpcRouter
+} from '@agentg/telegram/rpc';
+import { createHTTPServer } from '@trpc/server/adapters/standalone';
+import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 
-import { createGrpcTelegramHistoryClient } from '../../src/telegram-client.js';
+import { createTrpcTelegramHistoryClient } from '../../src/telegram-client.js';
 
-describe('createGrpcTelegramHistoryClient', () => {
-  it('calls Telegram History through generated gRPC client code', async () => {
-    const server = new Server();
-    const service: TelegramHistoryServiceServer = {
-      fetchPage(call, callback) {
-        callback(null, {
-          anchorMessageDate: '',
+describe('createTrpcTelegramHistoryClient', () => {
+  it('calls Telegram History through the domain-owned tRPC router shape', async () => {
+    const router = telegramRpcRouter({
+      fetchPage: telegramRpcProcedure
+        .input(telegramHistoryFetchPageInputSchema)
+        .output(telegramHistoryFetchPageResultSchema)
+        .mutation(({ input }) => ({
           crossedStart: false,
           fetchedMessages: 2,
-          kind: TelegramHistoryFetchPageKind.TELEGRAM_HISTORY_FETCH_PAGE_KIND_PAGE,
-          nextCursorMessageId: '99',
-          oldestFetchedMessageDate: call.request.startAt,
+          kind: 'page',
+          nextCursorMessageId: 99,
+          oldestFetchedMessageDate: input.startAt,
           reachedBeginning: false,
           storedMessages: 1
-        });
-      },
-      listChats(call, callback) {
-        callback(null, {
-          chats: [
-            {
-              id: call.request.discover ? 'chat-discovered' : 'chat-known',
-              title: 'Saved Messages',
-              type: 'private'
-            }
-          ]
-        });
-      }
-    };
-
-    server.addService(TelegramHistoryServiceService, service);
-
-    const port = await bindEphemeral(server);
-    const client = createGrpcTelegramHistoryClient({
+        })),
+      listChats: telegramRpcProcedure
+        .input(telegramHistoryListChatsInputSchema)
+        .output(z.array(telegramHistoryChatSchema))
+        .query(({ input }) => [
+          {
+            id: input.discover === true ? 'chat-discovered' : 'chat-known',
+            title: 'Saved Messages',
+            type: 'private'
+          }
+        ])
+    });
+    const server = createHTTPServer({ router });
+    const port = await listenEphemeral(server);
+    const client = createTrpcTelegramHistoryClient({
       url: `http://127.0.0.1:${String(port)}`
     });
 
@@ -73,32 +73,32 @@ describe('createGrpcTelegramHistoryClient', () => {
       });
     } finally {
       client.close?.();
-      await shutdown(server);
+      await closeServer(server);
     }
   });
 });
 
-function bindEphemeral(server: Server): Promise<number> {
-  return new Promise((resolve, reject) => {
-    server.bindAsync('127.0.0.1:0', createInsecureInternalRpcServerCredentials(), (error, port) => {
-      if (error !== null) {
-        reject(error);
+function listenEphemeral(server: Server): Promise<number> {
+  return new Promise((resolve) => {
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address();
+      if (typeof address === 'object' && address !== null) {
+        resolve(address.port);
         return;
       }
 
-      resolve(port);
+      throw new Error('tRPC test server did not expose a TCP port');
     });
   });
 }
 
-function shutdown(server: Server): Promise<void> {
+function closeServer(server: Server): Promise<void> {
   return new Promise((resolve, reject) => {
-    server.tryShutdown((error) => {
+    server.close((error) => {
       if (error !== undefined) {
         reject(error);
         return;
       }
-
       resolve();
     });
   });

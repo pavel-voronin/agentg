@@ -1,10 +1,7 @@
-import {
-  readInternalRpcBindConfig,
-  readInternalRpcClientConfig,
-  type InternalRpcBindConfig,
-  type InternalRpcClientConfig
-} from '@agentg/proto/rpc/config';
+import { readInternalRpcBindConfig, type InternalRpcBindConfig } from '@agentg/proto/rpc/config';
 import { loadNearestDotenv } from '@agentg/shared/dotenv';
+
+import { readInternalTrpcClientConfig, type InternalTrpcClientConfig } from './rpc/config.js';
 
 loadNearestDotenv();
 
@@ -21,7 +18,7 @@ export type HistorySyncServiceConfig = {
   };
   internalRpc: InternalRpcBindConfig;
   services: {
-    telegram: InternalRpcClientConfig;
+    telegram: InternalTrpcClientConfig;
   };
 };
 
@@ -50,7 +47,7 @@ export function loadHistorySyncServiceConfig(
       defaultPort: 18082
     }),
     services: {
-      telegram: readInternalRpcClientConfig(env, {
+      telegram: readInternalTrpcClientConfig(env, {
         urlEnv: 'TELEGRAM_RPC_URL',
         defaultUrl: 'http://127.0.0.1:18081'
       })

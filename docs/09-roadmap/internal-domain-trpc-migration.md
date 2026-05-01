@@ -112,7 +112,7 @@ Purpose: make Telegram expose the history-fetch surface through a domain-owned
 tRPC API.
 
 Stage re-plan:
-required before implementation.
+[Internal Domain tRPC Stage 2 Plan](internal-domain-trpc-stage-2-plan.md).
 
 Scope:
 

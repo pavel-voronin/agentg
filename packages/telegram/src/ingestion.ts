@@ -1,10 +1,8 @@
 import type { AppDatabase } from '@agentg/database/client';
-import type { InternalRpcBindConfig } from '@agentg/proto/rpc/config';
 import type { EventBus } from '@agentg/shared/events/bus';
 import { createIntegrationEvent } from '@agentg/shared/events/envelope';
 import { createTelegramIntegrationEvents } from '@agentg/shared/events/telegram-events';
 
-import { startTelegramHistoryGrpcServer, stopTelegramHistoryGrpcServer } from './history-api.js';
 import {
   asTdObject,
   normalizeChat,
@@ -12,6 +10,11 @@ import {
   normalizeUser,
   type TdObject
 } from './normalize.js';
+import type { InternalTrpcBindConfig } from './rpc/config.js';
+import {
+  startTelegramHistoryTrpcServer,
+  stopTelegramHistoryTrpcServer
+} from './rpc/history-server.js';
 import { persistCurrentTelegramUser, persistTelegramUpdate, upsertChat } from './store.js';
 import {
   createTelegramClient,
@@ -22,7 +25,7 @@ import {
 export type TelegramIngestionOptions = {
   database: AppDatabase;
   eventBus: EventBus;
-  internalRpc: InternalRpcBindConfig;
+  internalRpc: InternalTrpcBindConfig;
   telegram: TelegramClientConfig;
 };
 
@@ -61,7 +64,7 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
   const client = await createTelegramClient(options.telegram);
   const persistenceStats = createPersistenceStats();
   const tdlibStatus = createTdlibStatusTracker(options.eventBus);
-  let telegramHistoryServer: Awaited<ReturnType<typeof startTelegramHistoryGrpcServer>> | undefined;
+  let telegramHistoryServer: Awaited<ReturnType<typeof startTelegramHistoryTrpcServer>> | undefined;
   let tdlibStatusHeartbeat: ReturnType<typeof setInterval> | undefined;
 
   client.on('error', (error: unknown) => {
@@ -80,7 +83,7 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
   tdlibStatusHeartbeat = startTdlibStatusHeartbeat(tdlibStatus);
   await syncInitialChats(options.database, client);
 
-  telegramHistoryServer = await startTelegramHistoryGrpcServer({
+  telegramHistoryServer = await startTelegramHistoryTrpcServer({
     bind: options.internalRpc,
     client,
     database: options.database
@@ -97,8 +100,8 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
     const historyRpcClosed =
       historyRpcServer === undefined
         ? true
-        : await runShutdownStep('telegram.history_rpc_close', () =>
-            stopTelegramHistoryGrpcServer(historyRpcServer)
+        : await runShutdownStep('telegram.history_trpc_close', () =>
+            stopTelegramHistoryTrpcServer(historyRpcServer)
           );
     if (historyRpcClosed) {
       telegramHistoryServer = undefined;

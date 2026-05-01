@@ -1,27 +1,63 @@
 import type { AppDatabase } from '@agentg/database/client';
 import { telegramChatFolders, telegramChats } from '@agentg/database/schema';
-import {
-  TelegramHistoryFetchPageKind,
-  TelegramHistoryFetchPageResponse,
-  TelegramHistoryListChatsResponse,
-  TelegramHistoryServiceService,
-  type TelegramHistoryChat,
-  type TelegramHistoryFetchPageRequest,
-  type TelegramHistoryListChatsRequest,
-  type TelegramHistoryServiceServer
-} from '@agentg/proto/agentg/telegram/v1/history';
-import { formatInternalRpcBindAddress, type InternalRpcBindConfig } from '@agentg/proto/rpc/config';
-import { createInsecureInternalRpcServerCredentials } from '@agentg/proto/rpc/grpc';
-import { Server, status, type sendUnaryData, type ServiceError } from '@grpc/grpc-js';
 import { asc } from 'drizzle-orm';
+import { z } from 'zod';
 
 import {
   asTdObject,
   normalizeChat,
   normalizeHistoricalMessage,
   type TdObject
-} from './normalize.js';
-import { persistTelegramUpdate, upsertChat } from './store.js';
+} from '../normalize.js';
+import { persistTelegramUpdate, upsertChat } from '../store.js';
+import { telegramRpcProcedure, telegramRpcRouter } from './trpc.js';
+
+export const telegramHistoryChatSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  type: z.string()
+});
+
+export const telegramHistoryListChatsInputSchema = z.object({
+  discover: z.boolean().optional(),
+  loadBatchSize: z.number().int().positive().optional()
+});
+
+export const telegramHistoryFetchPageInputSchema = z.object({
+  chatId: z.string().min(1),
+  cursorMessageId: z.number().int().optional(),
+  endAt: z.string().min(1),
+  limit: z.number().int().positive(),
+  startAt: z.string().min(1)
+});
+
+export const telegramHistoryFetchPageResultSchema = z.discriminatedUnion('kind', [
+  z.object({
+    fetchedMessages: z.literal(0),
+    kind: z.literal('no_messages_before_end'),
+    storedMessages: z.literal(0)
+  }),
+  z.object({
+    anchorMessageDate: z.string(),
+    fetchedMessages: z.literal(0),
+    kind: z.literal('anchor_before_start'),
+    storedMessages: z.literal(0)
+  }),
+  z.object({
+    crossedStart: z.boolean(),
+    fetchedMessages: z.number().int().nonnegative(),
+    kind: z.literal('page'),
+    nextCursorMessageId: z.number().int().optional(),
+    oldestFetchedMessageDate: z.string().optional(),
+    reachedBeginning: z.boolean(),
+    storedMessages: z.number().int().nonnegative()
+  })
+]);
+
+export type TelegramHistoryChat = z.infer<typeof telegramHistoryChatSchema>;
+export type TelegramHistoryListChatsRequest = z.infer<typeof telegramHistoryListChatsInputSchema>;
+export type TelegramHistoryFetchPageRequest = z.infer<typeof telegramHistoryFetchPageInputSchema>;
+export type TelegramHistoryFetchPageResult = z.infer<typeof telegramHistoryFetchPageResultSchema>;
 
 type TelegramClient = {
   invoke(request: Record<string, unknown>): Promise<unknown>;
@@ -36,83 +72,41 @@ type ChatListKind =
       kind: 'folder';
     };
 
-export async function startTelegramHistoryGrpcServer(options: {
-  bind: InternalRpcBindConfig;
+export type TelegramHistoryRouterRuntime = {
   client: TelegramClient;
   database: AppDatabase;
-}): Promise<Server> {
-  const server = new Server();
-  const address = formatInternalRpcBindAddress(options.bind);
+};
 
-  server.addService(TelegramHistoryServiceService, createTelegramHistoryService(options));
-
-  await new Promise<void>((resolve, reject) => {
-    server.bindAsync(address, createInsecureInternalRpcServerCredentials(), (error) => {
-      if (error !== null) {
-        reject(error);
-        return;
-      }
-
-      resolve();
-    });
-  });
-
-  console.log(JSON.stringify({ address, event: 'telegram.history_rpc.ready' }));
-  return server;
-}
-
-export function stopTelegramHistoryGrpcServer(server: Server): Promise<void> {
-  return new Promise((resolve, reject) => {
-    server.tryShutdown((error) => {
-      if (error !== undefined) {
-        reject(error);
-        return;
-      }
-
-      resolve();
-    });
+export function createTelegramHistoryRouter(runtime: TelegramHistoryRouterRuntime) {
+  return telegramRpcRouter({
+    fetchPage: telegramRpcProcedure
+      .input(telegramHistoryFetchPageInputSchema)
+      .output(telegramHistoryFetchPageResultSchema)
+      .mutation(({ input }) => handleFetchPage(runtime, input)),
+    listChats: telegramRpcProcedure
+      .input(telegramHistoryListChatsInputSchema)
+      .output(z.array(telegramHistoryChatSchema))
+      .query(({ input }) => handleListChats(runtime, input))
   });
 }
 
-export function createTelegramHistoryService(options: {
-  client: TelegramClient;
-  database: AppDatabase;
-}): TelegramHistoryServiceServer {
-  return {
-    listChats(call, callback) {
-      completeUnary(handleListChats(options, call.request), callback);
-    },
-    fetchPage(call, callback) {
-      completeUnary(handleFetchPage(options, call.request), callback);
-    }
-  };
-}
+export type TelegramHistoryRouter = ReturnType<typeof createTelegramHistoryRouter>;
 
 async function handleListChats(
-  options: {
-    client: TelegramClient;
-    database: AppDatabase;
-  },
+  runtime: TelegramHistoryRouterRuntime,
   input: TelegramHistoryListChatsRequest
-): Promise<TelegramHistoryListChatsResponse> {
+): Promise<TelegramHistoryChat[]> {
   const { discover } = input;
   const loadBatchSize = parseLimit(input.loadBatchSize, 100, 1000);
-  const chats = discover
-    ? await discoverHistoryChats(options.database, options.client, loadBatchSize)
-    : await listKnownHistoryChats(options.database);
-
-  return TelegramHistoryListChatsResponse.create({
-    chats
-  });
+  return discover === true
+    ? discoverHistoryChats(runtime.database, runtime.client, loadBatchSize)
+    : listKnownHistoryChats(runtime.database);
 }
 
 async function handleFetchPage(
-  options: {
-    client: TelegramClient;
-    database: AppDatabase;
-  },
+  runtime: TelegramHistoryRouterRuntime,
   input: TelegramHistoryFetchPageRequest
-): Promise<TelegramHistoryFetchPageResponse> {
+): Promise<TelegramHistoryFetchPageResult> {
   const chatId = parseTelegramChatId(input.chatId);
   const startAt = requireDate(input.startAt, 'telegram.history.fetch_page requires startAt');
   const endAt = requireDate(input.endAt, 'telegram.history.fetch_page requires endAt');
@@ -120,32 +114,32 @@ async function handleFetchPage(
   let cursorMessageId = optionalTelegramMessageId(input.cursorMessageId);
 
   if (cursorMessageId === undefined) {
-    const anchor = await getLastMessageNoLaterThan(options.client, chatId, endAt);
+    const anchor = await getLastMessageNoLaterThan(runtime.client, chatId, endAt);
     const anchorDate = tdMessageDate(anchor);
     const anchorMessageId = tdMessageId(anchor);
 
     if (anchor === undefined || anchorMessageId === undefined) {
-      return TelegramHistoryFetchPageResponse.create({
+      return {
         fetchedMessages: 0,
-        kind: TelegramHistoryFetchPageKind.TELEGRAM_HISTORY_FETCH_PAGE_KIND_NO_MESSAGES_BEFORE_END,
+        kind: 'no_messages_before_end',
         storedMessages: 0
-      });
+      };
     }
 
     if (anchorDate !== undefined && anchorDate < startAt) {
-      return TelegramHistoryFetchPageResponse.create({
+      return {
         anchorMessageDate: anchorDate.toISOString(),
         fetchedMessages: 0,
-        kind: TelegramHistoryFetchPageKind.TELEGRAM_HISTORY_FETCH_PAGE_KIND_ANCHOR_BEFORE_START,
+        kind: 'anchor_before_start',
         storedMessages: 0
-      });
+      };
     }
 
     cursorMessageId = anchorMessageId;
   }
 
   const history = asTdObject(
-    await invokeTdlib(options.client, {
+    await invokeTdlib(runtime.client, {
       _: 'getChatHistory',
       chat_id: chatId,
       from_message_id: cursorMessageId,
@@ -158,11 +152,11 @@ async function handleFetchPage(
   const concreteMessages = messages.filter(isTdObject);
 
   if (concreteMessages.length === 0) {
-    return TelegramHistoryFetchPageResponse.create({
+    return {
       fetchedMessages: 0,
-      kind: TelegramHistoryFetchPageKind.TELEGRAM_HISTORY_FETCH_PAGE_KIND_NO_MESSAGES_BEFORE_END,
+      kind: 'no_messages_before_end',
       storedMessages: 0
-    });
+    };
   }
 
   let storedMessages = 0;
@@ -177,7 +171,7 @@ async function handleFetchPage(
       continue;
     }
 
-    const result = await persistTelegramUpdate(options.database, normalized);
+    const result = await persistTelegramUpdate(runtime.database, normalized);
     if (result.message) {
       storedMessages += 1;
     }
@@ -189,16 +183,17 @@ async function handleFetchPage(
       ? undefined
       : messageDateForId(concreteMessages, nextCursorMessageId);
 
-  return TelegramHistoryFetchPageResponse.create({
+  return {
     crossedStart: concreteMessages.some((message) => isBeforeInterval(message, startAt)),
     fetchedMessages: concreteMessages.length,
-    kind: TelegramHistoryFetchPageKind.TELEGRAM_HISTORY_FETCH_PAGE_KIND_PAGE,
-    nextCursorMessageId: nextCursorMessageId === undefined ? '' : String(nextCursorMessageId),
-    oldestFetchedMessageDate:
-      oldestFetchedMessageDate === undefined ? '' : oldestFetchedMessageDate.toISOString(),
+    kind: 'page',
+    ...(nextCursorMessageId === undefined ? {} : { nextCursorMessageId }),
+    ...(oldestFetchedMessageDate === undefined
+      ? {}
+      : { oldestFetchedMessageDate: oldestFetchedMessageDate.toISOString() }),
     reachedBeginning: nextCursorMessageId === undefined,
     storedMessages
-  });
+  };
 }
 
 async function discoverHistoryChats(
@@ -396,24 +391,6 @@ async function invokeTdlib(client: TelegramClient, request: TdObject): Promise<u
   }
 }
 
-function completeUnary<Response>(
-  promise: Promise<Response>,
-  callback: sendUnaryData<Response>
-): void {
-  void promise.then(
-    (response) => callback(null, response),
-    (error: unknown) => callback(toServiceError(error), null)
-  );
-}
-
-function toServiceError(error: unknown): ServiceError {
-  const message = error instanceof Error ? error.message : String(error);
-  const serviceError = new Error(message) as ServiceError;
-  serviceError.code = status.INTERNAL;
-  serviceError.details = message;
-  return serviceError;
-}
-
 function parseTelegramChatId(value: string): number {
   const text = requireString(value, 'telegram.history.fetch_page requires chatId');
   const parsed = Number(text);
@@ -423,16 +400,15 @@ function parseTelegramChatId(value: string): number {
   return parsed;
 }
 
-function optionalTelegramMessageId(value: string): number | undefined {
-  if (value.trim().length === 0) {
+function optionalTelegramMessageId(value: number | undefined): number | undefined {
+  if (value === undefined) {
     return undefined;
   }
 
-  const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed)) {
-    throw new Error(`Telegram message id must be numeric: ${value}`);
+  if (!Number.isSafeInteger(value)) {
+    throw new Error(`Telegram message id must be numeric: ${String(value)}`);
   }
-  return parsed;
+  return value;
 }
 
 function requireDate(value: unknown, message: string): Date {
