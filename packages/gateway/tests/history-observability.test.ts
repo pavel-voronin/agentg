@@ -1,92 +1,143 @@
-import { Server } from '@grpc/grpc-js';
-import { describe, expect, it } from 'vitest';
+import type { Server } from 'node:http';
 
 import {
-  HistoryChatListKind,
-  HistoryServiceService,
-  type HistoryServiceServer
-} from '@agentg/proto/agentg/history/v1/history';
-import { createInsecureInternalRpcServerCredentials } from '@agentg/proto/rpc/grpc';
+  historyChatHistoryStateOutputSchema,
+  historyDeleteTargetInputSchema,
+  historyGetChatHistoryStateInputSchema,
+  historyGetOverviewInputSchema,
+  historyListChatsInputSchema,
+  historyListChatsOutputSchema,
+  historyListJobsInputSchema,
+  historyListJobsOutputSchema,
+  historyOverviewOutputSchema,
+  historyRequestSyncInputSchema,
+  historyRequestSyncOutputSchema,
+  historyRpcProcedure,
+  historyRpcRouter,
+  historyTargetMutationOutputSchema,
+  historyUpsertTargetInputSchema
+} from '@agentg/history-sync/rpc';
+import { createHTTPServer } from '@trpc/server/adapters/standalone';
+import { describe, expect, it } from 'vitest';
 
-import { createGrpcGatewayHistoryClient } from '../src/history-observability.js';
+import { createTrpcGatewayHistoryClient } from '../src/history-observability.js';
 
-describe('createGrpcGatewayHistoryClient', () => {
-  it('calls explicit History gRPC methods for Gateway history RPC names', async () => {
-    const server = new Server();
-    const service: HistoryServiceServer = {
-      deleteTarget(_call, callback) {
-        callback(null, { deleted: true, target: undefined, upserted: false });
-      },
-      getChatHistoryState(call, callback) {
-        callback(null, {
-          chat: {
-            historyBeginningReached: false,
-            historyStartAt: '',
-            id: call.request.chatId,
-            isBot: false,
-            messageCount: 3,
-            title: 'Saved Messages',
-            type: 'private',
-            updatedAt: '2026-04-30T00:00:00.000Z'
-          },
-          coverage: [],
-          desired: [],
-          jobs: [],
-          missing: [],
-          targets: []
-        });
-      },
-      getOverview(_call, callback) {
-        callback(null, {
-          activeJob: undefined,
-          chats: 10,
-          coverageIntervals: 30,
-          pendingJobs: 1,
-          runningJobs: 0,
-          targets: 2,
-          templates: 3
-        });
-      },
-      listChats(call, callback) {
-        callback(null, {
-          chats: [
-            {
-              coverageIntervals: 1,
-              coverageNewestAt: '',
-              coverageOldestAt: '',
-              id: call.request.query,
-              isBot: false,
-              pendingJobs: 0,
+describe('createTrpcGatewayHistoryClient', () => {
+  it('calls explicit History tRPC procedures for Gateway history RPC names', async () => {
+    const calls: { method: string; params: unknown }[] = [];
+    const server = createHTTPServer({
+      router: historyRpcRouter({
+        deleteTarget: historyRpcProcedure
+          .input(historyDeleteTargetInputSchema)
+          .output(historyTargetMutationOutputSchema)
+          .mutation(({ input }) => {
+            calls.push({ method: 'deleteTarget', params: input });
+            return { deleted: true, target: undefined, upserted: false };
+          }),
+        getChatHistoryState: historyRpcProcedure
+          .input(historyGetChatHistoryStateInputSchema)
+          .output(historyChatHistoryStateOutputSchema)
+          .query(({ input }) => {
+            calls.push({ method: 'getChatHistoryState', params: input });
+            return {
+              chat: {
+                historyBeginningReached: false,
+                historyStartAt: null,
+                id: input.chatId,
+                isBot: false,
+                messageCount: 3,
+                title: 'Saved Messages',
+                type: 'private',
+                updatedAt: '2026-04-30T00:00:00.000Z'
+              },
+              coverage: [],
+              desired: [],
+              jobs: [],
+              missing: [],
+              targets: []
+            };
+          }),
+        getOverview: historyRpcProcedure
+          .input(historyGetOverviewInputSchema)
+          .output(historyOverviewOutputSchema)
+          .query(() => {
+            calls.push({ method: 'getOverview', params: undefined });
+            return {
+              activeJob: null,
+              chats: 10,
+              coverageIntervals: 30,
+              pendingJobs: 1,
               runningJobs: 0,
-              targets: 1,
-              title: 'Alice',
-              type: 'private',
-              updatedAt: '2026-04-30T00:00:00.000Z'
-            }
-          ],
-          navigation: {
-            archiveCount: 0,
-            folders: [],
-            mainCount: call.request.list === HistoryChatListKind.HISTORY_CHAT_LIST_KIND_MAIN ? 1 : 0
-          },
-          types: [{ count: 1, type: 'private' }]
-        });
-      },
-      listJobs(_call, callback) {
-        callback(null, { jobs: [] });
-      },
-      requestSync(_call, callback) {
-        callback(null, { requested: true });
-      },
-      upsertTarget(_call, callback) {
-        callback(null, { deleted: false, target: undefined, upserted: true });
-      }
-    };
+              targets: 2,
+              templates: 3
+            };
+          }),
+        listChats: historyRpcProcedure
+          .input(historyListChatsInputSchema)
+          .output(historyListChatsOutputSchema)
+          .query(({ input }) => {
+            calls.push({ method: 'listChats', params: input });
+            return {
+              chats: [
+                {
+                  coverageIntervals: 1,
+                  coverageNewestAt: null,
+                  coverageOldestAt: null,
+                  id: input.query ?? 'chat-a',
+                  isBot: false,
+                  pendingJobs: 0,
+                  runningJobs: 0,
+                  targets: 1,
+                  title: 'Alice',
+                  type: 'private',
+                  updatedAt: '2026-04-30T00:00:00.000Z'
+                }
+              ],
+              navigation: {
+                archiveCount: 0,
+                folders: [],
+                mainCount: input.list === 'main' ? 1 : 0
+              },
+              types: [{ count: 1, type: 'private' }]
+            };
+          }),
+        listJobs: historyRpcProcedure
+          .input(historyListJobsInputSchema)
+          .output(historyListJobsOutputSchema)
+          .query(({ input }) => {
+            calls.push({ method: 'listJobs', params: input });
+            return { jobs: [] };
+          }),
+        requestSync: historyRpcProcedure
+          .input(historyRequestSyncInputSchema)
+          .output(historyRequestSyncOutputSchema)
+          .mutation(({ input }) => {
+            calls.push({ method: 'requestSync', params: input });
+            return { requested: true };
+          }),
+        upsertTarget: historyRpcProcedure
+          .input(historyUpsertTargetInputSchema)
+          .output(historyTargetMutationOutputSchema)
+          .mutation(({ input }) => {
+            calls.push({ method: 'upsertTarget', params: input });
+            return {
+              deleted: false,
+              target: {
+                chatId: input.chatId,
+                id: 'target-a',
+                range: {
+                  end: { expression: 'now', kind: 'expression' },
+                  start: { expression: 'now-7d', kind: 'expression' }
+                }
+              },
+              upserted: true
+            };
+          })
+      })
+    });
 
-    server.addService(HistoryServiceService, service);
-
-    const port = await bindEphemeral(server);
-    const client = createGrpcGatewayHistoryClient({
+    const port = await listen(server);
+    const client = createTrpcGatewayHistoryClient({
       url: `http://127.0.0.1:${String(port)}`
     });
 
@@ -128,29 +179,52 @@ describe('createGrpcGatewayHistoryClient', () => {
           title: 'Saved Messages'
         }
       });
+
+      await expect(
+        client.call('history.upsertTarget', {
+          chatId: 'chat-a',
+          preset: 'last7d'
+        })
+      ).resolves.toMatchObject({
+        target: {
+          chatId: 'chat-a',
+          id: 'target-a'
+        },
+        upserted: true
+      });
+
+      expect(calls).toEqual(
+        expect.arrayContaining([
+          { method: 'getOverview', params: undefined },
+          { method: 'listChats', params: { list: 'main', query: 'chat-a' } },
+          { method: 'getChatHistoryState', params: { chatId: 'chat-a' } },
+          { method: 'upsertTarget', params: { chatId: 'chat-a', preset: 'last7d' } }
+        ])
+      );
     } finally {
       client.close();
-      await shutdown(server);
+      await close(server);
     }
   });
 });
 
-function bindEphemeral(server: Server): Promise<number> {
-  return new Promise((resolve, reject) => {
-    server.bindAsync('127.0.0.1:0', createInsecureInternalRpcServerCredentials(), (error, port) => {
-      if (error !== null) {
-        reject(error);
+function listen(server: Server): Promise<number> {
+  return new Promise((resolve) => {
+    server.listen(0, '127.0.0.1', () => {
+      const address = server.address();
+      if (typeof address === 'object' && address !== null) {
+        resolve(address.port);
         return;
       }
 
-      resolve(port);
+      throw new Error('Expected TCP server address');
     });
   });
 }
 
-function shutdown(server: Server): Promise<void> {
+function close(server: Server): Promise<void> {
   return new Promise((resolve, reject) => {
-    server.tryShutdown((error) => {
+    server.close((error) => {
       if (error !== undefined) {
         reject(error);
         return;

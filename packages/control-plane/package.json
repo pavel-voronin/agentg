@@ -16,7 +16,7 @@
     "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {
-    "@agentg/proto": "file:../proto",
+    "@agentg/history-sync": "file:../history-sync",
     "@agentg/shared": "file:../shared",
     "@trpc/client": "^11.17.0",
     "dotenv": "17.4.2",

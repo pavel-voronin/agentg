@@ -3,10 +3,10 @@ import { readFile } from 'node:fs/promises';
 import { extname, resolve, sep } from 'node:path';
 
 import {
-  createGrpcHistoryJsonRpcClient,
+  createTrpcHistoryJsonRpcClient,
   type HistoryJsonRpcClient
-} from '@agentg/proto/agentg/history/v1/json-rpc-client';
-import type { InternalRpcClientConfig } from '@agentg/proto/rpc/config';
+} from '@agentg/history-sync/rpc';
+import type { InternalTrpcClientConfig } from '@agentg/history-sync/rpc';
 import type { EventBus } from '@agentg/shared/events/bus';
 import type { IntegrationEvent } from '@agentg/shared/events/envelope';
 import { WebSocket, WebSocketServer, type RawData } from 'ws';
@@ -22,7 +22,7 @@ export type ControlPlaneServerOptions = {
   eventBus: EventBus;
   historyClient?: HistoryJsonRpcClient;
   services: {
-    history: InternalRpcClientConfig;
+    history: InternalTrpcClientConfig;
   };
 };
 
@@ -58,7 +58,7 @@ export async function startControlPlaneServer(
 ): Promise<ControlPlaneServerHandle> {
   const historyClient =
     options.historyClient ??
-    createGrpcHistoryJsonRpcClient(options.services.history, {
+    createTrpcHistoryJsonRpcClient(options.services.history, {
       timeoutMs: CONTROL_PLANE_HISTORY_REQUEST_TIMEOUT_MS
     });
   const runtime: ControlPlaneRuntime = {

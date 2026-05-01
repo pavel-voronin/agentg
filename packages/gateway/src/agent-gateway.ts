@@ -2,14 +2,14 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 
 import type { AppDatabase } from '@agentg/database/client';
 import { telegramChats, telegramMessages } from '@agentg/database/schema';
-import type { InternalRpcClientConfig } from '@agentg/proto/rpc/config';
+import type { InternalTrpcClientConfig } from '@agentg/history-sync/rpc';
 import type { EventBus, EventSubscription } from '@agentg/shared/events/bus';
 import type { IntegrationEvent } from '@agentg/shared/events/envelope';
 import { and, desc, eq, ilike, sql } from 'drizzle-orm';
 import { WebSocket, WebSocketServer, type RawData } from 'ws';
 
 import {
-  createGrpcGatewayHistoryClient,
+  createTrpcGatewayHistoryClient,
   type GatewayHistoryClient
 } from './history-observability.js';
 
@@ -24,7 +24,7 @@ export type AgentGatewayOptions = {
   database: AppDatabase;
   eventBus: EventBus;
   services: {
-    history: InternalRpcClientConfig;
+    history: InternalTrpcClientConfig;
   };
 };
 
@@ -48,7 +48,7 @@ type RpcResponse = {
 };
 
 export async function runAgentGateway(options: AgentGatewayOptions): Promise<void> {
-  const historyClient = createGrpcGatewayHistoryClient(options.services.history);
+  const historyClient = createTrpcGatewayHistoryClient(options.services.history);
   const runtime: AgentGatewayRuntime = {
     ...options,
     historyClient

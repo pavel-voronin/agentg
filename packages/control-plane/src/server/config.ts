@@ -1,9 +1,9 @@
 import 'dotenv/config';
 
 import {
-  readInternalRpcClientConfig,
-  type InternalRpcClientConfig
-} from '@agentg/proto/rpc/config';
+  readInternalTrpcClientConfig,
+  type InternalTrpcClientConfig
+} from '@agentg/history-sync/rpc';
 import { resolve } from 'node:path';
 
 export type ControlPlaneConfig = {
@@ -16,7 +16,7 @@ export type ControlPlaneConfig = {
     url: string;
   };
   services: {
-    history: InternalRpcClientConfig;
+    history: InternalTrpcClientConfig;
   };
 };
 
@@ -33,7 +33,7 @@ export function loadControlPlaneConfig(env: NodeJS.ProcessEnv = process.env): Co
       url: env.NATS_URL ?? 'nats://localhost:4222'
     },
     services: {
-      history: readInternalRpcClientConfig(env, {
+      history: readInternalTrpcClientConfig(env, {
         defaultUrl: 'http://127.0.0.1:18082',
         urlEnv: 'HISTORY_RPC_URL'
       })

@@ -151,7 +151,7 @@ Purpose: make History Sync expose its command and read surface through a
 domain-owned tRPC API.
 
 Stage re-plan:
-required before implementation.
+[Internal Domain tRPC Stage 3 Plan](internal-domain-trpc-stage-3-plan.md).
 
 Scope:
 

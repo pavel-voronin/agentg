@@ -1,7 +1,11 @@
-import { readInternalRpcBindConfig, type InternalRpcBindConfig } from '@agentg/proto/rpc/config';
 import { loadNearestDotenv } from '@agentg/shared/dotenv';
 
-import { readInternalTrpcClientConfig, type InternalTrpcClientConfig } from './rpc/config.js';
+import {
+  readInternalTrpcBindConfig,
+  readInternalTrpcClientConfig,
+  type InternalTrpcBindConfig,
+  type InternalTrpcClientConfig
+} from './rpc/config.js';
 
 loadNearestDotenv();
 
@@ -16,7 +20,7 @@ export type HistorySyncServiceConfig = {
   nats: {
     url: string;
   };
-  internalRpc: InternalRpcBindConfig;
+  internalRpc: InternalTrpcBindConfig;
   services: {
     telegram: InternalTrpcClientConfig;
   };
@@ -40,7 +44,7 @@ export function loadHistorySyncServiceConfig(
     nats: {
       url: env.NATS_URL ?? 'nats://localhost:4222'
     },
-    internalRpc: readInternalRpcBindConfig(env, {
+    internalRpc: readInternalTrpcBindConfig(env, {
       hostEnv: 'HISTORY_RPC_HOST',
       portEnv: 'HISTORY_RPC_PORT',
       defaultHost: '127.0.0.1',

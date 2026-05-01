@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { startControlPlaneServer } from '../src/server/control-plane-server.js';
 
 describe('Control Plane server boundary', () => {
-  it('routes browser history RPC to History gRPC adapter and forwards events', async () => {
+  it('routes browser history RPC to the History client and forwards events', async () => {
     const eventBus = createFakeEventBus();
     const historyClient = {
       call: vi.fn((method: string, params: unknown): Promise<unknown> => {

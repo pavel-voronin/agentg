@@ -1,5 +1,4 @@
 import type { AppDatabase } from '@agentg/database/client';
-import type { InternalRpcBindConfig } from '@agentg/proto/rpc/config';
 import type { EventBus, EventSubscription } from '@agentg/shared/events/bus';
 import { createIntegrationEvent } from '@agentg/shared/events/envelope';
 
@@ -9,8 +8,8 @@ import {
   type HistorySyncController
 } from './controller.js';
 import { createLiveCoverageObserver, type LiveCoverageObserver } from './live-coverage.js';
-import { startHistoryGrpcServer, stopHistoryGrpcServer } from './history-api.js';
-import type { InternalTrpcClientConfig } from './rpc/config.js';
+import type { InternalTrpcBindConfig, InternalTrpcClientConfig } from './rpc/config.js';
+import { startHistoryTrpcServer, stopHistoryTrpcServer } from './rpc/history-server.js';
 import { addHistoryCoverageBatch } from './store.js';
 import { createTrpcTelegramHistoryClient } from './telegram-client.js';
 
@@ -18,7 +17,7 @@ export type HistorySyncServiceOptions = {
   backfill: BackfillOptions;
   database: AppDatabase;
   eventBus: EventBus;
-  internalRpc: InternalRpcBindConfig;
+  internalRpc: InternalTrpcBindConfig;
   services: {
     telegram: InternalTrpcClientConfig;
   };
@@ -30,7 +29,7 @@ const HISTORY_SYNC_SHUTDOWN_STEP_TIMEOUT_MS = 2000;
 
 export async function runHistorySyncService(options: HistorySyncServiceOptions): Promise<void> {
   let shuttingDown = false;
-  let historyRpcServer: Awaited<ReturnType<typeof startHistoryGrpcServer>> | undefined;
+  let historyRpcServer: Awaited<ReturnType<typeof startHistoryTrpcServer>> | undefined;
   let liveCoverageTick: ReturnType<typeof setInterval> | undefined;
   const telegram = createTrpcTelegramHistoryClient(options.services.telegram);
   const controller = createHistorySyncController(
@@ -68,7 +67,7 @@ export async function runHistorySyncService(options: HistorySyncServiceOptions):
   liveCoverageTick = setInterval(() => {
     void liveCoverageObserver.tick();
   }, HISTORY_SYNC_STATUS_TICK_MS);
-  historyRpcServer = await startHistoryGrpcServer({
+  historyRpcServer = await startHistoryTrpcServer({
     bind: options.internalRpc,
     database: options.database,
     eventBus: options.eventBus,
@@ -94,7 +93,7 @@ export async function runHistorySyncService(options: HistorySyncServiceOptions):
       activeHistoryRpcServer === undefined
         ? true
         : await runShutdownStep('history_sync.rpc_close', () =>
-            stopHistoryGrpcServer(activeHistoryRpcServer)
+            stopHistoryTrpcServer(activeHistoryRpcServer)
           );
     if (historyRpcStopped) {
       historyRpcServer = undefined;

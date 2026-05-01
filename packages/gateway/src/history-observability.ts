@@ -1,17 +1,17 @@
 import {
-  createGrpcHistoryJsonRpcClient,
+  createTrpcHistoryJsonRpcClient,
   type HistoryJsonRpcClient
-} from '@agentg/proto/agentg/history/v1/json-rpc-client';
-import type { InternalRpcClientConfig } from '@agentg/proto/rpc/config';
+} from '@agentg/history-sync/rpc';
+import type { InternalTrpcClientConfig } from '@agentg/history-sync/rpc';
 
 export type GatewayHistoryClient = HistoryJsonRpcClient;
 
 const HISTORY_REQUEST_TIMEOUT_MS = 15000;
 
-export function createGrpcGatewayHistoryClient(
-  config: InternalRpcClientConfig
+export function createTrpcGatewayHistoryClient(
+  config: InternalTrpcClientConfig
 ): GatewayHistoryClient {
-  return createGrpcHistoryJsonRpcClient(config, {
+  return createTrpcHistoryJsonRpcClient(config, {
     timeoutMs: HISTORY_REQUEST_TIMEOUT_MS
   });
 }
