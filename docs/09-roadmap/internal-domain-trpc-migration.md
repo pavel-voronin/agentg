@@ -235,7 +235,7 @@ Purpose: confirm that removing gRPC did not weaken domain ownership or reintrodu
 request/reply behavior through NATS or shared packages.
 
 Stage re-plan:
-required before implementation.
+[Internal Domain tRPC Stage 5 Plan](internal-domain-trpc-stage-5-plan.md).
 
 Scope:
 

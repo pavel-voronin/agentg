@@ -39,6 +39,18 @@ Every event published to NATS uses the integration event envelope:
 - Wildcard subscriptions are allowed for fan-out, for example `telegram.>` and
   `history.>`.
 
+## NATS API Usage
+
+Runtime code uses `@agentg/shared/events/bus` as the NATS boundary. That boundary
+exposes only:
+
+- `publish(event)`: publish an integration event on `event.type`.
+- `subscribe(subject, handler)`: consume matching integration events.
+
+It does not expose request/reply, responder, inbox, or service APIs. Source audit
+after the tRPC migration found no runtime use of NATS request/reply APIs in
+Telegram, History Sync, Gateway, Control Plane, or Shared.
+
 ## Current Subjects
 
 Telegram publishes:
@@ -95,6 +107,24 @@ After reconnecting, consumers must rebuild state through these surfaces:
   History tRPC.
 - History Sync: its own Postgres tables plus Telegram History tRPC.
 - Telegram ingestion: TDLib session state and Telegram-shaped Postgres storage.
+
+## Internal RPC Ownership
+
+Internal RPC contracts are owned by the serving domain package:
+
+- Telegram owns `@agentg/telegram/rpc`, including the Telegram History tRPC
+  router and schemas for `listChats` and `fetchPage`.
+- History Sync owns `@agentg/history-sync/rpc`, including the History tRPC router,
+  schemas, and the JSON-RPC adapter used by Gateway and Control Plane server for
+  existing `history.*` method names.
+
+Gateway owns the external agent WebSocket protocol. Control Plane owns the
+browser-facing WebSocket protocol. Neither protocol is an internal domain RPC
+contract, and neither browser nor external agent clients call internal tRPC
+directly.
+
+There is no shared internal RPC contracts package. `@agentg/shared` owns only
+cross-cutting helpers such as the event envelope and event bus abstraction.
 
 ## Removed Command Subjects
 
