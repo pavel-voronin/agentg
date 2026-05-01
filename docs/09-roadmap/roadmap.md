@@ -15,4 +15,10 @@
 
 ## After Phase 1
 
-Do not pre-document later architecture yet. New phases should be added only after the Telegram client foundation works and the next concrete product need is selected.
+The next architecture migration is tracked separately because it changes internal
+domain boundaries rather than product scope.
+
+- [Internal Domain RPC Migration](internal-domain-rpc-migration.md)
+
+Do not advance between migration stages without re-planning the stage and meeting
+its Definition of Done.

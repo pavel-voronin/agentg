@@ -1,5 +1,6 @@
 import { isAbsolute, resolve } from 'node:path';
 
+import { readInternalRpcBindConfig, type InternalRpcBindConfig } from '@agentg/proto/rpc/config';
 import { loadNearestDotenv } from '@agentg/shared/dotenv';
 
 import type { TelegramClientConfig } from './tdlib.js';
@@ -11,6 +12,7 @@ export type TelegramIngestionConfig = {
   nats: {
     url: string;
   };
+  internalRpc: InternalRpcBindConfig;
   telegram: TelegramClientConfig;
 };
 
@@ -24,6 +26,12 @@ export function loadTelegramIngestionConfig(
     nats: {
       url: env.NATS_URL ?? 'nats://localhost:4222'
     },
+    internalRpc: readInternalRpcBindConfig(env, {
+      hostEnv: 'TELEGRAM_RPC_HOST',
+      portEnv: 'TELEGRAM_RPC_PORT',
+      defaultHost: '127.0.0.1',
+      defaultPort: 18081
+    }),
     telegram: {
       ...(apiId === undefined ? {} : { apiId }),
       ...(env.TELEGRAM_API_HASH === undefined ? {} : { apiHash: env.TELEGRAM_API_HASH }),

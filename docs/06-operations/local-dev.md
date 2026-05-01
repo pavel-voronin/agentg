@@ -20,6 +20,8 @@ npm run dev:gateway
 `npm run db:migrate` applies versioned Drizzle migrations from
 `packages/database/drizzle/`.
 
+`npm run proto:generate` regenerates TypeScript from Protobuf contracts.
+
 `npm run dev:telegram` runs the `@agentg/telegram` ingestion package. It owns the
 TDLib session, receives live Telegram updates, writes Telegram-shaped records to
 Postgres, publishes live integration events to NATS, and serves the narrow
@@ -31,6 +33,27 @@ the history sync lifecycle. It talks to Telegram ingestion through NATS RPC.
 
 `npm run dev:gateway` runs the `@agentg/gateway` package. It subscribes to live
 NATS events and serves WebSocket clients with Postgres-backed read RPCs.
+
+## Internal RPC Addresses
+
+Stage 1 of the internal RPC migration adds address configuration only. It does
+not start domain gRPC servers yet.
+
+Local development defaults:
+
+- Telegram internal RPC bind: `TELEGRAM_RPC_HOST=127.0.0.1`,
+  `TELEGRAM_RPC_PORT=18081`
+- History internal RPC bind: `HISTORY_RPC_HOST=127.0.0.1`,
+  `HISTORY_RPC_PORT=18082`
+- History to Telegram URL: `TELEGRAM_RPC_URL=http://127.0.0.1:18081`
+- Gateway to History URL: `HISTORY_RPC_URL=http://127.0.0.1:18082`
+
+Docker Compose uses internal service DNS names:
+
+- Telegram binds `0.0.0.0:8080` inside its container.
+- History Sync binds `0.0.0.0:8080` inside its container.
+- History Sync calls `http://telegram:8080`.
+- Gateway calls `http://history-sync:8080`.
 
 Run the containerized Telegram ingestion path when validating Docker packaging:
 

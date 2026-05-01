@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "workspaces": [
+    "packages/proto",
     "packages/shared",
     "packages/database",
     "packages/gateway",
@@ -32,6 +33,7 @@
     "db:logs": "docker compose logs --tail=50 postgres",
     "backfill:status": "bash scripts/backfill-status.sh",
     "infra:up": "docker compose up -d postgres nats --quiet-pull",
+    "proto:generate": "npm --workspace @agentg/proto run generate",
     "compose:history-sync": "docker compose --profile history-sync up --build history-sync",
     "compose:telegram": "docker compose --profile container-client up --build telegram",
     "lint": "eslint .",

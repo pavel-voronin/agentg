@@ -1,5 +1,10 @@
 import 'dotenv/config';
 
+import {
+  readInternalRpcClientConfig,
+  type InternalRpcClientConfig
+} from '@agentg/proto/rpc/config';
+
 export type GatewayConfig = {
   databaseUrl: string;
   gateway: {
@@ -9,6 +14,9 @@ export type GatewayConfig = {
   };
   nats: {
     url: string;
+  };
+  services: {
+    history: InternalRpcClientConfig;
   };
 };
 
@@ -22,6 +30,12 @@ export function loadGatewayConfig(env: NodeJS.ProcessEnv = process.env): Gateway
     },
     nats: {
       url: env.NATS_URL ?? 'nats://localhost:4222'
+    },
+    services: {
+      history: readInternalRpcClientConfig(env, {
+        urlEnv: 'HISTORY_RPC_URL',
+        defaultUrl: 'http://127.0.0.1:18082'
+      })
     }
   };
 }

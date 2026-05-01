@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@agentg/database": "file:../database",
+    "@agentg/proto": "file:../proto",
     "@agentg/shared": "file:../shared",
     "dotenv": "17.4.2",
     "drizzle-orm": "^0.45.2",

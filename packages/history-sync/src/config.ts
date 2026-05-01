@@ -1,3 +1,9 @@
+import {
+  readInternalRpcBindConfig,
+  readInternalRpcClientConfig,
+  type InternalRpcBindConfig,
+  type InternalRpcClientConfig
+} from '@agentg/proto/rpc/config';
 import { loadNearestDotenv } from '@agentg/shared/dotenv';
 
 loadNearestDotenv();
@@ -12,6 +18,10 @@ export type HistorySyncServiceConfig = {
   databaseUrl: string;
   nats: {
     url: string;
+  };
+  internalRpc: InternalRpcBindConfig;
+  services: {
+    telegram: InternalRpcClientConfig;
   };
 };
 
@@ -32,6 +42,18 @@ export function loadHistorySyncServiceConfig(
     databaseUrl: env.DATABASE_URL ?? 'postgres://agentg:agentg@localhost:5432/agentg',
     nats: {
       url: env.NATS_URL ?? 'nats://localhost:4222'
+    },
+    internalRpc: readInternalRpcBindConfig(env, {
+      hostEnv: 'HISTORY_RPC_HOST',
+      portEnv: 'HISTORY_RPC_PORT',
+      defaultHost: '127.0.0.1',
+      defaultPort: 18082
+    }),
+    services: {
+      telegram: readInternalRpcClientConfig(env, {
+        urlEnv: 'TELEGRAM_RPC_URL',
+        defaultUrl: 'http://127.0.0.1:18081'
+      })
     }
   };
 }
