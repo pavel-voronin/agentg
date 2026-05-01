@@ -86,14 +86,15 @@ The envelope is stable. `data` remains JSON and intentionally does not require a
 
 ## NATS Subjects
 
-Current subjects match event types:
+Gateway does not use NATS request/reply. It subscribes to live event subjects and
+forwards matching events to external WebSocket clients.
 
-- `telegram.chat.updated`
-- `telegram.message.created`
-- `telegram.message.updated`
-- `telegram.message.deleted`
+Current event-plane subjects are documented in
+[Event Plane](event-plane.md).
 
-These events are live integration signals. They are not durable and are not a replay log. Reconnect recovery should use Gateway RPC methods backed by Postgres.
+These events are live integration signals. They are not durable and are not a
+replay log. Reconnect recovery should use Gateway RPC methods backed by Postgres
+and History gRPC.
 
 ## RPC Protocol
 
@@ -226,8 +227,9 @@ History Sync also emits `history.target.upserted` and wakes its reconciler.
 }
 ```
 
-`chatId` is optional. The command is sent through NATS and consumed by the
-History Sync process when it is running.
+`chatId` is optional. Gateway calls History Sync through internal gRPC. History
+Sync wakes its own controller in-process and may publish
+`history.sync.requested` as a live notification event.
 
 The History Sync actor is event-driven and single-flight. Startup,
 target changes, chat changes, and explicit sync requests wake it. If another

@@ -98,12 +98,6 @@ function createFakeEventBus(): FakeEventBus {
     publish(): void {
       return;
     },
-    request(): Promise<IntegrationEvent> {
-      return Promise.reject(new Error('request is not implemented in fake event bus'));
-    },
-    respond(): EventSubscription {
-      throw new Error('respond is not implemented in fake event bus');
-    },
     subscribe(subject, handler): EventSubscription {
       const id = nextId;
       nextId += 1;

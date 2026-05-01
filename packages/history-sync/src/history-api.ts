@@ -41,6 +41,7 @@ export async function startHistoryGrpcServer(options: {
   bind: InternalRpcBindConfig;
   database: AppDatabase;
   eventBus: EventBus;
+  requestSync?: (reason: string, chatId?: string) => void;
 }): Promise<Server> {
   const server = new Server();
   const address = formatInternalRpcBindAddress(options.bind);

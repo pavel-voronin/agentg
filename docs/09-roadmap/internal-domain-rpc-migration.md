@@ -183,6 +183,9 @@ Stage 4 must be re-planned before implementation.
 
 Purpose: make NATS usage match the target architecture.
 
+Stage re-plan:
+[Internal Domain RPC Stage 5 Plan](internal-domain-rpc-stage-5-plan.md).
+
 Scope:
 
 - Inventory all NATS subjects.

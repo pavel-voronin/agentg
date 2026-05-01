@@ -11,7 +11,7 @@ export async function upsertManualHistoryTargetFromCommand(
   database: AppDatabase,
   command: unknown
 ): Promise<HistoryTarget> {
-  const input = parseHistoryTargetUpsertCommand(command, 'history.target.upsert.requested');
+  const input = parseHistoryTargetUpsertCommand(command, 'history.upsertTarget');
   const chatId = input.chatId;
   const range = input.range;
   const existingTargets = await listHistoryTargets(database);
@@ -34,10 +34,7 @@ export async function deleteManualHistoryTargetFromCommand(
   command: unknown
 ): Promise<HistoryTarget> {
   const input = asRecord(command);
-  const targetId = requireString(
-    input?.targetId,
-    'history.target.delete.requested requires targetId'
-  );
+  const targetId = requireString(input?.targetId, 'history.deleteTarget requires targetId');
   const deleted = await deleteHistoryTarget(database, targetId);
   if (deleted === undefined) {
     throw new Error(`Unknown history target: ${targetId}`);

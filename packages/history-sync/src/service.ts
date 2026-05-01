@@ -9,7 +9,6 @@ import {
   type HistorySyncController
 } from './controller.js';
 import { createLiveCoverageObserver, type LiveCoverageObserver } from './live-coverage.js';
-import { subscribeHistorySyncCommands } from './commands-adapter.js';
 import { startHistoryGrpcServer, stopHistoryGrpcServer } from './history-api.js';
 import { addHistoryCoverageBatch } from './store.js';
 import { createGrpcTelegramHistoryClient } from './telegram-client.js';
@@ -61,7 +60,6 @@ export async function runHistorySyncService(options: HistorySyncServiceOptions):
   });
   const subscriptions = subscribeHistorySyncService({
     controller,
-    database: options.database,
     eventBus: options.eventBus,
     liveCoverageObserver
   });
@@ -72,7 +70,10 @@ export async function runHistorySyncService(options: HistorySyncServiceOptions):
   historyRpcServer = await startHistoryGrpcServer({
     bind: options.internalRpc,
     database: options.database,
-    eventBus: options.eventBus
+    eventBus: options.eventBus,
+    requestSync(reason) {
+      controller.request(reason);
+    }
   });
   controller.request('startup');
 
@@ -113,12 +114,10 @@ export async function runHistorySyncService(options: HistorySyncServiceOptions):
 
 function subscribeHistorySyncService(options: {
   controller: HistorySyncController;
-  database: AppDatabase;
   eventBus: EventBus;
   liveCoverageObserver: LiveCoverageObserver;
 }): EventSubscription[] {
   return [
-    ...subscribeHistorySyncCommands(options),
     options.eventBus.subscribe('telegram.chat.updated', () => {
       options.controller.request('chat-updated');
     }),

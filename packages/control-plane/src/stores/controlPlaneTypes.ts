@@ -239,11 +239,7 @@ export const EVENT_GROUPS: EventGroup[] = [
       'history.sync.requested',
       'history.sync.started',
       'history.target.auto_deleted',
-      'history.target.delete.completed',
-      'history.target.delete.failed',
       'history.target.deleted',
-      'history.target.upsert.completed',
-      'history.target.upsert.failed',
       'history.target.upserted'
     ],
     id: 'history',

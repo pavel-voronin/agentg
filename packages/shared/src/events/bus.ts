@@ -1,15 +1,10 @@
 import { connect, StringCodec, type NatsConnection, type Subscription } from 'nats';
 
-import { createIntegrationEvent, type IntegrationEvent } from './envelope.js';
+import type { IntegrationEvent } from './envelope.js';
 
 export type EventBus = {
   close(): Promise<void>;
   publish(event: IntegrationEvent): void;
-  request(event: IntegrationEvent, options?: EventRequestOptions): Promise<IntegrationEvent>;
-  respond(
-    subject: string,
-    handler: (event: IntegrationEvent) => IntegrationEvent | Promise<IntegrationEvent>
-  ): EventSubscription;
   subscribe(
     subject: string,
     handler: (event: IntegrationEvent) => void | Promise<void>
@@ -24,11 +19,6 @@ export type EventBusConfig = {
   url: string;
 };
 
-export type EventRequestOptions = {
-  timeoutMs?: number;
-};
-
-const DEFAULT_REQUEST_TIMEOUT_MS = 5000;
 const NATS_DRAIN_TIMEOUT_MS = 1000;
 
 export async function createNatsEventBus(config: EventBusConfig): Promise<EventBus> {
@@ -44,33 +34,6 @@ export async function createNatsEventBus(config: EventBusConfig): Promise<EventB
     },
     publish(event: IntegrationEvent): void {
       connection.publish(event.type, codec.encode(JSON.stringify(event)));
-    },
-    async request(
-      event: IntegrationEvent,
-      options: EventRequestOptions = {}
-    ): Promise<IntegrationEvent> {
-      const response = await connection.request(event.type, codec.encode(JSON.stringify(event)), {
-        timeout: options.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS
-      });
-      const parsed = parseEvent(codec.decode(response.data));
-      if (parsed === undefined) {
-        throw new Error(`Invalid response for event request: ${event.type}`);
-      }
-
-      return parsed;
-    },
-    respond(
-      subject: string,
-      handler: (event: IntegrationEvent) => IntegrationEvent | Promise<IntegrationEvent>
-    ): EventSubscription {
-      const subscription = connection.subscribe(subject);
-      void consumeRequestSubscription(connection, subscription, handler, codec);
-
-      return {
-        unsubscribe(): void {
-          subscription.unsubscribe();
-        }
-      };
     },
     subscribe(
       subject: string,
@@ -104,47 +67,6 @@ async function delay(milliseconds: number): Promise<void> {
     const timeout = setTimeout(resolve, milliseconds);
     timeout.unref();
   });
-}
-
-async function consumeRequestSubscription(
-  connection: NatsConnection,
-  subscription: Subscription,
-  handler: (event: IntegrationEvent) => IntegrationEvent | Promise<IntegrationEvent>,
-  codec: ReturnType<typeof StringCodec>
-): Promise<void> {
-  try {
-    for await (const message of subscription) {
-      const event = parseEvent(codec.decode(message.data));
-      if (event === undefined) {
-        continue;
-      }
-
-      let response: IntegrationEvent;
-      try {
-        response = await handler(event);
-      } catch (error) {
-        response = createIntegrationEvent({
-          data: {
-            error: error instanceof Error ? error.message : String(error)
-          },
-          source: 'event_bus',
-          type: `${event.type}.failed`
-        });
-      }
-
-      message.respond(codec.encode(JSON.stringify(response)));
-    }
-  } catch (error) {
-    if (!connection.isClosed()) {
-      console.error(
-        JSON.stringify({
-          event: 'event_bus.request_subscription_failed',
-          error: error instanceof Error ? error.message : String(error),
-          subject: subscription.getSubject()
-        })
-      );
-    }
-  }
 }
 
 async function consumeSubscription(

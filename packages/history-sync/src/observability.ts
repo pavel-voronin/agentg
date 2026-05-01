@@ -89,6 +89,7 @@ type ChatListFilter =
 export type HistoryRuntime = {
   database: AppDatabase;
   eventBus: EventBus;
+  requestSync?: (reason: string, chatId?: string) => void;
 };
 
 const activeBackfillJobStatuses = ['pending', 'running'];
@@ -119,7 +120,7 @@ export async function callHistoryMethod(
   }
 
   if (method === 'history.requestSync') {
-    return requestHistorySync(runtime, params);
+    return requestHistorySyncFromRpc(runtime, params);
   }
 
   if (method === 'history.listJobs') {
@@ -441,7 +442,7 @@ async function upsertHistoryTarget(runtime: HistoryRuntime, params: unknown): Pr
       type: 'history.target.upserted'
     })
   );
-  publishHistorySyncRequested(runtime.eventBus, 'target-upserted');
+  requestHistorySync(runtime, 'target-upserted');
 
   return {
     target,
@@ -461,7 +462,7 @@ async function deleteHistoryTarget(runtime: HistoryRuntime, params: unknown): Pr
       type: 'history.target.deleted'
     })
   );
-  publishHistorySyncRequested(runtime.eventBus, 'target-deleted');
+  requestHistorySync(runtime, 'target-deleted');
 
   return {
     deleted: true,
@@ -469,22 +470,31 @@ async function deleteHistoryTarget(runtime: HistoryRuntime, params: unknown): Pr
   };
 }
 
-function publishHistorySyncRequested(eventBus: EventBus, reason: string, chatId?: string): void {
-  eventBus.publish(
+function publishHistorySyncRequested(
+  runtime: HistoryRuntime,
+  reason: string,
+  chatId?: string
+): void {
+  runtime.eventBus.publish(
     createIntegrationEvent({
       data: {
         ...(chatId === undefined ? {} : { chatId }),
         reason
       },
-      source: 'agent-gateway',
+      source: 'history-sync',
       type: 'history.sync.requested'
     })
   );
 }
 
-function requestHistorySync(runtime: HistoryRuntime, params: unknown): unknown {
+function requestHistorySync(runtime: HistoryRuntime, reason: string, chatId?: string): void {
+  publishHistorySyncRequested(runtime, reason, chatId);
+  runtime.requestSync?.(reason, chatId);
+}
+
+function requestHistorySyncFromRpc(runtime: HistoryRuntime, params: unknown): unknown {
   const input = asRecord(params);
-  publishHistorySyncRequested(runtime.eventBus, 'manual', asString(input?.chatId));
+  requestHistorySync(runtime, 'manual', asString(input?.chatId));
 
   return {
     requested: true
