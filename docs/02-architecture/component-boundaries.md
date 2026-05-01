@@ -30,6 +30,8 @@ Owns:
 - Reconciling desired history coverage against existing coverage.
 - Scheduling and checkpointing backfill jobs.
 - Requesting Telegram history pages through the Telegram internal tRPC surface.
+- Composing history read models from History-owned state and Telegram-owned read
+  models.
 - Publishing history lifecycle and coverage events.
 
 Does not own:
@@ -37,6 +39,7 @@ Does not own:
 - Telegram login, sessions, or TDLib state.
 - Telegram message normalization or Telegram-shaped current-state writes.
 - Telegram raw event storage.
+- Parsing Telegram raw storage payloads for History read behavior.
 
 ## Control Plane
 

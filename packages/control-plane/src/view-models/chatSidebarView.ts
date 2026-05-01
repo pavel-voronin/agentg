@@ -63,7 +63,7 @@ function chatArchiveShortcut(
   source: ChatSidebarViewSource,
   hasSearch: boolean
 ): ChatArchiveShortcutView | null {
-  const archiveCount = source.chatNavigation.archiveCount ?? 0;
+  const archiveCount = source.chatNavigation.archiveCount;
   return !hasSearch && source.chatListMode === 'main' && archiveCount > 0
     ? { count: formatInteger(archiveCount) }
     : null;
@@ -89,8 +89,8 @@ function chatFolderNavItems(source: ChatSidebarViewSource): ChatFolderNavItem[] 
       badge: formatOptionalBadge(folder.count),
       folderId: folder.id,
       id: `folder:${String(folder.id)}`,
-      label: folder.title ?? `#${String(folder.id)}`,
-      title: folder.title ?? `#${String(folder.id)}`,
+      label: folder.title,
+      title: folder.title,
       type: 'folder' as const
     }))
   ];
@@ -99,18 +99,18 @@ function chatFolderNavItems(source: ChatSidebarViewSource): ChatFolderNavItem[] 
 function chatListItemView(chat: ControlPlaneChat, selectedChatId: string | null): ChatListItemView {
   return {
     active: chat.id === selectedChatId,
-    coverageIntervals: formatInteger(chat.coverageIntervals ?? 0),
+    coverageIntervals: formatInteger(chat.coverageIntervals),
     icon: chatIcon(chat),
     id: chat.id,
-    pendingJobs: formatInteger(chat.pendingJobs ?? 0),
-    runningJobs: formatInteger(chat.runningJobs ?? 0),
-    targets: formatInteger(chat.targets ?? 0),
-    title: chat.title ?? chat.id
+    pendingJobs: formatInteger(chat.pendingJobs),
+    runningJobs: formatInteger(chat.runningJobs),
+    targets: formatInteger(chat.targets),
+    title: chat.title
   };
 }
 
 function chatIcon(chat: ControlPlaneChat): ChatIconKind | null {
-  if (chat.isBot === true) {
+  if (chat.isBot) {
     return 'bot';
   }
   if (chat.type === 'channel' || chat.type === 'group' || chat.type === 'secret') {

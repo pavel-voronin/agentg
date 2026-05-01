@@ -1,8 +1,10 @@
 export type ControlPlaneEvent = {
   data?: unknown;
   occurredAt?: Date | string;
+  id?: string;
+  meta?: unknown;
+  source?: string;
   type?: string;
-  [key: string]: unknown;
 };
 
 export type ControlPlaneClientOptions = {

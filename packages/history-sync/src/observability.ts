@@ -1,18 +1,15 @@
 import type { AppDatabase } from '@agentg/database/client';
 import {
   backfillJobs,
-  telegramChatFolders,
   historyCoverage,
   historyTargets,
-  historyTemplates,
-  telegramChats,
-  telegramMessages,
-  telegramUsers
+  historyTemplates
 } from '@agentg/database/schema';
 import type { EventBus } from '@agentg/shared/events/bus';
 import { createIntegrationEvent } from '@agentg/shared/events/envelope';
 import type { JsonObject } from '@agentg/shared/json';
-import { and, asc, desc, eq, gte, ilike, inArray, isNotNull, lt, sql } from 'drizzle-orm';
+import type { TelegramChatDirectoryEntry, TelegramChatFolder } from '@agentg/telegram/rpc';
+import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 
 import { TELEGRAM_HISTORY_PAST_BOUNDARY } from './constants.js';
 import {
@@ -34,6 +31,7 @@ import type {
   HistoryRange,
   HistoryTarget
 } from './types.js';
+import type { TelegramReadClient } from './telegram-client.js';
 
 type HistoryTargetResponse = {
   chatId: string;
@@ -44,26 +42,6 @@ type HistoryTargetResponse = {
   };
   range: HistoryRange;
   templateId: string | null;
-};
-
-type TelegramChatListRow = {
-  raw: JsonObject;
-  telegramChatId: string;
-  title: string;
-  type: string;
-};
-
-type TelegramChatUserInfo = {
-  isBot: boolean;
-  isSelf: boolean;
-  telegramUserId: string;
-};
-
-type TelegramChatFolderRow = {
-  iconName: string | null;
-  position: number;
-  telegramChatFolderId: number;
-  title: string;
 };
 
 type TelegramChatSortKey = {
@@ -90,6 +68,7 @@ export type HistoryRuntime = {
   database: AppDatabase;
   eventBus: EventBus;
   requestSync?: (reason: string, chatId?: string) => void;
+  telegram?: TelegramReadClient;
 };
 
 const activeBackfillJobStatuses = ['pending', 'running'];
@@ -100,15 +79,15 @@ export async function callHistoryMethod(
   params: unknown
 ): Promise<unknown> {
   if (method === 'history.getOverview') {
-    return getHistoryOverview(runtime.database);
+    return getHistoryOverview(runtime);
   }
 
   if (method === 'history.listChats') {
-    return listHistoryChats(runtime.database, params);
+    return listHistoryChats(runtime, params);
   }
 
   if (method === 'history.getChatHistoryState') {
-    return getChatHistoryState(runtime.database, params);
+    return getChatHistoryState(runtime, params);
   }
 
   if (method === 'history.upsertTarget') {
@@ -130,13 +109,14 @@ export async function callHistoryMethod(
   return undefined;
 }
 
-async function getHistoryOverview(database: AppDatabase): Promise<unknown> {
-  const [chats, templates, targets, coverage, activeJobs] = await Promise.all([
-    database.select({ id: telegramChats.telegramChatId }).from(telegramChats),
-    database.select({ id: historyTemplates.id }).from(historyTemplates),
-    database.select({ id: historyTargets.id }).from(historyTargets),
-    database.select({ id: historyCoverage.id }).from(historyCoverage),
-    database
+async function getHistoryOverview(runtime: HistoryRuntime): Promise<unknown> {
+  const telegram = requireTelegramReadClient(runtime);
+  const [directory, templates, targets, coverage, activeJobs] = await Promise.all([
+    telegram.listChatDirectory({}),
+    runtime.database.select({ id: historyTemplates.id }).from(historyTemplates),
+    runtime.database.select({ id: historyTargets.id }).from(historyTargets),
+    runtime.database.select({ id: historyCoverage.id }).from(historyCoverage),
+    runtime.database
       .select({
         endAt: backfillJobs.endAt,
         startAt: backfillJobs.startAt,
@@ -148,7 +128,7 @@ async function getHistoryOverview(database: AppDatabase): Promise<unknown> {
       .orderBy(desc(backfillJobs.status), desc(backfillJobs.endAt), desc(backfillJobs.startAt))
       .limit(1)
   ]);
-  const jobs = await database
+  const jobs = await runtime.database
     .select({
       status: backfillJobs.status
     })
@@ -167,7 +147,7 @@ async function getHistoryOverview(database: AppDatabase): Promise<unknown> {
             startAt: activeJob.startAt.toISOString(),
             status: activeJob.status
           },
-    chats: chats.length,
+    chats: directory.chats.length,
     coverageIntervals: coverage.length,
     pendingJobs: jobCounts.pending ?? 0,
     runningJobs: jobCounts.running ?? 0,
@@ -176,65 +156,35 @@ async function getHistoryOverview(database: AppDatabase): Promise<unknown> {
   };
 }
 
-async function listHistoryChats(database: AppDatabase, params: unknown): Promise<unknown> {
+async function listHistoryChats(runtime: HistoryRuntime, params: unknown): Promise<unknown> {
+  const telegram = requireTelegramReadClient(runtime);
   const input = asRecord(params);
   const query = asString(input?.query)?.trim();
   const type = asString(input?.type)?.trim();
   const limit = parseLimit(input?.limit, 100, 500);
   const listFilter =
     query === undefined || query.length === 0 ? chatListFilterFromInput(input) : undefined;
-  const queryWhere = query === undefined || query.length === 0 ? undefined : chatSearchWhere(query);
-  const where = andSql(queryWhere, type === undefined ? undefined : eq(telegramChats.type, type));
-  const navigationWhere = type === undefined ? undefined : eq(telegramChats.type, type);
 
-  const [matchingChats, navigationChats, types, folders] = await Promise.all([
-    database
-      .select()
-      .from(telegramChats)
-      .where(where)
-      .orderBy(asc(telegramChats.title), asc(telegramChats.telegramChatId)),
-    database
-      .select()
-      .from(telegramChats)
-      .where(navigationWhere)
-      .orderBy(asc(telegramChats.title), asc(telegramChats.telegramChatId)),
-    database
-      .select({
-        count: sql<number>`count(*)::int`,
-        type: telegramChats.type
-      })
-      .from(telegramChats)
-      .groupBy(telegramChats.type)
-      .orderBy(asc(telegramChats.type)),
-    database
-      .select({
-        iconName: telegramChatFolders.iconName,
-        position: telegramChatFolders.position,
-        telegramChatFolderId: telegramChatFolders.telegramChatFolderId,
-        title: telegramChatFolders.title
-      })
-      .from(telegramChatFolders)
-      .orderBy(asc(telegramChatFolders.position), asc(telegramChatFolders.telegramChatFolderId))
-  ]);
-  const chats = matchingChats
-    .filter((chat) =>
-      listFilter === undefined ? true : chatMatchesListFilter(chat.raw, listFilter)
-    )
+  const directory = await telegram.listChatDirectory({
+    ...(query === undefined || query.length === 0 ? {} : { query }),
+    ...(type === undefined || type.length === 0 ? {} : { type })
+  });
+  const chats = directory.chats
+    .filter((chat) => (listFilter === undefined ? true : chatMatchesListFilter(chat, listFilter)))
     .sort((left, right) => compareTelegramChatsByTdlibOrder(left, right, listFilter))
     .slice(0, limit);
-  const chatIds = chats.map((chat) => chat.telegramChatId);
-  const userIds = chats.map((chat) => telegramChatUserId(chat.raw)).filter(isDefined);
-  const [targets, coverage, jobs, users] =
+  const chatIds = chats.map((chat) => chat.id);
+  const [targets, coverage, jobs] =
     chatIds.length === 0
-      ? [[], [], [], []]
+      ? [[], [], []]
       : await Promise.all([
-          database
+          runtime.database
             .select({
               telegramChatId: historyTargets.telegramChatId
             })
             .from(historyTargets)
             .where(inArray(historyTargets.telegramChatId, chatIds)),
-          database
+          runtime.database
             .select({
               endAt: historyCoverage.endAt,
               startAt: historyCoverage.startAt,
@@ -242,7 +192,7 @@ async function listHistoryChats(database: AppDatabase, params: unknown): Promise
             })
             .from(historyCoverage)
             .where(inArray(historyCoverage.telegramChatId, chatIds)),
-          database
+          runtime.database
             .select({
               status: backfillJobs.status,
               telegramChatId: backfillJobs.telegramChatId
@@ -253,59 +203,45 @@ async function listHistoryChats(database: AppDatabase, params: unknown): Promise
                 inArray(backfillJobs.telegramChatId, chatIds),
                 inArray(backfillJobs.status, activeBackfillJobStatuses)
               )
-            ),
-          userIds.length === 0
-            ? []
-            : database
-                .select({
-                  isBot: telegramUsers.isBot,
-                  isSelf: telegramUsers.isSelf,
-                  telegramUserId: telegramUsers.telegramUserId
-                })
-                .from(telegramUsers)
-                .where(inArray(telegramUsers.telegramUserId, userIds))
+            )
         ]);
 
   const targetsByChat = countBy(targets, (target) => target.telegramChatId);
   const jobsByChat = groupBy(jobs, (job) => job.telegramChatId);
   const coverageByChat = groupBy(coverage, (interval) => interval.telegramChatId);
-  const usersById = new Map(users.map((user) => [user.telegramUserId, user]));
 
   return {
     chats: chats.map((chat) => {
-      const chatCoverage = coverageByChat.get(chat.telegramChatId) ?? [];
-      const chatJobs = jobsByChat.get(chat.telegramChatId) ?? [];
+      const chatCoverage = coverageByChat.get(chat.id) ?? [];
+      const chatJobs = jobsByChat.get(chat.id) ?? [];
       const jobCounts = countBy(chatJobs, (job) => job.status);
-      const chatUser = usersById.get(telegramChatUserId(chat.raw) ?? '');
 
       return {
         coverageIntervals: chatCoverage.length,
         coverageNewestAt: maxOptionalDate(chatCoverage.map((interval) => interval.endAt)),
         coverageOldestAt: minOptionalDate(chatCoverage.map((interval) => interval.startAt)),
-        id: chat.telegramChatId,
-        isBot: chatUser?.isBot === true,
+        id: chat.id,
+        isBot: chat.isBot,
         pendingJobs: jobCounts.pending ?? 0,
         runningJobs: jobCounts.running ?? 0,
-        targets: targetsByChat[chat.telegramChatId] ?? 0,
-        title: telegramChatDisplayTitle(chat, chatUser),
+        targets: targetsByChat[chat.id] ?? 0,
+        title: chat.title,
         type: chat.type,
         updatedAt: chat.updatedAt
       };
     }),
-    navigation: historyChatNavigation(navigationChats, folders),
-    types
+    navigation: historyChatNavigation(directory.navigationChats, directory.folders),
+    types: directory.types
   };
 }
 
-async function getChatHistoryState(database: AppDatabase, params: unknown): Promise<unknown> {
+async function getChatHistoryState(runtime: HistoryRuntime, params: unknown): Promise<unknown> {
+  const telegram = requireTelegramReadClient(runtime);
   const input = asRecord(params);
   const chatId = requireString(input?.chatId, 'history.getChatHistoryState requires chatId');
-  const [chat] = await database
-    .select()
-    .from(telegramChats)
-    .where(eq(telegramChats.telegramChatId, chatId))
-    .limit(1);
-  if (chat === undefined) {
+  const facts = await telegram.getChatHistoryFacts({ chatId });
+  const chat = facts.chat;
+  if (chat === null) {
     return {
       chat: null,
       coverage: [],
@@ -316,58 +252,29 @@ async function getChatHistoryState(database: AppDatabase, params: unknown): Prom
     };
   }
 
-  const chatUserId = telegramChatUserId(chat.raw);
-  const [targetRows, coverageRows, jobRows, earliestMessageRows, messageCountRows, chatUserRows] =
-    await Promise.all([
-      database
-        .select()
-        .from(historyTargets)
-        .where(eq(historyTargets.telegramChatId, chatId))
-        .orderBy(asc(historyTargets.id)),
-      database
-        .select()
-        .from(historyCoverage)
-        .where(eq(historyCoverage.telegramChatId, chatId))
-        .orderBy(asc(historyCoverage.startAt)),
-      database
-        .select()
-        .from(backfillJobs)
-        .where(
-          and(
-            eq(backfillJobs.telegramChatId, chatId),
-            inArray(backfillJobs.status, activeBackfillJobStatuses)
-          )
+  const [targetRows, coverageRows, jobRows] = await Promise.all([
+    runtime.database
+      .select()
+      .from(historyTargets)
+      .where(eq(historyTargets.telegramChatId, chatId))
+      .orderBy(asc(historyTargets.id)),
+    runtime.database
+      .select()
+      .from(historyCoverage)
+      .where(eq(historyCoverage.telegramChatId, chatId))
+      .orderBy(asc(historyCoverage.startAt)),
+    runtime.database
+      .select()
+      .from(backfillJobs)
+      .where(
+        and(
+          eq(backfillJobs.telegramChatId, chatId),
+          inArray(backfillJobs.status, activeBackfillJobStatuses)
         )
-        .orderBy(desc(backfillJobs.endAt), desc(backfillJobs.startAt))
-        .limit(200),
-      database
-        .select({
-          messageDate: telegramMessages.messageDate
-        })
-        .from(telegramMessages)
-        .where(
-          and(eq(telegramMessages.telegramChatId, chatId), isNotNull(telegramMessages.messageDate))
-        )
-        .orderBy(asc(telegramMessages.messageDate))
-        .limit(1),
-      database
-        .select({
-          count: sql<number>`count(*)::int`
-        })
-        .from(telegramMessages)
-        .where(eq(telegramMessages.telegramChatId, chatId)),
-      chatUserId === undefined
-        ? []
-        : database
-            .select({
-              isBot: telegramUsers.isBot,
-              isSelf: telegramUsers.isSelf,
-              telegramUserId: telegramUsers.telegramUserId
-            })
-            .from(telegramUsers)
-            .where(eq(telegramUsers.telegramUserId, chatUserId))
-            .limit(1)
-    ]);
+      )
+      .orderBy(desc(backfillJobs.endAt), desc(backfillJobs.startAt))
+      .limit(200)
+  ]);
 
   const targetModels = targetRows.map(toHistoryTarget);
   const now = floorToTelegramSecond(new Date());
@@ -388,33 +295,31 @@ async function getChatHistoryState(database: AppDatabase, params: unknown): Prom
   );
   const missing = subtractIntervals(desired, coverage);
   const historyBeginningReached = coverage.some(isTelegramHistoryPastCovered);
+  const earliestMessageDate = parseOptionalDate(facts.earliestMessageDate);
   const historyStartAt =
-    historyBeginningReached && earliestMessageRows[0]?.messageDate !== null
-      ? earliestMessageRows[0]?.messageDate
-      : undefined;
+    historyBeginningReached && earliestMessageDate !== undefined ? earliestMessageDate : undefined;
   const displayedDesired = clipIntervalsForDisplay(desired, historyStartAt);
   const displayedCoverage = clipIntervalsForDisplay(coverage, historyStartAt);
   const displayedMissing = clipIntervalsForDisplay(missing, historyStartAt);
-  const coverageMessageCounts = await countMessagesForIntervals(
-    database,
+  const coverageMessageCounts = await telegram.countMessagesInIntervals({
     chatId,
-    displayedCoverage
-  );
+    intervals: displayedCoverage.map(intervalToResponse)
+  });
 
   return {
     chat: {
       historyBeginningReached,
       historyStartAt: historyStartAt?.toISOString() ?? null,
-      id: chat.telegramChatId,
-      isBot: chatUserRows[0]?.isBot === true,
-      messageCount: messageCountRows[0]?.count ?? 0,
-      title: telegramChatDisplayTitle(chat, chatUserRows[0]),
+      id: chat.id,
+      isBot: chat.isBot,
+      messageCount: facts.messageCount,
+      title: chat.title,
       type: chat.type,
       updatedAt: chat.updatedAt
     },
     coverage: displayedCoverage.map((interval, index) => ({
       ...intervalToResponse(interval),
-      messageCount: coverageMessageCounts[index] ?? 0
+      messageCount: coverageMessageCounts.counts[index] ?? 0
     })),
     desired: displayedDesired.map(intervalToResponse),
     jobs: jobRows.map((job) => ({
@@ -533,13 +438,6 @@ async function listHistoryJobs(database: AppDatabase, params: unknown): Promise<
   };
 }
 
-function chatSearchWhere(query: string) {
-  return orSql(
-    ilike(telegramChats.title, `%${query}%`),
-    ilike(telegramChats.telegramChatId, `%${query}%`)
-  );
-}
-
 function chatListFilterFromInput(input: Record<string, unknown> | undefined): ChatListFilter {
   const list = asString(input?.list);
   if (list === 'archive') {
@@ -559,24 +457,27 @@ function chatListFilterFromInput(input: Record<string, unknown> | undefined): Ch
   return { kind: 'main' };
 }
 
-function historyChatNavigation(chats: TelegramChatListRow[], folderRows: TelegramChatFolderRow[]) {
+function historyChatNavigation(
+  chats: TelegramChatDirectoryEntry[],
+  folderRows: TelegramChatFolder[]
+) {
   const folderCounts = new Map<number, number>();
   let archiveCount = 0;
   let mainCount = 0;
 
   for (const chat of chats) {
-    if (chatMatchesListFilter(chat.raw, { kind: 'main' })) {
+    if (chatMatchesListFilter(chat, { kind: 'main' })) {
       mainCount += 1;
     }
-    if (chatMatchesListFilter(chat.raw, { kind: 'archive' })) {
+    if (chatMatchesListFilter(chat, { kind: 'archive' })) {
       archiveCount += 1;
     }
-    for (const folderId of chatFolderIds(chat.raw)) {
+    for (const folderId of chatFolderIds(chat)) {
       folderCounts.set(folderId, (folderCounts.get(folderId) ?? 0) + 1);
     }
   }
 
-  const knownFolderIds = new Set(folderRows.map((folder) => folder.telegramChatFolderId));
+  const knownFolderIds = new Set(folderRows.map((folder) => folder.id));
   const unknownFolderIds = [...folderCounts.keys()]
     .filter((id) => !knownFolderIds.has(id))
     .sort((left, right) => left - right);
@@ -585,9 +486,9 @@ function historyChatNavigation(chats: TelegramChatListRow[], folderRows: Telegra
     archiveCount,
     folders: [
       ...folderRows.map((folder) => ({
-        count: folderCounts.get(folder.telegramChatFolderId) ?? 0,
+        count: folderCounts.get(folder.id) ?? 0,
         iconName: folder.iconName,
-        id: folder.telegramChatFolderId,
+        id: folder.id,
         position: folder.position,
         title: folder.title
       })),
@@ -602,36 +503,19 @@ function historyChatNavigation(chats: TelegramChatListRow[], folderRows: Telegra
   };
 }
 
-function chatMatchesListFilter(raw: JsonObject, filter: ChatListFilter): boolean {
-  return chatPositions(raw).some((position) => {
-    const list = asPlainRecord(position.list);
-    const type = typeof list?._ === 'string' ? list._ : undefined;
-    if (filter.kind === 'main') {
-      return type === 'chatListMain';
-    }
-    if (filter.kind === 'archive') {
-      return type === 'chatListArchive';
-    }
-    return type === 'chatListFolder' && chatFolderId(list) === filter.folderId;
-  });
+function chatMatchesListFilter(chat: TelegramChatDirectoryEntry, filter: ChatListFilter): boolean {
+  return chat.placements.some((placement) => chatPlacementMatchesFilter(placement, filter));
 }
 
-function chatFolderIds(raw: JsonObject): number[] {
-  return chatPositions(raw)
-    .map((position) => asPlainRecord(position.list))
-    .filter(isDefined)
-    .filter((list) => list._ === 'chatListFolder')
-    .map(chatFolderId)
-    .filter(isDefined);
-}
-
-function chatPositions(raw: JsonObject): Record<string, unknown>[] {
-  return (Array.isArray(raw.positions) ? raw.positions : []).map(asPlainRecord).filter(isDefined);
+function chatFolderIds(chat: TelegramChatDirectoryEntry): number[] {
+  return chat.placements
+    .filter((placement) => placement.kind === 'folder')
+    .map((placement) => placement.folderId);
 }
 
 function compareTelegramChatsByTdlibOrder(
-  left: TelegramChatListRow,
-  right: TelegramChatListRow,
+  left: TelegramChatDirectoryEntry,
+  right: TelegramChatDirectoryEntry,
   filter?: ChatListFilter
 ): number {
   const leftKey = telegramChatSortKey(left, filter);
@@ -654,43 +538,42 @@ function compareTelegramChatsByTdlibOrder(
 }
 
 function telegramChatSortKey(
-  chat: TelegramChatListRow,
+  chat: TelegramChatDirectoryEntry,
   filter?: ChatListFilter
 ): TelegramChatSortKey {
-  const position = preferredChatPosition(chat.raw, filter);
+  const position = preferredChatPlacement(chat, filter);
   return {
-    id: chat.telegramChatId,
-    lastMessageDate: telegramChatLastMessageDate(chat.raw),
+    id: chat.id,
+    lastMessageDate: chat.lastMessageDate,
     listRank: position?.listRank ?? 3,
     order: position?.order ?? 0n,
     title: chat.title
   };
 }
 
-function preferredChatPosition(
-  raw: JsonObject,
+function preferredChatPlacement(
+  chat: TelegramChatDirectoryEntry,
   filter?: ChatListFilter
 ): { listRank: number; order: bigint } | undefined {
-  const parsedPositions = chatPositions(raw)
-    .map((record) => {
-      const order = parsePositiveBigInt(record.order);
+  const placements = chat.placements
+    .map((placement) => {
+      const order = parsePositiveBigInt(placement.order);
       if (order === undefined) {
         return undefined;
       }
 
-      const list = asPlainRecord(record.list);
-      if (filter !== undefined && !chatListMatchesFilter(list, filter)) {
+      if (filter !== undefined && !chatPlacementMatchesFilter(placement, filter)) {
         return undefined;
       }
 
       return {
-        listRank: chatListRank(list),
+        listRank: chatPlacementRank(placement),
         order
       };
     })
     .filter(isDefined);
 
-  return parsedPositions.sort((left, right) => {
+  return placements.sort((left, right) => {
     if (left.listRank !== right.listRank) {
       return left.listRank - right.listRank;
     }
@@ -699,58 +582,29 @@ function preferredChatPosition(
   })[0];
 }
 
-function chatListMatchesFilter(
-  list: Record<string, unknown> | undefined,
+function chatPlacementMatchesFilter(
+  placement: TelegramChatDirectoryEntry['placements'][number],
   filter: ChatListFilter
 ): boolean {
-  const type = typeof list?._ === 'string' ? list._ : undefined;
   if (filter.kind === 'main') {
-    return type === 'chatListMain';
+    return placement.kind === 'main';
   }
   if (filter.kind === 'archive') {
-    return type === 'chatListArchive';
+    return placement.kind === 'archive';
   }
-  return type === 'chatListFolder' && chatFolderId(list) === filter.folderId;
+  return placement.kind === 'folder' && placement.folderId === filter.folderId;
 }
 
-function chatListRank(list: Record<string, unknown> | undefined): number {
-  const type = typeof list?._ === 'string' ? list._ : undefined;
-
-  if (type === 'chatListMain') {
+function chatPlacementRank(placement: TelegramChatDirectoryEntry['placements'][number]): number {
+  if (placement.kind === 'main') {
     return 0;
   }
 
-  if (type === 'chatListArchive') {
+  if (placement.kind === 'archive') {
     return 1;
   }
 
   return 2;
-}
-
-function chatFolderId(list: Record<string, unknown> | undefined): number | undefined {
-  const value = list?.chat_folder_id ?? list?.chatFolderId;
-  return typeof value === 'number' && Number.isSafeInteger(value) ? value : undefined;
-}
-
-function telegramChatLastMessageDate(raw: JsonObject): number {
-  const lastMessage = asPlainRecord(raw.last_message) ?? asPlainRecord(raw.lastMessage);
-  return typeof lastMessage?.date === 'number' ? lastMessage.date : 0;
-}
-
-function telegramChatUserId(raw: JsonObject): string | undefined {
-  const type = asPlainRecord(raw.type);
-  const userId = type?.user_id ?? type?.userId;
-  if (typeof userId === 'number' || typeof userId === 'string') {
-    return String(userId);
-  }
-  return undefined;
-}
-
-function telegramChatDisplayTitle(
-  chat: { title: string; type: string },
-  user: TelegramChatUserInfo | undefined
-): string {
-  return chat.type === 'private' && user?.isSelf === true ? 'Saved Messages' : chat.title;
 }
 
 function compareBigIntDescending(left: bigint, right: bigint): number {
@@ -772,15 +626,6 @@ function parsePositiveBigInt(value: unknown): bigint | undefined {
   }
 
   return undefined;
-}
-
-function andSql(...conditions: (ReturnType<typeof eq> | undefined)[]) {
-  const defined = conditions.filter((condition) => condition !== undefined);
-  return defined.length === 0 ? undefined : and(...defined);
-}
-
-function orSql(first: ReturnType<typeof ilike>, second: ReturnType<typeof ilike>) {
-  return sql`(${first} or ${second})`;
 }
 
 function toTargetResponse(
@@ -823,32 +668,6 @@ function intervalToResponse(interval: HistoryInterval): { endAt: string; startAt
     endAt: normalized.endAt.toISOString(),
     startAt: normalized.startAt.toISOString()
   };
-}
-
-async function countMessagesForIntervals(
-  database: AppDatabase,
-  chatId: string,
-  intervals: HistoryInterval[]
-): Promise<number[]> {
-  return Promise.all(
-    intervals.map(async (interval) => {
-      const [row] = await database
-        .select({
-          count: sql<number>`count(*)::int`
-        })
-        .from(telegramMessages)
-        .where(
-          and(
-            eq(telegramMessages.telegramChatId, chatId),
-            isNotNull(telegramMessages.messageDate),
-            gte(telegramMessages.messageDate, interval.startAt),
-            lt(telegramMessages.messageDate, interval.endAt)
-          )
-        );
-
-      return row?.count ?? 0;
-    })
-  );
 }
 
 function isTelegramHistoryPastCovered(interval: HistoryInterval): boolean {
@@ -917,6 +736,23 @@ function maxOptionalDate(values: Date[]): string | null {
   return values.reduce((maximum, value) => (value > maximum ? value : maximum)).toISOString();
 }
 
+function requireTelegramReadClient(runtime: HistoryRuntime): TelegramReadClient {
+  if (runtime.telegram === undefined) {
+    throw new Error('History runtime requires Telegram read client');
+  }
+
+  return runtime.telegram;
+}
+
+function parseOptionalDate(value: string | null): Date | undefined {
+  if (value === null) {
+    return undefined;
+  }
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? undefined : date;
+}
+
 function requireString(value: unknown, message: string): string {
   const stringValue = asString(value);
   if (stringValue === undefined) {
@@ -944,12 +780,6 @@ function requireJsonObject(value: unknown, message: string): JsonObject {
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null
-    ? (value as Record<string, unknown>)
-    : undefined;
-}
-
-function asPlainRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : undefined;
 }

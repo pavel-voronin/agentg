@@ -11,7 +11,14 @@ describe('timeline view model', () => {
       coverageTableOpen: true,
       data: {
         chat: {
-          id: 'chat-a'
+          historyBeginningReached: false,
+          historyStartAt: null,
+          id: 'chat-a',
+          isBot: false,
+          messageCount: 10,
+          title: 'Saved Messages',
+          type: 'private',
+          updatedAt: '2026-05-01T17:04:41.000Z'
         },
         coverage: [
           {
@@ -19,7 +26,11 @@ describe('timeline view model', () => {
             messageCount: 10,
             startAt: '2026-05-01T15:31:33.000Z'
           }
-        ]
+        ],
+        desired: [],
+        jobs: [],
+        missing: [],
+        targets: []
       },
       viewport: {
         endAt: Date.parse('2026-05-01T17:04:28.000Z'),

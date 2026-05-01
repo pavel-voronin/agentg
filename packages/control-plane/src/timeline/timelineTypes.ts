@@ -125,7 +125,7 @@ export type TimelineTarget = {
   id?: string;
   projected?: TimelineRawInterval | null;
   range?: TimelineRange;
-  templateId?: string;
+  templateId?: string | null;
 };
 
 export type TimelineBoundary =

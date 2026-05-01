@@ -40,17 +40,17 @@ function selectedChatHeaderView(chat: SelectedHistoryChat): SelectedChatHeaderVi
   return {
     historyLabel: selectedChatHistoryLabel(chat),
     id: chat.id,
-    messageCount: `${formatInteger(chat.messageCount ?? 0)} messages`,
-    title: chat.title ?? chat.id,
-    type: chat.type ?? ''
+    messageCount: `${formatInteger(chat.messageCount)} messages`,
+    title: chat.title,
+    type: chat.type
   };
 }
 
 function selectedChatHistoryLabel(chat: SelectedHistoryChat): string | null {
-  if (chat.historyStartAt !== undefined) {
+  if (chat.historyStartAt !== null) {
     return `history starts ${formatDate(chat.historyStartAt)}`;
   }
-  if (chat.historyBeginningReached === true) {
+  if (chat.historyBeginningReached) {
     return 'history beginning reached';
   }
   return null;

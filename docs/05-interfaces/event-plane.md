@@ -101,11 +101,12 @@ live events to browser clients.
 
 After reconnecting, consumers must rebuild state through these surfaces:
 
-- Gateway external clients: Gateway WebSocket RPC methods backed by Postgres and
-  History tRPC.
+- Gateway external clients: Gateway WebSocket RPC methods backed by Telegram and
+  History internal tRPC.
 - Control Plane browser clients: Control Plane WebSocket RPC methods backed by
   History tRPC.
-- History Sync: its own Postgres tables plus Telegram History tRPC.
+- History Sync: its own Postgres tables plus Telegram read and history-fetch
+  tRPC.
 - Telegram ingestion: TDLib session state and Telegram-shaped Postgres storage.
 
 ## Internal RPC Ownership
@@ -113,7 +114,8 @@ After reconnecting, consumers must rebuild state through these surfaces:
 Internal RPC contracts are owned by the serving domain package:
 
 - Telegram owns `@agentg/telegram/rpc`, including the Telegram History tRPC
-  router and schemas for `listChats` and `fetchPage`.
+  router and schemas for `listChats`, `fetchPage`, Gateway Telegram reads, and
+  the stable Telegram read facts consumed by History Sync.
 - History Sync owns `@agentg/history-sync/rpc`, including the History tRPC router,
   schemas, and the JSON-RPC adapter used by Gateway and Control Plane server for
   existing `history.*` method names.

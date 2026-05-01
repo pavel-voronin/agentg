@@ -1,5 +1,12 @@
 import { createTRPCClient, httpBatchLink } from '@trpc/client';
-import type { TelegramHistoryRouter } from '@agentg/telegram/rpc';
+import type {
+  TelegramChatDirectoryEntry,
+  TelegramChatFolder,
+  TelegramChatTypeCount,
+  TelegramHistoryRouter,
+  TelegramReadChat,
+  TelegramReadMessage
+} from '@agentg/telegram/rpc';
 
 import type { InternalTrpcClientConfig } from './rpc/config.js';
 
@@ -44,11 +51,57 @@ export type TelegramHistoryFetchPageResult =
       storedMessages: number;
     };
 
+export type TelegramMessageInterval = {
+  endAt: string;
+  startAt: string;
+};
+
+export type TelegramChatDirectoryRequest = {
+  query?: string;
+  type?: string;
+};
+
+export type TelegramChatDirectoryResult = {
+  chats: TelegramChatDirectoryEntry[];
+  folders: TelegramChatFolder[];
+  navigationChats: TelegramChatDirectoryEntry[];
+  types: TelegramChatTypeCount[];
+};
+
+export type TelegramChatHistoryFacts = {
+  chat: TelegramChatDirectoryEntry | null;
+  earliestMessageDate: string | null;
+  messageCount: number;
+};
+
+export type TelegramReadClient = {
+  countMessagesInIntervals(request: {
+    chatId: string;
+    intervals: TelegramMessageInterval[];
+  }): Promise<{ counts: number[] }>;
+  getChat(request: { chatId: string }): Promise<{ chat: TelegramReadChat | null }>;
+  getChatHistoryFacts(request: { chatId: string }): Promise<TelegramChatHistoryFacts>;
+  getMessage(request: {
+    chatId: string;
+    messageId: string;
+  }): Promise<{ message: TelegramReadMessage | null }>;
+  listChatDirectory(request: TelegramChatDirectoryRequest): Promise<TelegramChatDirectoryResult>;
+  listRecentMessages(request: {
+    chatId?: string;
+    limit?: number;
+  }): Promise<{ messages: TelegramReadMessage[] }>;
+  searchMessages(request: {
+    chatId?: string;
+    limit?: number;
+    query: string;
+  }): Promise<{ messages: TelegramReadMessage[] }>;
+};
+
 export type TelegramHistoryClient = {
   close?(): void;
   fetchPage(request: TelegramHistoryFetchPageRequest): Promise<TelegramHistoryFetchPageResult>;
   listChats(request: TelegramHistoryListChatsRequest): Promise<TelegramHistoryChat[]>;
-};
+} & TelegramReadClient;
 
 const TELEGRAM_HISTORY_REQUEST_TIMEOUT_MS = 30000;
 
@@ -67,15 +120,57 @@ export function createTrpcTelegramHistoryClient(
     close() {
       return;
     },
+    countMessagesInIntervals(request) {
+      return withTimeout(
+        (signal) => client.countMessagesInIntervals.query(request, { signal }),
+        TELEGRAM_HISTORY_REQUEST_TIMEOUT_MS
+      );
+    },
     fetchPage(request) {
       return withTimeout(
         (signal) => client.fetchPage.mutate(request, { signal }),
         TELEGRAM_HISTORY_REQUEST_TIMEOUT_MS
       );
     },
+    getChat(request) {
+      return withTimeout(
+        (signal) => client.getChat.query(request, { signal }),
+        TELEGRAM_HISTORY_REQUEST_TIMEOUT_MS
+      );
+    },
+    getChatHistoryFacts(request) {
+      return withTimeout(
+        (signal) => client.getChatHistoryFacts.query(request, { signal }),
+        TELEGRAM_HISTORY_REQUEST_TIMEOUT_MS
+      );
+    },
+    getMessage(request) {
+      return withTimeout(
+        (signal) => client.getMessage.query(request, { signal }),
+        TELEGRAM_HISTORY_REQUEST_TIMEOUT_MS
+      );
+    },
+    listChatDirectory(request) {
+      return withTimeout(
+        (signal) => client.listChatDirectory.query(request, { signal }),
+        TELEGRAM_HISTORY_REQUEST_TIMEOUT_MS
+      );
+    },
     listChats(request) {
       return withTimeout(
         (signal) => client.listChats.query(request, { signal }),
+        TELEGRAM_HISTORY_REQUEST_TIMEOUT_MS
+      );
+    },
+    listRecentMessages(request) {
+      return withTimeout(
+        (signal) => client.listRecentMessages.query(request, { signal }),
+        TELEGRAM_HISTORY_REQUEST_TIMEOUT_MS
+      );
+    },
+    searchMessages(request) {
+      return withTimeout(
+        (signal) => client.searchMessages.query(request, { signal }),
         TELEGRAM_HISTORY_REQUEST_TIMEOUT_MS
       );
     }

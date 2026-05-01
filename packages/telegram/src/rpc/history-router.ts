@@ -1,16 +1,26 @@
 import type { AppDatabase } from '@agentg/database/client';
-import { telegramChatFolders, telegramChats } from '@agentg/database/schema';
-import { asc } from 'drizzle-orm';
+import {
+  telegramChatFolders,
+  telegramChats,
+  telegramMessages,
+  telegramUsers
+} from '@agentg/database/schema';
+import { and, asc, desc, eq, gte, ilike, inArray, isNotNull, lt, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import {
   asTdObject,
   normalizeChat,
   normalizeHistoricalMessage,
+  type JsonObject,
   type TdObject
 } from '../normalize.js';
 import { persistTelegramUpdate, upsertChat } from '../store.js';
 import { telegramRpcProcedure, telegramRpcRouter } from './trpc.js';
+
+const nonEmptyStringSchema = z.string().trim().min(1);
+const nonNegativeIntegerSchema = z.number().int().nonnegative();
+const positiveIntegerSchema = z.number().int().positive();
 
 export const telegramHistoryChatSchema = z.object({
   id: z.string(),
@@ -54,10 +64,166 @@ export const telegramHistoryFetchPageResultSchema = z.discriminatedUnion('kind',
   })
 ]);
 
+export const telegramReadChatSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  type: z.string(),
+  updatedAt: z.string()
+});
+
+export const telegramReadMessageSchema = z.object({
+  chatId: z.string(),
+  contentType: z.string(),
+  deletedAt: z.string().nullable(),
+  editDate: z.string().nullable(),
+  isDeleted: z.boolean(),
+  messageDate: z.string().nullable(),
+  messageId: z.string(),
+  senderId: z.string().nullable(),
+  senderType: z.string().nullable(),
+  text: z.string().nullable(),
+  updatedAt: z.string()
+});
+
+export const telegramGetChatInputSchema = z.object({
+  chatId: nonEmptyStringSchema
+});
+
+export const telegramGetChatOutputSchema = z.object({
+  chat: telegramReadChatSchema.nullable()
+});
+
+export const telegramGetMessageInputSchema = z.object({
+  chatId: nonEmptyStringSchema,
+  messageId: nonEmptyStringSchema
+});
+
+export const telegramGetMessageOutputSchema = z.object({
+  message: telegramReadMessageSchema.nullable()
+});
+
+export const telegramListRecentMessagesInputSchema = z
+  .object({
+    chatId: nonEmptyStringSchema.optional(),
+    limit: positiveIntegerSchema.optional()
+  })
+  .default({});
+
+export const telegramListRecentMessagesOutputSchema = z.object({
+  messages: z.array(telegramReadMessageSchema)
+});
+
+export const telegramSearchMessagesInputSchema = z.object({
+  chatId: nonEmptyStringSchema.optional(),
+  limit: positiveIntegerSchema.optional(),
+  query: nonEmptyStringSchema
+});
+
+export const telegramSearchMessagesOutputSchema = z.object({
+  messages: z.array(telegramReadMessageSchema)
+});
+
+export const telegramChatPlacementSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('archive'),
+    order: z.string()
+  }),
+  z.object({
+    kind: z.literal('main'),
+    order: z.string()
+  }),
+  z.object({
+    folderId: nonNegativeIntegerSchema,
+    kind: z.literal('folder'),
+    order: z.string()
+  })
+]);
+
+export const telegramChatDirectoryEntrySchema = telegramReadChatSchema.extend({
+  isBot: z.boolean(),
+  isSelf: z.boolean(),
+  lastMessageDate: nonNegativeIntegerSchema,
+  placements: z.array(telegramChatPlacementSchema)
+});
+
+export const telegramChatFolderSchema = z.object({
+  iconName: z.string().nullable(),
+  id: nonNegativeIntegerSchema,
+  position: nonNegativeIntegerSchema,
+  title: z.string()
+});
+
+export const telegramChatTypeCountSchema = z.object({
+  count: nonNegativeIntegerSchema,
+  type: z.string()
+});
+
+export const telegramListChatDirectoryInputSchema = z
+  .object({
+    query: nonEmptyStringSchema.optional(),
+    type: nonEmptyStringSchema.optional()
+  })
+  .default({});
+
+export const telegramListChatDirectoryOutputSchema = z.object({
+  chats: z.array(telegramChatDirectoryEntrySchema),
+  folders: z.array(telegramChatFolderSchema),
+  navigationChats: z.array(telegramChatDirectoryEntrySchema),
+  types: z.array(telegramChatTypeCountSchema)
+});
+
+export const telegramGetChatHistoryFactsInputSchema = z.object({
+  chatId: nonEmptyStringSchema
+});
+
+export const telegramGetChatHistoryFactsOutputSchema = z.object({
+  chat: telegramChatDirectoryEntrySchema.nullable(),
+  earliestMessageDate: z.string().nullable(),
+  messageCount: nonNegativeIntegerSchema
+});
+
+export const telegramCountMessagesInIntervalsInputSchema = z.object({
+  chatId: nonEmptyStringSchema,
+  intervals: z.array(
+    z.object({
+      endAt: nonEmptyStringSchema,
+      startAt: nonEmptyStringSchema
+    })
+  )
+});
+
+export const telegramCountMessagesInIntervalsOutputSchema = z.object({
+  counts: z.array(nonNegativeIntegerSchema)
+});
+
 export type TelegramHistoryChat = z.infer<typeof telegramHistoryChatSchema>;
 export type TelegramHistoryListChatsRequest = z.infer<typeof telegramHistoryListChatsInputSchema>;
 export type TelegramHistoryFetchPageRequest = z.infer<typeof telegramHistoryFetchPageInputSchema>;
 export type TelegramHistoryFetchPageResult = z.infer<typeof telegramHistoryFetchPageResultSchema>;
+export type TelegramReadChat = z.infer<typeof telegramReadChatSchema>;
+export type TelegramReadMessage = z.infer<typeof telegramReadMessageSchema>;
+export type TelegramGetChatInput = z.infer<typeof telegramGetChatInputSchema>;
+export type TelegramGetMessageInput = z.infer<typeof telegramGetMessageInputSchema>;
+export type TelegramListRecentMessagesInput = z.infer<typeof telegramListRecentMessagesInputSchema>;
+export type TelegramSearchMessagesInput = z.infer<typeof telegramSearchMessagesInputSchema>;
+export type TelegramChatPlacement = z.infer<typeof telegramChatPlacementSchema>;
+export type TelegramChatDirectoryEntry = z.infer<typeof telegramChatDirectoryEntrySchema>;
+export type TelegramChatFolder = z.infer<typeof telegramChatFolderSchema>;
+export type TelegramChatTypeCount = z.infer<typeof telegramChatTypeCountSchema>;
+export type TelegramListChatDirectoryInput = z.infer<typeof telegramListChatDirectoryInputSchema>;
+export type TelegramListChatDirectoryOutput = z.infer<typeof telegramListChatDirectoryOutputSchema>;
+export type TelegramGetChatHistoryFactsInput = z.infer<
+  typeof telegramGetChatHistoryFactsInputSchema
+>;
+export type TelegramGetChatHistoryFactsOutput = z.infer<
+  typeof telegramGetChatHistoryFactsOutputSchema
+>;
+export type TelegramCountMessagesInIntervalsInput = z.infer<
+  typeof telegramCountMessagesInIntervalsInputSchema
+>;
+export type TelegramCountMessagesInIntervalsOutput = z.infer<
+  typeof telegramCountMessagesInIntervalsOutputSchema
+>;
 
 type TelegramClient = {
   invoke(request: Record<string, unknown>): Promise<unknown>;
@@ -72,6 +238,34 @@ type ChatListKind =
       kind: 'folder';
     };
 
+type TelegramChatStorageRow = {
+  raw: JsonObject;
+  telegramChatId: string;
+  title: string;
+  type: string;
+  updatedAt: Date;
+};
+
+type TelegramMessageStorageRow = {
+  contentType: string;
+  deletedAt: Date | null;
+  editDate: Date | null;
+  isDeleted: boolean;
+  messageDate: Date | null;
+  senderId: string | null;
+  senderType: string | null;
+  telegramChatId: string;
+  telegramMessageId: string;
+  text: string | null;
+  updatedAt: Date;
+};
+
+type TelegramUserInfo = {
+  isBot: boolean;
+  isSelf: boolean;
+  telegramUserId: string;
+};
+
 export type TelegramHistoryRouterRuntime = {
   client: TelegramClient;
   database: AppDatabase;
@@ -79,14 +273,42 @@ export type TelegramHistoryRouterRuntime = {
 
 export function createTelegramHistoryRouter(runtime: TelegramHistoryRouterRuntime) {
   return telegramRpcRouter({
+    countMessagesInIntervals: telegramRpcProcedure
+      .input(telegramCountMessagesInIntervalsInputSchema)
+      .output(telegramCountMessagesInIntervalsOutputSchema)
+      .query(({ input }) => handleCountMessagesInIntervals(runtime, input)),
     fetchPage: telegramRpcProcedure
       .input(telegramHistoryFetchPageInputSchema)
       .output(telegramHistoryFetchPageResultSchema)
       .mutation(({ input }) => handleFetchPage(runtime, input)),
+    getChat: telegramRpcProcedure
+      .input(telegramGetChatInputSchema)
+      .output(telegramGetChatOutputSchema)
+      .query(({ input }) => handleGetChat(runtime, input)),
+    getChatHistoryFacts: telegramRpcProcedure
+      .input(telegramGetChatHistoryFactsInputSchema)
+      .output(telegramGetChatHistoryFactsOutputSchema)
+      .query(({ input }) => handleGetChatHistoryFacts(runtime, input)),
+    getMessage: telegramRpcProcedure
+      .input(telegramGetMessageInputSchema)
+      .output(telegramGetMessageOutputSchema)
+      .query(({ input }) => handleGetMessage(runtime, input)),
+    listChatDirectory: telegramRpcProcedure
+      .input(telegramListChatDirectoryInputSchema)
+      .output(telegramListChatDirectoryOutputSchema)
+      .query(({ input }) => handleListChatDirectory(runtime, input)),
     listChats: telegramRpcProcedure
       .input(telegramHistoryListChatsInputSchema)
       .output(z.array(telegramHistoryChatSchema))
-      .query(({ input }) => handleListChats(runtime, input))
+      .query(({ input }) => handleListChats(runtime, input)),
+    listRecentMessages: telegramRpcProcedure
+      .input(telegramListRecentMessagesInputSchema)
+      .output(telegramListRecentMessagesOutputSchema)
+      .query(({ input }) => handleListRecentMessages(runtime, input)),
+    searchMessages: telegramRpcProcedure
+      .input(telegramSearchMessagesInputSchema)
+      .output(telegramSearchMessagesOutputSchema)
+      .query(({ input }) => handleSearchMessages(runtime, input))
   });
 }
 
@@ -101,6 +323,253 @@ async function handleListChats(
   return discover === true
     ? discoverHistoryChats(runtime.database, runtime.client, loadBatchSize)
     : listKnownHistoryChats(runtime.database);
+}
+
+async function handleGetChat(
+  runtime: TelegramHistoryRouterRuntime,
+  input: TelegramGetChatInput
+): Promise<{ chat: TelegramReadChat | null }> {
+  const [chat] = await runtime.database
+    .select({
+      telegramChatId: telegramChats.telegramChatId,
+      title: telegramChats.title,
+      type: telegramChats.type,
+      updatedAt: telegramChats.updatedAt
+    })
+    .from(telegramChats)
+    .where(eq(telegramChats.telegramChatId, input.chatId))
+    .limit(1);
+
+  return {
+    chat:
+      chat === undefined
+        ? null
+        : {
+            id: chat.telegramChatId,
+            title: chat.title,
+            type: chat.type,
+            updatedAt: chat.updatedAt.toISOString()
+          }
+  };
+}
+
+async function handleGetMessage(
+  runtime: TelegramHistoryRouterRuntime,
+  input: TelegramGetMessageInput
+): Promise<{ message: TelegramReadMessage | null }> {
+  const [message] = await runtime.database
+    .select(readMessageSelection())
+    .from(telegramMessages)
+    .where(
+      and(
+        eq(telegramMessages.telegramChatId, input.chatId),
+        eq(telegramMessages.telegramMessageId, input.messageId)
+      )
+    )
+    .limit(1);
+
+  return {
+    message: message === undefined ? null : toReadMessage(message)
+  };
+}
+
+async function handleListRecentMessages(
+  runtime: TelegramHistoryRouterRuntime,
+  input: TelegramListRecentMessagesInput
+): Promise<{ messages: TelegramReadMessage[] }> {
+  const limit = parseLimit(input.limit, 50, 200);
+  const where =
+    input.chatId === undefined ? undefined : eq(telegramMessages.telegramChatId, input.chatId);
+  const messages = await runtime.database
+    .select(readMessageSelection())
+    .from(telegramMessages)
+    .where(where)
+    .orderBy(
+      desc(telegramMessages.messageDate),
+      sql`${telegramMessages.telegramMessageId}::bigint desc`
+    )
+    .limit(limit);
+
+  return {
+    messages: messages.map(toReadMessage)
+  };
+}
+
+async function handleSearchMessages(
+  runtime: TelegramHistoryRouterRuntime,
+  input: TelegramSearchMessagesInput
+): Promise<{ messages: TelegramReadMessage[] }> {
+  const query = input.query.trim();
+  const limit = parseLimit(input.limit, 20, 100);
+  const textFilter = ilike(telegramMessages.text, `%${query}%`);
+  const where =
+    input.chatId === undefined
+      ? textFilter
+      : and(eq(telegramMessages.telegramChatId, input.chatId), textFilter);
+  const messages = await runtime.database
+    .select(readMessageSelection())
+    .from(telegramMessages)
+    .where(where)
+    .orderBy(
+      desc(telegramMessages.messageDate),
+      sql`${telegramMessages.telegramMessageId}::bigint desc`
+    )
+    .limit(limit);
+
+  return {
+    messages: messages.map(toReadMessage)
+  };
+}
+
+async function handleListChatDirectory(
+  runtime: TelegramHistoryRouterRuntime,
+  input: TelegramListChatDirectoryInput
+): Promise<TelegramListChatDirectoryOutput> {
+  const query = input.query?.trim();
+  const type = input.type?.trim();
+  const queryWhere = query === undefined || query.length === 0 ? undefined : chatSearchWhere(query);
+  const where = andSql(queryWhere, type === undefined ? undefined : eq(telegramChats.type, type));
+  const navigationWhere = type === undefined ? undefined : eq(telegramChats.type, type);
+
+  const [matchingChats, navigationChats, folders, types] = await Promise.all([
+    runtime.database
+      .select({
+        raw: telegramChats.raw,
+        telegramChatId: telegramChats.telegramChatId,
+        title: telegramChats.title,
+        type: telegramChats.type,
+        updatedAt: telegramChats.updatedAt
+      })
+      .from(telegramChats)
+      .where(where)
+      .orderBy(asc(telegramChats.title), asc(telegramChats.telegramChatId)),
+    runtime.database
+      .select({
+        raw: telegramChats.raw,
+        telegramChatId: telegramChats.telegramChatId,
+        title: telegramChats.title,
+        type: telegramChats.type,
+        updatedAt: telegramChats.updatedAt
+      })
+      .from(telegramChats)
+      .where(navigationWhere)
+      .orderBy(asc(telegramChats.title), asc(telegramChats.telegramChatId)),
+    runtime.database
+      .select({
+        iconName: telegramChatFolders.iconName,
+        position: telegramChatFolders.position,
+        telegramChatFolderId: telegramChatFolders.telegramChatFolderId,
+        title: telegramChatFolders.title
+      })
+      .from(telegramChatFolders)
+      .orderBy(asc(telegramChatFolders.position), asc(telegramChatFolders.telegramChatFolderId)),
+    runtime.database
+      .select({
+        count: sql<number>`count(*)::int`,
+        type: telegramChats.type
+      })
+      .from(telegramChats)
+      .groupBy(telegramChats.type)
+      .orderBy(asc(telegramChats.type))
+  ]);
+
+  return {
+    chats: await toDirectoryEntries(runtime.database, matchingChats),
+    folders: folders.map((folder) => ({
+      iconName: folder.iconName,
+      id: folder.telegramChatFolderId,
+      position: folder.position,
+      title: folder.title
+    })),
+    navigationChats: await toDirectoryEntries(runtime.database, navigationChats),
+    types
+  };
+}
+
+async function handleGetChatHistoryFacts(
+  runtime: TelegramHistoryRouterRuntime,
+  input: TelegramGetChatHistoryFactsInput
+): Promise<TelegramGetChatHistoryFactsOutput> {
+  const [chat] = await runtime.database
+    .select({
+      raw: telegramChats.raw,
+      telegramChatId: telegramChats.telegramChatId,
+      title: telegramChats.title,
+      type: telegramChats.type,
+      updatedAt: telegramChats.updatedAt
+    })
+    .from(telegramChats)
+    .where(eq(telegramChats.telegramChatId, input.chatId))
+    .limit(1);
+
+  if (chat === undefined) {
+    return {
+      chat: null,
+      earliestMessageDate: null,
+      messageCount: 0
+    };
+  }
+
+  const [entries, earliestMessages, messageCounts] = await Promise.all([
+    toDirectoryEntries(runtime.database, [chat]),
+    runtime.database
+      .select({
+        messageDate: telegramMessages.messageDate
+      })
+      .from(telegramMessages)
+      .where(
+        and(
+          eq(telegramMessages.telegramChatId, input.chatId),
+          isNotNull(telegramMessages.messageDate)
+        )
+      )
+      .orderBy(asc(telegramMessages.messageDate))
+      .limit(1),
+    runtime.database
+      .select({
+        count: sql<number>`count(*)::int`
+      })
+      .from(telegramMessages)
+      .where(eq(telegramMessages.telegramChatId, input.chatId))
+  ]);
+
+  return {
+    chat: entries[0] ?? null,
+    earliestMessageDate: earliestMessages[0]?.messageDate?.toISOString() ?? null,
+    messageCount: messageCounts[0]?.count ?? 0
+  };
+}
+
+async function handleCountMessagesInIntervals(
+  runtime: TelegramHistoryRouterRuntime,
+  input: TelegramCountMessagesInIntervalsInput
+): Promise<TelegramCountMessagesInIntervalsOutput> {
+  const intervals = input.intervals.map((interval) => ({
+    endAt: requireDate(interval.endAt, 'telegram.countMessagesInIntervals requires endAt'),
+    startAt: requireDate(interval.startAt, 'telegram.countMessagesInIntervals requires startAt')
+  }));
+
+  return {
+    counts: await Promise.all(
+      intervals.map(async (interval) => {
+        const [row] = await runtime.database
+          .select({
+            count: sql<number>`count(*)::int`
+          })
+          .from(telegramMessages)
+          .where(
+            and(
+              eq(telegramMessages.telegramChatId, input.chatId),
+              isNotNull(telegramMessages.messageDate),
+              gte(telegramMessages.messageDate, interval.startAt),
+              lt(telegramMessages.messageDate, interval.endAt)
+            )
+          );
+
+        return row?.count ?? 0;
+      })
+    )
+  };
 }
 
 async function handleFetchPage(
@@ -435,6 +904,172 @@ function parseLimit(value: unknown, fallback: number, max: number): number {
   return Math.min(value, max);
 }
 
+function readMessageSelection() {
+  return {
+    contentType: telegramMessages.contentType,
+    deletedAt: telegramMessages.deletedAt,
+    editDate: telegramMessages.editDate,
+    isDeleted: telegramMessages.isDeleted,
+    messageDate: telegramMessages.messageDate,
+    senderId: telegramMessages.senderId,
+    senderType: telegramMessages.senderType,
+    telegramChatId: telegramMessages.telegramChatId,
+    telegramMessageId: telegramMessages.telegramMessageId,
+    text: telegramMessages.text,
+    updatedAt: telegramMessages.updatedAt
+  };
+}
+
+function toReadMessage(message: TelegramMessageStorageRow): TelegramReadMessage {
+  return {
+    chatId: message.telegramChatId,
+    contentType: message.contentType,
+    deletedAt: toNullableIsoString(message.deletedAt),
+    editDate: toNullableIsoString(message.editDate),
+    isDeleted: message.isDeleted,
+    messageDate: toNullableIsoString(message.messageDate),
+    messageId: message.telegramMessageId,
+    senderId: message.senderId,
+    senderType: message.senderType,
+    text: message.text,
+    updatedAt: message.updatedAt.toISOString()
+  };
+}
+
+async function toDirectoryEntries(
+  database: AppDatabase,
+  chats: TelegramChatStorageRow[]
+): Promise<TelegramChatDirectoryEntry[]> {
+  const userIds = chats.map((chat) => telegramChatUserId(chat.raw)).filter(isDefined);
+  const users =
+    userIds.length === 0
+      ? []
+      : await database
+          .select({
+            isBot: telegramUsers.isBot,
+            isSelf: telegramUsers.isSelf,
+            telegramUserId: telegramUsers.telegramUserId
+          })
+          .from(telegramUsers)
+          .where(inArray(telegramUsers.telegramUserId, userIds));
+  const usersById = new Map(users.map((user) => [user.telegramUserId, user]));
+
+  return chats.map((chat) => {
+    const user = usersById.get(telegramChatUserId(chat.raw) ?? '');
+    return toDirectoryEntry(chat, user);
+  });
+}
+
+function toDirectoryEntry(
+  chat: TelegramChatStorageRow,
+  user: TelegramUserInfo | undefined
+): TelegramChatDirectoryEntry {
+  return {
+    id: chat.telegramChatId,
+    isBot: user?.isBot === true,
+    isSelf: user?.isSelf === true,
+    lastMessageDate: telegramChatLastMessageDate(chat.raw),
+    placements: telegramChatPlacements(chat.raw),
+    title: chat.type === 'private' && user?.isSelf === true ? 'Saved Messages' : chat.title,
+    type: chat.type,
+    updatedAt: chat.updatedAt.toISOString()
+  };
+}
+
+function telegramChatPlacements(raw: JsonObject): TelegramChatPlacement[] {
+  return chatPositions(raw)
+    .map((position) => {
+      const list = asPlainRecord(position.list);
+      const order = parsePositiveBigInt(position.order);
+      if (list === undefined || order === undefined) {
+        return undefined;
+      }
+
+      const type = typeof list._ === 'string' ? list._ : undefined;
+      if (type === 'chatListMain') {
+        return {
+          kind: 'main' as const,
+          order: order.toString()
+        };
+      }
+      if (type === 'chatListArchive') {
+        return {
+          kind: 'archive' as const,
+          order: order.toString()
+        };
+      }
+      if (type === 'chatListFolder') {
+        const folderId = chatFolderId(list);
+        return folderId === undefined
+          ? undefined
+          : {
+              folderId,
+              kind: 'folder' as const,
+              order: order.toString()
+            };
+      }
+
+      return undefined;
+    })
+    .filter(isDefined);
+}
+
+function chatPositions(raw: JsonObject): Record<string, unknown>[] {
+  return (Array.isArray(raw.positions) ? raw.positions : []).map(asPlainRecord).filter(isDefined);
+}
+
+function chatFolderId(list: Record<string, unknown> | undefined): number | undefined {
+  const value = list?.chat_folder_id ?? list?.chatFolderId;
+  return typeof value === 'number' && Number.isSafeInteger(value) ? value : undefined;
+}
+
+function telegramChatLastMessageDate(raw: JsonObject): number {
+  const lastMessage = asPlainRecord(raw.last_message) ?? asPlainRecord(raw.lastMessage);
+  return typeof lastMessage?.date === 'number' && lastMessage.date > 0 ? lastMessage.date : 0;
+}
+
+function telegramChatUserId(raw: JsonObject): string | undefined {
+  const type = asPlainRecord(raw.type);
+  const userId = type?.user_id ?? type?.userId;
+  if (typeof userId === 'number' || typeof userId === 'string') {
+    return String(userId);
+  }
+  return undefined;
+}
+
+function parsePositiveBigInt(value: unknown): bigint | undefined {
+  if (typeof value === 'number' && Number.isSafeInteger(value) && value > 0) {
+    return BigInt(value);
+  }
+
+  if (typeof value === 'string' && /^[0-9]+$/.test(value)) {
+    const parsed = BigInt(value);
+    return parsed > 0n ? parsed : undefined;
+  }
+
+  return undefined;
+}
+
+function chatSearchWhere(query: string) {
+  return orSql(
+    ilike(telegramChats.title, `%${query}%`),
+    ilike(telegramChats.telegramChatId, `%${query}%`)
+  );
+}
+
+function andSql(...conditions: (ReturnType<typeof eq> | undefined)[]) {
+  const defined = conditions.filter((condition) => condition !== undefined);
+  return defined.length === 0 ? undefined : and(...defined);
+}
+
+function orSql(first: ReturnType<typeof ilike>, second: ReturnType<typeof ilike>) {
+  return sql`(${first} or ${second})`;
+}
+
+function toNullableIsoString(value: Date | null): string | null {
+  return value === null ? null : value.toISOString();
+}
+
 function toTdChatList(chatList: ChatListKind): TdObject {
   switch (chatList.kind) {
     case 'main':
@@ -505,6 +1140,16 @@ function isTelegramId(value: unknown): value is number {
 
 function dedupeTelegramIds(ids: number[]): number[] {
   return [...new Set(ids)];
+}
+
+function isDefined<T>(value: T | undefined): value is T {
+  return value !== undefined;
+}
+
+function asPlainRecord(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
 }
 
 async function delay(milliseconds: number): Promise<void> {

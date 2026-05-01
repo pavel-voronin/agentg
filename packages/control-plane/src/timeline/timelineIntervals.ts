@@ -63,15 +63,15 @@ export function targetKey(target: TimelineTarget): string {
 }
 
 export function timelineCoverage(data: SelectedHistoryState): TimelineRawInterval[] {
-  return Array.isArray(data.coverage) ? (data.coverage as TimelineRawInterval[]) : [];
+  return data.coverage;
 }
 
 export function timelineJobs(data: SelectedHistoryState): TimelineJob[] {
-  return Array.isArray(data.jobs) ? (data.jobs as TimelineJob[]) : [];
+  return data.jobs;
 }
 
 export function timelineTargets(data: SelectedHistoryState): TimelineTarget[] {
-  return Array.isArray(data.targets) ? (data.targets as TimelineTarget[]) : [];
+  return data.targets;
 }
 
 export function toDates(raw: TimelineRawInterval): TimelineInterval | null {

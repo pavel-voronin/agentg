@@ -27,7 +27,7 @@ const overviewStore = useOverviewStore();
 const selectedHistoryStore = useSelectedHistoryStore();
 const appShell = computed(() => appShellView(appShellStore));
 const chatSidebar = computed(() => chatSidebarView(chatStore, selectedHistoryStore.selectedChatId));
-const dashboardMetrics = computed(() => dashboardMetricsFromOverview(overviewStore.overview ?? {}));
+const dashboardMetrics = computed(() => dashboardMetricsFromOverview(overviewStore.overview));
 const eventFiltersPanel = computed(() => eventFiltersPanelView(eventsStore));
 const eventFiltersVisible = computed(() => eventsStore.eventsPanelMode === 'filters');
 const eventItems = computed(() => eventsStore.events.map(eventListItem));

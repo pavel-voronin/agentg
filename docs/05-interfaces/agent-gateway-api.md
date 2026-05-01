@@ -5,9 +5,9 @@
 Agent Gateway is the external API boundary for an agent-side MCP plugin.
 
 The plugin connects to Gateway over WebSocket. Gateway keeps NATS internal,
-applies the external protocol boundary, forwards live integration events, serves
-Telegram read commands against Postgres, and calls History Sync through internal
-tRPC for history commands and reads.
+applies the external protocol boundary, forwards live integration events, calls
+Telegram through internal tRPC for Telegram reads, and calls History Sync through
+internal tRPC for history commands and reads.
 
 Gateway is a separate workspace package at `packages/gateway`. Telegram
 ingestion is a separate workspace package at `packages/telegram`. History Sync
@@ -27,7 +27,7 @@ History Sync
 Agent Gateway
   <- NATS Core subjects
   -> WebSocket clients
-  -> Postgres read RPC for Telegram reads
+  <-> tRPC to Telegram ingestion for Telegram reads
   <-> tRPC to History Sync
 ```
 
@@ -58,6 +58,8 @@ Configuration:
 - `AGENT_GATEWAY_HOST`, default `127.0.0.1`
 - `AGENT_GATEWAY_PORT`, default `8787`
 - `AGENT_GATEWAY_TOKEN`, optional query-string token
+- `TELEGRAM_RPC_URL`, default `http://127.0.0.1:18081`
+- `HISTORY_RPC_URL`, default `http://127.0.0.1:18082`
 
 When `AGENT_GATEWAY_TOKEN` is set, connect with:
 
@@ -132,6 +134,10 @@ Errors:
 ```
 
 ## Methods
+
+Gateway owns these external WebSocket method names. Telegram owns the internal
+read models that back the `telegram.*` methods. Gateway does not return Telegram
+database rows or raw TDLib payloads.
 
 `telegram.getMessage`
 

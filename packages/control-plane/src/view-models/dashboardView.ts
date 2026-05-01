@@ -1,12 +1,12 @@
 import type { DashboardMetric, HistoryOverview } from '../stores/controlPlaneTypes.js';
 import { formatInteger, formatOptionalValue } from './formatters.js';
 
-export function dashboardMetricsFromOverview(overview: HistoryOverview): DashboardMetric[] {
-  const activeJob = overview.activeJob;
+export function dashboardMetricsFromOverview(overview: HistoryOverview | null): DashboardMetric[] {
+  const activeJob = overview?.activeJob ?? null;
   return [
-    dashboardMetric('Chats', overview.chats ?? 0),
-    dashboardMetric('Targets', overview.targets ?? 0),
-    dashboardMetric('Coverage intervals', overview.coverageIntervals ?? 0),
+    dashboardMetric('Chats', overview?.chats ?? 0),
+    dashboardMetric('Targets', overview?.targets ?? 0),
+    dashboardMetric('Coverage intervals', overview?.coverageIntervals ?? 0),
     dashboardMetric(
       'Current job',
       activeJob?.status ?? '\u2014',

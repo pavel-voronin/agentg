@@ -7,19 +7,22 @@ import { createHTTPServer } from '@trpc/server/adapters/standalone';
 import { formatInternalTrpcBindAddress, type InternalTrpcBindConfig } from './config.js';
 import { createHistoryRouter } from './history-router.js';
 import { createHistoryRpcContext } from './trpc.js';
+import type { TelegramReadClient } from '../telegram-client.js';
 
 export async function startHistoryTrpcServer(options: {
   bind: InternalTrpcBindConfig;
   database: AppDatabase;
   eventBus: EventBus;
   requestSync?: (reason: string, chatId?: string) => void;
+  telegram: TelegramReadClient;
 }): Promise<Server> {
   const server = createHTTPServer({
     createContext: createHistoryRpcContext,
     router: createHistoryRouter({
       database: options.database,
       eventBus: options.eventBus,
-      ...(options.requestSync === undefined ? {} : { requestSync: options.requestSync })
+      ...(options.requestSync === undefined ? {} : { requestSync: options.requestSync }),
+      telegram: options.telegram
     })
   });
   const address = formatInternalTrpcBindAddress(options.bind);

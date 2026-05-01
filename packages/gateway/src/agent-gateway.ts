@@ -1,17 +1,16 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 
-import type { AppDatabase } from '@agentg/database/client';
-import { telegramChats, telegramMessages } from '@agentg/database/schema';
 import type { InternalTrpcClientConfig } from '@agentg/history-sync/rpc';
+import type { InternalTrpcClientConfig as TelegramInternalTrpcClientConfig } from '@agentg/telegram/rpc';
 import type { EventBus, EventSubscription } from '@agentg/shared/events/bus';
 import type { IntegrationEvent } from '@agentg/shared/events/envelope';
-import { and, desc, eq, ilike, sql } from 'drizzle-orm';
 import { WebSocket, WebSocketServer, type RawData } from 'ws';
 
 import {
   createTrpcGatewayHistoryClient,
   type GatewayHistoryClient
 } from './history-observability.js';
+import { createTrpcGatewayTelegramClient, type GatewayTelegramClient } from './telegram-reads.js';
 
 export type AgentGatewayConfig = {
   host: string;
@@ -21,15 +20,16 @@ export type AgentGatewayConfig = {
 
 export type AgentGatewayOptions = {
   config: AgentGatewayConfig;
-  database: AppDatabase;
   eventBus: EventBus;
   services: {
     history: InternalTrpcClientConfig;
+    telegram: TelegramInternalTrpcClientConfig;
   };
 };
 
 type AgentGatewayRuntime = AgentGatewayOptions & {
   historyClient: GatewayHistoryClient;
+  telegramClient: GatewayTelegramClient;
 };
 
 type RpcRequest = {
@@ -49,9 +49,11 @@ type RpcResponse = {
 
 export async function runAgentGateway(options: AgentGatewayOptions): Promise<void> {
   const historyClient = createTrpcGatewayHistoryClient(options.services.history);
+  const telegramClient = createTrpcGatewayTelegramClient(options.services.telegram);
   const runtime: AgentGatewayRuntime = {
     ...options,
-    historyClient
+    historyClient,
+    telegramClient
   };
   const server = createServer((request, response) => {
     handleHttpRequest(request, response);
@@ -104,7 +106,14 @@ export async function runAgentGateway(options: AgentGatewayOptions): Promise<voi
     })
   );
 
-  await waitForShutdown(server, webSocketServer, subscriptions, options.eventBus, historyClient);
+  await waitForShutdown(
+    server,
+    webSocketServer,
+    subscriptions,
+    options.eventBus,
+    historyClient,
+    telegramClient
+  );
 }
 
 async function handleClientMessage(
@@ -176,116 +185,14 @@ async function callMethod(
     }
   }
 
-  if (method === 'telegram.getMessage') {
-    return getMessage(options.database, params);
-  }
-
-  if (method === 'telegram.listRecentMessages') {
-    return listRecentMessages(options.database, params);
-  }
-
-  if (method === 'telegram.searchMessages') {
-    return searchMessages(options.database, params);
-  }
-
-  if (method === 'telegram.getChat') {
-    return getChat(options.database, params);
+  if (method.startsWith('telegram.')) {
+    const result = await options.telegramClient.call(method, params);
+    if (result !== undefined) {
+      return result;
+    }
   }
 
   throw new Error(`Unknown method: ${method}`);
-}
-
-async function getMessage(database: AppDatabase, params: unknown): Promise<unknown> {
-  const input = asRecord(params);
-  const chatId = asString(input?.chatId);
-  const messageId = asString(input?.messageId);
-  if (chatId === undefined || messageId === undefined) {
-    throw new Error('telegram.getMessage requires chatId and messageId');
-  }
-
-  const rows = await database
-    .select()
-    .from(telegramMessages)
-    .where(
-      and(
-        eq(telegramMessages.telegramChatId, chatId),
-        eq(telegramMessages.telegramMessageId, messageId)
-      )
-    )
-    .limit(1);
-
-  return {
-    message: rows[0] ?? null
-  };
-}
-
-async function listRecentMessages(database: AppDatabase, params: unknown): Promise<unknown> {
-  const input = asRecord(params);
-  const chatId = asString(input?.chatId);
-  const limit = parseLimit(input?.limit, 50, 200);
-
-  const where = chatId === undefined ? undefined : eq(telegramMessages.telegramChatId, chatId);
-  const rows = await database
-    .select()
-    .from(telegramMessages)
-    .where(where)
-    .orderBy(
-      desc(telegramMessages.messageDate),
-      sql`${telegramMessages.telegramMessageId}::bigint desc`
-    )
-    .limit(limit);
-
-  return {
-    messages: rows
-  };
-}
-
-async function searchMessages(database: AppDatabase, params: unknown): Promise<unknown> {
-  const input = asRecord(params);
-  const query = asString(input?.query);
-  if (query === undefined || query.trim().length === 0) {
-    throw new Error('telegram.searchMessages requires query');
-  }
-
-  const chatId = asString(input?.chatId);
-  const limit = parseLimit(input?.limit, 20, 100);
-  const textFilter = ilike(telegramMessages.text, `%${query.trim()}%`);
-  const where =
-    chatId === undefined
-      ? textFilter
-      : and(eq(telegramMessages.telegramChatId, chatId), textFilter);
-
-  const rows = await database
-    .select()
-    .from(telegramMessages)
-    .where(where)
-    .orderBy(
-      desc(telegramMessages.messageDate),
-      sql`${telegramMessages.telegramMessageId}::bigint desc`
-    )
-    .limit(limit);
-
-  return {
-    messages: rows
-  };
-}
-
-async function getChat(database: AppDatabase, params: unknown): Promise<unknown> {
-  const input = asRecord(params);
-  const chatId = asString(input?.chatId);
-  if (chatId === undefined) {
-    throw new Error('telegram.getChat requires chatId');
-  }
-
-  const rows = await database
-    .select()
-    .from(telegramChats)
-    .where(eq(telegramChats.telegramChatId, chatId))
-    .limit(1);
-
-  return {
-    chat: rows[0] ?? null
-  };
 }
 
 function handleHttpRequest(request: IncomingMessage, response: ServerResponse): void {
@@ -352,24 +259,6 @@ function normalizeRequestId(value: unknown): string | number | null {
   return null;
 }
 
-function parseLimit(value: unknown, fallback: number, max: number): number {
-  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0) {
-    return fallback;
-  }
-
-  return Math.min(value, max);
-}
-
-function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null
-    ? (value as Record<string, unknown>)
-    : undefined;
-}
-
-function asString(value: unknown): string | undefined {
-  return typeof value === 'string' && value.length > 0 ? value : undefined;
-}
-
 function sendResponse(client: WebSocket, response: RpcResponse): void {
   sendJson(client, response);
 }
@@ -399,7 +288,8 @@ async function waitForShutdown(
   webSocketServer: WebSocketServer,
   subscriptions: EventSubscription[],
   eventBus: EventBus,
-  historyClient: GatewayHistoryClient
+  historyClient: GatewayHistoryClient,
+  telegramClient: GatewayTelegramClient
 ): Promise<void> {
   await new Promise<void>((resolve) => {
     const shutdown = (): void => {
@@ -407,6 +297,7 @@ async function waitForShutdown(
         subscription.unsubscribe();
       }
       historyClient.close();
+      telegramClient.close();
       webSocketServer.close();
       server.close(() => {
         void eventBus.close().finally(resolve);

@@ -20,16 +20,21 @@ export type EventGroup = {
   match: (type: string) => boolean;
 };
 
+export type HistoryActiveJob = {
+  chatId: string;
+  endAt: string;
+  startAt: string;
+  status: string;
+};
+
 export type HistoryOverview = {
-  activeJob?: {
-    chatId?: string | number;
-    endAt?: Date | string;
-    startAt?: Date | string;
-    status?: string;
-  } | null;
-  chats?: number;
-  coverageIntervals?: number;
-  targets?: number;
+  activeJob: HistoryActiveJob | null;
+  chats: number;
+  coverageIntervals: number;
+  pendingJobs: number;
+  runningJobs: number;
+  targets: number;
+  templates: number;
 };
 
 export type ControlPlaneEvent = {
@@ -70,26 +75,29 @@ export type AppEventItem = {
 export type ChatListMode = 'archive' | 'folder' | 'main';
 
 export type ControlPlaneChat = {
-  coverageIntervals?: number;
+  coverageIntervals: number;
   id: string;
-  isBot?: boolean;
-  pendingJobs?: number;
-  runningJobs?: number;
-  targets?: number;
-  title?: string;
-  type?: string;
+  isBot: boolean;
+  pendingJobs: number;
+  runningJobs: number;
+  targets: number;
+  title: string;
+  type: string;
+  updatedAt: string;
 };
 
 export type ChatFolder = {
-  count?: number;
+  count: number;
+  iconName: string | null;
   id: number;
-  title?: string;
+  position: number;
+  title: string;
 };
 
 export type ChatNavigation = {
-  archiveCount?: number;
-  folders?: ChatFolder[];
-  mainCount?: number;
+  archiveCount: number;
+  folders: ChatFolder[];
+  mainCount: number;
 };
 
 export type ChatFolderNavItem = {
@@ -141,20 +149,67 @@ export type ChatSidebarView = {
 };
 
 export type SelectedHistoryChat = {
-  historyBeginningReached?: boolean;
-  historyStartAt?: Date | string;
+  historyBeginningReached: boolean;
+  historyStartAt: string | null;
   id: string;
+  isBot: boolean;
+  messageCount: number;
+  title: string;
+  type: string;
+  updatedAt: string;
+};
+
+export type HistoryInterval = {
+  endAt: string;
   messageCount?: number;
-  title?: string;
-  type?: string;
+  startAt: string;
+};
+
+export type HistoryBoundary =
+  | {
+      at: string;
+      kind: 'absolute';
+    }
+  | {
+      expression: string;
+      kind: 'expression';
+    };
+
+export type HistoryRange = {
+  end: HistoryBoundary;
+  start: HistoryBoundary;
+};
+
+export type HistoryJob = {
+  cursor?: Record<string, unknown>;
+  endAt: string;
+  id: string;
+  startAt: string;
+  status: string;
+  telegramChatId?: string;
+  updatedAt: string;
+};
+
+export type HistoryTarget = {
+  chatId: string;
+  id: string;
+  projected?: HistoryInterval;
+  range: HistoryRange;
+  templateId?: string | null;
+};
+
+export type HistoryChatTypeCount = {
+  count: number;
+  type: string;
 };
 
 export type SelectedHistoryState = {
-  chat?: SelectedHistoryChat | null;
-  coverage?: unknown[];
-  jobs?: unknown[];
-  targets?: unknown[];
-  [key: string]: unknown;
+  chat: SelectedHistoryChat | null;
+  coverage: HistoryInterval[];
+  desired: HistoryInterval[];
+  jobs: HistoryJob[];
+  missing: HistoryInterval[];
+  targets: HistoryTarget[];
 };
 
 export type SelectedHistoryStatus = 'idle' | 'loading' | 'ready' | 'unavailable';

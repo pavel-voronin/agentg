@@ -4,9 +4,12 @@ import {
   readInternalTrpcClientConfig,
   type InternalTrpcClientConfig
 } from '@agentg/history-sync/rpc';
+import {
+  readInternalTrpcClientConfig as readTelegramInternalTrpcClientConfig,
+  type InternalTrpcClientConfig as TelegramInternalTrpcClientConfig
+} from '@agentg/telegram/rpc';
 
 export type GatewayConfig = {
-  databaseUrl: string;
   gateway: {
     host: string;
     port: number;
@@ -17,12 +20,12 @@ export type GatewayConfig = {
   };
   services: {
     history: InternalTrpcClientConfig;
+    telegram: TelegramInternalTrpcClientConfig;
   };
 };
 
 export function loadGatewayConfig(env: NodeJS.ProcessEnv = process.env): GatewayConfig {
   return {
-    databaseUrl: env.DATABASE_URL ?? 'postgres://agentg:agentg@localhost:5432/agentg',
     gateway: {
       host: env.AGENT_GATEWAY_HOST ?? '127.0.0.1',
       port: parseOptionalInteger(env.AGENT_GATEWAY_PORT, 'AGENT_GATEWAY_PORT') ?? 8787,
@@ -35,6 +38,10 @@ export function loadGatewayConfig(env: NodeJS.ProcessEnv = process.env): Gateway
       history: readInternalTrpcClientConfig(env, {
         urlEnv: 'HISTORY_RPC_URL',
         defaultUrl: 'http://127.0.0.1:18082'
+      }),
+      telegram: readTelegramInternalTrpcClientConfig(env, {
+        urlEnv: 'TELEGRAM_RPC_URL',
+        defaultUrl: 'http://127.0.0.1:18081'
       })
     }
   };

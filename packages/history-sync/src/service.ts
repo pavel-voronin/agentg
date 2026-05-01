@@ -73,7 +73,8 @@ export async function runHistorySyncService(options: HistorySyncServiceOptions):
     eventBus: options.eventBus,
     requestSync(reason) {
       controller.request(reason);
-    }
+    },
+    telegram
   });
   controller.request('startup');
 

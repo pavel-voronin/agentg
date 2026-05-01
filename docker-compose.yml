@@ -34,15 +34,13 @@ services:
     depends_on:
       nats:
         condition: service_started
-      postgres:
-        condition: service_healthy
     environment:
       AGENT_GATEWAY_HOST: 0.0.0.0
       AGENT_GATEWAY_PORT: ${AGENT_GATEWAY_PORT:-8787}
       AGENT_GATEWAY_TOKEN: ${AGENT_GATEWAY_TOKEN:-}
-      DATABASE_URL: postgres://agentg:agentg@postgres:5432/agentg
       HISTORY_RPC_URL: http://history-sync:8080
       NATS_URL: nats://nats:4222
+      TELEGRAM_RPC_URL: http://telegram:8080
     ports:
       - '${AGENT_GATEWAY_PORT:-8787}:${AGENT_GATEWAY_PORT:-8787}'
     restart: 'no'

@@ -46,9 +46,10 @@ not require Gateway.
 ## Internal RPC Addresses
 
 Telegram and History Sync start package-owned internal tRPC HTTP servers. History
-Sync calls Telegram for chat discovery and historical page fetches. Gateway and
-Control Plane server call History Sync for history commands and reads while
-keeping their external WebSocket protocols unchanged.
+Sync calls Telegram for chat discovery, stable Telegram read facts, and
+historical page fetches. Gateway calls Telegram for Telegram reads and History
+Sync for history commands and reads. Control Plane server calls History Sync
+while keeping the browser-facing WebSocket protocol unchanged.
 
 Local development defaults:
 
@@ -57,6 +58,7 @@ Local development defaults:
 - History internal RPC bind: `HISTORY_RPC_HOST=127.0.0.1`,
   `HISTORY_RPC_PORT=18082`
 - History to Telegram URL: `TELEGRAM_RPC_URL=http://127.0.0.1:18081`
+- Gateway to Telegram URL: `TELEGRAM_RPC_URL=http://127.0.0.1:18081`
 - Gateway to History URL: `HISTORY_RPC_URL=http://127.0.0.1:18082`
 - Control Plane server bind: `CONTROL_PLANE_HOST=127.0.0.1`,
   `CONTROL_PLANE_PORT=8789`
@@ -68,7 +70,7 @@ Docker Compose uses internal service DNS names:
 - Telegram binds `0.0.0.0:8080` inside its container.
 - History Sync binds `0.0.0.0:8080` inside its container.
 - History Sync calls `http://telegram:8080`.
-- Gateway calls `http://history-sync:8080`.
+- Gateway calls `http://telegram:8080` and `http://history-sync:8080`.
 - Control Plane server calls `http://history-sync:8080` and exposes the browser
   UI on `${CONTROL_PLANE_PORT:-8788}`.
 
