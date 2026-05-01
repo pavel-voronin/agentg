@@ -6,6 +6,7 @@
   "exports": {
     "./commands": "./src/commands.ts",
     "./observability": "./src/observability.ts",
+    "./rpc": "./src/rpc/index.ts",
     "./types": "./src/types.ts"
   },
   "scripts": {
@@ -20,10 +21,13 @@
     "@agentg/database": "file:../database",
     "@agentg/proto": "file:../proto",
     "@agentg/shared": "file:../shared",
+    "@trpc/client": "^11.17.0",
+    "@trpc/server": "^11.17.0",
     "dotenv": "17.4.2",
     "drizzle-orm": "^0.45.2",
     "nats": "^2.29.3",
-    "pg": "8.20.0"
+    "pg": "8.20.0",
+    "zod": "^4.4.1"
   },
   "devDependencies": {
     "@types/node": "24.10.0",

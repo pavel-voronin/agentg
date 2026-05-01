@@ -6,7 +6,8 @@
   "exports": {
     "./config": "./src/config.ts",
     "./ingestion": "./src/ingestion.ts",
-    "./normalize": "./src/normalize.ts"
+    "./normalize": "./src/normalize.ts",
+    "./rpc": "./src/rpc/index.ts"
   },
   "scripts": {
     "dev": "tsx watch --clear-screen=false src/main.ts",
@@ -20,14 +21,17 @@
     "@agentg/database": "file:../database",
     "@agentg/proto": "file:../proto",
     "@agentg/shared": "file:../shared",
+    "@trpc/server": "^11.17.0",
     "dotenv": "17.4.2",
     "drizzle-orm": "^0.45.2",
     "nats": "^2.29.3",
     "pg": "8.20.0",
     "prebuilt-tdlib": "0.1008063.0",
-    "tdl": "8.1.0"
+    "tdl": "8.1.0",
+    "zod": "^4.4.1"
   },
   "devDependencies": {
+    "@trpc/client": "^11.17.0",
     "@types/node": "24.10.0",
     "@types/pg": "8.15.6",
     "tsx": "4.21.0",

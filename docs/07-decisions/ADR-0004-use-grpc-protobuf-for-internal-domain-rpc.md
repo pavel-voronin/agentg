@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted for the internal domain boundary migration.
+Superseded by
+[ADR-0005: Use Domain-Owned tRPC for Internal RPC](ADR-0005-use-domain-owned-trpc-for-internal-rpc.md).
 
 ## Context
 

@@ -12,6 +12,9 @@ This plan supersedes the gRPC target described in
 plan remains useful historical context for the domain-boundary work, but gRPC and
 Protobuf are no longer the target implementation.
 
+Architecture decision:
+[ADR-0005](../07-decisions/ADR-0005-use-domain-owned-trpc-for-internal-rpc.md).
+
 ## Target State
 
 - Domains own their storage, lifecycle, invariants, public internal API, input
@@ -72,7 +75,7 @@ Purpose: add enough tRPC infrastructure for domain-owned routers without
 migrating business flows.
 
 Stage re-plan:
-required before implementation.
+[Internal Domain tRPC Stage 1 Plan](internal-domain-trpc-stage-1-plan.md).
 
 Scope:
 

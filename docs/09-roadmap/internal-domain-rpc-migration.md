@@ -1,5 +1,9 @@
 # Internal Domain RPC Migration
 
+This gRPC/Protobuf plan has been superseded by
+[Internal Domain tRPC Migration](internal-domain-trpc-migration.md). It remains
+as historical context for the domain-boundary work.
+
 This plan migrates AgenTG toward explicit domain-owned RPC boundaries.
 
 The plan is intentionally staged. Do not start the next stage until the current
