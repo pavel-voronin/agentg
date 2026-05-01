@@ -83,6 +83,9 @@ Stage 1 must be re-planned before implementation.
 
 Purpose: make Telegram expose the history-fetch surface through its domain RPC.
 
+Stage re-plan:
+[Internal Domain RPC Stage 2 Plan](internal-domain-rpc-stage-2-plan.md).
+
 Scope:
 
 - Define Telegram History Protobuf service.

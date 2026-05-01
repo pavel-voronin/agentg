@@ -31,6 +31,7 @@ try {
   await runTelegramIngestion({
     database,
     eventBus,
+    internalRpc: config.internalRpc,
     telegram: config.telegram
   });
 } catch (error) {

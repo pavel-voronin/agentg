@@ -41,13 +41,15 @@ The agent-facing integration adds a separate live boundary:
 TDLib sidecar
   -> Postgres
   -> NATS Core live integration events
-  <-> NATS Core history fetch RPC
+  <- gRPC history fetch calls from History Sync
   -> History Sync service
   -> Agent Gateway WebSocket API
   -> agent MCP plugin
 ```
 
-NATS Core is used as an internal, non-durable event bus. Postgres remains the source of recovery and replayable Telegram facts.
+NATS Core is used as an internal, non-durable event bus. Addressed internal
+domain reads and commands move to gRPC. Postgres remains the source of recovery
+and replayable Telegram facts.
 History Sync is a separate process from Telegram ingestion: it owns targets,
 coverage, and backfill jobs, while Telegram ingestion owns TDLib and
 Telegram-shaped persistence.

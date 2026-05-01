@@ -25,7 +25,8 @@ try {
   await runHistorySyncService({
     backfill: config.backfill,
     database,
-    eventBus
+    eventBus,
+    services: config.services
   });
 } catch (error) {
   console.error(

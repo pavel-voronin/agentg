@@ -10,7 +10,6 @@
     "./dotenv": "./src/dotenv.ts",
     "./events/bus": "./src/events/bus.ts",
     "./events/envelope": "./src/events/envelope.ts",
-    "./events/telegram-history": "./src/events/telegram-history.ts",
     "./events/telegram-events": "./src/events/telegram-events.ts",
     "./json": "./src/json.ts"
   },

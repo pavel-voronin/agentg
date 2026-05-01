@@ -29,15 +29,17 @@ Telegram history fetch RPC surface used by History Sync.
 
 `npm run dev:history-sync` runs the `@agentg/history-sync` package. It owns
 history templates, concrete chat targets, coverage intervals, backfill jobs, and
-the history sync lifecycle. It talks to Telegram ingestion through NATS RPC.
+the history sync lifecycle. It talks to Telegram ingestion through internal gRPC.
 
 `npm run dev:gateway` runs the `@agentg/gateway` package. It subscribes to live
 NATS events and serves WebSocket clients with Postgres-backed read RPCs.
 
 ## Internal RPC Addresses
 
-Stage 1 of the internal RPC migration adds address configuration only. It does
-not start domain gRPC servers yet.
+Telegram now starts the Telegram History gRPC server. History Sync calls that
+server for chat discovery and historical page fetches. History's own gRPC server
+address is configured for the later History Domain RPC stage, but the server is
+not started yet.
 
 Local development defaults:
 

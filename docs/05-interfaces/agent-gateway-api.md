@@ -19,7 +19,7 @@ Telegram ingestion
 
 History Sync
   -> Postgres history tables
-  <-> NATS RPC to Telegram ingestion
+  <-> gRPC to Telegram ingestion
 
 Agent Gateway
   <- NATS Core subjects
@@ -233,12 +233,13 @@ There is no periodic polling loop.
 
 ## Telegram History RPC
 
-History Sync talks to Telegram ingestion through a narrow internal NATS RPC
-surface. History jobs are not exposed to Telegram ingestion.
+History Sync talks to Telegram ingestion through a narrow internal gRPC surface.
+History jobs are not exposed to Telegram ingestion.
 
-- `agentg.command.telegram.history.list_chats`: optionally asks Telegram ingestion to
-  discover chats through TDLib and returns Telegram-shaped chat metadata.
-- `agentg.command.telegram.history.fetch_page`: asks Telegram ingestion to fetch and
-  persist one history page for `{ chatId, startAt, endAt, cursorMessageId,
-  limit }`. The response is a compact page summary used by History Sync to
-  checkpoint its own backfill job and coverage state.
+- `agentg.telegram.v1.TelegramHistoryService/ListChats`: optionally asks
+  Telegram ingestion to discover chats through TDLib and returns
+  Telegram-shaped chat metadata.
+- `agentg.telegram.v1.TelegramHistoryService/FetchPage`: asks Telegram
+  ingestion to fetch and persist one history page for `{ chatId, startAt, endAt,
+  cursorMessageId, limit }`. The response is a compact page summary used by
+  History Sync to checkpoint its own backfill job and coverage state.

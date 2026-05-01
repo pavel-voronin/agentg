@@ -5,11 +5,12 @@
   "type": "module",
   "exports": {
     "./agentg/internal/v1/health": "./src/generated/agentg/internal/v1/health.ts",
+    "./agentg/telegram/v1/history": "./src/generated/agentg/telegram/v1/history.ts",
     "./rpc/config": "./src/rpc/config.ts",
     "./rpc/grpc": "./src/rpc/grpc.ts"
   },
   "scripts": {
-    "generate": "mkdir -p src/generated && protoc --plugin=protoc-gen-ts_proto=../../node_modules/.bin/protoc-gen-ts_proto --ts_proto_out=src/generated --ts_proto_opt=esModuleInterop=true,env=node,forceLong=string,importSuffix=.js,outputServices=grpc-js,useExactTypes=true --proto_path=proto proto/agentg/internal/v1/health.proto && prettier --write src/generated",
+    "generate": "mkdir -p src/generated && protoc --plugin=protoc-gen-ts_proto=../../node_modules/.bin/protoc-gen-ts_proto --ts_proto_out=src/generated --ts_proto_opt=esModuleInterop=true,env=node,forceLong=string,importSuffix=.js,outputServices=grpc-js,useExactTypes=true --proto_path=proto proto/agentg/internal/v1/health.proto proto/agentg/telegram/v1/history.proto && prettier --write src/generated",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"

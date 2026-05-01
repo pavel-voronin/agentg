@@ -10,7 +10,7 @@ Owns:
 - TDLib local database.
 - Receiving live Telegram updates.
 - Fetching chat lists and historical messages.
-- Exposing a small internal NATS RPC API for Telegram client commands.
+- Exposing a small internal gRPC API for Telegram client commands and reads.
 - Passing raw Telegram facts to storage.
 - Fetching and persisting historical Telegram pages requested by the History
   Sync domain.
@@ -29,7 +29,7 @@ Owns:
   job state.
 - Reconciling desired history coverage against existing coverage.
 - Scheduling and checkpointing backfill jobs.
-- Requesting Telegram history pages through the TDLib sidecar NATS RPC surface.
+- Requesting Telegram history pages through the Telegram internal gRPC surface.
 - Publishing history lifecycle and coverage events.
 
 Does not own:

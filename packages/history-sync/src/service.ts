@@ -1,4 +1,5 @@
 import type { AppDatabase } from '@agentg/database/client';
+import type { InternalRpcClientConfig } from '@agentg/proto/rpc/config';
 import type { EventBus, EventSubscription } from '@agentg/shared/events/bus';
 import { createIntegrationEvent } from '@agentg/shared/events/envelope';
 
@@ -11,12 +12,15 @@ import { createLiveCoverageObserver, type LiveCoverageObserver } from './live-co
 import { subscribeHistorySyncCommands } from './commands-adapter.js';
 import { subscribeHistoryRpc } from './rpc-adapter.js';
 import { addHistoryCoverageBatch } from './store.js';
-import { createNatsTelegramHistoryClient } from './telegram-client.js';
+import { createGrpcTelegramHistoryClient } from './telegram-client.js';
 
 export type HistorySyncServiceOptions = {
   backfill: BackfillOptions;
   database: AppDatabase;
   eventBus: EventBus;
+  services: {
+    telegram: InternalRpcClientConfig;
+  };
 };
 
 const HISTORY_SYNC_STATUS_TICK_MS = 5000;
@@ -26,7 +30,7 @@ const HISTORY_SYNC_SHUTDOWN_STEP_TIMEOUT_MS = 2000;
 export async function runHistorySyncService(options: HistorySyncServiceOptions): Promise<void> {
   let shuttingDown = false;
   let liveCoverageTick: ReturnType<typeof setInterval> | undefined;
-  const telegram = createNatsTelegramHistoryClient(options.eventBus);
+  const telegram = createGrpcTelegramHistoryClient(options.services.telegram);
   const controller = createHistorySyncController(
     options.database,
     telegram,
@@ -76,6 +80,7 @@ export async function runHistorySyncService(options: HistorySyncServiceOptions):
     for (const subscription of subscriptions) {
       subscription.unsubscribe();
     }
+    telegram.close?.();
     controller.stop();
     const [historySyncStopped, liveCoverageStopped] = await Promise.all([
       runShutdownStep('history_sync.controller_wait', () => controller.wait()),

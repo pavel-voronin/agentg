@@ -1,9 +1,10 @@
 import type { AppDatabase } from '@agentg/database/client';
+import type { InternalRpcBindConfig } from '@agentg/proto/rpc/config';
 import type { EventBus } from '@agentg/shared/events/bus';
 import { createIntegrationEvent } from '@agentg/shared/events/envelope';
 import { createTelegramIntegrationEvents } from '@agentg/shared/events/telegram-events';
 
-import { subscribeTelegramHistoryApi } from './history-api.js';
+import { startTelegramHistoryGrpcServer, stopTelegramHistoryGrpcServer } from './history-api.js';
 import {
   asTdObject,
   normalizeChat,
@@ -21,6 +22,7 @@ import {
 export type TelegramIngestionOptions = {
   database: AppDatabase;
   eventBus: EventBus;
+  internalRpc: InternalRpcBindConfig;
   telegram: TelegramClientConfig;
 };
 
@@ -59,6 +61,7 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
   const client = await createTelegramClient(options.telegram);
   const persistenceStats = createPersistenceStats();
   const tdlibStatus = createTdlibStatusTracker(options.eventBus);
+  let telegramHistoryServer: Awaited<ReturnType<typeof startTelegramHistoryGrpcServer>> | undefined;
   let tdlibStatusHeartbeat: ReturnType<typeof setInterval> | undefined;
 
   client.on('error', (error: unknown) => {
@@ -77,10 +80,10 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
   tdlibStatusHeartbeat = startTdlibStatusHeartbeat(tdlibStatus);
   await syncInitialChats(options.database, client);
 
-  const telegramHistoryApiSubscriptions = subscribeTelegramHistoryApi({
+  telegramHistoryServer = await startTelegramHistoryGrpcServer({
+    bind: options.internalRpc,
     client,
-    database: options.database,
-    eventBus: options.eventBus
+    database: options.database
   });
 
   console.log(JSON.stringify({ event: 'telegram.ingestion_ready' }));
@@ -90,15 +93,22 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
       tdlibStatusHeartbeat = undefined;
     }
     tdlibStatus.markDisconnected();
-    for (const subscription of telegramHistoryApiSubscriptions) {
-      subscription.unsubscribe();
+    const historyRpcServer = telegramHistoryServer;
+    const historyRpcClosed =
+      historyRpcServer === undefined
+        ? true
+        : await runShutdownStep('telegram.history_rpc_close', () =>
+            stopTelegramHistoryGrpcServer(historyRpcServer)
+          );
+    if (historyRpcClosed) {
+      telegramHistoryServer = undefined;
     }
     const tdlibClosed = await runShutdownStep('telegram.tdlib_close', () => client.close());
     const eventBusClosed = await runShutdownStep('telegram.event_bus_close', () =>
       options.eventBus.close()
     );
 
-    return tdlibClosed && eventBusClosed;
+    return historyRpcClosed && tdlibClosed && eventBusClosed;
   });
 }
 
