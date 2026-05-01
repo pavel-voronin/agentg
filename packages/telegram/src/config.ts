@@ -1,4 +1,5 @@
 import { isAbsolute, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { readInternalRpcBindConfig, type InternalRpcBindConfig } from '@agentg/proto/rpc/config';
 import { loadNearestDotenv } from '@agentg/shared/dotenv';
@@ -6,6 +7,8 @@ import { loadNearestDotenv } from '@agentg/shared/dotenv';
 import type { TelegramClientConfig } from './tdlib.js';
 
 const dotenvDirectory = loadNearestDotenv();
+const defaultConfigDirectory =
+  dotenvDirectory ?? fileURLToPath(new URL('../../..', import.meta.url));
 
 export type TelegramIngestionConfig = {
   databaseUrl: string;
@@ -46,7 +49,7 @@ function resolveConfigPath(path: string): string {
     return path;
   }
 
-  return resolve(dotenvDirectory ?? process.cwd(), path);
+  return resolve(defaultConfigDirectory, path);
 }
 
 function parseOptionalInteger(value: string | undefined, name: string): number | undefined {

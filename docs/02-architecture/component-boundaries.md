@@ -38,6 +38,34 @@ Does not own:
 - Telegram message normalization or Telegram-shaped current-state writes.
 - Telegram raw event storage.
 
+## Control Plane
+
+Owns:
+
+- Browser-facing operator UI and WebSocket API.
+- Translating operator UI calls into internal domain RPC calls.
+- Subscribing to live integration events needed by operator views.
+
+Does not own:
+
+- Agent-facing API compatibility.
+- History targets, coverage, or backfill job writes.
+- Telegram login, sessions, TDLib state, or Telegram-shaped persistence.
+
+## Agent Gateway
+
+Owns:
+
+- External agent-facing WebSocket API compatibility.
+- Authentication and edge policy for external clients.
+- Translating external agent calls into internal domain RPC calls where needed.
+
+Does not own:
+
+- Operator UI traffic.
+- Internal orchestration between domains.
+- History targets, coverage, or backfill job writes.
+
 ## Storage Layer
 
 Owns:

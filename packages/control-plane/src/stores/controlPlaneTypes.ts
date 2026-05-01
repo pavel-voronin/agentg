@@ -53,9 +53,9 @@ export type StatusBadgeView = {
 };
 
 export type AppShellView = {
+  controlPlaneStatus: StatusBadgeView;
   dashboardCollapsed: boolean;
   eventsPanelCollapsed: boolean;
-  gatewayStatus: StatusBadgeView;
   tdlibStatus: StatusBadgeView;
 };
 

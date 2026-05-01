@@ -8,9 +8,9 @@ import {
 import type { StatusBadgeKind } from './controlPlaneTypes.js';
 
 type AppShellState = {
+  controlPlaneStatus: StatusBadgeKind;
   dashboardCollapsed: boolean;
   eventsPanelCollapsed: boolean;
-  gatewayStatus: StatusBadgeKind;
   tdlibStatus: StatusBadgeKind;
 };
 
@@ -24,17 +24,17 @@ export const useAppShellStore = defineStore('controlPlane.appShell', {
       this.eventsPanelCollapsed = collapsed;
       writeStorage(CONTROL_PLANE_STORAGE_KEYS.eventsPanelCollapsed, collapsed ? '1' : '0');
     },
-    setGatewayStatus(status: StatusBadgeKind) {
-      this.gatewayStatus = status;
+    setControlPlaneStatus(status: StatusBadgeKind) {
+      this.controlPlaneStatus = status;
     },
     setTdlibStatus(status: StatusBadgeKind) {
       this.tdlibStatus = status;
     }
   },
   state: (): AppShellState => ({
+    controlPlaneStatus: 'warn',
     dashboardCollapsed: readStoredBoolean(CONTROL_PLANE_STORAGE_KEYS.dashboardCollapsed, false),
     eventsPanelCollapsed: readStoredBoolean(CONTROL_PLANE_STORAGE_KEYS.eventsPanelCollapsed, false),
-    gatewayStatus: 'warn',
     tdlibStatus: 'warn'
   })
 });

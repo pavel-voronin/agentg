@@ -47,6 +47,27 @@ services:
       - '${AGENT_GATEWAY_PORT:-8787}:${AGENT_GATEWAY_PORT:-8787}'
     restart: 'no'
 
+  control-plane:
+    profiles:
+      - control-plane
+    build:
+      context: .
+      target: runtime
+    command: ['npm', '--workspace', '@agentg/control-plane', 'run', 'start']
+    depends_on:
+      history-sync:
+        condition: service_started
+      nats:
+        condition: service_started
+    environment:
+      CONTROL_PLANE_HOST: 0.0.0.0
+      CONTROL_PLANE_PORT: ${CONTROL_PLANE_PORT:-8788}
+      HISTORY_RPC_URL: http://history-sync:8080
+      NATS_URL: nats://nats:4222
+    ports:
+      - '${CONTROL_PLANE_PORT:-8788}:${CONTROL_PLANE_PORT:-8788}'
+    restart: 'no'
+
   history-sync:
     profiles:
       - history-sync

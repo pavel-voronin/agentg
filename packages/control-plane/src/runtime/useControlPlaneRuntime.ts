@@ -1,7 +1,10 @@
 import { onBeforeUnmount, onMounted } from 'vue';
 
-import { createGatewayClient, type GatewayEvent } from '../gateway/gatewayClient.js';
-import { createHistoryApi } from '../gateway/historyApi.js';
+import {
+  createControlPlaneClient,
+  type ControlPlaneEvent
+} from '../control-plane/controlPlaneClient.js';
+import { createHistoryApi } from '../control-plane/historyApi.js';
 import type { StatusBadgeKind } from '../stores/controlPlaneTypes.js';
 import { useAppShellStore } from '../stores/appShell.js';
 import { useChatStore } from '../stores/chat.js';
@@ -35,10 +38,10 @@ export function useControlPlaneRuntime() {
   let tdlibStatusWatchdog: ReturnType<typeof setInterval> | null = null;
   const tdlibStatusStartedAt = Date.now();
 
-  const gateway = createGatewayClient({
+  const controlPlane = createControlPlaneClient({
     onClose() {
       if (runtimeStarted) {
-        setGatewayStatus('bad');
+        setControlPlaneStatus('bad');
       }
     },
     onEvent(event) {
@@ -50,11 +53,11 @@ export function useControlPlaneRuntime() {
       if (!runtimeStarted) {
         return;
       }
-      setGatewayStatus('ok');
+      setControlPlaneStatus('ok');
       void refreshAll().catch(showError);
     }
   });
-  const historyApi = createHistoryApi(gateway);
+  const historyApi = createHistoryApi(controlPlane);
 
   async function refreshAll(): Promise<void> {
     await Promise.all([loadOverview(), loadChats()]);
@@ -143,7 +146,7 @@ export function useControlPlaneRuntime() {
     await refreshAll();
   }
 
-  function receiveEvent(event: GatewayEvent): void {
+  function receiveEvent(event: ControlPlaneEvent): void {
     if (event.type === 'telegram.tdlib.status') {
       receiveTdlibStatus(event);
     }
@@ -155,14 +158,14 @@ export function useControlPlaneRuntime() {
     }
   }
 
-  function receiveTdlibStatus(event: GatewayEvent): void {
+  function receiveTdlibStatus(event: ControlPlaneEvent): void {
     const data = isPlainRecord(event.data) ? event.data : {};
     tdlibConnected = data.connected === true;
     lastTdlibStatusAt = new Date(event.occurredAt ?? Date.now());
     updateTdlibStatus();
   }
 
-  function shouldRefreshForEvent(event: GatewayEvent): boolean {
+  function shouldRefreshForEvent(event: ControlPlaneEvent): boolean {
     return (
       event.type?.startsWith('history.') === true ||
       event.type === 'telegram.chat.updated' ||
@@ -218,8 +221,8 @@ export function useControlPlaneRuntime() {
     void loadChats().catch(showError);
   }
 
-  function setGatewayStatus(kind: StatusBadgeKind): void {
-    appShellStore.setGatewayStatus(kind);
+  function setControlPlaneStatus(kind: StatusBadgeKind): void {
+    appShellStore.setControlPlaneStatus(kind);
   }
 
   function setTdlibStatus(kind: StatusBadgeKind): void {
@@ -271,7 +274,7 @@ export function useControlPlaneRuntime() {
     }
     runtimeStarted = true;
     startTdlibStatusWatchdog();
-    gateway.connect();
+    controlPlane.connect();
   }
 
   function stopRuntime(): void {
@@ -284,7 +287,7 @@ export function useControlPlaneRuntime() {
       clearInterval(tdlibStatusWatchdog);
       tdlibStatusWatchdog = null;
     }
-    gateway.disconnect();
+    controlPlane.disconnect();
   }
 
   function clearRefreshTimer(): void {

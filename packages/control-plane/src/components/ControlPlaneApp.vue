@@ -213,7 +213,7 @@ onBeforeUnmount(() => {
         </div>
         <div class="flex flex-wrap items-center justify-end gap-3">
           <div class="flex flex-wrap items-center justify-end gap-2">
-            <ShellStatusBadge :badge="appShell.gatewayStatus" />
+            <ShellStatusBadge :badge="appShell.controlPlaneStatus" />
             <ShellStatusBadge :badge="appShell.tdlibStatus" />
           </div>
           <div class="flex flex-wrap items-center justify-end gap-2">

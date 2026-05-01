@@ -14,6 +14,12 @@ export default defineConfig({
   },
   server: {
     host: '127.0.0.1',
-    port: 8788
+    port: 8788,
+    proxy: {
+      '/ws': {
+        target: 'ws://127.0.0.1:8789',
+        ws: true
+      }
+    }
   }
 });

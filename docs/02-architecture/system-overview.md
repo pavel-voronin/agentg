@@ -43,6 +43,8 @@ TDLib sidecar
   -> NATS Core live integration events
   <- gRPC history fetch calls from History Sync
   -> History Sync service
+  <- gRPC operator calls from Control Plane server
+  -> Control Plane browser UI
   -> Agent Gateway WebSocket API
   -> agent MCP plugin
 ```
@@ -53,6 +55,9 @@ and replayable Telegram facts.
 History Sync is a separate process from Telegram ingestion: it owns targets,
 coverage, and backfill jobs, while Telegram ingestion owns TDLib and
 Telegram-shaped persistence.
+Control Plane is a separate operator boundary: the browser UI calls Control
+Plane server, and Control Plane server calls internal domain RPC directly.
+Gateway remains the external agent edge.
 
 The preferred starting runtime is TypeScript/Node.js, provided TDLib can be integrated reliably through its JSON/C interface or a maintained wrapper. Go or Rust remain fallback choices if the Node.js integration becomes the risky part of the project.
 

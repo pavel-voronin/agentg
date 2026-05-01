@@ -1,13 +1,13 @@
-export type GatewayEvent = {
+export type ControlPlaneEvent = {
   data?: unknown;
   occurredAt?: Date | string;
   type?: string;
   [key: string]: unknown;
 };
 
-export type GatewayClientOptions = {
+export type ControlPlaneClientOptions = {
   onClose?: () => void;
-  onEvent?: (event: GatewayEvent) => void;
+  onEvent?: (event: ControlPlaneEvent) => void;
   onOpen?: () => void;
   reconnectDelayMs?: number;
   rpcTimeoutMs?: number;
@@ -16,6 +16,8 @@ export type GatewayClientOptions = {
 
 type BrowserGlobal = {
   location?: {
+    host: string;
+    protocol: string;
     search: string;
   };
   WebSocket: new (url: string) => BrowserWebSocket;
@@ -37,22 +39,22 @@ type PendingRpc = {
   timeoutId: ReturnType<typeof setTimeout>;
 };
 
-const DEFAULT_GATEWAY_WS_URL = 'ws://127.0.0.1:8787/';
+const DEFAULT_CONTROL_PLANE_WS_URL = 'ws://127.0.0.1:8789/ws';
 const DEFAULT_RECONNECT_DELAY_MS = 1000;
 const DEFAULT_RPC_TIMEOUT_MS = 15000;
 const WEBSOCKET_OPEN = 1;
 
-export class GatewayClient {
+export class ControlPlaneClient {
   private reconnectEnabled = false;
   private readonly pending = new Map<number, PendingRpc>();
   private nextId = 1;
   private socket: BrowserWebSocket | null = null;
 
-  constructor(private readonly options: GatewayClientOptions = {}) {}
+  constructor(private readonly options: ControlPlaneClientOptions = {}) {}
 
   connect(): void {
     this.reconnectEnabled = true;
-    const socket = new (browserGlobal().WebSocket)(this.gatewayWebSocketUrl());
+    const socket = new (browserGlobal().WebSocket)(this.controlPlaneWebSocketUrl());
     this.socket = socket;
 
     socket.addEventListener('open', () => {
@@ -63,7 +65,7 @@ export class GatewayClient {
         this.socket = null;
       }
       this.options.onClose?.();
-      this.rejectPending(new Error('Gateway WebSocket closed'));
+      this.rejectPending(new Error('Control Plane WebSocket closed'));
       if (this.reconnectEnabled) {
         setTimeout(() => {
           if (this.reconnectEnabled) {
@@ -86,7 +88,7 @@ export class GatewayClient {
   rpc<T = unknown>(method: string, params: Record<string, unknown> = {}): Promise<T> {
     const socket = this.socket;
     if (socket?.readyState !== WEBSOCKET_OPEN) {
-      return Promise.reject(new Error('Gateway WebSocket is not connected'));
+      return Promise.reject(new Error('Control Plane WebSocket is not connected'));
     }
     const id = this.nextId;
     this.nextId += 1;
@@ -108,13 +110,13 @@ export class GatewayClient {
     });
   }
 
-  private gatewayWebSocketUrl(): string {
+  private controlPlaneWebSocketUrl(): string {
     const configuredOptionUrl = this.options.url?.();
     if (configuredOptionUrl) {
       return configuredOptionUrl;
     }
-    const configuredUrl = configuredGatewayUrl();
-    const url = new URL(configuredUrl ?? DEFAULT_GATEWAY_WS_URL);
+    const configuredUrl = configuredControlPlaneUrl();
+    const url = new URL(configuredUrl ?? defaultControlPlaneUrl());
     if (url.search.length === 0) {
       url.search = browserGlobal().location?.search ?? '';
     }
@@ -133,7 +135,7 @@ export class GatewayClient {
       return;
     }
 
-    if (isGatewayEvent(payload.event)) {
+    if (isControlPlaneEvent(payload.event)) {
       this.options.onEvent?.(payload.event);
     }
   }
@@ -146,7 +148,7 @@ export class GatewayClient {
     clearTimeout(pending.timeoutId);
     this.pending.delete(id);
 
-    const errorMessage = gatewayErrorMessage(payload.error);
+    const errorMessage = controlPlaneErrorMessage(payload.error);
     if (errorMessage !== null) {
       pending.reject(new Error(errorMessage));
       return;
@@ -163,21 +165,33 @@ export class GatewayClient {
   }
 }
 
-export function createGatewayClient(options: GatewayClientOptions = {}): GatewayClient {
-  return new GatewayClient(options);
+export function createControlPlaneClient(
+  options: ControlPlaneClientOptions = {}
+): ControlPlaneClient {
+  return new ControlPlaneClient(options);
 }
 
 function browserGlobal(): BrowserGlobal {
   return globalThis;
 }
 
-function configuredGatewayUrl(): string | null {
+function configuredControlPlaneUrl(): string | null {
   const env = import.meta.env as Record<string, unknown>;
-  const value = env.VITE_AGENT_GATEWAY_WS_URL;
+  const value = env.VITE_CONTROL_PLANE_WS_URL;
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
-function gatewayErrorMessage(error: unknown): string | null {
+function defaultControlPlaneUrl(): string {
+  const location = browserGlobal().location;
+  if (location?.host) {
+    const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${protocol}//${location.host}/ws`;
+  }
+
+  return DEFAULT_CONTROL_PLANE_WS_URL;
+}
+
+function controlPlaneErrorMessage(error: unknown): string | null {
   if (error === undefined || error === null) {
     return null;
   }
@@ -197,12 +211,12 @@ function gatewayErrorMessage(error: unknown): string | null {
     return String(error);
   }
   if (typeof error === 'symbol') {
-    return error.description ?? 'Gateway RPC failed';
+    return error.description ?? 'Control Plane RPC failed';
   }
-  return 'Gateway RPC failed';
+  return 'Control Plane RPC failed';
 }
 
-function isGatewayEvent(value: unknown): value is GatewayEvent {
+function isControlPlaneEvent(value: unknown): value is ControlPlaneEvent {
   return isPlainRecord(value);
 }
 

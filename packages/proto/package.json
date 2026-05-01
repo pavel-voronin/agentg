@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./agentg/history/v1/json-rpc-client": "./src/agentg/history/v1/json-rpc-client.ts",
     "./agentg/history/v1/history": "./src/generated/agentg/history/v1/history.ts",
     "./agentg/internal/v1/health": "./src/generated/agentg/internal/v1/health.ts",
     "./agentg/telegram/v1/history": "./src/generated/agentg/telegram/v1/history.ts",

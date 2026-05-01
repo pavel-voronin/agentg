@@ -1,8 +1,8 @@
 # Local Development
 
 Local development uses separate workspace packages for the long-running
-Telegram ingestion process, History Sync, and the Agent Gateway, with Docker
-Compose providing Postgres and NATS.
+Telegram ingestion process, History Sync, Control Plane, and the Agent Gateway,
+with Docker Compose providing Postgres and NATS.
 
 ## Commands
 
@@ -12,6 +12,8 @@ npm run infra:up
 npm run db:migrate
 npm run dev:telegram
 npm run dev:history-sync
+npm run dev:control-plane-server
+npm run dev:control-plane
 npm run dev:gateway
 ```
 
@@ -31,9 +33,17 @@ Telegram history fetch RPC surface used by History Sync.
 history templates, concrete chat targets, coverage intervals, backfill jobs, and
 the history sync lifecycle. It talks to Telegram ingestion through internal gRPC.
 
+`npm run dev:control-plane-server` runs the server-side Control Plane boundary.
+It serves the browser-facing operator WebSocket on `127.0.0.1:8789`, subscribes
+to live NATS events, and calls History Sync through internal gRPC.
+
+`npm run dev:control-plane` runs the Vite browser UI on `127.0.0.1:8788`. Its
+`/ws` path is proxied to the Control Plane server during development.
+
 `npm run dev:gateway` runs the `@agentg/gateway` package. It subscribes to live
-NATS events, serves WebSocket clients with Postgres-backed Telegram reads, and
-calls History Sync through internal gRPC.
+NATS events, serves external agent WebSocket clients with Postgres-backed
+Telegram reads, and calls History Sync through internal gRPC. Operator views do
+not require Gateway.
 
 ## Internal RPC Addresses
 
@@ -50,6 +60,10 @@ Local development defaults:
   `HISTORY_RPC_PORT=18082`
 - History to Telegram URL: `TELEGRAM_RPC_URL=http://127.0.0.1:18081`
 - Gateway to History URL: `HISTORY_RPC_URL=http://127.0.0.1:18082`
+- Control Plane server bind: `CONTROL_PLANE_HOST=127.0.0.1`,
+  `CONTROL_PLANE_PORT=8789`
+- Control Plane server to History URL:
+  `HISTORY_RPC_URL=http://127.0.0.1:18082`
 
 Docker Compose uses internal service DNS names:
 
@@ -57,6 +71,8 @@ Docker Compose uses internal service DNS names:
 - History Sync binds `0.0.0.0:8080` inside its container.
 - History Sync calls `http://telegram:8080`.
 - Gateway calls `http://history-sync:8080`.
+- Control Plane server calls `http://history-sync:8080` and exposes the browser
+  UI on `${CONTROL_PLANE_PORT:-8788}`.
 
 Run the containerized Telegram ingestion path when validating Docker packaging:
 
@@ -70,6 +86,7 @@ Initial local stack includes:
 
 - Telegram ingestion process backed by TDLib
 - History Sync process
+- Control Plane server and browser UI for operator views
 - Agent Gateway process when testing agent-facing APIs
 - Postgres
 - NATS

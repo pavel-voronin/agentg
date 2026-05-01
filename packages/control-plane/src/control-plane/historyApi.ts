@@ -6,7 +6,7 @@ import type {
   SelectedHistoryState
 } from '../stores/controlPlaneTypes.js';
 
-export type GatewayRpcClient = {
+export type ControlPlaneRpcClient = {
   rpc<T = unknown>(method: string, params?: Record<string, unknown>): Promise<T>;
 };
 
@@ -40,7 +40,7 @@ export type HistoryApi = {
 
 const DEFAULT_CHAT_LIMIT = 500;
 
-export function createHistoryApi(client: GatewayRpcClient): HistoryApi {
+export function createHistoryApi(client: ControlPlaneRpcClient): HistoryApi {
   return {
     deleteTarget(targetId) {
       return client.rpc('history.deleteTarget', { targetId });

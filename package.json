@@ -20,6 +20,7 @@
   "scripts": {
     "dev": "npm run dev:telegram",
     "dev:control-plane": "npm --workspace @agentg/control-plane run dev",
+    "dev:control-plane-server": "npm --workspace @agentg/control-plane run dev:server",
     "dev:gateway": "npm --workspace @agentg/gateway run dev",
     "dev:history-sync": "npm --workspace @agentg/history-sync run dev",
     "dev:claude": "npm --workspace @agentg/claude-plugin run start",
@@ -35,6 +36,7 @@
     "infra:up": "docker compose up -d postgres nats --quiet-pull",
     "proto:generate": "npm --workspace @agentg/proto run generate",
     "compose:history-sync": "docker compose --profile history-sync up --build history-sync",
+    "compose:control-plane": "docker compose --profile control-plane up --build control-plane",
     "compose:telegram": "docker compose --profile container-client up --build telegram",
     "lint": "eslint .",
     "format": "prettier --write .",

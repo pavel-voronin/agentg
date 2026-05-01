@@ -5,17 +5,17 @@ import type {
 } from '../stores/controlPlaneTypes.js';
 
 export type AppShellViewSource = {
+  controlPlaneStatus: StatusBadgeKind;
   dashboardCollapsed: boolean;
   eventsPanelCollapsed: boolean;
-  gatewayStatus: StatusBadgeKind;
   tdlibStatus: StatusBadgeKind;
 };
 
 export function appShellView(source: AppShellViewSource): AppShellView {
   return {
+    controlPlaneStatus: statusBadgeView('CONTROL', source.controlPlaneStatus),
     dashboardCollapsed: source.dashboardCollapsed,
     eventsPanelCollapsed: source.eventsPanelCollapsed,
-    gatewayStatus: statusBadgeView('GATEWAY', source.gatewayStatus),
     tdlibStatus: statusBadgeView('TDLIB', source.tdlibStatus)
   };
 }

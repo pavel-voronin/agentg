@@ -152,6 +152,9 @@ Stage 3 must be re-planned before implementation.
 
 Purpose: stop treating the browser UI as an internal service participant.
 
+Stage re-plan:
+[Internal Domain RPC Stage 4 Plan](internal-domain-rpc-stage-4-plan.md).
+
 Scope:
 
 - Introduce or clarify a server-side Control Plane boundary.
