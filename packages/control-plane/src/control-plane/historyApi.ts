@@ -73,8 +73,7 @@ export function createHistoryApi(client: ControlPlaneRpcClient): HistoryApi {
 function historyChatListParams(request: HistoryChatListRequest): Record<string, unknown> {
   const query = request.query.trim();
   const params: Record<string, unknown> = {
-    limit: request.limit ?? DEFAULT_CHAT_LIMIT,
-    query
+    limit: request.limit ?? DEFAULT_CHAT_LIMIT
   };
 
   if (query.length === 0) {
@@ -82,6 +81,8 @@ function historyChatListParams(request: HistoryChatListRequest): Record<string, 
     if (request.listMode === 'folder') {
       params.folderId = request.folderId;
     }
+  } else {
+    params.query = query;
   }
 
   return params;

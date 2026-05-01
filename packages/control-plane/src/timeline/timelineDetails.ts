@@ -181,14 +181,16 @@ function timelineDetail(detail: TimelineHistoryDetail): TimelineDetail {
     };
   }
   const interval = detail.item;
+  const displayStartAt = interval.originalStartAt ?? detail.startAt;
+  const displayEndAt = interval.originalEndAt ?? detail.endAt;
   return {
     count: formatInteger(interval.messageCount),
-    duration,
+    duration: formatDuration(displayEndAt.getTime() - displayStartAt.getTime()),
     endAt: detail.endAt,
-    endValue: formatTimelineDate(detail.endAt),
+    endValue: formatTimelineDate(displayEndAt),
     item: interval,
     key: detail.key,
-    startValue: formatTimelineDate(detail.startAt),
+    startValue: formatTimelineDate(displayStartAt),
     startAt: detail.startAt,
     type: detail.type
   };
