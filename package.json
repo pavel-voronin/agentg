@@ -38,6 +38,7 @@
     "compose:history-sync": "docker compose --profile history-sync up --build history-sync",
     "compose:control-plane": "docker compose --profile control-plane up --build control-plane",
     "compose:summaries": "docker compose --profile summaries up --build summaries",
+    "compose:smoke": "node scripts/compose-smoke.mjs",
     "compose:telegram": "docker compose --profile container-client up --build telegram",
     "lint": "eslint .",
     "format": "prettier --write .",
