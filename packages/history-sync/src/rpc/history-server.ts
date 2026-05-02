@@ -17,7 +17,10 @@ export async function startHistoryTrpcServer(options: {
   telegram: TelegramReadClient;
 }): Promise<Server> {
   const server = createHTTPServer({
-    createContext: createHistoryRpcContext,
+    createContext: (contextOptions) =>
+      createHistoryRpcContext(contextOptions, {
+        eventBus: options.eventBus
+      }),
     router: createHistoryRouter({
       database: options.database,
       eventBus: options.eventBus,

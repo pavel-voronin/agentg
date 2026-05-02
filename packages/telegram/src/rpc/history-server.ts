@@ -1,6 +1,7 @@
 import type { Server } from 'node:http';
 
 import type { TelegramDatabase as AppDatabase } from '../database.js';
+import type { EventBus } from '@agentg/shared/events/bus';
 import { createHTTPServer } from '@trpc/server/adapters/standalone';
 
 import { createTelegramHistoryRouter } from './history-router.js';
@@ -15,9 +16,13 @@ export async function startTelegramHistoryTrpcServer(options: {
   bind: InternalTrpcBindConfig;
   client: TelegramClient;
   database: AppDatabase;
+  eventBus: EventBus;
 }): Promise<Server> {
   const server = createHTTPServer({
-    createContext: createTelegramRpcContext,
+    createContext: (contextOptions) =>
+      createTelegramRpcContext(contextOptions, {
+        eventBus: options.eventBus
+      }),
     router: createTelegramHistoryRouter({
       client: options.client,
       database: options.database

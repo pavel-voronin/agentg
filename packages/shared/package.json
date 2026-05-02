@@ -12,6 +12,7 @@
     "./events/envelope": "./src/events/envelope.ts",
     "./events/telegram-events": "./src/events/telegram-events.ts",
     "./json": "./src/json.ts",
+    "./rpc/call-events": "./src/rpc/call-events.ts",
     "./rpc/envelope": "./src/rpc/envelope.ts"
   },
   "dependencies": {

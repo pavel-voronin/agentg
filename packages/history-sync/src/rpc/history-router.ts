@@ -25,7 +25,7 @@ import {
 } from './history-contracts.js';
 import { procedureEnvelopeSchema } from '@agentg/shared/rpc/envelope';
 import { callHistoryMethod, type HistoryRuntime } from '../observability.js';
-import { historyRpcRouter, rpc } from './trpc.js';
+import { historyRpcRouter, observable, rpc } from './trpc.js';
 
 type HistoryMethod =
   | 'history.deleteTarget'
@@ -90,7 +90,7 @@ export function createHistoryRouter(options: CreateHistoryRouterOptions) {
           await callKnownHistoryMethod(options, callMethod, 'history.listJobs', input)
         )
       ),
-    requestSync: rpc
+    requestSync: observable
       .input(historyRequestSyncInputSchema)
       .output(procedureEnvelopeSchema(historyRequestSyncOutputSchema))
       .mutation(async ({ input }) =>

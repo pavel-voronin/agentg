@@ -86,7 +86,8 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
   telegramHistoryServer = await startTelegramHistoryTrpcServer({
     bind: options.internalRpc,
     client,
-    database: options.database
+    database: options.database,
+    eventBus: options.eventBus
   });
 
   console.log(JSON.stringify({ event: 'telegram.ingestion_ready' }));

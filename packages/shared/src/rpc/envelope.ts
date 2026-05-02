@@ -134,6 +134,10 @@ export function unwrapProcedureEnvelope<T>(envelope: ProcedureEnvelope<T>): T {
   throw new ProcedureDomainError(envelope.error);
 }
 
+export function isProcedureErrorEnvelope(value: unknown): value is ProcedureErrorEnvelope {
+  return isDomainErrorEnvelope(value);
+}
+
 export class ProcedureDomainError extends Error {
   readonly code: string;
   readonly details?: JsonValue | undefined;
