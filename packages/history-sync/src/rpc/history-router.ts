@@ -1,7 +1,10 @@
 import {
+  extensionListOutputSchema,
   extensionRegistrationInputSchema,
   extensionRegistrationOutputSchema,
+  serializeExtensionRegistration,
   type ExtensionRegistry,
+  type ExtensionListOutput,
   type ExtensionRegistrationOutput
 } from '@agentg/shared/rpc/extensions';
 import {
@@ -97,6 +100,9 @@ export function createHistoryRouter(options: CreateHistoryRouterOptions) {
           await callKnownHistoryMethod(options, callMethod, 'history.listJobs', input)
         )
       ),
+    listExtensions: rpc
+      .output(procedureEnvelopeSchema(extensionListOutputSchema))
+      .query(() => listExtensions(options)),
     requestSync: observable
       .input(historyRequestSyncInputSchema)
       .output(procedureEnvelopeSchema(historyRequestSyncOutputSchema))
@@ -145,6 +151,12 @@ function registerExtension(
   }
 
   return options.extensionRegistry.register(input);
+}
+
+function listExtensions(options: CreateHistoryRouterOptions): ExtensionListOutput {
+  return {
+    extensions: (options.extensionRegistry?.listAll() ?? []).map(serializeExtensionRegistration)
+  };
 }
 
 function normalizeOverview(value: unknown): HistoryOverviewOutput {

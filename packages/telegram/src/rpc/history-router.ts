@@ -2,9 +2,12 @@ import type { TelegramDatabase as AppDatabase } from '../database.js';
 import { telegramChatFolders, telegramChats, telegramMessages, telegramUsers } from '../schema.js';
 import { procedureEnvelopeSchema } from '@agentg/shared/rpc/envelope';
 import {
+  extensionListOutputSchema,
   extensionRegistrationInputSchema,
   extensionRegistrationOutputSchema,
+  serializeExtensionRegistration,
   type ExtensionRegistry,
+  type ExtensionListOutput,
   type ExtensionRegistrationOutput
 } from '@agentg/shared/rpc/extensions';
 import { and, asc, desc, eq, gte, ilike, inArray, isNotNull, lt, sql } from 'drizzle-orm';
@@ -308,6 +311,9 @@ export function createTelegramHistoryRouter(runtime: TelegramHistoryRouterRuntim
       .input(telegramListRecentMessagesInputSchema)
       .output(procedureEnvelopeSchema(telegramListRecentMessagesOutputSchema))
       .query(({ input }) => handleListRecentMessages(runtime, input)),
+    listExtensions: rpc
+      .output(procedureEnvelopeSchema(extensionListOutputSchema))
+      .query(() => listExtensions(runtime)),
     registerExtension: rpc
       .input(extensionRegistrationInputSchema)
       .output(procedureEnvelopeSchema(extensionRegistrationOutputSchema))
@@ -330,6 +336,12 @@ function registerExtension(
   }
 
   return runtime.extensionRegistry.register(input);
+}
+
+function listExtensions(runtime: TelegramHistoryRouterRuntime): ExtensionListOutput {
+  return {
+    extensions: (runtime.extensionRegistry?.listAll() ?? []).map(serializeExtensionRegistration)
+  };
 }
 
 async function handleListChats(

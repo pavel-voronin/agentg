@@ -1,3 +1,21 @@
+x-agentg-module-environment: &agentg-module-environment
+  DATABASE_URL: postgres://agentg:agentg@postgres:5432/agentg
+  GATEWAY_RPC_URL: ws://gateway:8787
+  MODULE_RPC_HOST: 0.0.0.0
+  MODULE_RPC_PORT: 8080
+  NATS_URL: nats://nats:4222
+
+x-agentg-module-service: &agentg-module-service
+  build:
+    context: .
+    target: runtime
+  depends_on:
+    nats:
+      condition: service_started
+    postgres:
+      condition: service_healthy
+  restart: 'no'
+
 services:
   telegram:
     profiles:
@@ -23,6 +41,26 @@ services:
       - td-data:/app/td-data
     restart: 'no'
     command: ['npm', '--workspace', '@agentg/telegram', 'run', 'start']
+
+  modulesmoke:
+    profiles:
+      - module-smoke
+    <<: *agentg-module-service
+    command:
+      [
+        'node',
+        '-e',
+        "console.log(JSON.stringify({event:'module.smoke.ready',slug:process.env.MODULE_SLUG,rpcUrl:process.env.MODULE_RPC_URL,natsUrl:process.env.NATS_URL,databaseUrl:process.env.DATABASE_URL})); setInterval(() => {}, 1000)"
+      ]
+    environment:
+      <<: *agentg-module-environment
+      GATEWAY_RPC_URL: ws://gateway:8787
+      HISTORY_RPC_URL: http://history-sync:8080
+      MODULE_MIGRATION_FOLDER: packages/modulesmoke/drizzle
+      MODULE_RPC_URL: http://modulesmoke:8080
+      MODULE_SLUG: modulesmoke
+      MODULE_TABLE_PREFIX: modulesmoke_
+      TELEGRAM_RPC_URL: http://telegram:8080
 
   gateway:
     profiles:

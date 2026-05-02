@@ -12,6 +12,8 @@
     "./events/envelope": "./src/events/envelope.ts",
     "./events/telegram-events": "./src/events/telegram-events.ts",
     "./json": "./src/json.ts",
+    "./modules/runtime": "./src/modules/runtime.ts",
+    "./rpc/capabilities": "./src/rpc/capabilities.ts",
     "./rpc/call-events": "./src/rpc/call-events.ts",
     "./rpc/envelope": "./src/rpc/envelope.ts",
     "./rpc/extensions": "./src/rpc/extensions.ts"

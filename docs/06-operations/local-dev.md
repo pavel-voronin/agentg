@@ -80,6 +80,38 @@ Run the containerized Telegram ingestion path when validating Docker packaging:
 npm run compose:telegram
 ```
 
+## Trusted Module Runtime Conventions
+
+Trusted modules run as ordinary internal services. The service name should equal
+the module slug, and the slug should prefix tables, capability names, extension
+names, NATS subjects, and logs.
+
+Module runtime environment:
+
+- `MODULE_SLUG`: stable module slug, for example `summaries`
+- `MODULE_RPC_HOST`: bind host inside the container, usually `0.0.0.0`
+- `MODULE_RPC_PORT`: internal RPC port, usually `8080`
+- `MODULE_RPC_URL`: internal service URL, for example `http://summaries:8080`
+- `MODULE_TABLE_PREFIX`: owned table prefix, for example `summaries_`
+- `MODULE_MIGRATION_FOLDER`: module-owned Drizzle migration folder
+- `DATABASE_URL`: shared Postgres connection string
+- `NATS_URL`: shared NATS connection string
+- `GATEWAY_RPC_URL`: Gateway WebSocket URL for capability registration
+- needed domain URLs such as `TELEGRAM_RPC_URL` and `HISTORY_RPC_URL`
+
+Capability names are namespaced by slug, for example
+`summaries.summarizeChat`. Extension RPC names follow the same convention and
+are registered directly with the target service at startup, then refreshed
+periodically.
+
+Docker Compose includes a `module-smoke` profile with the `modulesmoke` service.
+It is a packaging smoke service for the module environment shape, not a product
+module:
+
+```bash
+docker compose --profile module-smoke up --build modulesmoke
+```
+
 ## Expected Services
 
 Initial local stack includes:

@@ -137,5 +137,18 @@ describe('createHistoryRouter', () => {
     });
 
     expect(extensionRegistry.list('history.getChatHistoryState')).toHaveLength(1);
+
+    await expect(caller.listExtensions()).resolves.toMatchObject({
+      ok: true,
+      result: {
+        extensions: [
+          {
+            extension: 'summaries.chatSummary',
+            slug: 'summaries',
+            target: 'history.getChatHistoryState'
+          }
+        ]
+      }
+    });
   });
 });

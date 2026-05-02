@@ -28,6 +28,18 @@ export const extensionRegistrationOutputSchema = z.object({
   target: z.string()
 });
 
+export const extensionRecordOutputSchema = z.object({
+  expiresAt: z.string(),
+  extension: z.string(),
+  registeredAt: z.string(),
+  slug: z.string(),
+  target: z.string()
+});
+
+export const extensionListOutputSchema = z.object({
+  extensions: z.array(extensionRecordOutputSchema)
+});
+
 export const extensionCallInputSchema = z.object({
   callId: nonEmptyStringSchema,
   input: z.unknown().optional(),
@@ -39,6 +51,8 @@ export const extensionCallOutputSchema = z.unknown();
 
 export type ExtensionRegistrationInput = z.infer<typeof extensionRegistrationInputSchema>;
 export type ExtensionRegistrationOutput = z.infer<typeof extensionRegistrationOutputSchema>;
+export type ExtensionRecordOutput = z.output<typeof extensionRecordOutputSchema>;
+export type ExtensionListOutput = z.output<typeof extensionListOutputSchema>;
 export type ExtensionCallInput = z.infer<typeof extensionCallInputSchema>;
 
 export type ExtensionRegistration = ExtensionRegistrationInput & {
@@ -180,6 +194,18 @@ export function extensionEnvelopeFromProcedureEnvelope(
   }
 
   return extensionError(envelope.error);
+}
+
+export function serializeExtensionRegistration(
+  registration: ExtensionRegistration
+): ExtensionRecordOutput {
+  return {
+    expiresAt: registration.expiresAt.toISOString(),
+    extension: registration.extension,
+    registeredAt: registration.registeredAt.toISOString(),
+    slug: registration.slug,
+    target: registration.target
+  };
 }
 
 function publicRegistration(registration: StoredExtensionRegistration): ExtensionRegistration {

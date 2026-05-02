@@ -29,6 +29,7 @@ Agent Gateway
   -> WebSocket clients
   <-> tRPC to Telegram ingestion for Telegram reads
   <-> tRPC to History Sync
+  <-> tRPC to module services for registered capabilities
 ```
 
 Start locally:
@@ -241,6 +242,63 @@ The History Sync actor is event-driven and single-flight. Startup,
 target changes, chat changes, and explicit sync requests wake it. If another
 wake-up arrives during a run, it performs another pass after the current run.
 There is no periodic polling loop.
+
+## Capability Methods
+
+Gateway keeps an in-memory registry of active module capabilities. Capability
+registrations are ephemeral: modules register at startup and refresh their
+records periodically.
+
+`capabilities.register`
+
+```json
+{
+  "moduleSlug": "summaries",
+  "name": "summaries.summarizeChat",
+  "serviceUrl": "http://summaries:8080",
+  "rpcMethod": "summarizeChat",
+  "rpcType": "query",
+  "description": "Summarize a chat"
+}
+```
+
+`name` must be prefixed by `moduleSlug`. `rpcType` is `query` or `mutation` and
+defaults to `query`.
+
+`capabilities.list`
+
+Returns active capability registrations:
+
+```json
+{
+  "capabilities": [
+    {
+      "moduleSlug": "summaries",
+      "name": "summaries.summarizeChat",
+      "serviceUrl": "http://summaries:8080",
+      "rpcMethod": "summarizeChat",
+      "rpcType": "query",
+      "registeredAt": "2026-05-02T00:00:00.000Z",
+      "expiresAt": "2026-05-02T00:01:00.000Z"
+    }
+  ]
+}
+```
+
+`capabilities.call`
+
+```json
+{
+  "name": "summaries.summarizeChat",
+  "input": {
+    "chatId": "123"
+  }
+}
+```
+
+Gateway routes the call to the owning module tRPC method and unwraps the
+standard AgenTG response envelope before returning the result to the WebSocket
+client.
 
 ## Telegram History RPC
 

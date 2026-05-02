@@ -4,8 +4,20 @@ import type { InternalTrpcClientConfig } from '@agentg/history-sync/rpc';
 import type { InternalTrpcClientConfig as TelegramInternalTrpcClientConfig } from '@agentg/telegram/rpc';
 import type { EventBus, EventSubscription } from '@agentg/shared/events/bus';
 import type { IntegrationEvent } from '@agentg/shared/events/envelope';
+import {
+  capabilityRegistrationInputSchema,
+  createCapabilityRegistry,
+  type CapabilityRegistry
+} from '@agentg/shared/rpc/capabilities';
 import { WebSocket, WebSocketServer, type RawData } from 'ws';
 
+import {
+  callGatewayCapability,
+  createTrpcGatewayCapabilityCaller,
+  DEFAULT_GATEWAY_CAPABILITY_CALL_TIMEOUT_MS,
+  listGatewayCapabilities,
+  type GatewayCapabilityCaller
+} from './capabilities.js';
 import {
   createTrpcGatewayHistoryClient,
   type GatewayHistoryClient
@@ -19,6 +31,10 @@ export type AgentGatewayConfig = {
 };
 
 export type AgentGatewayOptions = {
+  capabilityCallTimeoutMs?: number;
+  capabilityCaller?: GatewayCapabilityCaller;
+  capabilityRegistry?: CapabilityRegistry;
+  capabilityRegistrationTtlMs?: number;
   config: AgentGatewayConfig;
   eventBus: EventBus;
   services: {
@@ -28,8 +44,17 @@ export type AgentGatewayOptions = {
 };
 
 type AgentGatewayRuntime = AgentGatewayOptions & {
+  capabilityCallTimeoutMs: number;
+  capabilityCaller: GatewayCapabilityCaller;
+  capabilityRegistry: CapabilityRegistry;
   historyClient: GatewayHistoryClient;
   telegramClient: GatewayTelegramClient;
+};
+
+export type AgentGatewayServerHandle = {
+  close(): Promise<void>;
+  host: string;
+  port: number;
 };
 
 type RpcRequest = {
@@ -47,11 +72,24 @@ type RpcResponse = {
   result?: unknown;
 };
 
-export async function runAgentGateway(options: AgentGatewayOptions): Promise<void> {
+export async function startAgentGatewayServer(
+  options: AgentGatewayOptions
+): Promise<AgentGatewayServerHandle> {
   const historyClient = createTrpcGatewayHistoryClient(options.services.history);
   const telegramClient = createTrpcGatewayTelegramClient(options.services.telegram);
+  const capabilityRegistry =
+    options.capabilityRegistry ??
+    createCapabilityRegistry(
+      options.capabilityRegistrationTtlMs === undefined
+        ? {}
+        : { ttlMs: options.capabilityRegistrationTtlMs }
+    );
   const runtime: AgentGatewayRuntime = {
     ...options,
+    capabilityCallTimeoutMs:
+      options.capabilityCallTimeoutMs ?? DEFAULT_GATEWAY_CAPABILITY_CALL_TIMEOUT_MS,
+    capabilityCaller: options.capabilityCaller ?? createTrpcGatewayCapabilityCaller(),
+    capabilityRegistry,
     historyClient,
     telegramClient
   };
@@ -97,23 +135,35 @@ export async function runAgentGateway(options: AgentGatewayOptions): Promise<voi
     })
   ];
 
-  await listen(server, options.config.host, options.config.port);
+  const port = await listen(server, options.config.host, options.config.port);
   console.log(
     JSON.stringify({
       event: 'agent_gateway.ready',
       host: options.config.host,
-      port: options.config.port
+      port
     })
   );
 
-  await waitForShutdown(
-    server,
-    webSocketServer,
-    subscriptions,
-    options.eventBus,
-    historyClient,
-    telegramClient
-  );
+  return {
+    async close(): Promise<void> {
+      await closeAgentGateway(
+        server,
+        webSocketServer,
+        clients,
+        subscriptions,
+        options.eventBus,
+        historyClient,
+        telegramClient
+      );
+    },
+    host: options.config.host,
+    port
+  };
+}
+
+export async function runAgentGateway(options: AgentGatewayOptions): Promise<void> {
+  const handle = await startAgentGatewayServer(options);
+  await waitForShutdown(handle);
 }
 
 async function handleClientMessage(
@@ -190,6 +240,18 @@ async function callMethod(
     if (result !== undefined) {
       return result;
     }
+  }
+
+  if (method === 'capabilities.register') {
+    return options.capabilityRegistry.register(capabilityRegistrationInputSchema.parse(params));
+  }
+
+  if (method === 'capabilities.list') {
+    return listGatewayCapabilities(options.capabilityRegistry);
+  }
+
+  if (method === 'capabilities.call') {
+    return callGatewayCapability(options, params);
   }
 
   throw new Error(`Unknown method: ${method}`);
@@ -277,31 +339,75 @@ function sendJson(client: WebSocket, payload: unknown): void {
   client.send(JSON.stringify(payload));
 }
 
-async function listen(server: Server, host: string, port: number): Promise<void> {
-  await new Promise<void>((resolve) => {
-    server.listen(port, host, resolve);
+async function listen(server: Server, host: string, port: number): Promise<number> {
+  return new Promise<number>((resolve) => {
+    server.listen(port, host, () => {
+      const address = server.address();
+      if (typeof address === 'object' && address !== null) {
+        resolve(address.port);
+        return;
+      }
+
+      resolve(port);
+    });
   });
 }
 
-async function waitForShutdown(
+async function closeAgentGateway(
   server: Server,
   webSocketServer: WebSocketServer,
+  clients: Set<WebSocket>,
   subscriptions: EventSubscription[],
   eventBus: EventBus,
   historyClient: GatewayHistoryClient,
   telegramClient: GatewayTelegramClient
 ): Promise<void> {
+  for (const subscription of subscriptions) {
+    subscription.unsubscribe();
+  }
+  for (const client of clients) {
+    client.close();
+  }
+  historyClient.close();
+  telegramClient.close();
+  await Promise.all([closeWebSocketServer(webSocketServer), closeHttpServer(server)]);
+  await eventBus.close();
+}
+
+async function closeHttpServer(server: Server): Promise<void> {
+  if (!server.listening) {
+    return;
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    server.close((error) => {
+      if (error !== undefined) {
+        reject(error);
+        return;
+      }
+
+      resolve();
+    });
+  });
+}
+
+async function closeWebSocketServer(webSocketServer: WebSocketServer): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    webSocketServer.close((error) => {
+      if (error !== undefined) {
+        reject(error);
+        return;
+      }
+
+      resolve();
+    });
+  });
+}
+
+async function waitForShutdown(handle: AgentGatewayServerHandle): Promise<void> {
   await new Promise<void>((resolve) => {
     const shutdown = (): void => {
-      for (const subscription of subscriptions) {
-        subscription.unsubscribe();
-      }
-      historyClient.close();
-      telegramClient.close();
-      webSocketServer.close();
-      server.close(() => {
-        void eventBus.close().finally(resolve);
-      });
+      void handle.close().finally(resolve);
     };
 
     process.once('SIGINT', shutdown);
