@@ -12,6 +12,7 @@ npm run infra:up
 npm run db:migrate
 npm run dev:telegram
 npm run dev:history-sync
+npm run dev:summaries
 npm run dev:control-plane-server
 npm run dev:control-plane
 npm run dev:gateway
@@ -30,6 +31,12 @@ Telegram history fetch RPC surface used by History Sync.
 `npm run dev:history-sync` runs the `@agentg/history-sync` package. It owns
 history templates, concrete chat targets, coverage intervals, backfill jobs, and
 the history sync lifecycle. It talks to Telegram ingestion through internal tRPC.
+
+`npm run dev:summaries` runs the `@agentg/summaries` pilot module. It owns
+`summaries_*` tables, subscribes to Telegram and History events for summary
+invalidation, exposes `summaries.*` tRPC methods, registers
+`summaries.requestChatSummary` with Gateway, and registers
+`summaries.chatSummary` against `history.getChatHistoryState`.
 
 `npm run dev:control-plane-server` runs the server-side Control Plane boundary.
 It serves the browser-facing operator WebSocket on `127.0.0.1:8789`, subscribes
@@ -60,6 +67,12 @@ Local development defaults:
 - History to Telegram URL: `TELEGRAM_RPC_URL=http://127.0.0.1:18081`
 - Gateway to Telegram URL: `TELEGRAM_RPC_URL=http://127.0.0.1:18081`
 - Gateway to History URL: `HISTORY_RPC_URL=http://127.0.0.1:18082`
+- Summaries internal RPC bind: `SUMMARIES_RPC_HOST=127.0.0.1`,
+  `SUMMARIES_RPC_PORT=18083`
+- Summaries module URL: `MODULE_RPC_URL=http://127.0.0.1:18083`
+- Summaries to Gateway URL: `GATEWAY_RPC_URL=ws://127.0.0.1:8787`
+- Summaries to History URL: `HISTORY_RPC_URL=http://127.0.0.1:18082`
+- History to Summaries URL: `SUMMARIES_RPC_URL=http://127.0.0.1:18083`
 - Control Plane server bind: `CONTROL_PLANE_HOST=127.0.0.1`,
   `CONTROL_PLANE_PORT=8789`
 - Control Plane server to History URL:
@@ -71,6 +84,10 @@ Docker Compose uses internal service DNS names:
 - History Sync binds `0.0.0.0:8080` inside its container.
 - History Sync calls `http://telegram:8080`.
 - Gateway calls `http://telegram:8080` and `http://history-sync:8080`.
+- Summaries binds `0.0.0.0:8080` inside its container.
+- Summaries calls `ws://gateway:8787` and `http://history-sync:8080`.
+- History Sync calls `http://summaries:8080` for registered summaries
+  extensions when `SUMMARIES_RPC_URL` is configured.
 - Control Plane server calls `http://history-sync:8080` and exposes the browser
   UI on `${CONTROL_PLANE_PORT:-8788}`.
 
@@ -112,12 +129,19 @@ module:
 docker compose --profile module-smoke up --build modulesmoke
 ```
 
+Run the pilot summaries module through Compose:
+
+```bash
+npm run compose:summaries
+```
+
 ## Expected Services
 
 Initial local stack includes:
 
 - Telegram ingestion process backed by TDLib
 - History Sync process
+- Summaries pilot module
 - Control Plane server and browser UI for operator views
 - Agent Gateway process when testing agent-facing APIs
 - Postgres

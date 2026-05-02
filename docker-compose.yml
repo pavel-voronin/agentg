@@ -62,6 +62,32 @@ services:
       MODULE_TABLE_PREFIX: modulesmoke_
       TELEGRAM_RPC_URL: http://telegram:8080
 
+  summaries:
+    profiles:
+      - summaries
+    <<: *agentg-module-service
+    command: ['npm', '--workspace', '@agentg/summaries', 'run', 'start']
+    depends_on:
+      gateway:
+        condition: service_started
+      history-sync:
+        condition: service_started
+      nats:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    environment:
+      <<: *agentg-module-environment
+      GATEWAY_RPC_URL: ws://gateway:8787
+      HISTORY_RPC_URL: http://history-sync:8080
+      MODULE_MIGRATION_FOLDER: packages/summaries/drizzle
+      MODULE_RPC_URL: http://summaries:8080
+      MODULE_SLUG: summaries
+      MODULE_TABLE_PREFIX: summaries_
+      SUMMARIES_RPC_HOST: 0.0.0.0
+      SUMMARIES_RPC_PORT: 8080
+      TELEGRAM_RPC_URL: http://telegram:8080
+
   gateway:
     profiles:
       - gateway
@@ -78,6 +104,7 @@ services:
       AGENT_GATEWAY_TOKEN: ${AGENT_GATEWAY_TOKEN:-}
       HISTORY_RPC_URL: http://history-sync:8080
       NATS_URL: nats://nats:4222
+      SUMMARIES_RPC_URL: http://summaries:8080
       TELEGRAM_RPC_URL: http://telegram:8080
     ports:
       - '${AGENT_GATEWAY_PORT:-8787}:${AGENT_GATEWAY_PORT:-8787}'
@@ -125,6 +152,7 @@ services:
       HISTORY_RPC_HOST: 0.0.0.0
       HISTORY_RPC_PORT: 8080
       NATS_URL: nats://nats:4222
+      SUMMARIES_RPC_URL: http://summaries:8080
       TELEGRAM_RPC_URL: http://telegram:8080
     restart: 'no'
 
