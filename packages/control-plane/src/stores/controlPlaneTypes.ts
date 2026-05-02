@@ -327,6 +327,24 @@ export const EVENT_GROUPS: EventGroup[] = [
     match: (type) => type === 'telegram.tdlib.status'
   },
   {
+    color: '#14b8a6',
+    eventTypes: [
+      'summaries.summary.completed',
+      'summaries.summary.invalidated',
+      'summaries.summary.requested'
+    ],
+    id: 'summaries',
+    label: 'Summaries',
+    match: (type) => type.startsWith('summaries.')
+  },
+  {
+    color: '#6366f1',
+    eventTypes: ['rpc.call.completed', 'rpc.call.failed', 'rpc.call.progress', 'rpc.call.started'],
+    id: 'rpc',
+    label: 'RPC calls',
+    match: (type) => type.startsWith('rpc.')
+  },
+  {
     color: '#ef4444',
     eventTypes: ['ui.error'],
     filterable: false,

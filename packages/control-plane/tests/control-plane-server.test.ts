@@ -63,6 +63,34 @@ describe('Control Plane server boundary', () => {
       await expect(nextJsonMessage(socket)).resolves.toEqual({
         event
       });
+
+      const rpcEvent = createIntegrationEvent({
+        data: {
+          callId: 'call-a',
+          target: 'history.getOverview'
+        },
+        source: 'history-sync',
+        type: 'rpc.call.started'
+      });
+      await eventBus.emit(rpcEvent);
+
+      await expect(nextJsonMessage(socket)).resolves.toEqual({
+        event: rpcEvent
+      });
+
+      const summariesEvent = createIntegrationEvent({
+        data: {
+          chatId: 'chat-a',
+          runId: 'run-a'
+        },
+        source: 'summaries',
+        type: 'summaries.summary.requested'
+      });
+      await eventBus.emit(summariesEvent);
+
+      await expect(nextJsonMessage(socket)).resolves.toEqual({
+        event: summariesEvent
+      });
     } finally {
       socket.close();
       await server.close();

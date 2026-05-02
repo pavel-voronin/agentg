@@ -107,8 +107,8 @@ History Sync subscribes to Telegram events:
 Gateway subscribes to `telegram.>` and `history.>` and forwards live events to
 external agent WebSocket clients.
 
-Control Plane server subscribes to `telegram.>` and `history.>` and forwards
-live events to browser clients.
+Control Plane server subscribes to `>` and forwards live integration events to
+browser clients.
 
 Summaries subscribes to Telegram message events and History state-change events
 to invalidate private summary state. It recovers durable state through

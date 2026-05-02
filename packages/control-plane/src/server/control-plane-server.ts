@@ -96,12 +96,7 @@ export async function startControlPlaneServer(
   });
 
   const subscriptions = [
-    options.eventBus.subscribe('telegram.>', (event) => {
-      broadcast(clients, {
-        event
-      });
-    }),
-    options.eventBus.subscribe('history.>', (event) => {
+    options.eventBus.subscribe('>', (event) => {
       broadcast(clients, {
         event
       });
