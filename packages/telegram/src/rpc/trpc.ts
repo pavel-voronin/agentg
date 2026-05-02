@@ -12,20 +12,32 @@ import {
   publishRpcCallEvent,
   type RpcProgressData
 } from '@agentg/shared/rpc/call-events';
-import { isProcedureErrorEnvelope } from '@agentg/shared/rpc/envelope';
+import { isProcedureErrorEnvelope, isProcedureSuccessEnvelope } from '@agentg/shared/rpc/envelope';
+import {
+  callRegisteredExtensions,
+  type ExtensionCallerResolver,
+  type ExtensionRegistry
+} from '@agentg/shared/rpc/extensions';
 import { treeifyError, ZodError } from 'zod';
 
 export const INTERNAL_RPC_CORRELATION_ID_HEADER = 'x-agentg-correlation-id';
 
 export type TelegramRpcContext = {
   callId?: string;
+  callInput?: unknown;
   correlationId?: string;
   eventBus?: EventBus;
+  extensionCallTimeoutMs?: number;
+  extensionRegistry?: ExtensionRegistry;
   progress?: (progress: RpcProgressData) => void;
+  resolveExtensionCaller?: ExtensionCallerResolver;
 };
 
 export type TelegramRpcContextRuntime = {
   eventBus?: EventBus;
+  extensionCallTimeoutMs?: number;
+  extensionRegistry?: ExtensionRegistry;
+  resolveExtensionCaller?: ExtensionCallerResolver;
 };
 
 const TELEGRAM_RPC_SOURCE = 'telegram';
@@ -39,7 +51,16 @@ export function createTelegramRpcContext(
 
   return {
     ...(correlationId === undefined ? {} : { correlationId }),
-    ...(runtime.eventBus === undefined ? {} : { eventBus: runtime.eventBus })
+    ...(runtime.eventBus === undefined ? {} : { eventBus: runtime.eventBus }),
+    ...(runtime.extensionCallTimeoutMs === undefined
+      ? {}
+      : { extensionCallTimeoutMs: runtime.extensionCallTimeoutMs }),
+    ...(runtime.extensionRegistry === undefined
+      ? {}
+      : { extensionRegistry: runtime.extensionRegistry }),
+    ...(runtime.resolveExtensionCaller === undefined
+      ? {}
+      : { resolveExtensionCaller: runtime.resolveExtensionCaller })
   };
 }
 
@@ -90,6 +111,7 @@ const observableMiddleware = telegramRpc.middleware(
     const result = await next({
       ctx: {
         callId,
+        callInput: eventInput,
         progress
       }
     });
@@ -141,10 +163,47 @@ const observableMiddleware = telegramRpc.middleware(
   }
 );
 
+const enrichedMiddleware = telegramRpc.middleware(
+  async ({ ctx, getRawInput, input, next, path }) => {
+    const result = await next();
+    if (!result.ok || !isProcedureSuccessEnvelope(result.data)) {
+      return result;
+    }
+
+    const eventInput =
+      ctx.callInput ?? (input === undefined ? await readRawInput(getRawInput) : input);
+    const target = `${TELEGRAM_RPC_TARGET_PREFIX}.${path}`;
+    const extensions = await callRegisteredExtensions({
+      callId: ctx.callId ?? `call_${randomUUID()}`,
+      input: eventInput,
+      output: result.data.result,
+      registry: ctx.extensionRegistry,
+      resolveCaller: ctx.resolveExtensionCaller,
+      target,
+      timeoutMs: ctx.extensionCallTimeoutMs
+    });
+
+    if (Object.keys(extensions).length === 0) {
+      return result;
+    }
+
+    return {
+      ...result,
+      data: {
+        ...result.data,
+        extensions: {
+          ...result.data.extensions,
+          ...extensions
+        }
+      }
+    };
+  }
+);
+
 export const telegramRpcRouter = telegramRpc.router;
 export const rpc = telegramRpc.procedure;
 export const observable = rpc.use(observableMiddleware);
-export const enriched = rpc;
+export const enriched = observable.use(enrichedMiddleware);
 export const extension = rpc;
 
 function optionalHeader(value: string | string[] | undefined): string | undefined {

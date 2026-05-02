@@ -138,6 +138,19 @@ export function isProcedureErrorEnvelope(value: unknown): value is ProcedureErro
   return isDomainErrorEnvelope(value);
 }
 
+export function isProcedureSuccessEnvelope(
+  value: unknown
+): value is ProcedureSuccessEnvelope<unknown> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'ok' in value &&
+    (value as { ok?: unknown }).ok === true &&
+    'extensions' in value &&
+    'result' in value
+  );
+}
+
 export class ProcedureDomainError extends Error {
   readonly code: string;
   readonly details?: JsonValue | undefined;

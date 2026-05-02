@@ -2,6 +2,11 @@ import type { Server } from 'node:http';
 
 import type { TelegramDatabase as AppDatabase } from '../database.js';
 import type { EventBus } from '@agentg/shared/events/bus';
+import {
+  createExtensionRegistry,
+  type ExtensionCallerResolver,
+  type ExtensionRegistry
+} from '@agentg/shared/rpc/extensions';
 import { createHTTPServer } from '@trpc/server/adapters/standalone';
 
 import { createTelegramHistoryRouter } from './history-router.js';
@@ -17,15 +22,27 @@ export async function startTelegramHistoryTrpcServer(options: {
   client: TelegramClient;
   database: AppDatabase;
   eventBus: EventBus;
+  extensionCallTimeoutMs?: number;
+  extensionRegistry?: ExtensionRegistry;
+  resolveExtensionCaller?: ExtensionCallerResolver;
 }): Promise<Server> {
+  const extensionRegistry = options.extensionRegistry ?? createExtensionRegistry();
   const server = createHTTPServer({
     createContext: (contextOptions) =>
       createTelegramRpcContext(contextOptions, {
-        eventBus: options.eventBus
+        eventBus: options.eventBus,
+        ...(options.extensionCallTimeoutMs === undefined
+          ? {}
+          : { extensionCallTimeoutMs: options.extensionCallTimeoutMs }),
+        extensionRegistry,
+        ...(options.resolveExtensionCaller === undefined
+          ? {}
+          : { resolveExtensionCaller: options.resolveExtensionCaller })
       }),
     router: createTelegramHistoryRouter({
       client: options.client,
-      database: options.database
+      database: options.database,
+      extensionRegistry
     })
   });
   const address = formatInternalTrpcBindAddress(options.bind);

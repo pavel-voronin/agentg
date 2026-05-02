@@ -1,5 +1,6 @@
 import type { HistoryDatabase as AppDatabase } from '../../src/database.js';
 import type { EventBus } from '@agentg/shared/events/bus';
+import { createExtensionRegistry } from '@agentg/shared/rpc/extensions';
 import { describe, expect, it } from 'vitest';
 
 import { createHistoryRouter, type HistoryMethodCaller } from '../../src/rpc/history-router.js';
@@ -94,5 +95,47 @@ describe('createHistoryRouter', () => {
       { method: 'history.getOverview', params: undefined },
       { method: 'history.upsertTarget', params: { chatId: 'chat-a', preset: 'last7d' } }
     ]);
+  });
+
+  it('registers extensions through the runtime RPC method', async () => {
+    const extensionRegistry = createExtensionRegistry({ ttlMs: 60000 });
+    const caller = createHistoryRouter({
+      callMethod: () => Promise.resolve(undefined),
+      database: {} as AppDatabase,
+      eventBus: {} as EventBus,
+      extensionRegistry
+    }).createCaller({});
+
+    await expect(
+      caller.registerExtension({
+        extension: 'summaries.chatSummary',
+        target: 'history.getChatHistoryState'
+      })
+    ).resolves.toMatchObject({
+      ok: true,
+      result: {
+        extension: 'summaries.chatSummary',
+        refreshed: false,
+        registered: true,
+        target: 'history.getChatHistoryState'
+      }
+    });
+
+    await expect(
+      caller.registerExtension({
+        extension: 'summaries.chatSummary',
+        target: 'history.getChatHistoryState'
+      })
+    ).resolves.toMatchObject({
+      ok: true,
+      result: {
+        extension: 'summaries.chatSummary',
+        refreshed: true,
+        registered: false,
+        target: 'history.getChatHistoryState'
+      }
+    });
+
+    expect(extensionRegistry.list('history.getChatHistoryState')).toHaveLength(1);
   });
 });

@@ -9,13 +9,24 @@ import {
   RPC_CALL_PROGRESS_EVENT,
   RPC_CALL_STARTED_EVENT
 } from '@agentg/shared/rpc/call-events';
-import { domainErrorEnvelope, procedureEnvelopeSchema } from '@agentg/shared/rpc/envelope';
+import {
+  domainErrorEnvelope,
+  okEnvelope,
+  procedureEnvelopeSchema
+} from '@agentg/shared/rpc/envelope';
+import {
+  createExtensionRegistry,
+  extensionCallInputSchema,
+  type ExtensionCallInput
+} from '@agentg/shared/rpc/extensions';
 import { createHTTPServer } from '@trpc/server/adapters/standalone';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
 import {
   createHistoryRpcContext,
+  enriched,
+  extension,
   historyRpcRouter,
   INTERNAL_RPC_CORRELATION_ID_HEADER,
   observable,
@@ -206,6 +217,185 @@ describe('History tRPC foundation', () => {
           message: 'observable boom'
         },
         target: 'history.throwing'
+      }
+    });
+  });
+
+  it('refreshes registrations and removes stale extension entries', () => {
+    const registry = createExtensionRegistry({ ttlMs: 1000 });
+    const registeredAt = new Date('2026-05-02T00:00:00.000Z');
+    const refreshedAt = new Date('2026-05-02T00:00:00.500Z');
+
+    expect(
+      registry.register(
+        {
+          extension: 'summaries.chatSummary',
+          target: 'history.enrichedEcho'
+        },
+        registeredAt
+      )
+    ).toMatchObject({
+      extension: 'summaries.chatSummary',
+      refreshed: false,
+      registered: true,
+      target: 'history.enrichedEcho'
+    });
+
+    expect(
+      registry.register(
+        {
+          extension: 'summaries.chatSummary',
+          target: 'history.enrichedEcho'
+        },
+        refreshedAt
+      )
+    ).toMatchObject({
+      extension: 'summaries.chatSummary',
+      refreshed: true,
+      registered: false,
+      target: 'history.enrichedEcho'
+    });
+
+    expect(registry.list('history.enrichedEcho', refreshedAt)).toHaveLength(1);
+    expect(registry.list('history.enrichedEcho', new Date('2026-05-02T00:00:01.501Z'))).toEqual([]);
+  });
+
+  it('attaches registered extension results to enriched envelopes', async () => {
+    const publishedEvents: IntegrationEvent[] = [];
+    const registry = createExtensionRegistry({ ttlMs: 60000 });
+    const extensionCalls: ExtensionCallInput[] = [];
+    registry.register({
+      extension: 'bad.failure',
+      target: 'history.enrichedEcho'
+    });
+    registry.register({
+      extension: 'slow.timeout',
+      target: 'history.enrichedEcho'
+    });
+    registry.register({
+      extension: 'summaries.chatSummary',
+      target: 'history.enrichedEcho'
+    });
+
+    const caller = historyRpcRouter({
+      enrichedEcho: enriched
+        .input(z.object({ value: z.string() }))
+        .output(procedureEnvelopeSchema(z.object({ value: z.string() })))
+        .query(({ input }) => ({
+          value: input.value
+        }))
+    }).createCaller({
+      eventBus: createRecordingEventBus(publishedEvents),
+      extensionCallTimeoutMs: 1,
+      extensionRegistry: registry,
+      resolveExtensionCaller(slug) {
+        if (slug === 'summaries') {
+          return (_extensionName, input) => {
+            extensionCalls.push(input);
+            return Promise.resolve(
+              okEnvelope({
+                summary: `summary:${(input.output as { value: string }).value}`
+              })
+            );
+          };
+        }
+
+        if (slug === 'slow') {
+          return () => new Promise(() => undefined);
+        }
+
+        if (slug === 'bad') {
+          return () => {
+            throw new Error('extension failed');
+          };
+        }
+
+        return undefined;
+      }
+    });
+
+    await expect(caller.enrichedEcho({ value: 'chat-a' })).resolves.toMatchObject({
+      extensions: {
+        'bad.failure': {
+          error: {
+            code: 'extension_failed',
+            message: 'extension failed'
+          },
+          ok: false
+        },
+        'slow.timeout': {
+          error: {
+            code: 'extension_timeout'
+          },
+          ok: false
+        },
+        'summaries.chatSummary': {
+          ok: true,
+          result: {
+            summary: 'summary:chat-a'
+          }
+        }
+      },
+      ok: true,
+      result: {
+        value: 'chat-a'
+      }
+    });
+
+    expect(extensionCalls).toEqual([
+      {
+        callId: expect.any(String) as string,
+        input: {
+          value: 'chat-a'
+        },
+        output: {
+          value: 'chat-a'
+        },
+        target: 'history.enrichedEcho'
+      }
+    ]);
+    expect(publishedEvents.map((event) => event.type)).toEqual([
+      RPC_CALL_STARTED_EVENT,
+      RPC_CALL_COMPLETED_EVENT
+    ]);
+    expect(publishedEvents[1]).toMatchObject({
+      data: {
+        output: {
+          extensions: {
+            'summaries.chatSummary': {
+              ok: true
+            }
+          },
+          ok: true
+        },
+        target: 'history.enrichedEcho'
+      }
+    });
+  });
+
+  it('builds module-owned extension methods', async () => {
+    const caller = historyRpcRouter({
+      chatSummary: extension
+        .input(extensionCallInputSchema)
+        .output(procedureEnvelopeSchema(z.object({ summary: z.string() })))
+        .query(({ input }) => ({
+          summary: `${input.target}:${(input.output as { value: string }).value}`
+        }))
+    }).createCaller({});
+
+    await expect(
+      caller.chatSummary({
+        callId: 'call-a',
+        output: {
+          value: 'chat-a'
+        },
+        target: 'history.enrichedEcho'
+      })
+    ).resolves.toEqual({
+      extensions: {},
+      ok: true,
+      result: {
+        summary: 'history.enrichedEcho:chat-a'
       }
     });
   });

@@ -1,4 +1,10 @@
 import {
+  extensionRegistrationInputSchema,
+  extensionRegistrationOutputSchema,
+  type ExtensionRegistry,
+  type ExtensionRegistrationOutput
+} from '@agentg/shared/rpc/extensions';
+import {
   historyChatHistoryStateOutputSchema,
   historyDeleteTargetInputSchema,
   historyGetChatHistoryStateInputSchema,
@@ -25,7 +31,7 @@ import {
 } from './history-contracts.js';
 import { procedureEnvelopeSchema } from '@agentg/shared/rpc/envelope';
 import { callHistoryMethod, type HistoryRuntime } from '../observability.js';
-import { historyRpcRouter, observable, rpc } from './trpc.js';
+import { enriched, historyRpcRouter, observable, rpc } from './trpc.js';
 
 type HistoryMethod =
   | 'history.deleteTarget'
@@ -44,6 +50,7 @@ export type HistoryMethodCaller = (
 
 export type CreateHistoryRouterOptions = HistoryRuntime & {
   callMethod?: HistoryMethodCaller;
+  extensionRegistry?: ExtensionRegistry;
 };
 
 export function createHistoryRouter(options: CreateHistoryRouterOptions) {
@@ -58,7 +65,7 @@ export function createHistoryRouter(options: CreateHistoryRouterOptions) {
           await callKnownHistoryMethod(options, callMethod, 'history.deleteTarget', input)
         )
       ),
-    getChatHistoryState: rpc
+    getChatHistoryState: enriched
       .input(historyGetChatHistoryStateInputSchema)
       .output(procedureEnvelopeSchema(historyChatHistoryStateOutputSchema))
       .query(async ({ input }) =>
@@ -98,6 +105,10 @@ export function createHistoryRouter(options: CreateHistoryRouterOptions) {
           await callKnownHistoryMethod(options, callMethod, 'history.requestSync', input)
         )
       ),
+    registerExtension: rpc
+      .input(extensionRegistrationInputSchema)
+      .output(procedureEnvelopeSchema(extensionRegistrationOutputSchema))
+      .mutation(({ input }) => registerExtension(options, input)),
     upsertTarget: rpc
       .input(historyUpsertTargetInputSchema)
       .output(procedureEnvelopeSchema(historyTargetMutationOutputSchema))
@@ -123,6 +134,17 @@ async function callKnownHistoryMethod(
   }
 
   return result;
+}
+
+function registerExtension(
+  options: CreateHistoryRouterOptions,
+  input: Parameters<ExtensionRegistry['register']>[0]
+): ExtensionRegistrationOutput {
+  if (options.extensionRegistry === undefined) {
+    throw new Error('History extension registry is not configured');
+  }
+
+  return options.extensionRegistry.register(input);
 }
 
 function normalizeOverview(value: unknown): HistoryOverviewOutput {
