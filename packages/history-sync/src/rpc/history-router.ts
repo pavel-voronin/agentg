@@ -23,8 +23,9 @@ import {
   type HistoryTargetOutput,
   type HistoryTargetMutationOutput
 } from './history-contracts.js';
+import { procedureEnvelopeSchema } from '@agentg/shared/rpc/envelope';
 import { callHistoryMethod, type HistoryRuntime } from '../observability.js';
-import { historyRpcProcedure, historyRpcRouter } from './trpc.js';
+import { historyRpcRouter, rpc } from './trpc.js';
 
 type HistoryMethod =
   | 'history.deleteTarget'
@@ -49,57 +50,57 @@ export function createHistoryRouter(options: CreateHistoryRouterOptions) {
   const callMethod = options.callMethod ?? callHistoryMethod;
 
   return historyRpcRouter({
-    deleteTarget: historyRpcProcedure
+    deleteTarget: rpc
       .input(historyDeleteTargetInputSchema)
-      .output(historyTargetMutationOutputSchema)
+      .output(procedureEnvelopeSchema(historyTargetMutationOutputSchema))
       .mutation(async ({ input }) =>
         normalizeTargetMutation(
           await callKnownHistoryMethod(options, callMethod, 'history.deleteTarget', input)
         )
       ),
-    getChatHistoryState: historyRpcProcedure
+    getChatHistoryState: rpc
       .input(historyGetChatHistoryStateInputSchema)
-      .output(historyChatHistoryStateOutputSchema)
+      .output(procedureEnvelopeSchema(historyChatHistoryStateOutputSchema))
       .query(async ({ input }) =>
         normalizeChatHistoryState(
           await callKnownHistoryMethod(options, callMethod, 'history.getChatHistoryState', input)
         )
       ),
-    getOverview: historyRpcProcedure
+    getOverview: rpc
       .input(historyGetOverviewInputSchema)
-      .output(historyOverviewOutputSchema)
+      .output(procedureEnvelopeSchema(historyOverviewOutputSchema))
       .query(async () =>
         normalizeOverview(
           await callKnownHistoryMethod(options, callMethod, 'history.getOverview', undefined)
         )
       ),
-    listChats: historyRpcProcedure
+    listChats: rpc
       .input(historyListChatsInputSchema)
-      .output(historyListChatsOutputSchema)
+      .output(procedureEnvelopeSchema(historyListChatsOutputSchema))
       .query(async ({ input }) =>
         normalizeListChats(
           await callKnownHistoryMethod(options, callMethod, 'history.listChats', input)
         )
       ),
-    listJobs: historyRpcProcedure
+    listJobs: rpc
       .input(historyListJobsInputSchema)
-      .output(historyListJobsOutputSchema)
+      .output(procedureEnvelopeSchema(historyListJobsOutputSchema))
       .query(async ({ input }) =>
         normalizeListJobs(
           await callKnownHistoryMethod(options, callMethod, 'history.listJobs', input)
         )
       ),
-    requestSync: historyRpcProcedure
+    requestSync: rpc
       .input(historyRequestSyncInputSchema)
-      .output(historyRequestSyncOutputSchema)
+      .output(procedureEnvelopeSchema(historyRequestSyncOutputSchema))
       .mutation(async ({ input }) =>
         normalizeRequestSync(
           await callKnownHistoryMethod(options, callMethod, 'history.requestSync', input)
         )
       ),
-    upsertTarget: historyRpcProcedure
+    upsertTarget: rpc
       .input(historyUpsertTargetInputSchema)
-      .output(historyTargetMutationOutputSchema)
+      .output(procedureEnvelopeSchema(historyTargetMutationOutputSchema))
       .mutation(async ({ input }) =>
         normalizeTargetMutation(
           await callKnownHistoryMethod(options, callMethod, 'history.upsertTarget', input)

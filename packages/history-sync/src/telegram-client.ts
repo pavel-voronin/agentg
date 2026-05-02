@@ -1,4 +1,5 @@
 import { createTRPCClient, httpBatchLink } from '@trpc/client';
+import { unwrapProcedureEnvelope } from '@agentg/shared/rpc/envelope';
 import type {
   TelegramChatDirectoryEntry,
   TelegramChatFolder,
@@ -122,55 +123,63 @@ export function createTrpcTelegramHistoryClient(
     },
     countMessagesInIntervals(request) {
       return withTimeout(
-        (signal) => client.countMessagesInIntervals.query(request, { signal }),
+        async (signal) =>
+          unwrapProcedureEnvelope(await client.countMessagesInIntervals.query(request, { signal })),
         TELEGRAM_HISTORY_REQUEST_TIMEOUT_MS
       );
     },
     fetchPage(request) {
       return withTimeout(
-        (signal) => client.fetchPage.mutate(request, { signal }),
+        async (signal) =>
+          unwrapProcedureEnvelope(await client.fetchPage.mutate(request, { signal })),
         TELEGRAM_HISTORY_REQUEST_TIMEOUT_MS
       );
     },
     getChat(request) {
       return withTimeout(
-        (signal) => client.getChat.query(request, { signal }),
+        async (signal) => unwrapProcedureEnvelope(await client.getChat.query(request, { signal })),
         TELEGRAM_HISTORY_REQUEST_TIMEOUT_MS
       );
     },
     getChatHistoryFacts(request) {
       return withTimeout(
-        (signal) => client.getChatHistoryFacts.query(request, { signal }),
+        async (signal) =>
+          unwrapProcedureEnvelope(await client.getChatHistoryFacts.query(request, { signal })),
         TELEGRAM_HISTORY_REQUEST_TIMEOUT_MS
       );
     },
     getMessage(request) {
       return withTimeout(
-        (signal) => client.getMessage.query(request, { signal }),
+        async (signal) =>
+          unwrapProcedureEnvelope(await client.getMessage.query(request, { signal })),
         TELEGRAM_HISTORY_REQUEST_TIMEOUT_MS
       );
     },
     listChatDirectory(request) {
       return withTimeout(
-        (signal) => client.listChatDirectory.query(request, { signal }),
+        async (signal) =>
+          unwrapProcedureEnvelope(await client.listChatDirectory.query(request, { signal })),
         TELEGRAM_HISTORY_REQUEST_TIMEOUT_MS
       );
     },
     listChats(request) {
       return withTimeout(
-        (signal) => client.listChats.query(request, { signal }),
+        async (signal) =>
+          unwrapProcedureEnvelope(await client.listChats.query(request, { signal })),
         TELEGRAM_HISTORY_REQUEST_TIMEOUT_MS
       );
     },
     listRecentMessages(request) {
       return withTimeout(
-        (signal) => client.listRecentMessages.query(request, { signal }),
+        async (signal) =>
+          unwrapProcedureEnvelope(await client.listRecentMessages.query(request, { signal })),
         TELEGRAM_HISTORY_REQUEST_TIMEOUT_MS
       );
     },
     searchMessages(request) {
       return withTimeout(
-        (signal) => client.searchMessages.query(request, { signal }),
+        async (signal) =>
+          unwrapProcedureEnvelope(await client.searchMessages.query(request, { signal })),
         TELEGRAM_HISTORY_REQUEST_TIMEOUT_MS
       );
     }

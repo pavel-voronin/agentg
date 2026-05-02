@@ -1,5 +1,6 @@
 import type { Server } from 'node:http';
 
+import { procedureEnvelopeSchema } from '@agentg/shared/rpc/envelope';
 import {
   historyChatHistoryStateOutputSchema,
   historyDeleteTargetInputSchema,
@@ -12,8 +13,8 @@ import {
   historyOverviewOutputSchema,
   historyRequestSyncInputSchema,
   historyRequestSyncOutputSchema,
-  historyRpcProcedure,
   historyRpcRouter,
+  rpc,
   historyTargetMutationOutputSchema,
   historyUpsertTargetInputSchema
 } from '@agentg/history-sync/rpc';
@@ -27,16 +28,16 @@ describe('createTrpcGatewayHistoryClient', () => {
     const calls: { method: string; params: unknown }[] = [];
     const server = createHTTPServer({
       router: historyRpcRouter({
-        deleteTarget: historyRpcProcedure
+        deleteTarget: rpc
           .input(historyDeleteTargetInputSchema)
-          .output(historyTargetMutationOutputSchema)
+          .output(procedureEnvelopeSchema(historyTargetMutationOutputSchema))
           .mutation(({ input }) => {
             calls.push({ method: 'deleteTarget', params: input });
             return { deleted: true, target: undefined, upserted: false };
           }),
-        getChatHistoryState: historyRpcProcedure
+        getChatHistoryState: rpc
           .input(historyGetChatHistoryStateInputSchema)
-          .output(historyChatHistoryStateOutputSchema)
+          .output(procedureEnvelopeSchema(historyChatHistoryStateOutputSchema))
           .query(({ input }) => {
             calls.push({ method: 'getChatHistoryState', params: input });
             return {
@@ -57,9 +58,9 @@ describe('createTrpcGatewayHistoryClient', () => {
               targets: []
             };
           }),
-        getOverview: historyRpcProcedure
+        getOverview: rpc
           .input(historyGetOverviewInputSchema)
-          .output(historyOverviewOutputSchema)
+          .output(procedureEnvelopeSchema(historyOverviewOutputSchema))
           .query(() => {
             calls.push({ method: 'getOverview', params: undefined });
             return {
@@ -72,9 +73,9 @@ describe('createTrpcGatewayHistoryClient', () => {
               templates: 3
             };
           }),
-        listChats: historyRpcProcedure
+        listChats: rpc
           .input(historyListChatsInputSchema)
-          .output(historyListChatsOutputSchema)
+          .output(procedureEnvelopeSchema(historyListChatsOutputSchema))
           .query(({ input }) => {
             calls.push({ method: 'listChats', params: input });
             return {
@@ -101,23 +102,23 @@ describe('createTrpcGatewayHistoryClient', () => {
               types: [{ count: 1, type: 'private' }]
             };
           }),
-        listJobs: historyRpcProcedure
+        listJobs: rpc
           .input(historyListJobsInputSchema)
-          .output(historyListJobsOutputSchema)
+          .output(procedureEnvelopeSchema(historyListJobsOutputSchema))
           .query(({ input }) => {
             calls.push({ method: 'listJobs', params: input });
             return { jobs: [] };
           }),
-        requestSync: historyRpcProcedure
+        requestSync: rpc
           .input(historyRequestSyncInputSchema)
-          .output(historyRequestSyncOutputSchema)
+          .output(procedureEnvelopeSchema(historyRequestSyncOutputSchema))
           .mutation(({ input }) => {
             calls.push({ method: 'requestSync', params: input });
             return { requested: true };
           }),
-        upsertTarget: historyRpcProcedure
+        upsertTarget: rpc
           .input(historyUpsertTargetInputSchema)
-          .output(historyTargetMutationOutputSchema)
+          .output(procedureEnvelopeSchema(historyTargetMutationOutputSchema))
           .mutation(({ input }) => {
             calls.push({ method: 'upsertTarget', params: input });
             return {

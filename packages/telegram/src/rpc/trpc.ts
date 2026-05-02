@@ -27,7 +27,10 @@ const telegramRpc = initTRPC.context<TelegramRpcContext>().create({
 });
 
 export const telegramRpcRouter = telegramRpc.router;
-export const telegramRpcProcedure = telegramRpc.procedure;
+export const rpc = telegramRpc.procedure;
+export const observable = rpc;
+export const enriched = rpc;
+export const extension = rpc;
 
 function optionalHeader(value: string | string[] | undefined): string | undefined {
   const firstValue = Array.isArray(value) ? value[0] : value;

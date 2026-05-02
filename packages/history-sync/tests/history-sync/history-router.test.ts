@@ -50,18 +50,22 @@ describe('createHistoryRouter', () => {
     }).createCaller({});
 
     await expect(caller.getOverview(undefined)).resolves.toEqual({
-      activeJob: {
-        chatId: 'chat-a',
-        endAt: '2026-04-30T02:00:00.000Z',
-        startAt: '2026-04-30T01:00:00.000Z',
-        status: 'running'
-      },
-      chats: 1,
-      coverageIntervals: 2,
-      pendingJobs: 0,
-      runningJobs: 1,
-      targets: 1,
-      templates: 1
+      extensions: {},
+      ok: true,
+      result: {
+        activeJob: {
+          chatId: 'chat-a',
+          endAt: '2026-04-30T02:00:00.000Z',
+          startAt: '2026-04-30T01:00:00.000Z',
+          status: 'running'
+        },
+        chats: 1,
+        coverageIntervals: 2,
+        pendingJobs: 0,
+        runningJobs: 1,
+        targets: 1,
+        templates: 1
+      }
     });
 
     await expect(
@@ -70,16 +74,20 @@ describe('createHistoryRouter', () => {
         preset: 'last7d'
       })
     ).resolves.toEqual({
-      deleted: false,
-      target: {
-        chatId: 'chat-a',
-        id: 'target-a',
-        range: {
-          end: { expression: 'now', kind: 'expression' },
-          start: { expression: 'now-7d', kind: 'expression' }
-        }
-      },
-      upserted: true
+      extensions: {},
+      ok: true,
+      result: {
+        deleted: false,
+        target: {
+          chatId: 'chat-a',
+          id: 'target-a',
+          range: {
+            end: { expression: 'now', kind: 'expression' },
+            start: { expression: 'now-7d', kind: 'expression' }
+          }
+        },
+        upserted: true
+      }
     });
 
     expect(calls).toEqual([

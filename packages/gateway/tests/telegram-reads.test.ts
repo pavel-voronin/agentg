@@ -1,5 +1,6 @@
 import type { Server } from 'node:http';
 
+import { procedureEnvelopeSchema } from '@agentg/shared/rpc/envelope';
 import {
   telegramGetChatInputSchema,
   telegramGetChatOutputSchema,
@@ -7,8 +8,8 @@ import {
   telegramGetMessageOutputSchema,
   telegramListRecentMessagesInputSchema,
   telegramListRecentMessagesOutputSchema,
-  telegramRpcProcedure,
   telegramRpcRouter,
+  rpc,
   telegramSearchMessagesInputSchema,
   telegramSearchMessagesOutputSchema
 } from '@agentg/telegram/rpc';
@@ -35,9 +36,9 @@ describe('createTrpcGatewayTelegramClient', () => {
     };
     const server = createHTTPServer({
       router: telegramRpcRouter({
-        getChat: telegramRpcProcedure
+        getChat: rpc
           .input(telegramGetChatInputSchema)
-          .output(telegramGetChatOutputSchema)
+          .output(procedureEnvelopeSchema(telegramGetChatOutputSchema))
           .query(({ input }) => {
             calls.push({ method: 'getChat', params: input });
             return {
@@ -49,27 +50,27 @@ describe('createTrpcGatewayTelegramClient', () => {
               }
             };
           }),
-        getMessage: telegramRpcProcedure
+        getMessage: rpc
           .input(telegramGetMessageInputSchema)
-          .output(telegramGetMessageOutputSchema)
+          .output(procedureEnvelopeSchema(telegramGetMessageOutputSchema))
           .query(({ input }) => {
             calls.push({ method: 'getMessage', params: input });
             return {
               message
             };
           }),
-        listRecentMessages: telegramRpcProcedure
+        listRecentMessages: rpc
           .input(telegramListRecentMessagesInputSchema)
-          .output(telegramListRecentMessagesOutputSchema)
+          .output(procedureEnvelopeSchema(telegramListRecentMessagesOutputSchema))
           .query(({ input }) => {
             calls.push({ method: 'listRecentMessages', params: input });
             return {
               messages: [message]
             };
           }),
-        searchMessages: telegramRpcProcedure
+        searchMessages: rpc
           .input(telegramSearchMessagesInputSchema)
-          .output(telegramSearchMessagesOutputSchema)
+          .output(procedureEnvelopeSchema(telegramSearchMessagesOutputSchema))
           .query(({ input }) => {
             calls.push({ method: 'searchMessages', params: input });
             return {

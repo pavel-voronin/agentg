@@ -27,7 +27,10 @@ const historyRpc = initTRPC.context<HistoryRpcContext>().create({
 });
 
 export const historyRpcRouter = historyRpc.router;
-export const historyRpcProcedure = historyRpc.procedure;
+export const rpc = historyRpc.procedure;
+export const observable = rpc;
+export const enriched = rpc;
+export const extension = rpc;
 
 function optionalHeader(value: string | string[] | undefined): string | undefined {
   const firstValue = Array.isArray(value) ? value[0] : value;

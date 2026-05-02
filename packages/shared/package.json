@@ -11,11 +11,13 @@
     "./events/bus": "./src/events/bus.ts",
     "./events/envelope": "./src/events/envelope.ts",
     "./events/telegram-events": "./src/events/telegram-events.ts",
-    "./json": "./src/json.ts"
+    "./json": "./src/json.ts",
+    "./rpc/envelope": "./src/rpc/envelope.ts"
   },
   "dependencies": {
     "dotenv": "17.4.2",
-    "nats": "^2.29.3"
+    "nats": "^2.29.3",
+    "zod": "^4.4.1"
   },
   "devDependencies": {
     "@types/node": "24.10.0",

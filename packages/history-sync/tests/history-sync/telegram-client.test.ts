@@ -1,12 +1,13 @@
 import type { Server } from 'node:http';
 
+import { procedureEnvelopeSchema } from '@agentg/shared/rpc/envelope';
 import {
   telegramHistoryChatSchema,
   telegramHistoryFetchPageInputSchema,
   telegramHistoryFetchPageResultSchema,
   telegramHistoryListChatsInputSchema,
-  telegramRpcProcedure,
-  telegramRpcRouter
+  telegramRpcRouter,
+  rpc
 } from '@agentg/telegram/rpc';
 import { createHTTPServer } from '@trpc/server/adapters/standalone';
 import { describe, expect, it } from 'vitest';
@@ -17,9 +18,9 @@ import { createTrpcTelegramHistoryClient } from '../../src/telegram-client.js';
 describe('createTrpcTelegramHistoryClient', () => {
   it('calls Telegram History through the domain-owned tRPC router shape', async () => {
     const router = telegramRpcRouter({
-      fetchPage: telegramRpcProcedure
+      fetchPage: rpc
         .input(telegramHistoryFetchPageInputSchema)
-        .output(telegramHistoryFetchPageResultSchema)
+        .output(procedureEnvelopeSchema(telegramHistoryFetchPageResultSchema))
         .mutation(({ input }) => ({
           crossedStart: false,
           fetchedMessages: 2,
@@ -29,9 +30,9 @@ describe('createTrpcTelegramHistoryClient', () => {
           reachedBeginning: false,
           storedMessages: 1
         })),
-      listChats: telegramRpcProcedure
+      listChats: rpc
         .input(telegramHistoryListChatsInputSchema)
-        .output(z.array(telegramHistoryChatSchema))
+        .output(procedureEnvelopeSchema(z.array(telegramHistoryChatSchema)))
         .query(({ input }) => [
           {
             id: input.discover === true ? 'chat-discovered' : 'chat-known',

@@ -1,5 +1,6 @@
 import type { TelegramDatabase as AppDatabase } from '../database.js';
 import { telegramChatFolders, telegramChats, telegramMessages, telegramUsers } from '../schema.js';
+import { procedureEnvelopeSchema } from '@agentg/shared/rpc/envelope';
 import { and, asc, desc, eq, gte, ilike, inArray, isNotNull, lt, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
@@ -11,7 +12,7 @@ import {
   type TdObject
 } from '../normalize.js';
 import { persistTelegramUpdate, upsertChat } from '../store.js';
-import { telegramRpcProcedure, telegramRpcRouter } from './trpc.js';
+import { rpc, telegramRpcRouter } from './trpc.js';
 
 const nonEmptyStringSchema = z.string().trim().min(1);
 const nonNegativeIntegerSchema = z.number().int().nonnegative();
@@ -268,41 +269,41 @@ export type TelegramHistoryRouterRuntime = {
 
 export function createTelegramHistoryRouter(runtime: TelegramHistoryRouterRuntime) {
   return telegramRpcRouter({
-    countMessagesInIntervals: telegramRpcProcedure
+    countMessagesInIntervals: rpc
       .input(telegramCountMessagesInIntervalsInputSchema)
-      .output(telegramCountMessagesInIntervalsOutputSchema)
+      .output(procedureEnvelopeSchema(telegramCountMessagesInIntervalsOutputSchema))
       .query(({ input }) => handleCountMessagesInIntervals(runtime, input)),
-    fetchPage: telegramRpcProcedure
+    fetchPage: rpc
       .input(telegramHistoryFetchPageInputSchema)
-      .output(telegramHistoryFetchPageResultSchema)
+      .output(procedureEnvelopeSchema(telegramHistoryFetchPageResultSchema))
       .mutation(({ input }) => handleFetchPage(runtime, input)),
-    getChat: telegramRpcProcedure
+    getChat: rpc
       .input(telegramGetChatInputSchema)
-      .output(telegramGetChatOutputSchema)
+      .output(procedureEnvelopeSchema(telegramGetChatOutputSchema))
       .query(({ input }) => handleGetChat(runtime, input)),
-    getChatHistoryFacts: telegramRpcProcedure
+    getChatHistoryFacts: rpc
       .input(telegramGetChatHistoryFactsInputSchema)
-      .output(telegramGetChatHistoryFactsOutputSchema)
+      .output(procedureEnvelopeSchema(telegramGetChatHistoryFactsOutputSchema))
       .query(({ input }) => handleGetChatHistoryFacts(runtime, input)),
-    getMessage: telegramRpcProcedure
+    getMessage: rpc
       .input(telegramGetMessageInputSchema)
-      .output(telegramGetMessageOutputSchema)
+      .output(procedureEnvelopeSchema(telegramGetMessageOutputSchema))
       .query(({ input }) => handleGetMessage(runtime, input)),
-    listChatDirectory: telegramRpcProcedure
+    listChatDirectory: rpc
       .input(telegramListChatDirectoryInputSchema)
-      .output(telegramListChatDirectoryOutputSchema)
+      .output(procedureEnvelopeSchema(telegramListChatDirectoryOutputSchema))
       .query(({ input }) => handleListChatDirectory(runtime, input)),
-    listChats: telegramRpcProcedure
+    listChats: rpc
       .input(telegramHistoryListChatsInputSchema)
-      .output(z.array(telegramHistoryChatSchema))
+      .output(procedureEnvelopeSchema(z.array(telegramHistoryChatSchema)))
       .query(({ input }) => handleListChats(runtime, input)),
-    listRecentMessages: telegramRpcProcedure
+    listRecentMessages: rpc
       .input(telegramListRecentMessagesInputSchema)
-      .output(telegramListRecentMessagesOutputSchema)
+      .output(procedureEnvelopeSchema(telegramListRecentMessagesOutputSchema))
       .query(({ input }) => handleListRecentMessages(runtime, input)),
-    searchMessages: telegramRpcProcedure
+    searchMessages: rpc
       .input(telegramSearchMessagesInputSchema)
-      .output(telegramSearchMessagesOutputSchema)
+      .output(procedureEnvelopeSchema(telegramSearchMessagesOutputSchema))
       .query(({ input }) => handleSearchMessages(runtime, input))
   });
 }
