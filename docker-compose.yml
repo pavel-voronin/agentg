@@ -38,7 +38,7 @@ services:
       TDLIB_DATABASE_DIR: /app/td-data/database
       TDLIB_FILES_DIR: /app/td-data/files
     volumes:
-      - td-data:/app/td-data
+      - ./td-data:/app/td-data
     restart: 'no'
     command: ['npm', '--workspace', '@agentg/telegram', 'run', 'start']
 
@@ -179,4 +179,3 @@ services:
 
 volumes:
   postgres-data:
-  td-data:
