@@ -10,7 +10,7 @@ select
   (select count(*) from history_templates) as templates,
   (select count(*) from history_targets) as targets,
   (select count(*) from history_coverage) as coverage_intervals,
-  (select count(*) from backfill_jobs) as backfill_jobs;
+  (select count(*) from history_backfill_jobs) as backfill_jobs;
 "
 
 echo
@@ -22,7 +22,7 @@ select
   min(start_at) as oldest_start,
   max(end_at) as newest_end,
   max(updated_at) as last_update
-from backfill_jobs
+from history_backfill_jobs
 group by status
 order by status;
 "
@@ -38,7 +38,7 @@ select
   status,
   cursor is not null as has_cursor,
   updated_at
-from backfill_jobs
+from history_backfill_jobs
 where status in ('pending', 'running')
 order by end_at desc, start_at desc
 limit 25;

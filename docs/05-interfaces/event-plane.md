@@ -79,6 +79,19 @@ History Sync publishes:
 - `history.target.deleted`
 - `history.target.auto_deleted`
 
+Summaries publishes:
+
+- `summaries.summary.requested`
+- `summaries.summary.completed`
+- `summaries.summary.invalidated`
+
+Observable RPC calls publish:
+
+- `rpc.call.started`
+- `rpc.call.progress`
+- `rpc.call.completed`
+- `rpc.call.failed`
+
 `history.sync.requested` is a notification that a sync wake-up was accepted at
 the History boundary. It is not consumed as a NATS command.
 
@@ -97,6 +110,10 @@ external agent WebSocket clients.
 Control Plane server subscribes to `telegram.>` and `history.>` and forwards
 live events to browser clients.
 
+Summaries subscribes to Telegram message events and History state-change events
+to invalidate private summary state. It recovers durable state through
+`summaries_*` tables and does not treat NATS as a replay log.
+
 ## Recovery Surfaces
 
 After reconnecting, consumers must rebuild state through these surfaces:
@@ -108,6 +125,7 @@ After reconnecting, consumers must rebuild state through these surfaces:
 - History Sync: its own Postgres tables plus Telegram read and history-fetch
   tRPC.
 - Telegram ingestion: TDLib session state and Telegram-shaped Postgres storage.
+- Modules: their owned tables plus domain tRPC reads.
 
 ## Internal RPC Ownership
 
@@ -119,14 +137,19 @@ Internal RPC contracts are owned by the serving domain package:
 - History Sync owns `@agentg/history-sync/rpc`, including the History tRPC router,
   schemas, and the JSON-RPC adapter used by Gateway and Control Plane server for
   existing `history.*` method names.
+- Modules own package-local RPC contracts. The pilot summaries module owns
+  `@agentg/summaries/rpc` and registers its capability and extension methods
+  through the module runtime.
 
 Gateway owns the external agent WebSocket protocol. Control Plane owns the
 browser-facing WebSocket protocol. Neither protocol is an internal domain RPC
 contract, and neither browser nor external agent clients call internal tRPC
 directly.
 
-There is no shared internal RPC contracts package. `@agentg/shared` owns only
-cross-cutting helpers such as the event envelope and event bus abstraction.
+There is no shared internal domain RPC contracts package. `@agentg/shared` owns
+only cross-cutting helpers such as the event envelope, event bus abstraction,
+standard RPC envelope, call lifecycle events, capability contracts, extension
+contracts, and module runtime helpers.
 
 ## Removed Command Subjects
 

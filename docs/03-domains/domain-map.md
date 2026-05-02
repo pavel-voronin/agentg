@@ -7,12 +7,15 @@
 - [History Sync](history-sync.md): manage templates, concrete chat targets, timeline coverage, reconciliation, and backfill jobs.
 - Telegram Storage: persist raw events and current Telegram message state in Postgres.
 - History Storage: persist templates, targets, coverage, and backfill queue state in Postgres.
+- Summaries: persist summary runs, results, source references, and invalidation
+  state in Postgres.
 
 ## Supporting Domains
 
 - Backup and restore.
 - Secrets management.
 - Observability.
+- Module runtime and Gateway capability registration.
 
 ## Important Separation
 
@@ -22,4 +25,5 @@ The system should separate:
 - raw event log
 - current message state
 - history targets and coverage
+- module-owned derived state
 - attachment metadata

@@ -64,7 +64,7 @@ with the target service by sending:
 
 ```json
 {
-  "target": "history.getChatState",
+  "target": "history.getChatHistoryState",
   "extension": "summaries.chatSummary"
 }
 ```
@@ -95,7 +95,8 @@ and collected by Gateway.
 Extension means a module-owned RPC method registered against a target RPC method
 so its result can be attached to the target call.
 
-Target means the RPC method being extended, for example `history.getChatState`.
+Target means the RPC method being extended, for example
+`history.getChatHistoryState`.
 
 Response envelope means the standard successful or domain-error shape returned
 by public AgenTG internal RPC methods.
@@ -155,6 +156,10 @@ Every synchronous extension call should have a short timeout. Extension failure
 is represented in the relevant extension envelope.
 
 NATS event subjects for a module should use the module slug as their prefix.
+
+The accepted baseline is guarded by `npm run source:audit`, which checks raw
+tRPC builder imports, cross-domain schema imports, table-prefix ownership, and
+Gateway capability registry behavior.
 
 ## Migration
 

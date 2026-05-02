@@ -254,11 +254,11 @@ records periodically.
 ```json
 {
   "moduleSlug": "summaries",
-  "name": "summaries.summarizeChat",
+  "name": "summaries.requestChatSummary",
   "serviceUrl": "http://summaries:8080",
-  "rpcMethod": "summarizeChat",
-  "rpcType": "query",
-  "description": "Summarize a chat"
+  "rpcMethod": "summaries.requestSummary",
+  "rpcType": "mutation",
+  "description": "Request or refresh a deterministic chat summary"
 }
 ```
 
@@ -274,10 +274,10 @@ Returns active capability registrations:
   "capabilities": [
     {
       "moduleSlug": "summaries",
-      "name": "summaries.summarizeChat",
+      "name": "summaries.requestChatSummary",
       "serviceUrl": "http://summaries:8080",
-      "rpcMethod": "summarizeChat",
-      "rpcType": "query",
+      "rpcMethod": "summaries.requestSummary",
+      "rpcType": "mutation",
       "registeredAt": "2026-05-02T00:00:00.000Z",
       "expiresAt": "2026-05-02T00:01:00.000Z"
     }
@@ -289,9 +289,11 @@ Returns active capability registrations:
 
 ```json
 {
-  "name": "summaries.summarizeChat",
+  "name": "summaries.requestChatSummary",
   "input": {
-    "chatId": "123"
+    "chatId": "123",
+    "reason": "agent-request",
+    "sourceMessages": []
   }
 }
 ```
@@ -299,6 +301,20 @@ Returns active capability registrations:
 Gateway routes the call to the owning module tRPC method and unwraps the
 standard AgenTG response envelope before returning the result to the WebSocket
 client.
+
+Gateway does not persist capability registrations. Modules refresh active
+registrations periodically, and Gateway removes stale entries when listing or
+resolving capabilities.
+
+## Extension Registry Reads
+
+Core services expose their active extension registry through internal tRPC:
+
+- History Sync: `listExtensions`
+- Telegram ingestion: `listExtensions`
+
+These methods return the standard AgenTG envelope. The registry is in-memory and
+describes only active registrations known to that service process.
 
 ## Telegram History RPC
 

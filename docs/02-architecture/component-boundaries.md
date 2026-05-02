@@ -62,24 +62,62 @@ Owns:
 - External agent-facing WebSocket API compatibility.
 - Authentication and edge policy for external clients.
 - Translating external agent calls into internal domain RPC calls where needed.
+- Aggregating active module capabilities through the in-memory capability
+  registry.
+- Proxying capability execution to the owning module tRPC method.
 
 Does not own:
 
 - Operator UI traffic.
 - Internal orchestration between domains.
 - History targets, coverage, or backfill job writes.
+- Module-owned capability implementation.
+
+## Trusted Modules
+
+Own:
+
+- A stable slug and service runtime.
+- Module-owned tables and Drizzle migrations.
+- Module-owned tRPC methods.
+- Module-owned NATS events with the slug prefix.
+- Gateway capability registration and refresh.
+- Extension registration and refresh against enriched target methods.
+
+Do not own:
+
+- Core domain base models.
+- Core domain table writes.
+- Gateway external protocol compatibility.
+
+## Summaries Pilot Module
+
+Owns:
+
+- `summaries_*` tables for summary runs, results, source references, and
+  invalidation state.
+- `summaries.*` tRPC methods.
+- `summaries.requestChatSummary` Gateway capability.
+- `summaries.chatSummary` extension for `history.getChatHistoryState`.
+- `summaries.*` lifecycle events.
+
+Does not own:
+
+- Telegram-shaped message storage.
+- History targets, coverage, or backfill jobs.
+- The base `history.getChatHistoryState` result.
 
 ## Storage Layer
 
 Owns:
 
-- Postgres schema for raw events and current message state.
-- Idempotent writes.
-- Basic chat, user, message, reply, and attachment metadata.
-- History templates, targets, coverage intervals, and backfill job state.
+- Shared database infrastructure: Postgres pool creation, Drizzle client
+  creation, health checks, and migration runner helpers.
 
 Does not own:
 
+- Domain or module schemas.
+- Centralized migrations.
 - Telegram session credentials.
 - Telegram network calls.
 

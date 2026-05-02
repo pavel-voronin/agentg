@@ -12,16 +12,16 @@ npm run infra:up
 npm run db:migrate
 npm run dev:telegram
 npm run dev:history-sync
+npm run dev:gateway
 npm run dev:summaries
 npm run dev:control-plane-server
 npm run dev:control-plane
-npm run dev:gateway
 ```
 
 `npm run infra:up` starts Postgres and NATS.
 
-`npm run db:migrate` applies versioned Drizzle migrations owned by the Telegram
-and History Sync packages.
+`npm run db:migrate` applies versioned Drizzle migrations owned by Telegram,
+History Sync, and Summaries.
 
 `npm run dev:telegram` runs the `@agentg/telegram` ingestion package. It owns the
 TDLib session, receives live Telegram updates, writes Telegram-shaped records to
@@ -117,8 +117,8 @@ Module runtime environment:
 - needed domain URLs such as `TELEGRAM_RPC_URL` and `HISTORY_RPC_URL`
 
 Capability names are namespaced by slug, for example
-`summaries.summarizeChat`. Extension RPC names follow the same convention and
-are registered directly with the target service at startup, then refreshed
+`summaries.requestChatSummary`. Extension RPC names follow the same convention
+and are registered directly with the target service at startup, then refreshed
 periodically.
 
 Docker Compose includes a `module-smoke` profile with the `modulesmoke` service.
@@ -134,6 +134,60 @@ Run the pilot summaries module through Compose:
 ```bash
 npm run compose:summaries
 ```
+
+## Inspecting Registries
+
+Gateway capabilities are exposed through the external WebSocket API:
+
+```bash
+node --input-type=module -e "
+import { WebSocket } from 'ws';
+const ws = new WebSocket('ws://127.0.0.1:8787');
+ws.on('open', () => ws.send(JSON.stringify({ id: 'capabilities', method: 'capabilities.list' })));
+ws.on('message', (data) => { console.log(data.toString()); ws.close(); });
+"
+```
+
+History extension registrations are exposed through History tRPC:
+
+```bash
+npx tsx -e "
+import { createTRPCClient, httpBatchLink } from '@trpc/client';
+const client = createTRPCClient({
+  links: [httpBatchLink({ url: process.env.HISTORY_RPC_URL ?? 'http://127.0.0.1:18082' })]
+});
+console.log(JSON.stringify(await client.listExtensions.query(), null, 2));
+"
+```
+
+The `listExtensions` result is an AgenTG response envelope. The registry is
+process-local and ephemeral.
+
+## Debugging `callId` Flows
+
+Observable and enriched RPC methods publish `rpc.call.*` events with one
+`callId` per invocation. To inspect a flow, subscribe to NATS directly:
+
+```bash
+node --input-type=module -e "
+import { connect, StringCodec } from 'nats';
+const nc = await connect({ servers: process.env.NATS_URL ?? 'nats://127.0.0.1:4222' });
+const codec = StringCodec();
+for await (const msg of nc.subscribe('rpc.call.>')) {
+  console.log(codec.decode(msg.data));
+}
+"
+```
+
+Then:
+
+1. Invoke an observable or enriched method, for example `history.requestSync` or
+   a `capabilities.call` to `summaries.requestChatSummary`.
+2. Correlate `rpc.call.started`, optional `rpc.call.progress`,
+   `rpc.call.completed`, and `rpc.call.failed` by `event.data.callId`.
+
+These events are not durable. If a client disconnects, recover state through the
+owning domain or module RPC surface.
 
 ## Expected Services
 

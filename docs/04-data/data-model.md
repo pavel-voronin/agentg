@@ -18,6 +18,10 @@ history_templates
 history_targets
 history_coverage
 history_backfill_jobs
+summaries_runs
+summaries_results
+summaries_source_refs
+summaries_invalidations
 ```
 
 For the first implementation, the minimum practical subset is:
@@ -31,6 +35,10 @@ history_templates
 history_targets
 history_coverage
 history_backfill_jobs
+summaries_runs
+summaries_results
+summaries_source_refs
+summaries_invalidations
 ```
 
 Add more tables when the Telegram data being ingested needs them.
@@ -90,3 +98,15 @@ Purpose:
 
 See [History Sync](../03-domains/history-sync.md).
 See [History Sync Schema](history-sync-schema.md) for the table shape.
+
+## Module-Owned State
+
+Additional trusted modules own their tables and migrations. The table prefix
+must match the module slug. The current pilot module owns:
+
+- `summaries_runs`
+- `summaries_results`
+- `summaries_source_refs`
+- `summaries_invalidations`
+
+Other domains and modules should not read or write those tables directly.
