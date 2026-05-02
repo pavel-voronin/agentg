@@ -20,6 +20,7 @@ internal domain boundaries rather than product scope.
 
 - [Internal Domain tRPC Migration](internal-domain-trpc-migration.md)
 - [Domain Boundary Hardening Plan](domain-boundary-hardening-plan.md)
+- [Module Runtime And Extensions Plan](module-runtime-and-extensions-plan.md)
 - [Internal Domain RPC Migration](internal-domain-rpc-migration.md) is historical
   gRPC/Protobuf context superseded by the tRPC migration plan.
 
