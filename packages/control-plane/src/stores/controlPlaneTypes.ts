@@ -278,7 +278,26 @@ export type EventFiltersPanelView = {
 
 export type EventsPanelMode = 'events' | 'filters';
 
+const RPC_CALL_EVENT_SUFFIXES = ['started', 'progress', 'completed', 'failed'] as const;
+const RPC_CALL_EVENT_TARGETS = [
+  'history.getChatHistoryState',
+  'history.requestSync',
+  'summaries.summaries.requestSummary',
+  'telegram.fetchPage',
+  'telegram.getChat'
+] as const;
+const RPC_CALL_EVENT_TYPES = RPC_CALL_EVENT_TARGETS.flatMap((target) =>
+  RPC_CALL_EVENT_SUFFIXES.map((suffix) => `${target}.${suffix}`)
+);
+
 export const EVENT_GROUPS: EventGroup[] = [
+  {
+    color: '#6366f1',
+    eventTypes: RPC_CALL_EVENT_TYPES,
+    id: 'rpc',
+    label: 'RPC calls',
+    match: isRpcCallEventType
+  },
   {
     color: '#7c3aed',
     eventTypes: [
@@ -338,13 +357,6 @@ export const EVENT_GROUPS: EventGroup[] = [
     match: (type) => type.startsWith('summaries.')
   },
   {
-    color: '#6366f1',
-    eventTypes: ['rpc.call.completed', 'rpc.call.failed', 'rpc.call.progress', 'rpc.call.started'],
-    id: 'rpc',
-    label: 'RPC calls',
-    match: (type) => type.startsWith('rpc.')
-  },
-  {
     color: '#ef4444',
     eventTypes: ['ui.error'],
     filterable: false,
@@ -361,3 +373,7 @@ export const EVENT_GROUPS: EventGroup[] = [
     match: () => true
   }
 ];
+
+function isRpcCallEventType(type: string): boolean {
+  return RPC_CALL_EVENT_TYPES.includes(type);
+}

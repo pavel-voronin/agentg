@@ -4,10 +4,16 @@ import type { JsonObject } from '../json.js';
 import { toJsonValue } from '../json.js';
 import type { DomainError } from './envelope.js';
 
-export const RPC_CALL_STARTED_EVENT = 'rpc.call.started';
-export const RPC_CALL_PROGRESS_EVENT = 'rpc.call.progress';
-export const RPC_CALL_COMPLETED_EVENT = 'rpc.call.completed';
-export const RPC_CALL_FAILED_EVENT = 'rpc.call.failed';
+export const RPC_CALL_STARTED_EVENT_SUFFIX = 'started';
+export const RPC_CALL_PROGRESS_EVENT_SUFFIX = 'progress';
+export const RPC_CALL_COMPLETED_EVENT_SUFFIX = 'completed';
+export const RPC_CALL_FAILED_EVENT_SUFFIX = 'failed';
+
+export type RpcCallEventSuffix =
+  | typeof RPC_CALL_STARTED_EVENT_SUFFIX
+  | typeof RPC_CALL_PROGRESS_EVENT_SUFFIX
+  | typeof RPC_CALL_COMPLETED_EVENT_SUFFIX
+  | typeof RPC_CALL_FAILED_EVENT_SUFFIX;
 
 export type RpcProgressData = JsonObject;
 
@@ -46,7 +52,7 @@ export function createRpcCallStartedEvent(input: RpcCallStartedEventInput): Inte
     },
     occurredAt,
     source: input.source,
-    type: RPC_CALL_STARTED_EVENT
+    type: rpcCallEventType(input.target, RPC_CALL_STARTED_EVENT_SUFFIX)
   });
 }
 
@@ -64,7 +70,7 @@ export function createRpcCallProgressEvent(input: RpcCallProgressEventInput): In
     },
     occurredAt,
     source: input.source,
-    type: RPC_CALL_PROGRESS_EVENT
+    type: rpcCallEventType(input.target, RPC_CALL_PROGRESS_EVENT_SUFFIX)
   });
 }
 
@@ -82,7 +88,7 @@ export function createRpcCallCompletedEvent(input: RpcCallCompletedEventInput): 
     },
     occurredAt,
     source: input.source,
-    type: RPC_CALL_COMPLETED_EVENT
+    type: rpcCallEventType(input.target, RPC_CALL_COMPLETED_EVENT_SUFFIX)
   });
 }
 
@@ -101,8 +107,12 @@ export function createRpcCallFailedEvent(input: RpcCallFailedEventInput): Integr
     },
     occurredAt,
     source: input.source,
-    type: RPC_CALL_FAILED_EVENT
+    type: rpcCallEventType(input.target, RPC_CALL_FAILED_EVENT_SUFFIX)
   });
+}
+
+export function rpcCallEventType(target: string, suffix: RpcCallEventSuffix): string {
+  return `${target}.${suffix}`;
 }
 
 export function publishRpcCallEvent(eventBus: EventBus | undefined, event: IntegrationEvent): void {

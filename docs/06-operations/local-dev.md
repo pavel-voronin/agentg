@@ -165,15 +165,16 @@ process-local and ephemeral.
 
 ## Debugging `callId` Flows
 
-Observable and enriched RPC methods publish `rpc.call.*` events with one
-`callId` per invocation. To inspect a flow, subscribe to NATS directly:
+Observable and enriched RPC methods publish `{target}.{lifecycle}` events with
+one `callId` per invocation. To inspect one procedure flow, subscribe to that
+target in NATS directly:
 
 ```bash
 node --input-type=module -e "
 import { connect, StringCodec } from 'nats';
 const nc = await connect({ servers: process.env.NATS_URL ?? 'nats://127.0.0.1:4222' });
 const codec = StringCodec();
-for await (const msg of nc.subscribe('rpc.call.>')) {
+for await (const msg of nc.subscribe('history.getChatHistoryState.>')) {
   console.log(codec.decode(msg.data));
 }
 "
@@ -181,10 +182,11 @@ for await (const msg of nc.subscribe('rpc.call.>')) {
 
 Then:
 
-1. Invoke an observable or enriched method, for example `history.requestSync` or
-   a `capabilities.call` to `summaries.requestChatSummary`.
-2. Correlate `rpc.call.started`, optional `rpc.call.progress`,
-   `rpc.call.completed`, and `rpc.call.failed` by `event.data.callId`.
+1. Invoke the subscribed observable or enriched method, for example
+   `history.getChatHistoryState`. Use `history.requestSync.>` or
+   `summaries.summaries.requestSummary.>` when inspecting those targets.
+2. Correlate `{target}.started`, optional `{target}.progress`,
+   `{target}.completed`, and `{target}.failed` by `event.data.callId`.
 
 These events are not durable. If a client disconnects, recover state through the
 owning domain or module RPC surface.

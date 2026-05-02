@@ -87,10 +87,16 @@ Summaries publishes:
 
 Observable RPC calls publish:
 
-- `rpc.call.started`
-- `rpc.call.progress`
-- `rpc.call.completed`
-- `rpc.call.failed`
+- `{target}.started`
+- `{target}.progress`
+- `{target}.completed`
+- `{target}.failed`
+
+For example, `history.getChatHistoryState` publishes
+`history.getChatHistoryState.started`,
+`history.getChatHistoryState.progress`,
+`history.getChatHistoryState.completed`, and
+`history.getChatHistoryState.failed`.
 
 `history.sync.requested` is a notification that a sync wake-up was accepted at
 the History boundary. It is not consumed as a NATS command.

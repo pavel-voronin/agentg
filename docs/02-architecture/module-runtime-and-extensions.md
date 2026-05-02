@@ -74,8 +74,10 @@ readChatSummary: rpc
   .query(({ input }) => readChatSummary(runtime, input.chatId));
 ```
 
-`observable` publishes `rpc.call.started`, optional `rpc.call.progress`,
-`rpc.call.completed`, and `rpc.call.failed` events with one `callId`:
+`observable` publishes live events named from the RPC target and lifecycle, for
+example `history.getChatHistoryState.started`, optional
+`history.getChatHistoryState.progress`, `history.getChatHistoryState.completed`,
+and `history.getChatHistoryState.failed`, with one `callId`:
 
 ```ts
 requestSummary: observable

@@ -38,10 +38,13 @@ The system should support answering:
 
 Observable and enriched RPC methods publish these live events:
 
-- `rpc.call.started`
-- `rpc.call.progress`
-- `rpc.call.completed`
-- `rpc.call.failed`
+The event name is `{target}.{lifecycle}`. For target
+`history.getChatHistoryState`, the lifecycle events are:
+
+- `history.getChatHistoryState.started`
+- `history.getChatHistoryState.progress`
+- `history.getChatHistoryState.completed`
+- `history.getChatHistoryState.failed`
 
 The `callId` is stored in `event.data.callId`. These events are ephemeral and
 should be used for live debugging, not recovery.

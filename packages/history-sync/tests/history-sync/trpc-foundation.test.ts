@@ -4,10 +4,11 @@ import { createTRPCClient, httpBatchLink } from '@trpc/client';
 import type { EventBus, EventSubscription } from '@agentg/shared/events/bus';
 import type { IntegrationEvent } from '@agentg/shared/events/envelope';
 import {
-  RPC_CALL_COMPLETED_EVENT,
-  RPC_CALL_FAILED_EVENT,
-  RPC_CALL_PROGRESS_EVENT,
-  RPC_CALL_STARTED_EVENT
+  RPC_CALL_COMPLETED_EVENT_SUFFIX,
+  RPC_CALL_FAILED_EVENT_SUFFIX,
+  RPC_CALL_PROGRESS_EVENT_SUFFIX,
+  RPC_CALL_STARTED_EVENT_SUFFIX,
+  rpcCallEventType
 } from '@agentg/shared/rpc/call-events';
 import {
   domainErrorEnvelope,
@@ -134,9 +135,9 @@ describe('History tRPC foundation', () => {
     });
 
     expect(publishedEvents.map((event) => event.type)).toEqual([
-      RPC_CALL_STARTED_EVENT,
-      RPC_CALL_PROGRESS_EVENT,
-      RPC_CALL_COMPLETED_EVENT
+      rpcCallEventType('history.echo', RPC_CALL_STARTED_EVENT_SUFFIX),
+      rpcCallEventType('history.echo', RPC_CALL_PROGRESS_EVENT_SUFFIX),
+      rpcCallEventType('history.echo', RPC_CALL_COMPLETED_EVENT_SUFFIX)
     ]);
     const successCallId = publishedEvents[0]?.data.callId;
     expect(typeof successCallId).toBe('string');
@@ -183,8 +184,8 @@ describe('History tRPC foundation', () => {
     });
 
     expect(publishedEvents.map((event) => event.type)).toEqual([
-      RPC_CALL_STARTED_EVENT,
-      RPC_CALL_FAILED_EVENT
+      rpcCallEventType('history.domainError', RPC_CALL_STARTED_EVENT_SUFFIX),
+      rpcCallEventType('history.domainError', RPC_CALL_FAILED_EVENT_SUFFIX)
     ]);
     const domainErrorCallId = publishedEvents[0]?.data.callId;
     expect(publishedEvents[1]).toMatchObject({
@@ -206,8 +207,8 @@ describe('History tRPC foundation', () => {
     await expect(caller.throwing()).rejects.toThrow('observable boom');
 
     expect(publishedEvents.map((event) => event.type)).toEqual([
-      RPC_CALL_STARTED_EVENT,
-      RPC_CALL_FAILED_EVENT
+      rpcCallEventType('history.throwing', RPC_CALL_STARTED_EVENT_SUFFIX),
+      rpcCallEventType('history.throwing', RPC_CALL_FAILED_EVENT_SUFFIX)
     ]);
     const thrownCallId = publishedEvents[0]?.data.callId;
     expect(publishedEvents[1]).toMatchObject({
@@ -355,8 +356,8 @@ describe('History tRPC foundation', () => {
       }
     ]);
     expect(publishedEvents.map((event) => event.type)).toEqual([
-      RPC_CALL_STARTED_EVENT,
-      RPC_CALL_COMPLETED_EVENT
+      rpcCallEventType('history.enrichedEcho', RPC_CALL_STARTED_EVENT_SUFFIX),
+      rpcCallEventType('history.enrichedEcho', RPC_CALL_COMPLETED_EVENT_SUFFIX)
     ]);
     expect(publishedEvents[1]).toMatchObject({
       data: {

@@ -70,7 +70,7 @@ describe('Control Plane server boundary', () => {
           target: 'history.getOverview'
         },
         source: 'history-sync',
-        type: 'rpc.call.started'
+        type: 'history.getOverview.started'
       });
       await eventBus.emit(rpcEvent);
 
