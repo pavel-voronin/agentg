@@ -111,7 +111,7 @@ Purpose: make database ownership match domain and module ownership.
 - Keep table names prefixed by the owning domain or module slug:
   - `telegram_*`
   - `history_*`
-  - `backfill_*` as History-owned queue state
+  - `history_backfill_jobs` as History-owned queue state
   - `${slug}_*` for additional modules.
 - Give every domain and module its own Drizzle migration folder.
 - Give every domain and module its own migration journal table or migration

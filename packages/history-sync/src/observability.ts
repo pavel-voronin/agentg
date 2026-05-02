@@ -1,10 +1,10 @@
-import type { AppDatabase } from '@agentg/database/client';
+import type { HistoryDatabase as AppDatabase } from './database.js';
 import {
-  backfillJobs,
+  historyBackfillJobs,
   historyCoverage,
   historyTargets,
   historyTemplates
-} from '@agentg/database/schema';
+} from './schema.js';
 import type { EventBus } from '@agentg/shared/events/bus';
 import { createIntegrationEvent } from '@agentg/shared/events/envelope';
 import type { JsonObject } from '@agentg/shared/json';
@@ -118,22 +118,26 @@ async function getHistoryOverview(runtime: HistoryRuntime): Promise<unknown> {
     runtime.database.select({ id: historyCoverage.id }).from(historyCoverage),
     runtime.database
       .select({
-        endAt: backfillJobs.endAt,
-        startAt: backfillJobs.startAt,
-        status: backfillJobs.status,
-        telegramChatId: backfillJobs.telegramChatId
+        endAt: historyBackfillJobs.endAt,
+        startAt: historyBackfillJobs.startAt,
+        status: historyBackfillJobs.status,
+        telegramChatId: historyBackfillJobs.telegramChatId
       })
-      .from(backfillJobs)
-      .where(inArray(backfillJobs.status, activeBackfillJobStatuses))
-      .orderBy(desc(backfillJobs.status), desc(backfillJobs.endAt), desc(backfillJobs.startAt))
+      .from(historyBackfillJobs)
+      .where(inArray(historyBackfillJobs.status, activeBackfillJobStatuses))
+      .orderBy(
+        desc(historyBackfillJobs.status),
+        desc(historyBackfillJobs.endAt),
+        desc(historyBackfillJobs.startAt)
+      )
       .limit(1)
   ]);
   const jobs = await runtime.database
     .select({
-      status: backfillJobs.status
+      status: historyBackfillJobs.status
     })
-    .from(backfillJobs)
-    .where(inArray(backfillJobs.status, activeBackfillJobStatuses));
+    .from(historyBackfillJobs)
+    .where(inArray(historyBackfillJobs.status, activeBackfillJobStatuses));
   const jobCounts = countBy(jobs, (job) => job.status);
   const activeJob = activeJobs[0];
 
@@ -194,14 +198,14 @@ async function listHistoryChats(runtime: HistoryRuntime, params: unknown): Promi
             .where(inArray(historyCoverage.telegramChatId, chatIds)),
           runtime.database
             .select({
-              status: backfillJobs.status,
-              telegramChatId: backfillJobs.telegramChatId
+              status: historyBackfillJobs.status,
+              telegramChatId: historyBackfillJobs.telegramChatId
             })
-            .from(backfillJobs)
+            .from(historyBackfillJobs)
             .where(
               and(
-                inArray(backfillJobs.telegramChatId, chatIds),
-                inArray(backfillJobs.status, activeBackfillJobStatuses)
+                inArray(historyBackfillJobs.telegramChatId, chatIds),
+                inArray(historyBackfillJobs.status, activeBackfillJobStatuses)
               )
             )
         ]);
@@ -265,14 +269,14 @@ async function getChatHistoryState(runtime: HistoryRuntime, params: unknown): Pr
       .orderBy(asc(historyCoverage.startAt)),
     runtime.database
       .select()
-      .from(backfillJobs)
+      .from(historyBackfillJobs)
       .where(
         and(
-          eq(backfillJobs.telegramChatId, chatId),
-          inArray(backfillJobs.status, activeBackfillJobStatuses)
+          eq(historyBackfillJobs.telegramChatId, chatId),
+          inArray(historyBackfillJobs.status, activeBackfillJobStatuses)
         )
       )
-      .orderBy(desc(backfillJobs.endAt), desc(backfillJobs.startAt))
+      .orderBy(desc(historyBackfillJobs.endAt), desc(historyBackfillJobs.startAt))
       .limit(200)
   ]);
 
@@ -416,13 +420,13 @@ async function listHistoryJobs(database: AppDatabase, params: unknown): Promise<
 
   const where =
     status === undefined
-      ? inArray(backfillJobs.status, activeBackfillJobStatuses)
-      : eq(backfillJobs.status, status);
+      ? inArray(historyBackfillJobs.status, activeBackfillJobStatuses)
+      : eq(historyBackfillJobs.status, status);
   const rows = await database
     .select()
-    .from(backfillJobs)
+    .from(historyBackfillJobs)
     .where(where)
-    .orderBy(desc(backfillJobs.endAt), desc(backfillJobs.startAt))
+    .orderBy(desc(historyBackfillJobs.endAt), desc(historyBackfillJobs.startAt))
     .limit(limit);
 
   return {

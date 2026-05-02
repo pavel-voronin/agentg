@@ -167,7 +167,7 @@ JSON while keeping History Sync in charge of history aggregation.
 - Remove direct reads of `telegramChats`, `telegramMessages`,
   `telegramUsers`, and `telegramChatFolders` from `packages/history-sync/src`.
 - Keep History Sync direct writes and reads for `historyTemplates`,
-  `historyTargets`, `historyCoverage`, and `backfillJobs`.
+  `historyTargets`, `historyCoverage`, and `historyBackfillJobs`.
 - Update tests to use fake Telegram read clients for History observability
   paths.
 

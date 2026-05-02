@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-import type { AppDatabase } from '@agentg/database/client';
+import type { HistoryDatabase as AppDatabase } from './database.js';
 
 import { parseHistoryTargetUpsertCommand } from './commands.js';
 import { historyRangeKey } from './ranges.js';

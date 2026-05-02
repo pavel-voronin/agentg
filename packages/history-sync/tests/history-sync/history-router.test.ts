@@ -1,4 +1,4 @@
-import type { AppDatabase } from '@agentg/database/client';
+import type { HistoryDatabase as AppDatabase } from '../../src/database.js';
 import type { EventBus } from '@agentg/shared/events/bus';
 import { describe, expect, it } from 'vitest';
 

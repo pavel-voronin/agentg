@@ -2,10 +2,12 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import type { Pool } from 'pg';
 
-import * as schema from './schema.js';
+export type AppDatabase<TSchema extends Record<string, unknown> = Record<string, never>> =
+  NodePgDatabase<TSchema>;
 
-export type AppDatabase = NodePgDatabase<typeof schema>;
-
-export function createAppDatabase(pool: Pool): AppDatabase {
+export function createAppDatabase<TSchema extends Record<string, unknown>>(
+  pool: Pool,
+  schema: TSchema
+): AppDatabase<TSchema> {
   return drizzle(pool, { schema });
 }

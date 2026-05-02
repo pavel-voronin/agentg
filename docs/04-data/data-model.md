@@ -17,7 +17,7 @@ telegram_topics
 history_templates
 history_targets
 history_coverage
-backfill_jobs
+history_backfill_jobs
 ```
 
 For the first implementation, the minimum practical subset is:
@@ -30,7 +30,7 @@ telegram_users
 history_templates
 history_targets
 history_coverage
-backfill_jobs
+history_backfill_jobs
 ```
 
 Add more tables when the Telegram data being ingested needs them.

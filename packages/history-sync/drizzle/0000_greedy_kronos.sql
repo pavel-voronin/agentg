@@ -1,4 +1,4 @@
-CREATE TABLE "backfill_jobs" (
+CREATE TABLE IF NOT EXISTS "history_backfill_jobs" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"cursor" jsonb,
 	"end_at" timestamp with time zone NOT NULL,
@@ -9,7 +9,7 @@ CREATE TABLE "backfill_jobs" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "history_coverage" (
+CREATE TABLE IF NOT EXISTS "history_coverage" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"end_at" timestamp with time zone NOT NULL,
 	"id" bigserial PRIMARY KEY NOT NULL,
@@ -18,7 +18,7 @@ CREATE TABLE "history_coverage" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "history_targets" (
+CREATE TABLE IF NOT EXISTS "history_targets" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"id" text PRIMARY KEY NOT NULL,
 	"range" jsonb NOT NULL,
@@ -27,7 +27,7 @@ CREATE TABLE "history_targets" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "history_templates" (
+CREATE TABLE IF NOT EXISTS "history_templates" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"id" text PRIMARY KEY NOT NULL,
 	"match" jsonb NOT NULL,
@@ -35,7 +35,8 @@ CREATE TABLE "history_templates" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE INDEX "backfill_jobs_status_interval_idx" ON "backfill_jobs" USING btree ("status","end_at");--> statement-breakpoint
-CREATE INDEX "backfill_jobs_chat_interval_idx" ON "backfill_jobs" USING btree ("telegram_chat_id","start_at");--> statement-breakpoint
-CREATE INDEX "history_coverage_chat_interval_idx" ON "history_coverage" USING btree ("telegram_chat_id","start_at");--> statement-breakpoint
-CREATE INDEX "history_targets_chat_idx" ON "history_targets" USING btree ("telegram_chat_id");
+CREATE INDEX IF NOT EXISTS "history_backfill_jobs_status_interval_idx" ON "history_backfill_jobs" USING btree ("status","end_at");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "history_backfill_jobs_chat_interval_unique_idx" ON "history_backfill_jobs" USING btree ("telegram_chat_id","start_at","end_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "history_coverage_chat_interval_idx" ON "history_coverage" USING btree ("telegram_chat_id","start_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "history_targets_chat_idx" ON "history_targets" USING btree ("telegram_chat_id");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "history_targets_chat_range_unique_idx" ON "history_targets" USING btree ("telegram_chat_id","range");

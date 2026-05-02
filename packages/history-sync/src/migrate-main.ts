@@ -1,19 +1,19 @@
+import { loadDatabaseCliConfig } from '@agentg/database/config';
 import { checkDatabase, createDatabasePool } from '@agentg/database/database';
-import { createNatsEventBus } from '@agentg/shared/events/bus';
 
-import { loadHistorySyncServiceConfig } from './config.js';
 import { createHistoryDatabase } from './database.js';
-import { runHistorySyncService } from './service.js';
+import { runHistoryMigrations } from './migrate.js';
 
-const config = loadHistorySyncServiceConfig();
+const config = loadDatabaseCliConfig();
 const pool = createDatabasePool(config.databaseUrl);
 const database = createHistoryDatabase(pool);
 
 try {
   const databaseHealth = await checkDatabase(pool);
+
   console.log(
     JSON.stringify({
-      event: 'history_sync.startup_healthcheck',
+      event: 'history.database_healthcheck',
       postgres: {
         now: databaseHealth.now.toISOString(),
         version: databaseHealth.postgresVersion
@@ -21,18 +21,12 @@ try {
     })
   );
 
-  const eventBus = await createNatsEventBus(config.nats);
-  await runHistorySyncService({
-    backfill: config.backfill,
-    database,
-    eventBus,
-    internalRpc: config.internalRpc,
-    services: config.services
-  });
+  await runHistoryMigrations(database);
+  console.log(JSON.stringify({ event: 'history.database_migrated' }));
 } catch (error) {
   console.error(
     JSON.stringify({
-      event: 'history_sync.failed',
+      event: 'history.database_failed',
       error: error instanceof Error ? error.message : String(error)
     })
   );

@@ -1,4 +1,4 @@
-import type { AppDatabase } from '@agentg/database/client';
+import type { HistoryDatabase as AppDatabase } from './database.js';
 import { createIntegrationEvent, type IntegrationEvent } from '@agentg/shared/events/envelope';
 import type { JsonObject } from '@agentg/shared/json';
 

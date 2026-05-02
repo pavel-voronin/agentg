@@ -104,7 +104,7 @@ The executor runs jobs, fetches Telegram history, persists messages, and extends
 coverage for the interval it covered.
 
 Completed jobs are not retained as queue rows. Once a job successfully extends
-coverage, it is deleted from `backfill_jobs`; durable completion history belongs
+coverage, it is deleted from `history_backfill_jobs`; durable completion history belongs
 to events/logs, not to the work queue.
 
 ## HistoryReconciler

@@ -1,10 +1,10 @@
-import type { AppDatabase } from '@agentg/database/client';
+import type { HistoryDatabase as AppDatabase } from './database.js';
 import {
-  backfillJobs,
+  historyBackfillJobs,
   historyCoverage,
   historyTargets,
   historyTemplates
-} from '@agentg/database/schema';
+} from './schema.js';
 import { and, asc, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
 
 import type { JsonObject } from '@agentg/shared/json';
@@ -403,7 +403,7 @@ export async function createBackfillJobs(
       continue;
     }
     const inserted = await database
-      .insert(backfillJobs)
+      .insert(historyBackfillJobs)
       .values({
         endAt: normalizedJob.endAt,
         startAt: normalizedJob.startAt,
@@ -411,9 +411,13 @@ export async function createBackfillJobs(
         telegramChatId: normalizedJob.chatId
       })
       .onConflictDoNothing({
-        target: [backfillJobs.telegramChatId, backfillJobs.startAt, backfillJobs.endAt]
+        target: [
+          historyBackfillJobs.telegramChatId,
+          historyBackfillJobs.startAt,
+          historyBackfillJobs.endAt
+        ]
       })
-      .returning({ id: backfillJobs.id });
+      .returning({ id: historyBackfillJobs.id });
 
     created += inserted.length;
   }
@@ -426,16 +430,16 @@ export async function claimNextBackfillJob(
 ): Promise<BackfillJob | undefined> {
   const rows = await database
     .select({
-      cursor: backfillJobs.cursor,
-      endAt: backfillJobs.endAt,
-      id: backfillJobs.id,
-      startAt: backfillJobs.startAt,
-      status: backfillJobs.status,
-      telegramChatId: backfillJobs.telegramChatId
+      cursor: historyBackfillJobs.cursor,
+      endAt: historyBackfillJobs.endAt,
+      id: historyBackfillJobs.id,
+      startAt: historyBackfillJobs.startAt,
+      status: historyBackfillJobs.status,
+      telegramChatId: historyBackfillJobs.telegramChatId
     })
-    .from(backfillJobs)
-    .where(eq(backfillJobs.status, 'pending'))
-    .orderBy(desc(backfillJobs.endAt), desc(backfillJobs.startAt))
+    .from(historyBackfillJobs)
+    .where(eq(historyBackfillJobs.status, 'pending'))
+    .orderBy(desc(historyBackfillJobs.endAt), desc(historyBackfillJobs.startAt))
     .limit(1);
 
   const row = rows[0];
@@ -444,12 +448,12 @@ export async function claimNextBackfillJob(
   }
 
   await database
-    .update(backfillJobs)
+    .update(historyBackfillJobs)
     .set({
       status: 'running',
       updatedAt: sql`now()`
     })
-    .where(eq(backfillJobs.id, row.id));
+    .where(eq(historyBackfillJobs.id, row.id));
 
   return {
     chatId: row.telegramChatId,
@@ -469,12 +473,12 @@ export async function updateBackfillJobCursor(
   cursor: JsonObject
 ): Promise<void> {
   await database
-    .update(backfillJobs)
+    .update(historyBackfillJobs)
     .set({
       cursor,
       updatedAt: sql`now()`
     })
-    .where(eq(backfillJobs.id, Number(jobId)));
+    .where(eq(historyBackfillJobs.id, Number(jobId)));
 }
 
 export async function checkpointBackfillJob(
@@ -497,10 +501,12 @@ export async function checkpointBackfillJob(
       }
 
       if (checkpoint.complete === true) {
-        await transaction.delete(backfillJobs).where(eq(backfillJobs.id, Number(job.id)));
+        await transaction
+          .delete(historyBackfillJobs)
+          .where(eq(historyBackfillJobs.id, Number(job.id)));
       } else {
         await transaction
-          .update(backfillJobs)
+          .update(historyBackfillJobs)
           .set({
             ...(checkpoint.cursor === undefined ? {} : { cursor: checkpoint.cursor }),
             ...(checkpoint.remainingEndAt === undefined
@@ -509,7 +515,7 @@ export async function checkpointBackfillJob(
             status: 'running',
             updatedAt: sql`now()`
           })
-          .where(eq(backfillJobs.id, Number(job.id)));
+          .where(eq(historyBackfillJobs.id, Number(job.id)));
       }
 
       return {
@@ -535,22 +541,22 @@ export async function completeBackfillJob(
 
 export async function resetBackfillJob(database: AppDatabase, job: BackfillJob): Promise<void> {
   await database
-    .update(backfillJobs)
+    .update(historyBackfillJobs)
     .set({
       status: 'pending',
       updatedAt: sql`now()`
     })
-    .where(eq(backfillJobs.id, Number(job.id)));
+    .where(eq(historyBackfillJobs.id, Number(job.id)));
 }
 
 export async function resetRunningBackfillJobs(database: AppDatabase): Promise<void> {
   await database
-    .update(backfillJobs)
+    .update(historyBackfillJobs)
     .set({
       status: 'pending',
       updatedAt: sql`now()`
     })
-    .where(eq(backfillJobs.status, 'running'));
+    .where(eq(historyBackfillJobs.status, 'running'));
 }
 
 function chunks<T>(items: T[], size: number): T[][] {

@@ -1,14 +1,14 @@
-import { createAppDatabase } from '@agentg/database/client';
 import { checkDatabase, createDatabasePool } from '@agentg/database/database';
 import { createNatsEventBus } from '@agentg/shared/events/bus';
 
 import { loadTelegramIngestionConfig } from './config.js';
+import { createTelegramDatabase } from './database.js';
 import { runTelegramIngestion } from './ingestion.js';
 import { configureTdlib } from './tdlib.js';
 
 const config = loadTelegramIngestionConfig();
 const pool = createDatabasePool(config.databaseUrl);
-const database = createAppDatabase(pool);
+const database = createTelegramDatabase(pool);
 
 try {
   const databaseHealth = await checkDatabase(pool);

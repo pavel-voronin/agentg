@@ -1,6 +1,6 @@
 import type { Server } from 'node:http';
 
-import type { AppDatabase } from '@agentg/database/client';
+import type { TelegramDatabase as AppDatabase } from '../database.js';
 import { createHTTPServer } from '@trpc/server/adapters/standalone';
 
 import { createTelegramHistoryRouter } from './history-router.js';

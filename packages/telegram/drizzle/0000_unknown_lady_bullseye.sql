@@ -1,3 +1,12 @@
+CREATE TABLE IF NOT EXISTS "telegram_chat_folders" (
+	"icon_name" text,
+	"position" integer NOT NULL,
+	"raw" jsonb NOT NULL,
+	"telegram_chat_folder_id" integer PRIMARY KEY NOT NULL,
+	"title" text NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "telegram_chats" (
 	"raw" jsonb NOT NULL,
 	"telegram_chat_id" text PRIMARY KEY NOT NULL,
@@ -22,7 +31,9 @@ CREATE TABLE IF NOT EXISTS "telegram_events" (
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "telegram_messages" (
 	"content_type" text NOT NULL,
+	"deleted_at" timestamp with time zone,
 	"edit_date" timestamp with time zone,
+	"is_deleted" boolean DEFAULT false NOT NULL,
 	"message_date" timestamp with time zone,
 	"raw" jsonb NOT NULL,
 	"sender_id" text,
@@ -34,15 +45,10 @@ CREATE TABLE IF NOT EXISTS "telegram_messages" (
 	CONSTRAINT "telegram_messages_telegram_chat_id_telegram_message_id_pk" PRIMARY KEY("telegram_chat_id","telegram_message_id")
 );
 --> statement-breakpoint
-CREATE TABLE IF NOT EXISTS "telegram_sync_state" (
-	"key" text PRIMARY KEY NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"value" jsonb NOT NULL
-);
---> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "telegram_users" (
 	"first_name" text NOT NULL,
 	"is_bot" boolean DEFAULT false NOT NULL,
+	"is_self" boolean DEFAULT false NOT NULL,
 	"last_name" text NOT NULL,
 	"raw" jsonb NOT NULL,
 	"telegram_user_id" text PRIMARY KEY NOT NULL,
@@ -50,5 +56,6 @@ CREATE TABLE IF NOT EXISTS "telegram_users" (
 	"username" text
 );
 --> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "telegram_chat_folders_position_idx" ON "telegram_chat_folders" USING btree ("position");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "telegram_events_chat_time_idx" ON "telegram_events" USING btree ("telegram_chat_id","occurred_at");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "telegram_messages_chat_date_idx" ON "telegram_messages" USING btree ("telegram_chat_id","message_date");

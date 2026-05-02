@@ -1,1 +1,0 @@
-DROP TABLE "telegram_sync_state" CASCADE;

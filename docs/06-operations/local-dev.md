@@ -19,8 +19,8 @@ npm run dev:gateway
 
 `npm run infra:up` starts Postgres and NATS.
 
-`npm run db:migrate` applies versioned Drizzle migrations from
-`packages/database/drizzle/`.
+`npm run db:migrate` applies versioned Drizzle migrations owned by the Telegram
+and History Sync packages.
 
 `npm run dev:telegram` runs the `@agentg/telegram` ingestion package. It owns the
 TDLib session, receives live Telegram updates, writes Telegram-shaped records to

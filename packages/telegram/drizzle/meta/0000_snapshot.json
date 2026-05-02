@@ -1,223 +1,43 @@
 {
-  "id": "5bd813fe-14ba-4faf-a252-53c6c03eeb45",
-  "prevId": "e9a7b8bb-6ac6-460a-88a0-f4960b060d9d",
+  "id": "e1a72c9b-b89f-4275-aaa8-ca5e4da6fedd",
+  "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
-    "public.backfill_jobs": {
-      "name": "backfill_jobs",
+    "public.telegram_chat_folders": {
+      "name": "telegram_chat_folders",
       "schema": "",
       "columns": {
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "cursor": {
-          "name": "cursor",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "end_at": {
-          "name": "end_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "id": {
-          "name": "id",
-          "type": "bigserial",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "start_at": {
-          "name": "start_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "telegram_chat_id": {
-          "name": "telegram_chat_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "backfill_jobs_status_interval_idx": {
-          "name": "backfill_jobs_status_interval_idx",
-          "columns": [
-            {
-              "expression": "status",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "end_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "backfill_jobs_chat_interval_idx": {
-          "name": "backfill_jobs_chat_interval_idx",
-          "columns": [
-            {
-              "expression": "telegram_chat_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "start_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.history_coverage": {
-      "name": "history_coverage",
-      "schema": "",
-      "columns": {
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "end_at": {
-          "name": "end_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "id": {
-          "name": "id",
-          "type": "bigserial",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "start_at": {
-          "name": "start_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "telegram_chat_id": {
-          "name": "telegram_chat_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "history_coverage_chat_interval_idx": {
-          "name": "history_coverage_chat_interval_idx",
-          "columns": [
-            {
-              "expression": "telegram_chat_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "start_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.history_targets": {
-      "name": "history_targets",
-      "schema": "",
-      "columns": {
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "range": {
-          "name": "range",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "telegram_chat_id": {
-          "name": "telegram_chat_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "template_id": {
-          "name": "template_id",
+        "icon_name": {
+          "name": "icon_name",
           "type": "text",
           "primaryKey": false,
           "notNull": false
         },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "raw": {
+          "name": "raw",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "telegram_chat_folder_id": {
+          "name": "telegram_chat_folder_id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
         "updated_at": {
           "name": "updated_at",
           "type": "timestamp with time zone",
@@ -227,11 +47,11 @@
         }
       },
       "indexes": {
-        "history_targets_chat_idx": {
-          "name": "history_targets_chat_idx",
+        "telegram_chat_folders_position_idx": {
+          "name": "telegram_chat_folders_position_idx",
           "columns": [
             {
-              "expression": "telegram_chat_id",
+              "expression": "position",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -243,51 +63,6 @@
           "with": {}
         }
       },
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.history_templates": {
-      "name": "history_templates",
-      "schema": "",
-      "columns": {
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "match": {
-          "name": "match",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "range": {
-          "name": "range",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
@@ -434,7 +209,9 @@
         "telegram_events_event_key_unique": {
           "name": "telegram_events_event_key_unique",
           "nullsNotDistinct": false,
-          "columns": ["event_key"]
+          "columns": [
+            "event_key"
+          ]
         }
       },
       "policies": {},
@@ -547,41 +324,12 @@
       "compositePrimaryKeys": {
         "telegram_messages_telegram_chat_id_telegram_message_id_pk": {
           "name": "telegram_messages_telegram_chat_id_telegram_message_id_pk",
-          "columns": ["telegram_chat_id", "telegram_message_id"]
+          "columns": [
+            "telegram_chat_id",
+            "telegram_message_id"
+          ]
         }
       },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.telegram_sync_state": {
-      "name": "telegram_sync_state",
-      "schema": "",
-      "columns": {
-        "key": {
-          "name": "key",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "value": {
-          "name": "value",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
@@ -599,6 +347,13 @@
         },
         "is_bot": {
           "name": "is_bot",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "is_self": {
+          "name": "is_self",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,

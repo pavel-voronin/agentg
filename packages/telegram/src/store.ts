@@ -1,11 +1,11 @@
-import type { AppDatabase } from '@agentg/database/client';
+import type { TelegramDatabase as AppDatabase } from './database.js';
 import {
   telegramChatFolders,
   telegramChats,
   telegramEvents,
   telegramMessages,
   telegramUsers
-} from '@agentg/database/schema';
+} from './schema.js';
 import { eq, notInArray, sql } from 'drizzle-orm';
 
 import type {

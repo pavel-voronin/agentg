@@ -9,7 +9,7 @@ This is the data shape for history sync. It records the domain model from
 history_templates
 history_targets
 history_coverage
-backfill_jobs
+history_backfill_jobs
 ```
 
 ## history_templates
@@ -108,7 +108,7 @@ Coverage rows are stored merged:
 - intervals for the same chat do not touch
 - adding coverage merges matching existing intervals
 
-## backfill_jobs
+## history_backfill_jobs
 
 Backfill jobs describe executable historical fetch work.
 
@@ -132,7 +132,7 @@ updated_at
 
 Jobs are derived from targets minus coverage. They are not product policy.
 Successfully finished jobs are deleted immediately after coverage is written;
-`backfill_jobs` is a work queue, not a historical log.
+`history_backfill_jobs` is a work queue, not a historical log.
 
 Runnable jobs are ordered by missing intervals closest to the present first.
 This ordering rule is not represented as a stored priority field.

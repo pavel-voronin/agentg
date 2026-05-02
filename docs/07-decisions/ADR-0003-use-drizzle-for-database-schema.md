@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted for implementation.
+Accepted for implementation. Updated by
+[ADR-0006](ADR-0006-use-trusted-service-modules-and-rpc-extensions.md) for
+domain-owned schema and migration placement.
 
 ## Context
 
@@ -19,9 +21,9 @@ Use Drizzle for:
 - Versioned SQL migrations.
 - Type-safe insert and query code for Postgres.
 
-The schema lives in `packages/database/src/schema.ts`. Generated SQL migrations
-live in `packages/database/drizzle/` and are applied explicitly with
-`npm run db:migrate`.
+Each storage-owning domain or module owns its Drizzle schema and generated SQL
+migrations. Shared database infrastructure lives in `@agentg/database`.
+Migrations are applied explicitly with `npm run db:migrate`.
 
 ## Consequences
 
