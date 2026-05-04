@@ -4,13 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./commands": "./src/commands.ts",
-    "./database": "./src/database.ts",
-    "./migrate": "./src/migrate.ts",
-    "./observability": "./src/observability.ts",
-    "./rpc": "./src/rpc/index.ts",
-    "./schema": "./src/schema.ts",
-    "./types": "./src/types.ts"
+    "./rpc": "./src/rpc/index.ts"
   },
   "scripts": {
     "dev": "tsx watch --clear-screen=false src/main.ts",

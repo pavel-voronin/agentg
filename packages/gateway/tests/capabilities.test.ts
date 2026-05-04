@@ -6,12 +6,11 @@ import {
   extensionRegistryListInputSchema,
   extensionRegistryListOutputSchema
 } from '@agentg/shared/rpc/extensions';
-import { historyRpcRouter, rpc } from '@agentg/history-sync/rpc';
 import {
   telegramGetChatInputSchema,
   telegramGetChatOutputSchema,
-  telegramRpcRouter,
-  rpc as telegramRpc
+  rpc as telegramRpc,
+  telegramRpcRouter
 } from '@agentg/telegram/rpc';
 import { createHTTPServer } from '@trpc/server/adapters/standalone';
 import { WebSocket, type RawData } from 'ws';
@@ -19,6 +18,7 @@ import { z } from 'zod';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { startAgentGatewayServer, type AgentGatewayServerHandle } from '../src/agent-gateway.js';
+import { testRpc, testRpcRouter } from './trpc-test.js';
 
 const gatewayHandles: AgentGatewayServerHandle[] = [];
 const httpServers: Server[] = [];
@@ -89,8 +89,8 @@ describe('Agent Gateway capabilities', () => {
   it('proxies capability calls to the owning module tRPC method', async () => {
     const calls: unknown[] = [];
     const moduleServer = createHTTPServer({
-      router: historyRpcRouter({
-        summarizeChat: rpc
+      router: testRpcRouter({
+        summarizeChat: testRpc
           .input(z.object({ chatId: z.string() }))
           .output(z.object({ summary: z.string() }))
           .query(({ input }) => {
@@ -135,8 +135,8 @@ describe('Agent Gateway capabilities', () => {
   it('composes model extensions from the standalone extension registry', async () => {
     const extensionInputs: unknown[] = [];
     const registryServer = createHTTPServer({
-      router: historyRpcRouter({
-        listExtensions: rpc
+      router: testRpcRouter({
+        listExtensions: testRpc
           .input(extensionRegistryListInputSchema.optional())
           .output(extensionRegistryListOutputSchema)
           .query(({ input }) => ({
@@ -158,9 +158,9 @@ describe('Agent Gateway capabilities', () => {
     const registryPort = await listen(registryServer);
 
     const summariesServer = createHTTPServer({
-      router: historyRpcRouter({
-        summaries: historyRpcRouter({
-          chatSummary: rpc
+      router: testRpcRouter({
+        summaries: testRpcRouter({
+          chatSummary: testRpc
             .input(
               z
                 .object({

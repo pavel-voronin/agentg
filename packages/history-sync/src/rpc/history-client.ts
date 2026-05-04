@@ -1,11 +1,9 @@
-import { createTRPCClient, httpBatchLink, type TRPCClient } from '@trpc/client';
+import { createTRPCClient, httpBatchLink } from '@trpc/client';
 import {
   createInternalRpcCallOptionsHeaders,
-  internalRpcProcedureOptions,
-  type InternalRpcCallOptions
+  internalRpcProcedureOptions
 } from '@agentg/shared/rpc/call-options';
 
-import type { InternalTrpcClientConfig } from './config.js';
 import {
   historyDeleteTargetInputSchema,
   historyGetChatHistoryStateInputSchema,
@@ -16,97 +14,100 @@ import {
 } from './history-contracts.js';
 import type { HistoryRouter } from './history-router.js';
 
-export type HistoryJsonRpcClient = {
-  call(method: string, params: unknown, options?: InternalRpcCallOptions): Promise<unknown>;
+type HistoryRpcClientConfig = {
+  url: string;
+};
+
+type HistoryRpcClient = {
   close(): void;
+  deleteTarget(input: unknown): Promise<unknown>;
+  getChatHistoryState(input: unknown): Promise<unknown>;
+  getChatStats(input: unknown): Promise<unknown>;
+  getOverview(): Promise<unknown>;
+  listJobs(input?: unknown): Promise<unknown>;
+  requestSync(input?: unknown): Promise<unknown>;
+  upsertTarget(input: unknown): Promise<unknown>;
 };
 
-export type HistoryJsonRpcClientOptions = {
-  timeoutMs?: number;
-};
+const HISTORY_REQUEST_TIMEOUT_MS = 15000;
 
-const DEFAULT_HISTORY_REQUEST_TIMEOUT_MS = 15000;
-
-export function createTrpcHistoryJsonRpcClient(
-  config: InternalTrpcClientConfig,
-  options: HistoryJsonRpcClientOptions = {}
-): HistoryJsonRpcClient {
+export function createHistoryRpcClient(config: HistoryRpcClientConfig): HistoryRpcClient {
   const client = createTRPCClient<HistoryRouter>({
     links: [
       httpBatchLink({
         headers: ({ opList }) => createInternalRpcCallOptionsHeaders(opList),
-        url: config.url
+        url: parseHistoryRpcUrl(config.url)
       })
     ]
   });
-  const timeoutMs = options.timeoutMs ?? DEFAULT_HISTORY_REQUEST_TIMEOUT_MS;
 
   return {
-    call(method, params, callOptions) {
-      return withTimeout(
-        (signal) => callHistoryJsonRpcMethod(client, method, params, signal, callOptions),
-        timeoutMs
-      );
-    },
     close() {
       return;
+    },
+    deleteTarget(input) {
+      return callHistoryProcedure((signal) =>
+        client.deleteTarget.mutate(
+          historyDeleteTargetInputSchema.parse(input),
+          internalRpcProcedureOptions(undefined, signal)
+        )
+      );
+    },
+    getChatHistoryState(input) {
+      return callHistoryProcedure((signal) =>
+        client.getChatHistoryState.query(
+          historyGetChatHistoryStateInputSchema.parse(input),
+          internalRpcProcedureOptions(undefined, signal)
+        )
+      );
+    },
+    getChatStats(input) {
+      return callHistoryProcedure((signal) =>
+        client.getChatStats.query(
+          historyGetChatStatsInputSchema.parse(input),
+          internalRpcProcedureOptions(undefined, signal)
+        )
+      );
+    },
+    getOverview() {
+      return callHistoryProcedure((signal) =>
+        client.getOverview.query(undefined, internalRpcProcedureOptions(undefined, signal))
+      );
+    },
+    listJobs(input = {}) {
+      return callHistoryProcedure((signal) =>
+        client.listJobs.query(
+          historyListJobsInputSchema.parse(input),
+          internalRpcProcedureOptions(undefined, signal)
+        )
+      );
+    },
+    requestSync(input = {}) {
+      return callHistoryProcedure((signal) =>
+        client.requestSync.mutate(
+          historyRequestSyncInputSchema.parse(input),
+          internalRpcProcedureOptions(undefined, signal)
+        )
+      );
+    },
+    upsertTarget(input) {
+      return callHistoryProcedure((signal) =>
+        client.upsertTarget.mutate(
+          historyUpsertTargetInputSchema.parse(input),
+          internalRpcProcedureOptions(undefined, signal)
+        )
+      );
     }
   };
 }
 
-async function callHistoryJsonRpcMethod(
-  client: TRPCClient<HistoryRouter>,
-  method: string,
-  params: unknown,
-  signal: AbortSignal,
-  callOptions?: InternalRpcCallOptions
-): Promise<unknown> {
-  switch (method) {
-    case 'history.deleteTarget':
-      return client.deleteTarget.mutate(
-        historyDeleteTargetInputSchema.parse(params),
-        internalRpcProcedureOptions(callOptions, signal)
-      );
-    case 'history.getChatHistoryState':
-      return client.getChatHistoryState.query(
-        historyGetChatHistoryStateInputSchema.parse(params),
-        internalRpcProcedureOptions(callOptions, signal)
-      );
-    case 'history.getChatStats':
-      return client.getChatStats.query(
-        historyGetChatStatsInputSchema.parse(params),
-        internalRpcProcedureOptions(callOptions, signal)
-      );
-    case 'history.getOverview':
-      return client.getOverview.query(undefined, internalRpcProcedureOptions(callOptions, signal));
-    case 'history.listJobs':
-      return client.listJobs.query(
-        historyListJobsInputSchema.parse(params ?? {}),
-        internalRpcProcedureOptions(callOptions, signal)
-      );
-    case 'history.requestSync':
-      return client.requestSync.mutate(
-        historyRequestSyncInputSchema.parse(params ?? {}),
-        internalRpcProcedureOptions(callOptions, signal)
-      );
-    case 'history.upsertTarget':
-      return client.upsertTarget.mutate(
-        historyUpsertTargetInputSchema.parse(params),
-        internalRpcProcedureOptions(callOptions, signal)
-      );
-    default:
-      return undefined;
-  }
-}
-
-async function withTimeout<T>(
-  call: (signal: AbortSignal) => Promise<T>,
-  timeoutMs: number
-): Promise<T> {
+async function callHistoryProcedure<T>(call: (signal: AbortSignal) => Promise<T>): Promise<T> {
   const controller = new AbortController();
   const timeout = setTimeout(() => {
-    controller.abort(new Error(`History tRPC timed out after ${String(timeoutMs)}ms`));
-  }, timeoutMs);
+    controller.abort(
+      new Error(`History tRPC timed out after ${String(HISTORY_REQUEST_TIMEOUT_MS)}ms`)
+    );
+  }, HISTORY_REQUEST_TIMEOUT_MS);
   timeout.unref();
 
   try {
@@ -114,4 +115,28 @@ async function withTimeout<T>(
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function parseHistoryRpcUrl(value: string): string {
+  let url: URL;
+
+  try {
+    url = new URL(value);
+  } catch (error) {
+    throw new Error('History RPC URL must be a valid http(s) URL', { cause: error });
+  }
+
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new Error('History RPC URL must use http or https');
+  }
+
+  if (url.username.length > 0 || url.password.length > 0) {
+    throw new Error('History RPC URL must not include credentials');
+  }
+
+  if (url.pathname !== '/' || url.search.length > 0 || url.hash.length > 0) {
+    throw new Error('History RPC URL must point to a service root');
+  }
+
+  return url.toString().replace(/\/$/, '');
 }

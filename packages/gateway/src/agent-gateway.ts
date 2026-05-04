@@ -1,6 +1,5 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 
-import type { InternalTrpcClientConfig } from '@agentg/history-sync/rpc';
 import type { InternalTrpcClientConfig as TelegramInternalTrpcClientConfig } from '@agentg/telegram/rpc';
 import type { EventBus, EventSubscription } from '@agentg/shared/events/bus';
 import type { IntegrationEvent } from '@agentg/shared/events/envelope';
@@ -32,6 +31,10 @@ import {
 } from './extensions.js';
 import { createTrpcGatewayTelegramClient, type GatewayTelegramClient } from './telegram-reads.js';
 
+type InternalServiceConfig = {
+  url: string;
+};
+
 export type AgentGatewayConfig = {
   host: string;
   port: number;
@@ -46,11 +49,11 @@ export type AgentGatewayOptions = {
   config: AgentGatewayConfig;
   eventBus: EventBus;
   services: {
-    extensionRegistry?: InternalTrpcClientConfig;
+    extensionRegistry?: InternalServiceConfig;
     extensions?: {
-      summaries?: InternalTrpcClientConfig | undefined;
+      summaries?: InternalServiceConfig | undefined;
     };
-    history: InternalTrpcClientConfig;
+    history: InternalServiceConfig;
     telegram: TelegramInternalTrpcClientConfig;
   };
 };

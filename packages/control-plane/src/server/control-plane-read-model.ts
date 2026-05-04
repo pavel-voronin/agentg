@@ -1,4 +1,4 @@
-import type { HistoryJsonRpcClient } from '@agentg/history-sync/rpc';
+import type { createHistoryRpcClient } from '@agentg/history-sync/rpc';
 import type {
   TelegramChatDirectoryEntry,
   TelegramChatFolder,
@@ -6,6 +6,8 @@ import type {
 } from '@agentg/telegram/rpc';
 
 import type { TelegramDirectoryClient } from './telegram-client.js';
+
+type HistoryRpcClient = ReturnType<typeof createHistoryRpcClient>;
 
 type ChatListKind =
   | {
@@ -67,7 +69,7 @@ type ControlPlaneChatListResult = {
 };
 
 export type ControlPlaneReadModelRuntime = {
-  historyClient: HistoryJsonRpcClient;
+  historyClient: HistoryRpcClient;
   telegramClient: TelegramDirectoryClient;
 };
 
@@ -89,7 +91,7 @@ export async function callControlPlaneReadMethod(
 
 async function getControlPlaneOverview(runtime: ControlPlaneReadModelRuntime): Promise<unknown> {
   const [historyOverview, directory] = await Promise.all([
-    runtime.historyClient.call('history.getOverview', undefined),
+    runtime.historyClient.getOverview(),
     runtime.telegramClient.listChatDirectory({})
   ]);
   const overview = asRecord(historyOverview);
@@ -153,14 +155,14 @@ async function listControlPlaneChats(
 }
 
 async function loadStatsByChat(
-  historyClient: HistoryJsonRpcClient,
+  historyClient: HistoryRpcClient,
   chatIds: string[]
 ): Promise<Map<string, ChatStats>> {
   if (chatIds.length === 0) {
     return new Map();
   }
 
-  const response = asRecord(await historyClient.call('history.getChatStats', { chatIds }));
+  const response = asRecord(await historyClient.getChatStats({ chatIds }));
   const stats = asArray(response?.stats).map(normalizeChatStats);
   return new Map(stats.map((stat) => [stat.chatId, stat]));
 }

@@ -31,9 +31,12 @@ function auditRawTrpcBuilderImports(files) {
       continue;
     }
 
-    if (!/packages\/[^/]+\/src\/rpc\/trpc\.ts$/.test(rel)) {
+    if (
+      !/packages\/[^/]+\/src\/rpc\/trpc\.ts$/.test(rel) &&
+      !/packages\/[^/]+\/tests\/trpc-test\.ts$/.test(rel)
+    ) {
       failures.push(
-        `raw tRPC builder import is only allowed in package-local src/rpc/trpc.ts: ${rel}`
+        `raw tRPC builder import is only allowed in package-local src/rpc/trpc.ts or tests/trpc-test.ts: ${rel}`
       );
     }
   }

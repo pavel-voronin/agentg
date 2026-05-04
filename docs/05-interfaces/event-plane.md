@@ -146,9 +146,11 @@ Internal RPC contracts are owned by the serving domain package:
 - Telegram owns `@agentg/telegram/rpc`, including the Telegram History tRPC
   router and schemas for `listChats`, `fetchPage`, Gateway Telegram reads, and
   the stable Telegram read facts consumed by History Sync.
-- History Sync owns `@agentg/history-sync/rpc`, including the History tRPC router,
-  schemas, and the JSON-RPC adapter used by Gateway and Control Plane server for
-  existing `history.*` method names.
+- History Sync owns `@agentg/history-sync/rpc`, whose only public export is
+  `createHistoryRpcClient`. The helper returns the explicit History procedures
+  used by Gateway and Control Plane server. The History schemas, router, server
+  bind config, storage schema, commands, and domain types remain
+  package-internal.
 - Modules own package-local RPC contracts. The pilot summaries module owns
   `@agentg/summaries/rpc` and registers its capability and extension methods
   through the module runtime.

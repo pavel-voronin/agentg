@@ -9,17 +9,19 @@ describe('Control Plane server boundary', () => {
   it('routes browser history RPC to the History client and forwards events', async () => {
     const eventBus = createFakeEventBus();
     const historyClient = {
-      call: vi.fn((method: string, params: unknown): Promise<unknown> => {
-        if (method === 'history.getOverview') {
-          return Promise.resolve({
-            chats: 3,
-            coverageIntervals: 5,
-            params
-          });
-        }
-        return Promise.resolve(undefined);
-      }),
-      close: vi.fn()
+      close: vi.fn(),
+      deleteTarget: vi.fn(),
+      getChatHistoryState: vi.fn(),
+      getChatStats: vi.fn(),
+      getOverview: vi.fn(() =>
+        Promise.resolve({
+          chats: 3,
+          coverageIntervals: 5
+        })
+      ),
+      listJobs: vi.fn(),
+      requestSync: vi.fn(),
+      upsertTarget: vi.fn()
     };
     const telegramClient = {
       close: vi.fn(),
@@ -53,11 +55,10 @@ describe('Control Plane server boundary', () => {
         id: 1,
         result: {
           chats: 3,
-          coverageIntervals: 5,
-          params: {}
+          coverageIntervals: 5
         }
       });
-      expect(historyClient.call).toHaveBeenCalledWith('history.getOverview', {});
+      expect(historyClient.getOverview).toHaveBeenCalledWith();
 
       const event = createIntegrationEvent({
         data: {
@@ -108,25 +109,28 @@ describe('Control Plane server boundary', () => {
   it('builds Control Plane chat lists from Telegram directory and History stats', async () => {
     const eventBus = createFakeEventBus();
     const historyClient = {
-      call: vi.fn((method: string, params: unknown): Promise<unknown> => {
-        if (method === 'history.getChatStats') {
-          return Promise.resolve({
-            stats: [
-              {
-                chatId: 'chat-b',
-                coverageIntervals: 2,
-                coverageNewestAt: '2026-05-01T01:00:00.000Z',
-                coverageOldestAt: '2026-05-01T00:00:00.000Z',
-                pendingJobs: 1,
-                runningJobs: 0,
-                targets: 3
-              }
-            ]
-          });
-        }
-        return Promise.resolve({ params });
-      }),
-      close: vi.fn()
+      close: vi.fn(),
+      deleteTarget: vi.fn(),
+      getChatHistoryState: vi.fn(),
+      getChatStats: vi.fn(() =>
+        Promise.resolve({
+          stats: [
+            {
+              chatId: 'chat-b',
+              coverageIntervals: 2,
+              coverageNewestAt: '2026-05-01T01:00:00.000Z',
+              coverageOldestAt: '2026-05-01T00:00:00.000Z',
+              pendingJobs: 1,
+              runningJobs: 0,
+              targets: 3
+            }
+          ]
+        })
+      ),
+      getOverview: vi.fn(),
+      listJobs: vi.fn(),
+      requestSync: vi.fn(),
+      upsertTarget: vi.fn()
     };
     const mainChat = {
       _model: 'telegram.chat' as const,
@@ -209,7 +213,7 @@ describe('Control Plane server boundary', () => {
         }
       });
       expect(telegramClient.listChatDirectory).toHaveBeenCalledWith({});
-      expect(historyClient.call).toHaveBeenCalledWith('history.getChatStats', {
+      expect(historyClient.getChatStats).toHaveBeenCalledWith({
         chatIds: ['chat-b']
       });
     } finally {

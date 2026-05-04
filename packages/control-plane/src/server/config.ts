@@ -1,14 +1,14 @@
 import 'dotenv/config';
 
 import {
-  readInternalTrpcClientConfig as readHistoryInternalTrpcClientConfig,
-  type InternalTrpcClientConfig as HistoryInternalTrpcClientConfig
-} from '@agentg/history-sync/rpc';
-import {
   readInternalTrpcClientConfig as readTelegramInternalTrpcClientConfig,
   type InternalTrpcClientConfig as TelegramInternalTrpcClientConfig
 } from '@agentg/telegram/rpc';
 import { resolve } from 'node:path';
+
+export type HistoryServiceConfig = {
+  url: string;
+};
 
 export type ControlPlaneConfig = {
   controlPlane: {
@@ -20,7 +20,7 @@ export type ControlPlaneConfig = {
     url: string;
   };
   services: {
-    history: HistoryInternalTrpcClientConfig;
+    history: HistoryServiceConfig;
     telegram: TelegramInternalTrpcClientConfig;
   };
 };
@@ -38,7 +38,7 @@ export function loadControlPlaneConfig(env: NodeJS.ProcessEnv = process.env): Co
       url: env.NATS_URL ?? 'nats://localhost:4222'
     },
     services: {
-      history: readHistoryInternalTrpcClientConfig(env, {
+      history: readHistoryServiceConfig(env, {
         defaultUrl: 'http://127.0.0.1:18082',
         urlEnv: 'HISTORY_RPC_URL'
       }),
@@ -48,6 +48,42 @@ export function loadControlPlaneConfig(env: NodeJS.ProcessEnv = process.env): Co
       })
     }
   };
+}
+
+function readHistoryServiceConfig(
+  env: NodeJS.ProcessEnv,
+  options: {
+    defaultUrl: string;
+    urlEnv: string;
+  }
+): HistoryServiceConfig {
+  return {
+    url: parseHistoryServiceUrl(env[options.urlEnv] ?? options.defaultUrl, options.urlEnv)
+  };
+}
+
+function parseHistoryServiceUrl(value: string, name: string): string {
+  let url: URL;
+
+  try {
+    url = new URL(value);
+  } catch (error) {
+    throw new Error(`${name} must be a valid http(s) URL`, { cause: error });
+  }
+
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new Error(`${name} must use http or https`);
+  }
+
+  if (url.username.length > 0 || url.password.length > 0) {
+    throw new Error(`${name} must not include credentials`);
+  }
+
+  if (url.pathname !== '/' || url.search.length > 0 || url.hash.length > 0) {
+    throw new Error(`${name} must point to a service root`);
+  }
+
+  return url.toString().replace(/\/$/, '');
 }
 
 function defaultControlPlanePort(env: NodeJS.ProcessEnv): number {

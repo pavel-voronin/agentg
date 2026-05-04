@@ -2,11 +2,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { readFile } from 'node:fs/promises';
 import { extname, resolve, sep } from 'node:path';
 
-import {
-  createTrpcHistoryJsonRpcClient,
-  type HistoryJsonRpcClient
-} from '@agentg/history-sync/rpc';
-import type { InternalTrpcClientConfig as HistoryInternalTrpcClientConfig } from '@agentg/history-sync/rpc';
+import { createHistoryRpcClient } from '@agentg/history-sync/rpc';
 import type { InternalTrpcClientConfig as TelegramInternalTrpcClientConfig } from '@agentg/telegram/rpc';
 import type { EventBus } from '@agentg/shared/events/bus';
 import type { IntegrationEvent } from '@agentg/shared/events/envelope';
@@ -21,6 +17,11 @@ import {
   type TelegramDirectoryClient
 } from './telegram-client.js';
 
+type HistoryRpcClient = ReturnType<typeof createHistoryRpcClient>;
+type HistoryServiceConfig = {
+  url: string;
+};
+
 export type ControlPlaneServerConfig = {
   host: string;
   port: number;
@@ -30,10 +31,10 @@ export type ControlPlaneServerConfig = {
 export type ControlPlaneServerOptions = {
   config: ControlPlaneServerConfig;
   eventBus: EventBus;
-  historyClient?: HistoryJsonRpcClient;
+  historyClient?: HistoryRpcClient;
   telegramClient?: TelegramDirectoryClient;
   services: {
-    history: HistoryInternalTrpcClientConfig;
+    history: HistoryServiceConfig;
     telegram: TelegramInternalTrpcClientConfig;
   };
 };
@@ -61,17 +62,13 @@ type RpcResponse = {
   result?: unknown;
 };
 
-const CONTROL_PLANE_HISTORY_REQUEST_TIMEOUT_MS = 15000;
 const CONTROL_PLANE_TELEGRAM_REQUEST_TIMEOUT_MS = 15000;
 
 export async function startControlPlaneServer(
   options: ControlPlaneServerOptions
 ): Promise<ControlPlaneServerHandle> {
   const historyClient =
-    options.historyClient ??
-    createTrpcHistoryJsonRpcClient(options.services.history, {
-      timeoutMs: CONTROL_PLANE_HISTORY_REQUEST_TIMEOUT_MS
-    });
+    options.historyClient ?? createHistoryRpcClient({ url: options.services.history.url });
   const telegramClient =
     options.telegramClient ??
     createTrpcTelegramDirectoryClient(options.services.telegram, {
@@ -219,13 +216,38 @@ async function callMethod(
   }
 
   if (method.startsWith('history.')) {
-    const result = await runtime.historyClient.call(method, params);
+    const result = await callHistoryMethod(runtime.historyClient, method, params);
     if (result !== undefined) {
       return result;
     }
   }
 
   throw new Error(`Unknown method: ${method}`);
+}
+
+function callHistoryMethod(
+  historyClient: HistoryRpcClient,
+  method: string,
+  params: unknown
+): Promise<unknown> {
+  switch (method) {
+    case 'history.deleteTarget':
+      return historyClient.deleteTarget(params);
+    case 'history.getChatHistoryState':
+      return historyClient.getChatHistoryState(params);
+    case 'history.getChatStats':
+      return historyClient.getChatStats(params);
+    case 'history.getOverview':
+      return historyClient.getOverview();
+    case 'history.listJobs':
+      return historyClient.listJobs(params);
+    case 'history.requestSync':
+      return historyClient.requestSync(params);
+    case 'history.upsertTarget':
+      return historyClient.upsertTarget(params);
+    default:
+      return Promise.resolve(undefined);
+  }
 }
 
 async function handleHttpRequest(

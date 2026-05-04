@@ -1,42 +1,54 @@
 import type { Server } from 'node:http';
 
-import {
-  historyChatHistoryStateOutputSchema,
-  historyDeleteTargetInputSchema,
-  historyGetChatHistoryStateInputSchema,
-  historyGetChatStatsInputSchema,
-  historyGetChatStatsOutputSchema,
-  historyGetOverviewInputSchema,
-  historyListJobsInputSchema,
-  historyListJobsOutputSchema,
-  historyOverviewOutputSchema,
-  historyRequestSyncInputSchema,
-  historyRequestSyncOutputSchema,
-  historyRpcRouter,
-  rpc,
-  historyTargetMutationOutputSchema,
-  historyUpsertTargetInputSchema
-} from '@agentg/history-sync/rpc';
 import { createHTTPServer } from '@trpc/server/adapters/standalone';
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 
 import { createTrpcGatewayHistoryClient } from '../src/history-observability.js';
+import { testRpc, testRpcRouter } from './trpc-test.js';
+
+const nonEmptyStringSchema = z.string().trim().min(1);
+const historyDeleteTargetInputSchema = z.object({
+  targetId: nonEmptyStringSchema
+});
+const historyGetChatHistoryStateInputSchema = z.object({
+  chatId: nonEmptyStringSchema
+});
+const historyGetChatStatsInputSchema = z.object({
+  chatIds: z.array(nonEmptyStringSchema)
+});
+const historyListJobsInputSchema = z
+  .object({
+    limit: z.number().int().positive().optional(),
+    status: nonEmptyStringSchema.optional()
+  })
+  .default({});
+const historyRequestSyncInputSchema = z
+  .object({
+    chatId: nonEmptyStringSchema.optional()
+  })
+  .default({});
+const historyUpsertTargetInputSchema = z
+  .object({
+    chatId: nonEmptyStringSchema,
+    end: nonEmptyStringSchema.optional(),
+    preset: nonEmptyStringSchema.optional(),
+    start: nonEmptyStringSchema.optional(),
+    targetId: nonEmptyStringSchema.optional()
+  })
+  .loose();
 
 describe('createTrpcGatewayHistoryClient', () => {
   it('calls explicit History tRPC procedures for Gateway history RPC names', async () => {
     const calls: { method: string; params: unknown }[] = [];
     const server = createHTTPServer({
-      router: historyRpcRouter({
-        deleteTarget: rpc
-          .input(historyDeleteTargetInputSchema)
-          .output(historyTargetMutationOutputSchema)
-          .mutation(({ input }) => {
-            calls.push({ method: 'deleteTarget', params: input });
-            return { deleted: true, target: undefined, upserted: false };
-          }),
-        getChatHistoryState: rpc
+      router: testRpcRouter({
+        deleteTarget: testRpc.input(historyDeleteTargetInputSchema).mutation(({ input }) => {
+          calls.push({ method: 'deleteTarget', params: input });
+          return { deleted: true, target: undefined, upserted: false };
+        }),
+        getChatHistoryState: testRpc
           .input(historyGetChatHistoryStateInputSchema)
-          .output(historyChatHistoryStateOutputSchema)
           .query(({ input }) => {
             calls.push({ method: 'getChatHistoryState', params: input });
             return {
@@ -58,69 +70,54 @@ describe('createTrpcGatewayHistoryClient', () => {
               targets: []
             };
           }),
-        getChatStats: rpc
-          .input(historyGetChatStatsInputSchema)
-          .output(historyGetChatStatsOutputSchema)
-          .query(({ input }) => {
-            calls.push({ method: 'getChatStats', params: input });
-            return {
-              stats: input.chatIds.map((chatId) => ({
-                chatId,
-                coverageIntervals: 1,
-                coverageNewestAt: null,
-                coverageOldestAt: null,
-                pendingJobs: 0,
-                runningJobs: 0,
-                targets: 1
-              }))
-            };
-          }),
-        getOverview: rpc
-          .input(historyGetOverviewInputSchema)
-          .output(historyOverviewOutputSchema)
-          .query(() => {
-            calls.push({ method: 'getOverview', params: undefined });
-            return {
-              activeJob: null,
-              coverageIntervals: 30,
-              pendingJobs: 1,
+        getChatStats: testRpc.input(historyGetChatStatsInputSchema).query(({ input }) => {
+          calls.push({ method: 'getChatStats', params: input });
+          return {
+            stats: input.chatIds.map((chatId) => ({
+              chatId,
+              coverageIntervals: 1,
+              coverageNewestAt: null,
+              coverageOldestAt: null,
+              pendingJobs: 0,
               runningJobs: 0,
-              targets: 2,
-              templates: 3
-            };
-          }),
-        listJobs: rpc
-          .input(historyListJobsInputSchema)
-          .output(historyListJobsOutputSchema)
-          .query(({ input }) => {
-            calls.push({ method: 'listJobs', params: input });
-            return { jobs: [] };
-          }),
-        requestSync: rpc
-          .input(historyRequestSyncInputSchema)
-          .output(historyRequestSyncOutputSchema)
-          .mutation(({ input }) => {
-            calls.push({ method: 'requestSync', params: input });
-            return { requested: true };
-          }),
-        upsertTarget: rpc
-          .input(historyUpsertTargetInputSchema)
-          .output(historyTargetMutationOutputSchema)
-          .mutation(({ input }) => {
-            calls.push({ method: 'upsertTarget', params: input });
-            return {
-              deleted: false,
-              target: {
-                chatId: input.chatId,
-                id: 'target-a',
-                range: {
-                  end: { expression: 'now', kind: 'expression' },
-                  start: { expression: 'now-7d', kind: 'expression' }
-                }
-              },
-              upserted: true
-            };
-          })
+              targets: 1
+            }))
+          };
+        }),
+        getOverview: testRpc.query(() => {
+          calls.push({ method: 'getOverview', params: undefined });
+          return {
+            activeJob: null,
+            coverageIntervals: 30,
+            pendingJobs: 1,
+            runningJobs: 0,
+            targets: 2,
+            templates: 3
+          };
+        }),
+        listJobs: testRpc.input(historyListJobsInputSchema).query(({ input }) => {
+          calls.push({ method: 'listJobs', params: input });
+          return { jobs: [] };
+        }),
+        requestSync: testRpc.input(historyRequestSyncInputSchema).mutation(({ input }) => {
+          calls.push({ method: 'requestSync', params: input });
+          return { requested: true };
+        }),
+        upsertTarget: testRpc.input(historyUpsertTargetInputSchema).mutation(({ input }) => {
+          calls.push({ method: 'upsertTarget', params: input });
+          return {
+            deleted: false,
+            target: {
+              chatId: input.chatId,
+              id: 'target-a',
+              range: {
+                end: { expression: 'now', kind: 'expression' },
+                start: { expression: 'now-7d', kind: 'expression' }
+              }
+            },
+            upserted: true
+          };
+        })
       })
     });
 
