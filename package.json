@@ -19,7 +19,7 @@
     "npm": ">=11.0.0"
   },
   "scripts": {
-    "dev": "npm run dev:telegram",
+    "dev": "node scripts/dev.mjs",
     "dev:control-plane": "npm --workspace @agentg/control-plane run dev",
     "dev:control-plane-server": "npm --workspace @agentg/control-plane run dev:server",
     "dev:extension-registry": "npm --workspace @agentg/extension-registry run dev",
