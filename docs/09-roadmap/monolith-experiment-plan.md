@@ -17,6 +17,7 @@ This branch turns AgenTG into one Node.js application:
 ## Hard Decisions
 
 - `packages/*` is removed as an architecture boundary.
+- `src/domains/*` is not used; domain modules live directly under `src/<domain>`.
 - Docker Compose, Dockerfiles, NATS scripts, and Postgres runtime scripts are removed.
 - Internal tRPC is removed completely.
 - Internal calls use direct TypeScript service interfaces.
@@ -44,20 +45,19 @@ src/
     sqlite.ts
     migrations/
     schema.ts
-  domains/
-    telegram/
-      telegramService.ts
-      telegramRepository.ts
-      tdlibClient.ts
-      normalize.ts
-      files.ts
-      migrations.ts
-    history/
-      historyService.ts
-      historyRepository.ts
-      reconciler.ts
-      coverage.ts
-      ranges.ts
+  telegram/
+    telegramService.ts
+    telegramRepository.ts
+    tdlibClient.ts
+    normalize.ts
+    files.ts
+    migrations.ts
+  history/
+    historyService.ts
+    historyRepository.ts
+    reconciler.ts
+    coverage.ts
+    ranges.ts
   plugins/
     registry.ts
     types.ts
@@ -101,6 +101,7 @@ Exit check:
 - Keep Vue/Vite dependencies needed by the Control Plane UI in the root package.
 - Create `src/main.ts`, `src/app/createApp.ts`, `src/app/config.ts`, and `src/app/lifecycle.ts`.
 - Create `src/bus/eventBus.ts` and `src/bus/events.ts`.
+- `npm run dev` uses a watcher and reloads on meaningful runtime changes.
 - `createApp()` wires config, SQLite placeholder, event bus, repositories placeholder, services placeholder, plugins placeholder, and edge server placeholders.
 
 Exit check:
@@ -125,7 +126,7 @@ Exit check:
 
 ### Stage 3: Telegram Domain
 
-- Move useful Telegram code from `packages/telegram/src` into `src/domains/telegram`.
+- Move useful Telegram code from `packages/telegram/src` into `src/telegram`.
 - Remove Telegram tRPC server/client code from runtime.
 - Keep TDLib behind `TelegramService`.
 - Expose direct methods such as `getChat()` and `getMessage()`.
@@ -140,7 +141,7 @@ Exit check:
 
 ### Stage 4: History Domain
 
-- Move controller, reconciler, coverage, ranges, jobs, and observability logic from `packages/history-sync`.
+- Move controller, reconciler, coverage, ranges, jobs, and observability logic from `packages/history-sync` into `src/history`.
 - Replace Telegram tRPC client usage with injected `TelegramService`.
 - Replace NATS events with the in-memory event bus.
 - Persist history data through SQLite repositories.

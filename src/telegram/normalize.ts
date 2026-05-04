@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto';
 
-import type { JsonObject, JsonValue } from '../../bus/events.js';
+import type { JsonObject, JsonValue } from '../bus/events.js';
 
-export type { JsonObject, JsonValue } from '../../bus/events.js';
+export type { JsonObject, JsonValue } from '../bus/events.js';
 
 export type TdObject = {
   _: string;

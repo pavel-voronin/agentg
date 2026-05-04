@@ -1,4 +1,4 @@
-import type { SqliteMigration } from '../../storage/migrations/types.js';
+import type { SqliteMigration } from '../storage/migrations/types.js';
 
 export const telegramDomainMigration: SqliteMigration = {
   id: '0002',

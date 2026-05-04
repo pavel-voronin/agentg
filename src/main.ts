@@ -40,11 +40,9 @@ function logError(event: string, error: unknown): void {
 
 async function waitForShutdownSignal(): Promise<NodeJS.Signals> {
   return await new Promise((resolve) => {
-    const keepAlive = setInterval(Date.now, 60_000);
     const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];
 
     const cleanup = (): void => {
-      clearInterval(keepAlive);
       for (const signal of signals) {
         process.off(signal, handleSignal);
       }

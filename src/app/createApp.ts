@@ -3,11 +3,11 @@ import { createAppEvent } from '../bus/events.js';
 import {
   createTelegramRepository,
   type TelegramRepository
-} from '../domains/telegram/telegramRepository.js';
+} from '../telegram/telegramRepository.js';
 import {
   createTelegramService,
   type TelegramService
-} from '../domains/telegram/telegramService.js';
+} from '../telegram/telegramService.js';
 import { openSqliteDatabase, type SqliteDatabase } from '../storage/sqlite.js';
 import { loadAppConfig, type AppConfig, type LoadAppConfigInput } from './config.js';
 import { createLifecycle, type AppLifecycle, type LifecycleResource } from './lifecycle.js';

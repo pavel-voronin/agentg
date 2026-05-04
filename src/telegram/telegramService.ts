@@ -1,5 +1,5 @@
-import type { EventBus } from '../../bus/eventBus.js';
-import { createAppEvent } from '../../bus/events.js';
+import type { EventBus } from '../bus/eventBus.js';
+import { createAppEvent } from '../bus/events.js';
 import {
   normalizeHistoricalMessage,
   normalizeTelegramUpdate,
