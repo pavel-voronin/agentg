@@ -104,6 +104,26 @@ export function callControlPlaneMethod(
     };
   }
 
+  if (method === 'history.getOverview') {
+    return runtime.services.history.getOverview();
+  }
+
+  if (method === 'history.listChats') {
+    return runtime.services.history.listChats(readHistoryListChatsParams(params));
+  }
+
+  if (method === 'history.getChatHistoryState') {
+    return runtime.services.history.getChatHistoryState(readStringParam(params, 'chatId'));
+  }
+
+  if (method === 'history.upsertTarget') {
+    return runtime.services.history.upsertTarget(readHistoryTargetUpsertParams(params));
+  }
+
+  if (method === 'history.deleteTarget') {
+    return runtime.services.history.deleteTarget(readStringParam(params, 'targetId'));
+  }
+
   if (method === 'history.listMessages') {
     return runtime.services.history.listMessages(readStringParam(params, 'chatId'));
   }
@@ -274,6 +294,74 @@ function readStringParam(params: unknown, key: string): string {
   }
 
   return value;
+}
+
+function readHistoryListChatsParams(params: unknown): {
+  folderId?: number | null;
+  limit?: number;
+  list?: 'archive' | 'folder' | 'main';
+  query?: string;
+} {
+  if (!isRecord(params)) {
+    return {};
+  }
+
+  const list = params.list;
+  const folderId = params.folderId;
+  const limit = params.limit;
+  const query = params.query;
+
+  return {
+    ...(folderId === null || typeof folderId === 'number' ? { folderId } : {}),
+    ...(typeof limit === 'number' ? { limit } : {}),
+    ...(list === 'archive' || list === 'folder' || list === 'main' ? { list } : {}),
+    ...(typeof query === 'string' ? { query } : {})
+  };
+}
+
+function readHistoryTargetUpsertParams(params: unknown):
+  | {
+      chatId: string;
+      end: string;
+      start: string;
+      targetId?: string;
+    }
+  | {
+      chatId: string;
+      preset: string;
+      targetId?: string;
+    } {
+  if (!isRecord(params)) {
+    throw new Error('Params must be an object');
+  }
+
+  const chatId = params.chatId;
+  const targetId = params.targetId;
+  if (typeof chatId !== 'string' || chatId.length === 0) {
+    throw new Error('Param must be a string: chatId');
+  }
+  if (targetId !== undefined && typeof targetId !== 'string') {
+    throw new Error('Param must be a string: targetId');
+  }
+
+  if (typeof params.preset === 'string') {
+    return {
+      chatId,
+      preset: params.preset,
+      ...(targetId === undefined ? {} : { targetId })
+    };
+  }
+
+  if (typeof params.start === 'string' && typeof params.end === 'string') {
+    return {
+      chatId,
+      end: params.end,
+      start: params.start,
+      ...(targetId === undefined ? {} : { targetId })
+    };
+  }
+
+  throw new Error('history.upsertTarget requires preset or start/end');
 }
 
 function invalidRequest(

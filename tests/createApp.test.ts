@@ -13,7 +13,7 @@ describe('createApp', () => {
     const app = createApp({
       cwd,
       env: {
-        AGENTG_PLUGINS: 'summaries,claude',
+        AGENTG_PLUGINS: 'summaries',
         AGENTG_SQLITE_PATH: './test.sqlite',
         CONTROL_PLANE_ENABLED: 'true',
         CONTROL_PLANE_PORT: '9901',
@@ -28,7 +28,7 @@ describe('createApp', () => {
 
     await app.start();
 
-    expect(app.config.plugins.enabled).toEqual(['summaries', 'claude']);
+    expect(app.config.plugins.enabled).toEqual(['summaries']);
     expect(app.config.controlPlane).toMatchObject({
       enabled: true,
       port: 9901

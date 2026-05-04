@@ -10,9 +10,16 @@ import {
   type TelegramRepository
 } from '../telegram/telegramRepository.js';
 import { createTelegramService, type TelegramService } from '../telegram/telegramService.js';
+import {
+  createTelegramTdlibClient,
+  hasTelegramCredentials,
+  type TdlibSubscription,
+  type TelegramTdlibClient
+} from '../telegram/tdlibClient.js';
 import { createHistoryRepository, type HistoryRepository } from '../history/historyRepository.js';
 import { createHistoryService, type HistoryService } from '../history/historyService.js';
 import { createPluginRegistry, type PluginRegistry } from '../plugins/registry.js';
+import type { TrustedPlugin } from '../plugins/types.js';
 import { createSummariesPlugin, type SummariesPlugin } from '../plugins/summaries/plugin.js';
 import {
   createSummariesRepository,
@@ -83,7 +90,11 @@ export function createApp(input: CreateAppInput = {}): AppRuntime {
   const summariesPlugin = createSummariesPlugin({
     repository: summariesRepository
   });
-  const pluginRegistry = createPluginRegistry([summariesPlugin]);
+  const pluginRegistry = createPluginRegistry(
+    selectEnabledPlugins(config.plugins.enabled, {
+      summaries: summariesPlugin
+    })
+  );
   const edges: AppEdgeRegistry = {};
   const storage: AppStorageHandle = {
     sqlite
@@ -155,6 +166,7 @@ export function createApp(input: CreateAppInput = {}): AppRuntime {
         delete edges.controlPlane;
       }
     },
+    createTelegramTdlibLifecycleResource(config, eventBus, telegramService),
     ...(input.lifecycleResources ?? [])
   ]);
   let stopped = false;
@@ -214,4 +226,142 @@ export function createApp(input: CreateAppInput = {}): AppRuntime {
       eventBus.close();
     }
   };
+}
+
+function selectEnabledPlugins(
+  configuredPluginNames: readonly string[],
+  plugins: {
+    summaries: SummariesPlugin;
+  }
+): TrustedPlugin[] {
+  const enabledPluginNames =
+    configuredPluginNames.length === 0 ? ['summaries'] : [...configuredPluginNames];
+
+  return enabledPluginNames.map((pluginName) => {
+    switch (pluginName) {
+      case 'summaries':
+        return plugins.summaries;
+      default:
+        throw new Error(`Unknown plugin: ${pluginName}`);
+    }
+  });
+}
+
+function createTelegramTdlibLifecycleResource(
+  config: AppConfig,
+  eventBus: EventBus,
+  telegramService: TelegramService
+): LifecycleResource {
+  let client: TelegramTdlibClient | undefined;
+  let subscriptions: TdlibSubscription[] = [];
+
+  return {
+    name: 'telegram.tdlib',
+    async start(): Promise<void> {
+      if (!hasTelegramCredentials(config.tdlib)) {
+        return;
+      }
+
+      const tdlibClient = await createTelegramTdlibClient(config.tdlib);
+      client = tdlibClient;
+      telegramService.setTdlibClient(tdlibClient);
+      subscriptions = [
+        tdlibClient.onError((error) => {
+          void publishTelegramTdlibError(eventBus, error);
+        }),
+        tdlibClient.onUpdate((update) => {
+          void handleTelegramTdlibUpdate(eventBus, telegramService, update);
+        })
+      ];
+
+      await publishTelegramTdlibStatus(eventBus, {
+        authenticated: false,
+        connected: false
+      });
+      await tdlibClient.login();
+      await publishTelegramTdlibStatus(eventBus, {
+        authenticated: true,
+        connected: true
+      });
+    },
+    async stop(): Promise<void> {
+      for (const subscription of subscriptions) {
+        subscription.unsubscribe();
+      }
+      subscriptions = [];
+
+      const tdlibClient = client;
+      if (tdlibClient === undefined) {
+        return;
+      }
+
+      telegramService.clearTdlibClient(tdlibClient);
+      client = undefined;
+      await publishTelegramTdlibStatus(eventBus, {
+        authenticated: false,
+        connected: false
+      });
+      await tdlibClient.close();
+    }
+  };
+}
+
+async function handleTelegramTdlibUpdate(
+  eventBus: EventBus,
+  telegramService: TelegramService,
+  update: unknown
+): Promise<void> {
+  const connectionState = readTdlibConnectionState(update);
+  if (connectionState !== undefined) {
+    await publishTelegramTdlibStatus(eventBus, {
+      authenticated: connectionState === 'connectionStateReady',
+      connected: connectionState === 'connectionStateReady'
+    });
+  }
+
+  await telegramService.ingestUpdate(update);
+}
+
+async function publishTelegramTdlibStatus(
+  eventBus: EventBus,
+  data: {
+    authenticated: boolean;
+    connected: boolean;
+  }
+): Promise<void> {
+  await eventBus.publish(
+    createAppEvent({
+      data,
+      source: 'telegram.tdlib',
+      type: 'telegram.tdlib.status'
+    })
+  );
+}
+
+async function publishTelegramTdlibError(eventBus: EventBus, error: Error): Promise<void> {
+  await eventBus.publish(
+    createAppEvent({
+      data: {
+        message: error.message
+      },
+      source: 'telegram.tdlib',
+      type: 'telegram.tdlib.error'
+    })
+  );
+}
+
+function readTdlibConnectionState(update: unknown): string | undefined {
+  const record = readRecord(update);
+  if (record?._ !== 'updateConnectionState') {
+    return undefined;
+  }
+
+  const state = readRecord(record.state);
+  return typeof state?._ === 'string' ? state._ : undefined;
+}
+
+function readRecord(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
 }

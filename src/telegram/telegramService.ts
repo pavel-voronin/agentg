@@ -6,7 +6,10 @@ import {
   type NormalizedTelegramUpdate
 } from './normalize.js';
 import type {
+  TelegramChatFolderDto,
+  TelegramChatListInput,
   TelegramChatDto,
+  TelegramChatTypeCountDto,
   TelegramMessageDto,
   TelegramPersistResult,
   TelegramRepository
@@ -14,10 +17,16 @@ import type {
 import type { TelegramTdlibClient } from './tdlibClient.js';
 
 export type TelegramService = {
+  clearTdlibClient(client: TelegramTdlibClient): void;
+  countChats(): number;
   getChat(chatId: string): Promise<TelegramChatDto | undefined>;
   getMessage(chatId: string, messageId: string): Promise<TelegramMessageDto | undefined>;
   ingestHistoricalMessage(message: unknown): Promise<TelegramIngestResult>;
   ingestUpdate(update: unknown): Promise<TelegramIngestResult>;
+  listChatFolders(): TelegramChatFolderDto[];
+  listChatTypeCounts(): TelegramChatTypeCountDto[];
+  listChats(input?: TelegramChatListInput): TelegramChatDto[];
+  setTdlibClient(client: TelegramTdlibClient): void;
 };
 
 export type TelegramServiceDependencies = {
@@ -40,14 +49,23 @@ const EMPTY_PERSIST_RESULT: TelegramPersistResult = {
 };
 
 export function createTelegramService(dependencies: TelegramServiceDependencies): TelegramService {
+  let tdlibClient = dependencies.tdlibClient;
   const service: TelegramService = {
+    clearTdlibClient(client): void {
+      if (tdlibClient === client) {
+        tdlibClient = undefined;
+      }
+    },
+    countChats(): number {
+      return dependencies.repository.countChats();
+    },
     async getChat(chatId): Promise<TelegramChatDto | undefined> {
       const storedChat = dependencies.repository.getChat(chatId);
-      if (storedChat !== undefined || dependencies.tdlibClient === undefined) {
+      if (storedChat !== undefined || tdlibClient === undefined) {
         return storedChat;
       }
 
-      const rawChat = await dependencies.tdlibClient.getChat(chatId);
+      const rawChat = await tdlibClient.getChat(chatId);
       await service.ingestUpdate({
         _: 'updateNewChat',
         chat: rawChat
@@ -57,11 +75,11 @@ export function createTelegramService(dependencies: TelegramServiceDependencies)
     },
     async getMessage(chatId, messageId): Promise<TelegramMessageDto | undefined> {
       const storedMessage = dependencies.repository.getMessage(chatId, messageId);
-      if (storedMessage !== undefined || dependencies.tdlibClient === undefined) {
+      if (storedMessage !== undefined || tdlibClient === undefined) {
         return storedMessage;
       }
 
-      const rawMessage = await dependencies.tdlibClient.getMessage(chatId, messageId);
+      const rawMessage = await tdlibClient.getMessage(chatId, messageId);
       await service.ingestHistoricalMessage(rawMessage);
 
       return dependencies.repository.getMessage(chatId, messageId);
@@ -71,6 +89,18 @@ export function createTelegramService(dependencies: TelegramServiceDependencies)
     },
     async ingestUpdate(update): Promise<TelegramIngestResult> {
       return ingestNormalizedUpdate(dependencies, normalizeTelegramUpdate(update));
+    },
+    listChatFolders(): TelegramChatFolderDto[] {
+      return dependencies.repository.listChatFolders();
+    },
+    listChatTypeCounts(): TelegramChatTypeCountDto[] {
+      return dependencies.repository.listChatTypeCounts();
+    },
+    listChats(input): TelegramChatDto[] {
+      return dependencies.repository.listChats(input);
+    },
+    setTdlibClient(client): void {
+      tdlibClient = client;
     }
   };
 

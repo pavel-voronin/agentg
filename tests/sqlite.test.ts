@@ -41,6 +41,11 @@ describe('openSqliteDatabase', () => {
           appliedAt: expect.any(String) as string,
           id: '0004',
           name: 'summaries_plugin'
+        },
+        {
+          appliedAt: expect.any(String) as string,
+          id: '0005',
+          name: 'history_targets'
         }
       ]);
     } finally {
@@ -79,7 +84,7 @@ describe('storage schema helpers', () => {
     expect(prefixedTableName('telegram', 'messages')).toBe('telegram_messages');
     expect(prefixedTableName('history', 'coverage')).toBe('history_coverage');
     expect(prefixedTableName('summaries', 'runs')).toBe('summaries_runs');
-    expect(prefixedTableName('plugin:claude', 'events')).toBe('claude_events');
+    expect(prefixedTableName('plugin:demo', 'events')).toBe('demo_events');
     expect(AGENTG_MIGRATIONS_TABLE).toBe('agentg_migrations');
   });
 });

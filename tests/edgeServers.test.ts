@@ -1,4 +1,4 @@
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -110,6 +110,44 @@ describe('edge servers', () => {
       });
     } finally {
       client.close();
+      await server.close();
+      await app.stop();
+    }
+  });
+
+  it('serves Control Plane UI static files', async () => {
+    const staticDir = mkdtempSync(join(tmpdir(), 'agentg-control-plane-ui-'));
+    writeFileSync(
+      join(staticDir, 'index.html'),
+      '<!doctype html><html><body><div id="app">Control Plane</div></body></html>'
+    );
+    const app = createApp({
+      cwd: mkdtempSync(join(tmpdir(), 'agentg-control-plane-static-')),
+      env: {
+        AGENTG_SQLITE_PATH: './control-plane-static.sqlite'
+      }
+    });
+
+    await app.start();
+    const server = await startControlPlaneServer({
+      config: {
+        enabled: true,
+        host: '127.0.0.1',
+        port: 0,
+        staticDir
+      },
+      eventBus: app.eventBus,
+      plugins: app.plugins,
+      services: app.services
+    });
+
+    try {
+      const response = await fetch(`http://${server.host}:${String(server.port)}/`);
+
+      await expect(response.text()).resolves.toContain('Control Plane');
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toContain('text/html');
+    } finally {
       await server.close();
       await app.stop();
     }

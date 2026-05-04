@@ -246,7 +246,7 @@ Checks:
 - Verify the Control Plane WebSocket receives runtime events.
 - Verify the Control Plane UI serves and works against the monolith edge.
 - Verify one real Telegram event reaches the monolith.
-- Verify the connected Claude plugin receives that event, reacts once, and exits.
+- Verify the external Claude channel plugin receives that event from Gateway, reacts once, and exits.
 
 Checks:
 
@@ -265,11 +265,12 @@ Checks:
   - serve the UI from the monolith Control Plane edge
   - open the UI in a browser
   - confirm it renders against the monolith edge
-- Real Telegram and Claude plugin smoke:
+- Real Telegram and Claude channel smoke:
   - start the monolith with real Telegram credentials/session
-  - load the trusted Claude plugin in-process
+  - start the external Claude channel plugin as an MCP/channel bridge
+  - connect that bridge to the monolith Gateway
   - receive one real Telegram update
-  - confirm the Claude plugin reacts once
+  - confirm the Claude channel receives and reacts once
   - exit the process after the verified reaction
 
 ## Definition of Done
@@ -296,4 +297,4 @@ Checks:
 - Control Plane receives runtime events and the UI works.
 - Gateway calls services/plugins directly and uses static capabilities.
 - One real Telegram event is received.
-- The connected Claude plugin reacts to that Telegram event once and exits.
+- The external Claude channel plugin reacts to that Telegram event once and exits.

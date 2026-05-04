@@ -12,8 +12,12 @@ import type {
 } from './normalize.js';
 
 export type TelegramRepository = {
+  countChats(): number;
   getChat(chatId: string): TelegramChatDto | undefined;
   getMessage(chatId: string, messageId: string): TelegramMessageDto | undefined;
+  listChatFolders(): TelegramChatFolderDto[];
+  listChatTypeCounts(): TelegramChatTypeCountDto[];
+  listChats(input?: TelegramChatListInput): TelegramChatDto[];
   persistCurrentUser(user: NormalizedTelegramUser): boolean;
   persistUpdate(update: NormalizedTelegramUpdate): TelegramPersistResult;
 };
@@ -31,6 +35,24 @@ export type TelegramChatDto = {
   title: string;
   type: string;
   updatedAt: string;
+};
+
+export type TelegramChatFolderDto = {
+  count: number;
+  iconName: string | null;
+  id: number;
+  position: number;
+  title: string;
+};
+
+export type TelegramChatListInput = {
+  limit?: number;
+  query?: string;
+};
+
+export type TelegramChatTypeCountDto = {
+  count: number;
+  type: string;
 };
 
 export type TelegramMessageDto = {
@@ -53,6 +75,18 @@ type ChatRow = {
   updated_at: string;
 };
 
+type ChatFolderRow = {
+  icon_name: string | null;
+  position: number;
+  telegram_chat_folder_id: number;
+  title: string;
+};
+
+type ChatTypeCountRow = {
+  count: number;
+  type: string;
+};
+
 type MessageRow = {
   content_type: string;
   edit_date: string | null;
@@ -68,6 +102,12 @@ type MessageRow = {
 
 export function createTelegramRepository(database: Database): TelegramRepository {
   return {
+    countChats(): number {
+      const row = database.prepare('SELECT count(*) AS count FROM telegram_chats').get() as {
+        count: number;
+      };
+      return row.count;
+    },
     getChat(chatId): TelegramChatDto | undefined {
       const row = database
         .prepare(
@@ -103,6 +143,59 @@ export function createTelegramRepository(database: Database): TelegramRepository
         .get(chatId, messageId) as MessageRow | undefined;
 
       return row === undefined ? undefined : mapMessageRow(row);
+    },
+    listChatFolders(): TelegramChatFolderDto[] {
+      return database
+        .prepare(
+          `
+            SELECT telegram_chat_folder_id, position, title, icon_name
+            FROM telegram_chat_folders
+            ORDER BY position ASC, title ASC
+          `
+        )
+        .all()
+        .map((row) => mapChatFolderRow(row as ChatFolderRow));
+    },
+    listChatTypeCounts(): TelegramChatTypeCountDto[] {
+      return database
+        .prepare(
+          `
+            SELECT type, count(*) AS count
+            FROM telegram_chats
+            GROUP BY type
+            ORDER BY count DESC, type ASC
+          `
+        )
+        .all()
+        .map((row) => {
+          const typed = row as ChatTypeCountRow;
+          return {
+            count: typed.count,
+            type: typed.type
+          };
+        });
+    },
+    listChats(input = {}): TelegramChatDto[] {
+      const limit = normalizeChatListLimit(input.limit);
+      const query = input.query?.trim();
+      const hasQuery = query !== undefined && query.length > 0;
+      const rows = database
+        .prepare(
+          `
+            SELECT telegram_chat_id, title, type, updated_at
+            FROM telegram_chats
+            ${
+              hasQuery
+                ? "WHERE title LIKE ? ESCAPE '\\' OR telegram_chat_id LIKE ? ESCAPE '\\'"
+                : ''
+            }
+            ORDER BY updated_at DESC, title ASC
+            LIMIT ?
+          `
+        )
+        .all(...(hasQuery ? [likePattern(query), likePattern(query), limit] : [limit]));
+
+      return rows.map((row) => mapChatRow(row as ChatRow));
     },
     persistCurrentUser(user): boolean {
       const transaction = database.transaction(() => {
@@ -410,6 +503,16 @@ function mapChatRow(row: ChatRow): TelegramChatDto {
   };
 }
 
+function mapChatFolderRow(row: ChatFolderRow): TelegramChatFolderDto {
+  return {
+    count: 0,
+    iconName: row.icon_name,
+    id: row.telegram_chat_folder_id,
+    position: row.position,
+    title: row.title
+  };
+}
+
 function mapMessageRow(row: MessageRow): TelegramMessageDto {
   return {
     chatId: row.telegram_chat_id,
@@ -423,4 +526,20 @@ function mapMessageRow(row: MessageRow): TelegramMessageDto {
     ...(row.sender_type === null ? {} : { senderType: row.sender_type }),
     ...(row.text === null ? {} : { text: row.text })
   };
+}
+
+function normalizeChatListLimit(value: number | undefined): number {
+  if (value === undefined) {
+    return 500;
+  }
+
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw new Error('Telegram chat list limit must be a positive safe integer');
+  }
+
+  return Math.min(value, 2000);
+}
+
+function likePattern(value: string): string {
+  return `%${value.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_')}%`;
 }

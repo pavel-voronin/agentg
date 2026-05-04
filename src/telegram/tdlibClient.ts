@@ -14,6 +14,13 @@ export type TelegramTdlibClient = {
   close(): Promise<void>;
   getChat(chatId: string): Promise<unknown>;
   getMessage(chatId: string, messageId: string): Promise<unknown>;
+  login(): Promise<void>;
+  onError(handler: (error: Error) => void): TdlibSubscription;
+  onUpdate(handler: (update: unknown) => void): TdlibSubscription;
+};
+
+export type TdlibSubscription = {
+  unsubscribe(): void;
 };
 
 export type TelegramDependencyStatus = {
@@ -74,11 +81,32 @@ export function createTelegramTdlibClientAdapter(client: Client): TelegramTdlibC
         chat_id: parseTelegramIntegerId(chatId),
         message_id: parseTelegramIntegerId(messageId)
       });
+    },
+    async login(): Promise<void> {
+      await client.login();
+    },
+    onError(handler): TdlibSubscription {
+      client.on('error', handler);
+      return {
+        unsubscribe(): void {
+          client.off('error', handler);
+        }
+      };
+    },
+    onUpdate(handler): TdlibSubscription {
+      client.on('update', handler);
+      return {
+        unsubscribe(): void {
+          client.off('update', handler);
+        }
+      };
     }
   };
 }
 
-function hasTelegramCredentials(config: TelegramClientConfig): config is TelegramClientConfig & {
+export function hasTelegramCredentials(
+  config: TelegramClientConfig
+): config is TelegramClientConfig & {
   apiHash: string;
   apiId: number;
 } {
