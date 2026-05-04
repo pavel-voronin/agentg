@@ -18,6 +18,12 @@ const ClaudeChannelNotificationSchema = NotificationSchema.extend({
 });
 
 async function main(): Promise<void> {
+  const existingGatewayWsUrl = process.env.AGENTG_GATEWAY_WS_URL;
+  if (existingGatewayWsUrl !== undefined && existingGatewayWsUrl.length > 0) {
+    await runSmokeAgainstGateway(existingGatewayWsUrl);
+    return;
+  }
+
   const gatewayPort = await reservePort();
   const cwd = mkdtempSync(join(tmpdir(), 'agentg-telegram-claude-'));
   process.env.AGENTG_SQLITE_PATH = join(cwd, 'agentg.sqlite');
@@ -33,6 +39,19 @@ async function main(): Promise<void> {
   const appStart = app.start();
   await waitForGatewayHandle(app);
 
+  try {
+    await runSmokeAgainstGateway(`ws://127.0.0.1:${String(gatewayPort)}/`, async () => {
+      await appStart;
+    });
+  } finally {
+    await app.stop();
+  }
+}
+
+async function runSmokeAgainstGateway(
+  gatewayWsUrl: string,
+  beforeWait?: () => Promise<void>
+): Promise<void> {
   const mcpClient = new Client(
     { name: 'agentg-smoke', version: '0.1.0' },
     {
@@ -54,14 +73,14 @@ async function main(): Promise<void> {
     cwd: process.cwd(),
     env: {
       ...stringEnvironment(process.env),
-      AGENTG_GATEWAY_WS_URL: `ws://127.0.0.1:${String(gatewayPort)}/`
+      AGENTG_GATEWAY_WS_URL: gatewayWsUrl
     },
     stderr: 'pipe'
   });
 
   try {
     await mcpClient.connect(transport);
-    await appStart;
+    await beforeWait?.();
     const notification = await channelNotification;
     console.log(
       JSON.stringify({
@@ -72,7 +91,6 @@ async function main(): Promise<void> {
     );
   } finally {
     await mcpClient.close();
-    await app.stop();
   }
 }
 
