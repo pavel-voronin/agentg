@@ -40,6 +40,23 @@ export const extensionListOutputSchema = z.object({
   extensions: z.array(extensionRecordOutputSchema)
 });
 
+export const extensionRegistryRecordOutputSchema = z.object({
+  expiresAt: z.string(),
+  extension: z.string(),
+  registeredAt: z.string(),
+  target: z.string()
+});
+
+export const extensionRegistryListInputSchema = z
+  .object({
+    target: nonEmptyStringSchema.optional()
+  })
+  .default({});
+
+export const extensionRegistryListOutputSchema = z.object({
+  extensions: z.array(extensionRegistryRecordOutputSchema)
+});
+
 export const extensionCallInputSchema = z.object({
   callId: nonEmptyStringSchema,
   input: z.unknown().optional(),
@@ -53,6 +70,9 @@ export type ExtensionRegistrationInput = z.infer<typeof extensionRegistrationInp
 export type ExtensionRegistrationOutput = z.infer<typeof extensionRegistrationOutputSchema>;
 export type ExtensionRecordOutput = z.output<typeof extensionRecordOutputSchema>;
 export type ExtensionListOutput = z.output<typeof extensionListOutputSchema>;
+export type ExtensionRegistryRecordOutput = z.output<typeof extensionRegistryRecordOutputSchema>;
+export type ExtensionRegistryListInput = z.output<typeof extensionRegistryListInputSchema>;
+export type ExtensionRegistryListOutput = z.output<typeof extensionRegistryListOutputSchema>;
 export type ExtensionCallInput = z.infer<typeof extensionCallInputSchema>;
 
 export type ExtensionRegistration = ExtensionRegistrationInput & {

@@ -6,6 +6,7 @@
   "workspaces": [
     "packages/shared",
     "packages/database",
+    "packages/extension-registry",
     "packages/gateway",
     "packages/control-plane",
     "packages/telegram",

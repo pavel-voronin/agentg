@@ -5,6 +5,7 @@ COPY packages/shared/package.json packages/shared/package.json
 COPY packages/database/package.json packages/database/package.json
 COPY packages/claude-plugin/package.json packages/claude-plugin/package.json
 COPY packages/control-plane/package.json packages/control-plane/package.json
+COPY packages/extension-registry/package.json packages/extension-registry/package.json
 COPY packages/gateway/package.json packages/gateway/package.json
 COPY packages/history-sync/package.json packages/history-sync/package.json
 COPY packages/summaries/package.json packages/summaries/package.json
@@ -24,6 +25,7 @@ COPY packages/shared/package.json packages/shared/package.json
 COPY packages/database/package.json packages/database/package.json
 COPY packages/claude-plugin/package.json packages/claude-plugin/package.json
 COPY packages/control-plane/package.json packages/control-plane/package.json
+COPY packages/extension-registry/package.json packages/extension-registry/package.json
 COPY packages/gateway/package.json packages/gateway/package.json
 COPY packages/history-sync/package.json packages/history-sync/package.json
 COPY packages/summaries/package.json packages/summaries/package.json
@@ -32,6 +34,7 @@ RUN npm install --omit=dev && npm cache clean --force
 COPY --from=build --chown=agentg:agentg /app/packages/database/dist ./packages/database/dist
 COPY --from=build --chown=agentg:agentg /app/packages/control-plane/dist ./packages/control-plane/dist
 COPY --from=build --chown=agentg:agentg /app/packages/control-plane/dist-server ./packages/control-plane/dist-server
+COPY --from=build --chown=agentg:agentg /app/packages/extension-registry/dist ./packages/extension-registry/dist
 COPY --from=build --chown=agentg:agentg /app/packages/gateway/dist ./packages/gateway/dist
 COPY --from=build --chown=agentg:agentg /app/packages/history-sync/dist ./packages/history-sync/dist
 COPY --from=build --chown=agentg:agentg /app/packages/summaries/dist ./packages/summaries/dist
