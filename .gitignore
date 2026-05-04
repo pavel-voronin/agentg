@@ -6,4 +6,6 @@ coverage/
 .env.local
 .claude/settings.local.json
 td-data/
+agentg.sqlite
+agentg.sqlite-*
 npm-debug.log*

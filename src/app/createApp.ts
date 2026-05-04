@@ -1,5 +1,6 @@
 import { createEventBus, type EventBus } from '../bus/eventBus.js';
 import { createAppEvent } from '../bus/events.js';
+import { openSqliteDatabase, type SqliteDatabase } from '../storage/sqlite.js';
 import { loadAppConfig, type AppConfig, type LoadAppConfigInput } from './config.js';
 import { createLifecycle, type AppLifecycle, type LifecycleResource } from './lifecycle.js';
 
@@ -21,8 +22,7 @@ export type CreateAppInput = LoadAppConfigInput & {
 };
 
 export type AppStorageHandle = {
-  databasePath: string;
-  kind: 'sqlite';
+  sqlite: SqliteDatabase;
 };
 
 export type AppRepositoryRegistry = Record<string, unknown>;
@@ -35,12 +35,20 @@ export type AppEdgeRegistry = Record<string, unknown>;
 
 export function createApp(input: CreateAppInput = {}): AppRuntime {
   const config = loadAppConfig(input);
+  const sqlite = openSqliteDatabase(config.database);
   const eventBus = createEventBus();
-  const lifecycle = createLifecycle(input.lifecycleResources ?? []);
   const storage: AppStorageHandle = {
-    databasePath: config.database.path,
-    kind: 'sqlite'
+    sqlite
   };
+  const lifecycle = createLifecycle([
+    {
+      name: 'sqlite',
+      stop(): void {
+        sqlite.close();
+      }
+    },
+    ...(input.lifecycleResources ?? [])
+  ]);
   let stopped = false;
 
   return {
@@ -57,7 +65,7 @@ export function createApp(input: CreateAppInput = {}): AppRuntime {
       await eventBus.publish(
         createAppEvent({
           data: {
-            databasePath: storage.databasePath
+            databasePath: storage.sqlite.path
           },
           source: 'app',
           type: 'app.started'

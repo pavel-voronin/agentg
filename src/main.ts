@@ -6,7 +6,7 @@ async function main(): Promise<void> {
   try {
     await app.start();
     logInfo('agentg.started', {
-      databasePath: app.storage.databasePath,
+      databasePath: app.storage.sqlite.path,
       plugins: app.config.plugins.enabled
     });
 

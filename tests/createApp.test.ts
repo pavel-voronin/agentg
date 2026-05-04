@@ -34,10 +34,7 @@ describe('createApp', () => {
       port: 9901
     });
     expect(app.config.gateway.port).toBe(9902);
-    expect(app.storage).toEqual({
-      databasePath: join(cwd, 'test.sqlite'),
-      kind: 'sqlite'
-    });
+    expect(app.storage.sqlite.path).toBe(join(cwd, 'test.sqlite'));
     expect(app.lifecycle.getState()).toBe('started');
     expect(received).toHaveLength(1);
 
