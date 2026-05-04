@@ -27,6 +27,7 @@ import {
 type EventsState = {
   eventFilters: EventFiltersState;
   eventLimit: number;
+  eventsPaused: boolean;
   events: ControlPlaneEvent[];
   eventsPanelMode: EventsPanelMode;
 };
@@ -40,6 +41,9 @@ export const useEventsStore = defineStore('controlPlane.events', {
       return isEventEnabledInState(this, event);
     },
     pushEvent(event: ControlPlaneEvent): boolean {
+      if (this.eventsPaused) {
+        return false;
+      }
       if (!isEventEnabledInState(this, event)) {
         return false;
       }
@@ -81,8 +85,14 @@ export const useEventsStore = defineStore('controlPlane.events', {
     setEvents(events: ControlPlaneEvent[]) {
       this.events = events.slice(0, this.eventLimit);
     },
+    setEventsPaused(paused: boolean) {
+      this.eventsPaused = paused;
+    },
     setEventsPanelMode(mode: EventsPanelMode) {
       this.eventsPanelMode = mode === 'filters' ? 'filters' : 'events';
+    },
+    toggleEventsPaused() {
+      this.eventsPaused = !this.eventsPaused;
     },
     toggleEventsPanelMode() {
       this.eventsPanelMode = this.eventsPanelMode === 'filters' ? 'events' : 'filters';
@@ -91,6 +101,7 @@ export const useEventsStore = defineStore('controlPlane.events', {
   state: (): EventsState => ({
     eventFilters: readStoredEventFilters(),
     eventLimit: readStoredEventLimit(),
+    eventsPaused: false,
     events: [],
     eventsPanelMode: 'events'
   })

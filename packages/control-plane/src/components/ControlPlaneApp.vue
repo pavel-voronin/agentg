@@ -31,6 +31,7 @@ const dashboardMetrics = computed(() => dashboardMetricsFromOverview(overviewSto
 const eventFiltersPanel = computed(() => eventFiltersPanelView(eventsStore));
 const eventFiltersVisible = computed(() => eventsStore.eventsPanelMode === 'filters');
 const eventItems = computed(() => eventsStore.events.map(eventListItem));
+const eventsPaused = computed(() => eventsStore.eventsPaused);
 const hasEvents = computed(() => eventsStore.events.length > 0);
 const selectedWorkspace = computed(() => selectedWorkspaceView(selectedHistoryStore));
 const {
@@ -77,6 +78,14 @@ const eventFilterToggleClass = computed(() =>
   eventFiltersVisible.value
     ? 'inline-flex h-8 items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-800 px-2.5 text-sm font-medium text-white hover:bg-zinc-950'
     : 'inline-flex h-8 items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50'
+);
+const eventStreamToggleClass = computed(() =>
+  eventsPaused.value
+    ? 'inline-flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-700 bg-emerald-700 text-white hover:bg-emerald-800'
+    : 'inline-flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50'
+);
+const eventStreamToggleLabel = computed(() =>
+  eventsPaused.value ? 'Play event stream' : 'Pause event stream'
 );
 
 const mainLayoutClass = computed(() =>
@@ -166,6 +175,10 @@ function browserGlobal(): BrowserGlobal {
 
 function toggleEventFilters(): void {
   eventsStore.toggleEventsPanelMode();
+}
+
+function toggleEventStream(): void {
+  eventsStore.toggleEventsPaused();
 }
 
 function closeEventFilters(): void {
@@ -282,6 +295,38 @@ onBeforeUnmount(() => {
           </div>
           <div class="flex shrink-0 items-center gap-2">
             <button
+              id="eventStreamToggle"
+              type="button"
+              :aria-label="eventStreamToggleLabel"
+              :aria-pressed="eventsPaused"
+              :class="eventStreamToggleClass"
+              :title="eventStreamToggleLabel"
+              @click="toggleEventStream"
+            >
+              <svg
+                v-if="eventsPaused"
+                class="h-3.5 w-3.5"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path
+                  d="M6 4.75v10.5c0 .63.7 1.01 1.22.66l7.75-5.25a.79.79 0 0 0 0-1.32L7.22 4.09A.78.78 0 0 0 6 4.75Z"
+                />
+              </svg>
+              <svg
+                v-else
+                class="h-3.5 w-3.5"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path
+                  d="M6 4.5A1.5 1.5 0 0 1 7.5 3h.25a1.5 1.5 0 0 1 1.5 1.5v11a1.5 1.5 0 0 1-1.5 1.5H7.5A1.5 1.5 0 0 1 6 15.5v-11ZM10.75 4.5A1.5 1.5 0 0 1 12.25 3h.25A1.5 1.5 0 0 1 14 4.5v11a1.5 1.5 0 0 1-1.5 1.5h-.25a1.5 1.5 0 0 1-1.5-1.5v-11Z"
+                />
+              </svg>
+            </button>
+            <button
               id="eventFiltersToggle"
               type="button"
               :class="eventFilterToggleClass"
@@ -354,6 +399,37 @@ onBeforeUnmount(() => {
         <div class="text-sm font-semibold">Events</div>
       </div>
       <div class="flex shrink-0 items-center gap-2">
+        <button
+          type="button"
+          :aria-label="eventStreamToggleLabel"
+          :aria-pressed="eventsPaused"
+          :class="eventStreamToggleClass"
+          :title="eventStreamToggleLabel"
+          @click="toggleEventStream"
+        >
+          <svg
+            v-if="eventsPaused"
+            class="h-3.5 w-3.5"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            <path
+              d="M6 4.75v10.5c0 .63.7 1.01 1.22.66l7.75-5.25a.79.79 0 0 0 0-1.32L7.22 4.09A.78.78 0 0 0 6 4.75Z"
+            />
+          </svg>
+          <svg
+            v-else
+            class="h-3.5 w-3.5"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            <path
+              d="M6 4.5A1.5 1.5 0 0 1 7.5 3h.25a1.5 1.5 0 0 1 1.5 1.5v11a1.5 1.5 0 0 1-1.5 1.5H7.5A1.5 1.5 0 0 1 6 15.5v-11ZM10.75 4.5A1.5 1.5 0 0 1 12.25 3h.25A1.5 1.5 0 0 1 14 4.5v11a1.5 1.5 0 0 1-1.5 1.5h-.25a1.5 1.5 0 0 1-1.5-1.5v-11Z"
+            />
+          </svg>
+        </button>
         <button type="button" :class="eventFilterToggleClass" @click="toggleEventFilters">
           <svg
             class="h-3.5 w-3.5"
