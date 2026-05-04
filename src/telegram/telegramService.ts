@@ -29,6 +29,8 @@ export type TelegramService = {
   listChatFolders(): TelegramChatFolderDto[];
   listChatTypeCounts(): TelegramChatTypeCountDto[];
   listChats(input?: TelegramChatListInput): TelegramChatDto[];
+  listRecentMessages(input?: TelegramRecentMessagesInput): TelegramMessageDto[];
+  searchMessages(input: TelegramSearchMessagesInput): TelegramMessageDto[];
   setTdlibClient(client: TelegramTdlibClient): void;
 };
 
@@ -76,6 +78,17 @@ export type TelegramHistoryFetchPageResult =
       nextCursorMessageId?: number;
       oldestFetchedMessageDate?: string;
     };
+
+export type TelegramRecentMessagesInput = {
+  chatId?: string;
+  limit?: number;
+};
+
+export type TelegramSearchMessagesInput = {
+  query: string;
+  chatId?: string;
+  limit?: number;
+};
 
 const EMPTY_PERSIST_RESULT: TelegramPersistResult = {
   chat: false,
@@ -170,6 +183,12 @@ export function createTelegramService(dependencies: TelegramServiceDependencies)
     },
     listChats(input): TelegramChatDto[] {
       return dependencies.repository.listChats(input);
+    },
+    listRecentMessages(input): TelegramMessageDto[] {
+      return dependencies.repository.listRecentMessages(input);
+    },
+    searchMessages(input): TelegramMessageDto[] {
+      return dependencies.repository.searchMessages(input);
     },
     setTdlibClient(client): void {
       tdlibClient = client;

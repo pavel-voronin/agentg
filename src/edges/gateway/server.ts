@@ -115,6 +115,25 @@ export async function callGatewayMethod(
     );
   }
 
+  if (method === 'telegram.listRecentMessages') {
+    const chatId = readOptionalString(params, 'chatId');
+    const limit = readOptionalPositiveInteger(params, 'limit');
+    return runtime.services.telegram.listRecentMessages({
+      ...(chatId === undefined ? {} : { chatId }),
+      ...(limit === undefined ? {} : { limit })
+    });
+  }
+
+  if (method === 'telegram.searchMessages') {
+    const chatId = readOptionalString(params, 'chatId');
+    const limit = readOptionalPositiveInteger(params, 'limit');
+    return runtime.services.telegram.searchMessages({
+      query: readStringParam(params, 'query'),
+      ...(chatId === undefined ? {} : { chatId }),
+      ...(limit === undefined ? {} : { limit })
+    });
+  }
+
   if (method === 'history.listMessages') {
     return runtime.services.history.listMessages(readStringParam(params, 'chatId'));
   }
@@ -218,6 +237,19 @@ function readStringParam(params: unknown, key: string): string {
 
 function readOptionalString(params: unknown, key: string): string | undefined {
   return isRecord(params) && typeof params[key] === 'string' ? params[key] : undefined;
+}
+
+function readOptionalPositiveInteger(params: unknown, key: string): number | undefined {
+  if (!isRecord(params) || params[key] === undefined) {
+    return undefined;
+  }
+
+  const value = params[key];
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0) {
+    throw new Error(`Param must be a positive integer: ${key}`);
+  }
+
+  return value;
 }
 
 function invalidRequest(

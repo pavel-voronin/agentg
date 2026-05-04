@@ -20,8 +20,10 @@ export type TelegramRepository = {
   listChatFolders(): TelegramChatFolderDto[];
   listChatTypeCounts(): TelegramChatTypeCountDto[];
   listChats(input?: TelegramChatListInput): TelegramChatDto[];
+  listRecentMessages(input?: TelegramRecentMessagesInput): TelegramMessageDto[];
   persistCurrentUser(user: NormalizedTelegramUser): boolean;
   persistUpdate(update: NormalizedTelegramUpdate): TelegramPersistResult;
+  searchMessages(input: TelegramSearchMessagesInput): TelegramMessageDto[];
 };
 
 export type TelegramPersistResult = {
@@ -60,6 +62,17 @@ export type TelegramChatCountInput = Pick<TelegramChatListInput, 'folderId' | 'l
 export type TelegramChatTypeCountDto = {
   count: number;
   type: string;
+};
+
+export type TelegramRecentMessagesInput = {
+  chatId?: string;
+  limit?: number;
+};
+
+export type TelegramSearchMessagesInput = {
+  query: string;
+  chatId?: string;
+  limit?: number;
 };
 
 export type TelegramMessageDto = {
@@ -228,6 +241,54 @@ export function createTelegramRepository(database: Database): TelegramRepository
 
       return rows.map((row) => mapChatRow(row as ChatRow));
     },
+    listRecentMessages(input = {}): TelegramMessageDto[] {
+      const limit = normalizeMessageListLimit(input.limit, 50, 200);
+      const rows =
+        input.chatId === undefined
+          ? database
+              .prepare(
+                `
+                  SELECT
+                    telegram_chat_id,
+                    telegram_message_id,
+                    sender_id,
+                    sender_type,
+                    content_type,
+                    text,
+                    message_date,
+                    edit_date,
+                    is_deleted,
+                    updated_at
+                  FROM telegram_messages
+                  ORDER BY message_date DESC, CAST(telegram_message_id AS INTEGER) DESC
+                  LIMIT ?
+                `
+              )
+              .all(limit)
+          : database
+              .prepare(
+                `
+                  SELECT
+                    telegram_chat_id,
+                    telegram_message_id,
+                    sender_id,
+                    sender_type,
+                    content_type,
+                    text,
+                    message_date,
+                    edit_date,
+                    is_deleted,
+                    updated_at
+                  FROM telegram_messages
+                  WHERE telegram_chat_id = ?
+                  ORDER BY message_date DESC, CAST(telegram_message_id AS INTEGER) DESC
+                  LIMIT ?
+                `
+              )
+              .all(input.chatId, limit);
+
+      return rows.map((row) => mapMessageRow(row as MessageRow));
+    },
     persistCurrentUser(user): boolean {
       const transaction = database.transaction(() => {
         database
@@ -271,6 +332,61 @@ export function createTelegramRepository(database: Database): TelegramRepository
       });
 
       return transaction();
+    },
+    searchMessages(input): TelegramMessageDto[] {
+      const query = input.query.trim();
+      if (query.length === 0) {
+        throw new Error('Telegram message search query must not be empty');
+      }
+
+      const limit = normalizeMessageListLimit(input.limit, 20, 100);
+      const rows =
+        input.chatId === undefined
+          ? database
+              .prepare(
+                `
+                  SELECT
+                    telegram_chat_id,
+                    telegram_message_id,
+                    sender_id,
+                    sender_type,
+                    content_type,
+                    text,
+                    message_date,
+                    edit_date,
+                    is_deleted,
+                    updated_at
+                  FROM telegram_messages
+                  WHERE text LIKE ? ESCAPE '\\'
+                  ORDER BY message_date DESC, CAST(telegram_message_id AS INTEGER) DESC
+                  LIMIT ?
+                `
+              )
+              .all(likePattern(query), limit)
+          : database
+              .prepare(
+                `
+                  SELECT
+                    telegram_chat_id,
+                    telegram_message_id,
+                    sender_id,
+                    sender_type,
+                    content_type,
+                    text,
+                    message_date,
+                    edit_date,
+                    is_deleted,
+                    updated_at
+                  FROM telegram_messages
+                  WHERE telegram_chat_id = ?
+                    AND text LIKE ? ESCAPE '\\'
+                  ORDER BY message_date DESC, CAST(telegram_message_id AS INTEGER) DESC
+                  LIMIT ?
+                `
+              )
+              .all(input.chatId, likePattern(query), limit);
+
+      return rows.map((row) => mapMessageRow(row as MessageRow));
     }
   };
 }
@@ -683,6 +799,22 @@ function normalizeChatListLimit(value: number | undefined): number {
   }
 
   return Math.min(value, 2000);
+}
+
+function normalizeMessageListLimit(
+  value: number | undefined,
+  fallback: number,
+  max: number
+): number {
+  if (value === undefined) {
+    return fallback;
+  }
+
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw new Error('Telegram message list limit must be a positive safe integer');
+  }
+
+  return Math.min(value, max);
 }
 
 function likePattern(value: string): string {

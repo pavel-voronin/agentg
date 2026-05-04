@@ -49,6 +49,69 @@ describe('edge servers', () => {
           capabilities: [{ name: 'telegram.read' }]
         }
       });
+
+      await app.services.telegram.ingestUpdate({
+        _: 'updateNewMessage',
+        message: {
+          _: 'message',
+          chat_id: 123,
+          content: {
+            _: 'messageText',
+            text: {
+              _: 'formattedText',
+              text: 'gateway searchable message'
+            }
+          },
+          date: 1_700_000_400,
+          id: 501
+        }
+      });
+
+      client.send(
+        JSON.stringify({
+          id: 2,
+          method: 'telegram.listRecentMessages',
+          params: {
+            chatId: '123',
+            limit: 5
+          }
+        })
+      );
+
+      await expect(
+        readJsonMessageMatching(client, (message) => isRecord(message) && message.id === 2)
+      ).resolves.toMatchObject({
+        id: 2,
+        result: [
+          {
+            chatId: '123',
+            messageId: '501',
+            text: 'gateway searchable message'
+          }
+        ]
+      });
+
+      client.send(
+        JSON.stringify({
+          id: 3,
+          method: 'telegram.searchMessages',
+          params: {
+            query: 'searchable'
+          }
+        })
+      );
+
+      await expect(
+        readJsonMessageMatching(client, (message) => isRecord(message) && message.id === 3)
+      ).resolves.toMatchObject({
+        id: 3,
+        result: [
+          {
+            chatId: '123',
+            messageId: '501'
+          }
+        ]
+      });
     } finally {
       client.close();
       await server.close();
