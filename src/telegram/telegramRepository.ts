@@ -142,9 +142,14 @@ export function createTelegramRepository(database: Database): TelegramRepository
       const row = database
         .prepare(
           `
-            SELECT telegram_chat_id, title, type, updated_at
-            FROM telegram_chats
-            WHERE telegram_chat_id = ?
+            SELECT
+              c.telegram_chat_id,
+              ${chatDisplayTitleSql()} AS title,
+              c.type,
+              c.updated_at
+            FROM telegram_chats c
+            ${chatUserJoinSql()}
+            WHERE c.telegram_chat_id = ?
           `
         )
         .get(chatId) as ChatRow | undefined;
@@ -222,14 +227,18 @@ export function createTelegramRepository(database: Database): TelegramRepository
       const rows = database
         .prepare(
           `
-            SELECT DISTINCT c.telegram_chat_id, c.title, c.type, c.updated_at
+            SELECT DISTINCT
+              c.telegram_chat_id,
+              ${chatDisplayTitleSql()} AS title,
+              c.type,
+              c.updated_at
             ${listQuery.from}
             ${
               hasQuery
-                ? `${listQuery.where.length > 0 ? `${listQuery.where} AND` : 'WHERE'} (c.title LIKE ? ESCAPE '\\' OR c.telegram_chat_id LIKE ? ESCAPE '\\')`
+                ? `${listQuery.where.length > 0 ? `${listQuery.where} AND` : 'WHERE'} (${chatDisplayTitleSql()} LIKE ? ESCAPE '\\' OR c.telegram_chat_id LIKE ? ESCAPE '\\')`
                 : listQuery.where
             }
-            ORDER BY c.updated_at DESC, c.title ASC
+            ORDER BY c.updated_at DESC, title ASC
             LIMIT ?
           `
         )
@@ -761,7 +770,7 @@ function chatListQuery(input: TelegramChatCountInput): {
 } {
   if (input.list === undefined) {
     return {
-      from: 'FROM telegram_chats c',
+      from: `FROM telegram_chats c ${chatUserJoinSql()}`,
       params: [],
       where: ''
     };
@@ -769,7 +778,7 @@ function chatListQuery(input: TelegramChatCountInput): {
 
   if (input.list === 'folder' && input.folderId === undefined) {
     return {
-      from: 'FROM telegram_chats c',
+      from: `FROM telegram_chats c ${chatUserJoinSql()}`,
       params: [],
       where: 'WHERE 1 = 0'
     };
@@ -778,6 +787,7 @@ function chatListQuery(input: TelegramChatCountInput): {
   return {
     from: `
       FROM telegram_chats c
+      ${chatUserJoinSql()}
       JOIN telegram_chat_list_memberships m
         ON m.telegram_chat_id = c.telegram_chat_id
     `,
@@ -815,6 +825,29 @@ function normalizeMessageListLimit(
   }
 
   return Math.min(value, max);
+}
+
+function chatDisplayTitleSql(): string {
+  const fullName = "trim(coalesce(u.first_name, '') || ' ' || coalesce(u.last_name, ''))";
+
+  return `
+    CASE
+      WHEN trim(c.title) <> '' THEN c.title
+      WHEN u.is_self = 1 THEN 'Saved Messages'
+      WHEN ${fullName} <> '' THEN ${fullName}
+      WHEN trim(coalesce(u.username, '')) <> '' THEN u.username
+      WHEN json_extract(u.raw_json, '$.type._') = 'userTypeDeleted' THEN 'Deleted Account'
+      WHEN c.type = 'private' THEN 'Unknown User'
+      ELSE c.telegram_chat_id
+    END
+  `;
+}
+
+function chatUserJoinSql(): string {
+  return `
+    LEFT JOIN telegram_users u
+      ON u.telegram_user_id = CAST(json_extract(c.raw_json, '$.type.user_id') AS TEXT)
+  `;
 }
 
 function likePattern(value: string): string {

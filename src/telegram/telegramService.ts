@@ -132,6 +132,7 @@ export function createTelegramService(dependencies: TelegramServiceDependencies)
             _: 'updateNewChat',
             chat: rawChat
           });
+          await ingestPrivateChatUser(service, tdlibClient, rawChat);
         }
       }
 
@@ -146,7 +147,10 @@ export function createTelegramService(dependencies: TelegramServiceDependencies)
     },
     async getChat(chatId): Promise<TelegramChatDto | undefined> {
       const storedChat = dependencies.repository.getChat(chatId);
-      if (storedChat !== undefined || tdlibClient === undefined) {
+      if (
+        (storedChat !== undefined && !needsPrivateTitleHydration(storedChat)) ||
+        tdlibClient === undefined
+      ) {
         return storedChat;
       }
 
@@ -155,6 +159,7 @@ export function createTelegramService(dependencies: TelegramServiceDependencies)
         _: 'updateNewChat',
         chat: rawChat
       });
+      await ingestPrivateChatUser(service, tdlibClient, rawChat);
 
       return dependencies.repository.getChat(chatId);
     },
@@ -495,6 +500,39 @@ async function getChatOrUndefined(
   }
 }
 
+async function ingestPrivateChatUser(
+  service: TelegramService,
+  tdlibClient: TelegramTdlibClient,
+  chat: unknown
+): Promise<void> {
+  const userId = privateChatUserId(chat);
+  if (userId === undefined) {
+    return;
+  }
+
+  try {
+    await service.ingestUpdate({
+      _: 'updateUser',
+      user: await tdlibClient.getUser(userId)
+    });
+  } catch (error) {
+    if (!isTdlibNotFound(error)) {
+      throw error;
+    }
+  }
+}
+
+function privateChatUserId(chat: unknown): string | undefined {
+  const record = readRecord(chat);
+  const type = readRecord(record?.type);
+  if (type?._ !== 'chatTypePrivate') {
+    return undefined;
+  }
+
+  const userId = type.user_id ?? type.userId;
+  return typeof userId === 'number' || typeof userId === 'string' ? String(userId) : undefined;
+}
+
 async function getLastMessageNoLaterThan(
   tdlibClient: TelegramTdlibClient,
   chatId: string,
@@ -513,6 +551,10 @@ async function getLastMessageNoLaterThan(
 
 function historySyncChats(chats: TelegramChatDto[]): TelegramChatDto[] {
   return chats.filter((chat) => isHistorySyncChatType(chat.type));
+}
+
+function needsPrivateTitleHydration(chat: TelegramChatDto): boolean {
+  return chat.type === 'private' && (chat.title === chat.id || chat.title === 'Unknown User');
 }
 
 function isHistorySyncChatType(type: string): boolean {

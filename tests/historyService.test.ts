@@ -192,6 +192,16 @@ function createFakeHistoryTdlibClient(): TelegramTdlibClient {
     getChats: () => Promise.resolve({ _: 'chats', chat_ids: [42] }),
     getMessage: (_chatId, messageId) =>
       Promise.resolve(telegramTextMessage(Number(messageId), 1_704_067_230, 'from history')),
+    getUser: () =>
+      Promise.resolve({
+        _: 'user',
+        first_name: 'Backfill',
+        id: 42,
+        last_name: 'User',
+        type: {
+          _: 'userTypeRegular'
+        }
+      }),
     loadChats: () => Promise.resolve(),
     login: () => Promise.resolve(),
     onError: () => ({

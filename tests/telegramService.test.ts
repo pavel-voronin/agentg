@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 
 import { createApp } from '../src/app/createApp.js';
 import type { AppEvent } from '../src/bus/events.js';
+import type { TelegramTdlibClient } from '../src/telegram/tdlibClient.js';
 
 describe('TelegramService', () => {
   it('ingests TDLib updates and returns DTOs without raw TDLib leakage', async () => {
@@ -170,4 +171,182 @@ describe('TelegramService', () => {
       await app.stop();
     }
   });
+
+  it('uses private user names when TDLib chat title is empty', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'agentg-telegram-names-'));
+    const app = createApp({
+      cwd,
+      env: {
+        AGENTG_SQLITE_PATH: './telegram-names.sqlite'
+      }
+    });
+
+    try {
+      await app.services.telegram.ingestUpdate({
+        _: 'updateNewChat',
+        chat: {
+          _: 'chat',
+          id: 149725525,
+          title: '',
+          type: {
+            _: 'chatTypePrivate',
+            user_id: 149725525
+          }
+        }
+      });
+      await app.services.telegram.ingestUpdate({
+        _: 'updateUser',
+        user: {
+          _: 'user',
+          first_name: 'Ivan',
+          id: 149725525,
+          last_name: 'Petrov',
+          type: {
+            _: 'userTypeRegular'
+          }
+        }
+      });
+
+      await expect(app.services.telegram.getChat('149725525')).resolves.toEqual({
+        id: '149725525',
+        title: 'Ivan Petrov',
+        type: 'private',
+        updatedAt: expect.any(String) as string
+      });
+      expect(app.services.history.listChats({ query: 'Ivan' }).chats).toEqual([
+        expect.objectContaining({
+          id: '149725525',
+          title: 'Ivan Petrov'
+        })
+      ]);
+    } finally {
+      await app.stop();
+    }
+  });
+
+  it('hydrates an already stored private chat when its title fell back to id', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'agentg-telegram-hydrate-name-'));
+    const app = createApp({
+      cwd,
+      env: {
+        AGENTG_SQLITE_PATH: './telegram-hydrate-name.sqlite'
+      }
+    });
+
+    try {
+      await app.services.telegram.ingestUpdate({
+        _: 'updateNewChat',
+        chat: {
+          _: 'chat',
+          id: 149725525,
+          title: '',
+          type: {
+            _: 'chatTypePrivate',
+            user_id: 149725525
+          }
+        }
+      });
+
+      await expect(app.services.telegram.getChat('149725525')).resolves.toMatchObject({
+        title: 'Unknown User'
+      });
+
+      app.services.telegram.setTdlibClient(createPrivateNameTdlibClient());
+
+      await expect(app.services.telegram.getChat('149725525')).resolves.toMatchObject({
+        id: '149725525',
+        title: 'Ivan Petrov',
+        type: 'private'
+      });
+    } finally {
+      await app.stop();
+    }
+  });
+
+  it('shows a human fallback for deleted private users without leaking numeric ids as names', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'agentg-telegram-deleted-name-'));
+    const app = createApp({
+      cwd,
+      env: {
+        AGENTG_SQLITE_PATH: './telegram-deleted-name.sqlite'
+      }
+    });
+
+    try {
+      await app.services.telegram.ingestUpdate({
+        _: 'updateNewChat',
+        chat: {
+          _: 'chat',
+          id: 149725525,
+          title: '',
+          type: {
+            _: 'chatTypePrivate',
+            user_id: 149725525
+          }
+        }
+      });
+      await app.services.telegram.ingestUpdate({
+        _: 'updateUser',
+        user: {
+          _: 'user',
+          first_name: '',
+          id: 149725525,
+          last_name: '',
+          type: {
+            _: 'userTypeDeleted'
+          }
+        }
+      });
+
+      await expect(app.services.telegram.getChat('149725525')).resolves.toMatchObject({
+        id: '149725525',
+        title: 'Deleted Account',
+        type: 'private'
+      });
+    } finally {
+      await app.stop();
+    }
+  });
 });
+
+function createPrivateNameTdlibClient(): TelegramTdlibClient {
+  return {
+    close: () => Promise.resolve(),
+    getChat: () =>
+      Promise.resolve({
+        _: 'chat',
+        id: 149725525,
+        title: '',
+        type: {
+          _: 'chatTypePrivate',
+          user_id: 149725525
+        }
+      }),
+    getChatHistory: () => Promise.resolve({ _: 'messages', messages: [] }),
+    getChatMessageByDate: () => Promise.resolve(undefined),
+    getChats: () => Promise.resolve({ _: 'chats', chat_ids: [] }),
+    getMessage: () => Promise.resolve(undefined),
+    getUser: () =>
+      Promise.resolve({
+        _: 'user',
+        first_name: 'Ivan',
+        id: 149725525,
+        last_name: 'Petrov',
+        type: {
+          _: 'userTypeRegular'
+        }
+      }),
+    loadChats: () => Promise.resolve(),
+    login: () => Promise.resolve(),
+    onError: () => ({
+      unsubscribe() {
+        return;
+      }
+    }),
+    onUpdate: () => ({
+      unsubscribe() {
+        return;
+      }
+    })
+  };
+}

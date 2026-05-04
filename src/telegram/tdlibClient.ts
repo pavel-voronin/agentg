@@ -17,6 +17,7 @@ export type TelegramTdlibClient = {
   getChatMessageByDate(chatId: string, endAt: Date): Promise<unknown>;
   getChats(input: TelegramTdlibChatListRequest): Promise<unknown>;
   getMessage(chatId: string, messageId: string): Promise<unknown>;
+  getUser(userId: string): Promise<unknown>;
   loadChats(input: TelegramTdlibChatListRequest): Promise<void>;
   login(): Promise<void>;
   onError(handler: (error: Error) => void): TdlibSubscription;
@@ -128,6 +129,12 @@ export function createTelegramTdlibClientAdapter(client: Client): TelegramTdlibC
         _: 'getMessage',
         chat_id: parseTelegramIntegerId(chatId),
         message_id: parseTelegramIntegerId(messageId)
+      });
+    },
+    async getUser(userId): Promise<unknown> {
+      return await invokeTdlib(client, {
+        _: 'getUser',
+        user_id: parseTelegramIntegerId(userId)
       });
     },
     async loadChats(input): Promise<void> {
