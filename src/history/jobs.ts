@@ -9,7 +9,7 @@ export const TELEGRAM_HISTORY_PAST_BOUNDARY = new Date('2013-08-14T00:00:00.000Z
 
 export type HistoryJobCursor = Record<string, unknown>;
 
-export type HistoryJobStatus = 'queued' | 'running' | 'completed' | 'failed';
+export type HistoryJobStatus = 'queued' | 'running';
 
 export type HistoryJob = HistoryBackfillJobInput & {
   createdAt: string;

@@ -161,6 +161,9 @@ describe('HistoryService', () => {
         pendingJobs: 0,
         runningJobs: 0
       });
+      await expect(app.services.history.getChatHistoryState('42')).resolves.toMatchObject({
+        jobs: []
+      });
     } finally {
       await app.stop();
     }
@@ -217,7 +220,11 @@ function createFakeHistoryTdlibClient(): TelegramTdlibClient {
   };
 }
 
-function telegramTextMessage(messageId: number, date: number, text: string): Record<string, unknown> {
+function telegramTextMessage(
+  messageId: number,
+  date: number,
+  text: string
+): Record<string, unknown> {
   return {
     _: 'message',
     chat_id: 42,

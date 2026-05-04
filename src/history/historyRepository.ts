@@ -27,10 +27,7 @@ export type HistoryRepository = {
   upsertTarget(target: HistoryTarget): HistoryTarget;
 };
 
-export type HistoryJobCheckpoint = Pick<
-  BackfillPageCheckpoint,
-  'complete' | 'remainingEndAt'
-> & {
+export type HistoryJobCheckpoint = Pick<BackfillPageCheckpoint, 'complete' | 'remainingEndAt'> & {
   coveredInterval?: HistoryCoverageInterval;
   cursor?: HistoryJobCursor;
 };
@@ -152,10 +149,7 @@ export function createHistoryRepository(database: Database): HistoryRepository {
         database
           .prepare(
             `
-              UPDATE history_jobs
-              SET status = 'completed',
-                  cursor_json = NULL,
-                  updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+              DELETE FROM history_jobs
               WHERE id = ?
             `
           )
@@ -416,7 +410,7 @@ export function createHistoryRepository(database: Database): HistoryRepository {
         const stat = chatStatsFor(stats, row.telegram_chat_id);
         if (row.status === 'queued') {
           stat.pendingJobs = row.count;
-        } else if (row.status === 'running') {
+        } else {
           stat.runningJobs = row.count;
         }
       }
@@ -451,6 +445,7 @@ export function createHistoryRepository(database: Database): HistoryRepository {
               updated_at
             FROM history_jobs
             WHERE telegram_chat_id = ?
+              AND status IN ('queued', 'running')
             ORDER BY created_at DESC, id DESC
           `
         )
