@@ -1,10 +1,5 @@
 import 'dotenv/config';
 
-import {
-  readInternalTrpcClientConfig as readTelegramInternalTrpcClientConfig,
-  type InternalTrpcClientConfig as TelegramInternalTrpcClientConfig
-} from '@agentg/telegram/rpc';
-
 export type InternalServiceConfig = {
   url: string;
 };
@@ -24,7 +19,7 @@ export type GatewayConfig = {
       summaries?: InternalServiceConfig | undefined;
     };
     history: InternalServiceConfig;
-    telegram: TelegramInternalTrpcClientConfig;
+    telegram: InternalServiceConfig;
   };
 };
 
@@ -62,7 +57,7 @@ export function loadGatewayConfig(env: NodeJS.ProcessEnv = process.env): Gateway
         urlEnv: 'HISTORY_RPC_URL',
         defaultUrl: 'http://127.0.0.1:18082'
       }),
-      telegram: readTelegramInternalTrpcClientConfig(env, {
+      telegram: readInternalServiceConfig(env, {
         urlEnv: 'TELEGRAM_RPC_URL',
         defaultUrl: 'http://127.0.0.1:18081'
       })

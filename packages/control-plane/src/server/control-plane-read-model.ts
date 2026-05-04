@@ -1,11 +1,11 @@
 import type { createHistoryRpcClient } from '@agentg/history-sync/rpc';
+
 import type {
   TelegramChatDirectoryEntry,
   TelegramChatFolder,
+  TelegramDirectoryClient,
   TelegramChatTypeCount
-} from '@agentg/telegram/rpc';
-
-import type { TelegramDirectoryClient } from './telegram-client.js';
+} from './telegram-client.js';
 
 type HistoryRpcClient = ReturnType<typeof createHistoryRpcClient>;
 

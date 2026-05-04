@@ -1,45 +1,44 @@
 import type { Server } from 'node:http';
 
-import {
-  telegramHistoryChatSchema,
-  telegramHistoryFetchPageInputSchema,
-  telegramHistoryFetchPageResultSchema,
-  telegramHistoryListChatsInputSchema,
-  telegramRpcRouter,
-  rpc
-} from '@agentg/telegram/rpc';
 import { createHTTPServer } from '@trpc/server/adapters/standalone';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
 import { createTrpcTelegramHistoryClient } from '../../src/telegram-client.js';
+import { testRpc, testRpcRouter } from '../trpc-test.js';
+
+const telegramHistoryFetchPageInputSchema = z.object({
+  chatId: z.string().min(1),
+  cursorMessageId: z.number().int().optional(),
+  endAt: z.string().min(1),
+  limit: z.number().int().positive(),
+  startAt: z.string().min(1)
+});
+const telegramHistoryListChatsInputSchema = z.object({
+  discover: z.boolean().optional(),
+  loadBatchSize: z.number().int().positive().optional()
+});
 
 describe('createTrpcTelegramHistoryClient', () => {
-  it('calls Telegram History through the domain-owned tRPC router shape', async () => {
-    const router = telegramRpcRouter({
-      fetchPage: rpc
-        .input(telegramHistoryFetchPageInputSchema)
-        .output(telegramHistoryFetchPageResultSchema)
-        .mutation(({ input }) => ({
-          crossedStart: false,
-          fetchedMessages: 2,
-          kind: 'page',
-          nextCursorMessageId: 99,
-          oldestFetchedMessageDate: input.startAt,
-          reachedBeginning: false,
-          storedMessages: 1
-        })),
-      listChats: rpc
-        .input(telegramHistoryListChatsInputSchema)
-        .output(z.array(telegramHistoryChatSchema))
-        .query(({ input }) => [
-          {
-            _model: 'telegram.chat',
-            id: input.discover === true ? 'chat-discovered' : 'chat-known',
-            title: 'Saved Messages',
-            type: 'private'
-          }
-        ])
+  it('calls Telegram History through the domain-owned RPC client', async () => {
+    const router = testRpcRouter({
+      fetchPage: testRpc.input(telegramHistoryFetchPageInputSchema).mutation(({ input }) => ({
+        crossedStart: false,
+        fetchedMessages: 2,
+        kind: 'page',
+        nextCursorMessageId: 99,
+        oldestFetchedMessageDate: input.startAt,
+        reachedBeginning: false,
+        storedMessages: 1
+      })),
+      listChats: testRpc.input(telegramHistoryListChatsInputSchema).query(({ input }) => [
+        {
+          _model: 'telegram.chat',
+          id: input.discover === true ? 'chat-discovered' : 'chat-known',
+          title: 'Saved Messages',
+          type: 'private'
+        }
+      ])
     });
     const server = createHTTPServer({ router });
     const port = await listenEphemeral(server);

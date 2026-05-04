@@ -1,14 +1,13 @@
 import 'dotenv/config';
 
-import {
-  readInternalTrpcClientConfig as readTelegramInternalTrpcClientConfig,
-  type InternalTrpcClientConfig as TelegramInternalTrpcClientConfig
-} from '@agentg/telegram/rpc';
 import { resolve } from 'node:path';
 
-export type HistoryServiceConfig = {
+type InternalServiceConfig = {
   url: string;
 };
+
+export type HistoryServiceConfig = InternalServiceConfig;
+export type TelegramServiceConfig = InternalServiceConfig;
 
 export type ControlPlaneConfig = {
   controlPlane: {
@@ -21,7 +20,7 @@ export type ControlPlaneConfig = {
   };
   services: {
     history: HistoryServiceConfig;
-    telegram: TelegramInternalTrpcClientConfig;
+    telegram: TelegramServiceConfig;
   };
 };
 
@@ -38,11 +37,11 @@ export function loadControlPlaneConfig(env: NodeJS.ProcessEnv = process.env): Co
       url: env.NATS_URL ?? 'nats://localhost:4222'
     },
     services: {
-      history: readHistoryServiceConfig(env, {
+      history: readInternalServiceConfig(env, {
         defaultUrl: 'http://127.0.0.1:18082',
         urlEnv: 'HISTORY_RPC_URL'
       }),
-      telegram: readTelegramInternalTrpcClientConfig(env, {
+      telegram: readInternalServiceConfig(env, {
         defaultUrl: 'http://127.0.0.1:18081',
         urlEnv: 'TELEGRAM_RPC_URL'
       })
@@ -50,19 +49,19 @@ export function loadControlPlaneConfig(env: NodeJS.ProcessEnv = process.env): Co
   };
 }
 
-function readHistoryServiceConfig(
+function readInternalServiceConfig(
   env: NodeJS.ProcessEnv,
   options: {
     defaultUrl: string;
     urlEnv: string;
   }
-): HistoryServiceConfig {
+): InternalServiceConfig {
   return {
-    url: parseHistoryServiceUrl(env[options.urlEnv] ?? options.defaultUrl, options.urlEnv)
+    url: parseInternalServiceUrl(env[options.urlEnv] ?? options.defaultUrl, options.urlEnv)
   };
 }
 
-function parseHistoryServiceUrl(value: string, name: string): string {
+function parseInternalServiceUrl(value: string, name: string): string {
   let url: URL;
 
   try {

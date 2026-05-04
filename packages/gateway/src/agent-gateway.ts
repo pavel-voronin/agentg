@@ -1,6 +1,5 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 
-import type { InternalTrpcClientConfig as TelegramInternalTrpcClientConfig } from '@agentg/telegram/rpc';
 import type { EventBus, EventSubscription } from '@agentg/shared/events/bus';
 import type { IntegrationEvent } from '@agentg/shared/events/envelope';
 import {
@@ -54,7 +53,7 @@ export type AgentGatewayOptions = {
       summaries?: InternalServiceConfig | undefined;
     };
     history: InternalServiceConfig;
-    telegram: TelegramInternalTrpcClientConfig;
+    telegram: InternalServiceConfig;
   };
 };
 

@@ -1,21 +1,31 @@
 import type { Server } from 'node:http';
 
-import {
-  telegramGetChatInputSchema,
-  telegramGetChatOutputSchema,
-  telegramGetMessageInputSchema,
-  telegramGetMessageOutputSchema,
-  telegramListRecentMessagesInputSchema,
-  telegramListRecentMessagesOutputSchema,
-  telegramRpcRouter,
-  rpc,
-  telegramSearchMessagesInputSchema,
-  telegramSearchMessagesOutputSchema
-} from '@agentg/telegram/rpc';
 import { createHTTPServer } from '@trpc/server/adapters/standalone';
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 
 import { createTrpcGatewayTelegramClient } from '../src/telegram-reads.js';
+import { testRpc, testRpcRouter } from './trpc-test.js';
+
+const nonEmptyStringSchema = z.string().trim().min(1);
+const telegramGetChatInputSchema = z.object({
+  chatId: nonEmptyStringSchema
+});
+const telegramGetMessageInputSchema = z.object({
+  chatId: nonEmptyStringSchema,
+  messageId: nonEmptyStringSchema
+});
+const telegramListRecentMessagesInputSchema = z
+  .object({
+    chatId: nonEmptyStringSchema.optional(),
+    limit: z.number().int().positive().optional()
+  })
+  .default({});
+const telegramSearchMessagesInputSchema = z.object({
+  chatId: nonEmptyStringSchema.optional(),
+  limit: z.number().int().positive().optional(),
+  query: nonEmptyStringSchema
+});
 
 describe('createTrpcGatewayTelegramClient', () => {
   it('calls Telegram-owned read procedures for Gateway telegram RPC names', async () => {
@@ -34,49 +44,39 @@ describe('createTrpcGatewayTelegramClient', () => {
       updatedAt: '2026-05-01T00:00:01.000Z'
     };
     const server = createHTTPServer({
-      router: telegramRpcRouter({
-        getChat: rpc
-          .input(telegramGetChatInputSchema)
-          .output(telegramGetChatOutputSchema)
-          .query(({ input }) => {
-            calls.push({ method: 'getChat', params: input });
-            return {
-              chat: {
-                _model: 'telegram.chat',
-                id: input.chatId,
-                title: 'Saved Messages',
-                type: 'private',
-                updatedAt: '2026-05-01T00:00:00.000Z'
-              }
-            };
-          }),
-        getMessage: rpc
-          .input(telegramGetMessageInputSchema)
-          .output(telegramGetMessageOutputSchema)
-          .query(({ input }) => {
-            calls.push({ method: 'getMessage', params: input });
-            return {
-              message
-            };
-          }),
-        listRecentMessages: rpc
+      router: testRpcRouter({
+        getChat: testRpc.input(telegramGetChatInputSchema).query(({ input }) => {
+          calls.push({ method: 'getChat', params: input });
+          return {
+            chat: {
+              _model: 'telegram.chat',
+              id: input.chatId,
+              title: 'Saved Messages',
+              type: 'private',
+              updatedAt: '2026-05-01T00:00:00.000Z'
+            }
+          };
+        }),
+        getMessage: testRpc.input(telegramGetMessageInputSchema).query(({ input }) => {
+          calls.push({ method: 'getMessage', params: input });
+          return {
+            message
+          };
+        }),
+        listRecentMessages: testRpc
           .input(telegramListRecentMessagesInputSchema)
-          .output(telegramListRecentMessagesOutputSchema)
           .query(({ input }) => {
             calls.push({ method: 'listRecentMessages', params: input });
             return {
               messages: [message]
             };
           }),
-        searchMessages: rpc
-          .input(telegramSearchMessagesInputSchema)
-          .output(telegramSearchMessagesOutputSchema)
-          .query(({ input }) => {
-            calls.push({ method: 'searchMessages', params: input });
-            return {
-              messages: [message]
-            };
-          })
+        searchMessages: testRpc.input(telegramSearchMessagesInputSchema).query(({ input }) => {
+          calls.push({ method: 'searchMessages', params: input });
+          return {
+            messages: [message]
+          };
+        })
       })
     });
     const port = await listen(server);

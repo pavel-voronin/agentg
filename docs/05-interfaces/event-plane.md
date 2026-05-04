@@ -143,9 +143,11 @@ After reconnecting, consumers must rebuild state through these surfaces:
 
 Internal RPC contracts are owned by the serving domain package:
 
-- Telegram owns `@agentg/telegram/rpc`, including the Telegram History tRPC
-  router and schemas for `listChats`, `fetchPage`, Gateway Telegram reads, and
-  the stable Telegram read facts consumed by History Sync.
+- Telegram owns `@agentg/telegram/rpc`, whose only public export is
+  `createTelegramRpcClient`. The helper returns the explicit Telegram
+  procedures used by History Sync, Gateway, and Control Plane server. The
+  Telegram schemas, router, server bind config, storage schema, ingestion,
+  normalization, and TDLib plumbing remain package-internal.
 - History Sync owns `@agentg/history-sync/rpc`, whose only public export is
   `createHistoryRpcClient`. The helper returns the explicit History procedures
   used by Gateway and Control Plane server. The History schemas, router, server

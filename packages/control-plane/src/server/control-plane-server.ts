@@ -3,7 +3,6 @@ import { readFile } from 'node:fs/promises';
 import { extname, resolve, sep } from 'node:path';
 
 import { createHistoryRpcClient } from '@agentg/history-sync/rpc';
-import type { InternalTrpcClientConfig as TelegramInternalTrpcClientConfig } from '@agentg/telegram/rpc';
 import type { EventBus } from '@agentg/shared/events/bus';
 import type { IntegrationEvent } from '@agentg/shared/events/envelope';
 import { WebSocket, WebSocketServer, type RawData } from 'ws';
@@ -21,6 +20,9 @@ type HistoryRpcClient = ReturnType<typeof createHistoryRpcClient>;
 type HistoryServiceConfig = {
   url: string;
 };
+type TelegramServiceConfig = {
+  url: string;
+};
 
 export type ControlPlaneServerConfig = {
   host: string;
@@ -35,7 +37,7 @@ export type ControlPlaneServerOptions = {
   telegramClient?: TelegramDirectoryClient;
   services: {
     history: HistoryServiceConfig;
-    telegram: TelegramInternalTrpcClientConfig;
+    telegram: TelegramServiceConfig;
   };
 };
 

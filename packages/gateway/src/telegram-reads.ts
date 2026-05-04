@@ -1,102 +1,50 @@
-import { createTRPCClient, httpBatchLink, type TRPCClient } from '@trpc/client';
-import {
-  createInternalRpcCallOptionsHeaders,
-  internalRpcProcedureOptions,
-  type InternalRpcCallOptions
-} from '@agentg/shared/rpc/call-options';
-import {
-  telegramGetChatInputSchema,
-  telegramGetMessageInputSchema,
-  telegramListRecentMessagesInputSchema,
-  telegramSearchMessagesInputSchema,
-  type InternalTrpcClientConfig,
-  type TelegramHistoryRouter
-} from '@agentg/telegram/rpc';
+import { createTelegramRpcClient } from '@agentg/telegram/rpc';
 
 export type GatewayTelegramClient = {
-  call(method: string, params: unknown, options?: InternalRpcCallOptions): Promise<unknown>;
+  call(method: string, params: unknown): Promise<unknown>;
   close(): void;
 };
 
-export type GatewayTelegramClientOptions = {
-  timeoutMs?: number;
+type TelegramServiceConfig = {
+  url: string;
 };
+
+type TelegramRpcClient = ReturnType<typeof createTelegramRpcClient>;
 
 const DEFAULT_TELEGRAM_REQUEST_TIMEOUT_MS = 15000;
 
 export function createTrpcGatewayTelegramClient(
-  config: InternalTrpcClientConfig,
-  options: GatewayTelegramClientOptions = {}
+  config: TelegramServiceConfig
 ): GatewayTelegramClient {
-  const client = createTRPCClient<TelegramHistoryRouter>({
-    links: [
-      httpBatchLink({
-        headers: ({ opList }) => createInternalRpcCallOptionsHeaders(opList),
-        url: config.url
-      })
-    ]
+  const telegram = createTelegramRpcClient(config, {
+    timeoutMs: DEFAULT_TELEGRAM_REQUEST_TIMEOUT_MS
   });
-  const timeoutMs = options.timeoutMs ?? DEFAULT_TELEGRAM_REQUEST_TIMEOUT_MS;
 
   return {
-    call(method, params, callOptions) {
-      return withTimeout(
-        (signal) => callTelegramJsonRpcMethod(client, method, params, signal, callOptions),
-        timeoutMs
-      );
+    call(method, params) {
+      return callTelegramMethod(telegram, method, params);
     },
     close() {
-      return;
+      telegram.close();
     }
   };
 }
 
-async function callTelegramJsonRpcMethod(
-  client: TRPCClient<TelegramHistoryRouter>,
+function callTelegramMethod(
+  telegram: TelegramRpcClient,
   method: string,
-  params: unknown,
-  signal: AbortSignal,
-  callOptions?: InternalRpcCallOptions
+  params: unknown
 ): Promise<unknown> {
   switch (method) {
     case 'telegram.getChat':
-      return client.getChat.query(
-        telegramGetChatInputSchema.parse(params),
-        internalRpcProcedureOptions(callOptions, signal)
-      );
+      return telegram.getChat(params);
     case 'telegram.getMessage':
-      return client.getMessage.query(
-        telegramGetMessageInputSchema.parse(params),
-        internalRpcProcedureOptions(callOptions, signal)
-      );
+      return telegram.getMessage(params);
     case 'telegram.listRecentMessages':
-      return client.listRecentMessages.query(
-        telegramListRecentMessagesInputSchema.parse(params ?? {}),
-        internalRpcProcedureOptions(callOptions, signal)
-      );
+      return telegram.listRecentMessages(params);
     case 'telegram.searchMessages':
-      return client.searchMessages.query(
-        telegramSearchMessagesInputSchema.parse(params),
-        internalRpcProcedureOptions(callOptions, signal)
-      );
+      return telegram.searchMessages(params);
     default:
-      return undefined;
-  }
-}
-
-async function withTimeout<T>(
-  call: (signal: AbortSignal) => Promise<T>,
-  timeoutMs: number
-): Promise<T> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => {
-    controller.abort(new Error(`Telegram tRPC timed out after ${String(timeoutMs)}ms`));
-  }, timeoutMs);
-  timeout.unref();
-
-  try {
-    return await call(controller.signal);
-  } finally {
-    clearTimeout(timeout);
+      return Promise.resolve(undefined);
   }
 }

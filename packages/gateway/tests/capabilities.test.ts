@@ -6,12 +6,6 @@ import {
   extensionRegistryListInputSchema,
   extensionRegistryListOutputSchema
 } from '@agentg/shared/rpc/extensions';
-import {
-  telegramGetChatInputSchema,
-  telegramGetChatOutputSchema,
-  rpc as telegramRpc,
-  telegramRpcRouter
-} from '@agentg/telegram/rpc';
 import { createHTTPServer } from '@trpc/server/adapters/standalone';
 import { WebSocket, type RawData } from 'ws';
 import { z } from 'zod';
@@ -22,6 +16,9 @@ import { testRpc, testRpcRouter } from './trpc-test.js';
 
 const gatewayHandles: AgentGatewayServerHandle[] = [];
 const httpServers: Server[] = [];
+const telegramGetChatInputSchema = z.object({
+  chatId: z.string().trim().min(1)
+});
 
 describe('Agent Gateway capabilities', () => {
   afterEach(async () => {
@@ -186,19 +183,16 @@ describe('Agent Gateway capabilities', () => {
     const summariesPort = await listen(summariesServer);
 
     const telegramServer = createHTTPServer({
-      router: telegramRpcRouter({
-        getChat: telegramRpc
-          .input(telegramGetChatInputSchema)
-          .output(telegramGetChatOutputSchema)
-          .query(({ input }) => ({
-            chat: {
-              _model: 'telegram.chat',
-              id: input.chatId,
-              title: 'Alice',
-              type: 'private',
-              updatedAt: '2026-05-02T00:00:00.000Z'
-            }
-          }))
+      router: testRpcRouter({
+        getChat: testRpc.input(telegramGetChatInputSchema).query(({ input }) => ({
+          chat: {
+            _model: 'telegram.chat',
+            id: input.chatId,
+            title: 'Alice',
+            type: 'private',
+            updatedAt: '2026-05-02T00:00:00.000Z'
+          }
+        }))
       })
     });
     httpServers.push(telegramServer);
