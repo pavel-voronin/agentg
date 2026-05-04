@@ -33,9 +33,12 @@ npm run dev
 ```
 
 `npm run dev:control-plane` rebuilds the Control Plane UI on client changes.
+It starts a Vite dev server with HMR at `http://127.0.0.1:8790/` and proxies
+`/ws` to the monolith Control Plane edge.
+
 `npm run dev` runs the monolith through a watcher and reloads on runtime source
-changes. The monolith prints the local URLs and Telegram connection state at
-startup:
+changes. The monolith prints the static edge URLs and Telegram connection state
+at startup:
 
 ```json
 {
@@ -48,6 +51,15 @@ startup:
 
 In dev mode, Control Plane and Gateway are enabled by default unless the
 corresponding environment variables explicitly disable them.
+
+Open the Vite URL during frontend development:
+
+```text
+http://127.0.0.1:8790/
+```
+
+Open `http://127.0.0.1:8789/` only when checking the static Control Plane bundle
+served by the monolith.
 
 ## Runtime Shape
 
