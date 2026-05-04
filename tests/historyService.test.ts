@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { createApp } from '../src/app/createApp.js';
-import type { AppEvent } from '../src/bus/events.js';
+import { createAppEvent, type AppEvent } from '../src/bus/events.js';
 
 describe('HistoryService', () => {
   it('records Telegram message events through direct TelegramService DI', async () => {
@@ -24,6 +24,18 @@ describe('HistoryService', () => {
 
     try {
       await app.start();
+      await app.eventBus.publish(
+        createAppEvent({
+          data: {
+            authenticated: true,
+            configured: true,
+            connected: true
+          },
+          occurredAt: new Date(Date.now() - 2000),
+          source: 'test',
+          type: 'telegram.tdlib.status'
+        })
+      );
       await app.services.telegram.ingestUpdate({
         _: 'updateNewMessage',
         message: {

@@ -111,8 +111,8 @@ export function createApp(input: CreateAppInput = {}): AppRuntime {
       start(): void {
         historyService.start();
       },
-      stop(): void {
-        historyService.stop();
+      async stop(): Promise<void> {
+        await historyService.stop();
       }
     },
     {

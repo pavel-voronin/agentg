@@ -5,8 +5,8 @@ import { createAppEvent, type AppEvent } from '../bus/events.js';
 import type { TelegramService } from '../telegram/telegramService.js';
 import type { TelegramChatDto } from '../telegram/telegramRepository.js';
 import type { HistoryCoverageInterval } from './coverage.js';
-import { liveMessageCoverageInterval } from './coverage.js';
 import type { HistoryJob } from './jobs.js';
+import { createLiveCoverageObserver } from './liveCoverage.js';
 import type {
   HistoryBoundary,
   HistoryChatStats,
@@ -17,6 +17,8 @@ import type {
 } from './historyRepository.js';
 import { reconcileChat, type HistoryTarget as ReconcilerHistoryTarget } from './reconciler.js';
 
+const HISTORY_LIVE_COVERAGE_TICK_MS = 5000;
+
 export type HistoryService = {
   createBackfillJobs(input: CreateBackfillJobsInput): HistoryJob[];
   deleteTarget(targetId: string): HistoryTargetMutationResult;
@@ -26,7 +28,7 @@ export type HistoryService = {
   listChats(input: HistoryChatListInput): HistoryChatListResult;
   listMessages(chatId: string): HistoryMessage[];
   start(): void;
-  stop(): void;
+  stop(): Promise<void>;
   upsertTarget(input: HistoryTargetUpsertInput): HistoryTargetMutationResult;
 };
 
@@ -145,6 +147,21 @@ export type HistoryTargetMutationResult = {
 
 export function createHistoryService(dependencies: HistoryServiceDependencies): HistoryService {
   let subscriptions: EventSubscription[] = [];
+  let liveCoverageTick: ReturnType<typeof setInterval> | undefined;
+  const liveCoverageObserver = createLiveCoverageObserver({
+    addCoverageBatch(intervals): Promise<void> {
+      for (const interval of intervals) {
+        dependencies.repository.addCoverage(interval);
+      }
+      return Promise.resolve();
+    },
+    listChatIds(): Promise<string[]> {
+      return Promise.resolve(dependencies.telegramService.listChats().map((chat) => chat.id));
+    },
+    publishCoverageChanged(intervals): Promise<void> {
+      return publishLiveCoverageChanged(dependencies.eventBus, intervals);
+    }
+  });
 
   return {
     createBackfillJobs(input): HistoryJob[] {
@@ -250,19 +267,39 @@ export function createHistoryService(dependencies: HistoryServiceDependencies): 
       }
 
       subscriptions = [
-        dependencies.eventBus.subscribe('telegram.message.created', (event) =>
-          recordTelegramMessageEvent(dependencies, event)
-        ),
-        dependencies.eventBus.subscribe('telegram.message.updated', (event) =>
-          recordTelegramMessageEvent(dependencies, event)
+        dependencies.eventBus.subscribe('telegram.message.created', async (event) => {
+          const message = await recordTelegramMessageEvent(dependencies, event);
+          if (message?.messageDate !== undefined) {
+            await liveCoverageObserver.recordLiveMessage(
+              message.chatId,
+              new Date(message.messageDate),
+              new Date(event.occurredAt)
+            );
+          }
+        }),
+        dependencies.eventBus.subscribe('telegram.message.updated', async (event) => {
+          await recordTelegramMessageEvent(dependencies, event);
+        }),
+        dependencies.eventBus.subscribe('telegram.tdlib.status', (event) =>
+          handleTelegramTdlibStatus(liveCoverageObserver, event)
         )
       ];
+      liveCoverageTick = setInterval(() => {
+        void liveCoverageObserver.tick();
+      }, HISTORY_LIVE_COVERAGE_TICK_MS);
+      liveCoverageTick.unref();
     },
-    stop(): void {
+    async stop(): Promise<void> {
+      if (liveCoverageTick !== undefined) {
+        clearInterval(liveCoverageTick);
+        liveCoverageTick = undefined;
+      }
       for (const subscription of subscriptions) {
         subscription.unsubscribe();
       }
       subscriptions = [];
+      await liveCoverageObserver.markDisconnected();
+      await liveCoverageObserver.wait();
     },
     upsertTarget(input): HistoryTargetMutationResult {
       const range = targetRangeFromInput(input);
@@ -283,10 +320,10 @@ export function createHistoryService(dependencies: HistoryServiceDependencies): 
 async function recordTelegramMessageEvent(
   dependencies: HistoryServiceDependencies,
   event: AppEvent
-): Promise<void> {
+): Promise<HistoryMessage | undefined> {
   const messageReference = readTelegramMessageReference(event);
   if (messageReference === undefined) {
-    return;
+    return undefined;
   }
 
   const message = await dependencies.telegramService.getMessage(
@@ -294,18 +331,11 @@ async function recordTelegramMessageEvent(
     messageReference.messageId
   );
   if (message?.messageDate === undefined) {
-    return;
+    return undefined;
   }
 
   const observedAt = new Date(event.occurredAt);
   const recorded = dependencies.repository.recordTelegramMessage(message, observedAt);
-  const coverage = dependencies.repository.addCoverage(
-    liveMessageCoverageInterval({
-      chatId: message.chatId,
-      messageDate: new Date(message.messageDate),
-      observedUntil: observedAt
-    })
-  );
 
   if (recorded !== undefined) {
     await dependencies.eventBus.publish(
@@ -324,14 +354,37 @@ async function recordTelegramMessageEvent(
     );
   }
 
-  await dependencies.eventBus.publish(
+  return recorded;
+}
+
+async function handleTelegramTdlibStatus(
+  liveCoverageObserver: ReturnType<typeof createLiveCoverageObserver>,
+  event: AppEvent
+): Promise<void> {
+  const data = readRecord(event.data);
+  if (data?.connected === true) {
+    await liveCoverageObserver.markConnected(new Date(event.occurredAt));
+    return;
+  }
+
+  await liveCoverageObserver.markDisconnected();
+}
+
+async function publishLiveCoverageChanged(
+  eventBus: EventBus,
+  intervals: HistoryCoverageInterval[]
+): Promise<void> {
+  if (intervals.length === 0) {
+    return;
+  }
+
+  await eventBus.publish(
     createAppEvent({
       data: {
-        chatId: message.chatId,
-        intervalCount: coverage.length
-      },
-      meta: {
-        chatId: message.chatId
+        chatCount: new Set(intervals.map((interval) => interval.chatId)).size,
+        endAt: maxDateFromList(intervals.map((interval) => interval.endAt)).toISOString(),
+        intervalCount: intervals.length,
+        startAt: minDateFromList(intervals.map((interval) => interval.startAt)).toISOString()
       },
       source: 'history',
       type: 'history.coverage.changed'
@@ -478,4 +531,38 @@ function readRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null
     ? (value as Record<string, unknown>)
     : undefined;
+}
+
+function minDate(first: Date, ...rest: Date[]): Date;
+function minDate(...dates: Date[]): Date {
+  const [first, ...rest] = dates;
+  if (first === undefined) {
+    throw new Error('minDate requires at least one date');
+  }
+  return rest.reduce((minimum, date) => (date < minimum ? date : minimum), first);
+}
+
+function minDateFromList(dates: Date[]): Date {
+  const [first, ...rest] = dates;
+  if (first === undefined) {
+    throw new Error('minDateFromList requires at least one date');
+  }
+  return minDate(first, ...rest);
+}
+
+function maxDate(first: Date, ...rest: Date[]): Date;
+function maxDate(...dates: Date[]): Date {
+  const [first, ...rest] = dates;
+  if (first === undefined) {
+    throw new Error('maxDate requires at least one date');
+  }
+  return rest.reduce((maximum, date) => (date > maximum ? date : maximum), first);
+}
+
+function maxDateFromList(dates: Date[]): Date {
+  const [first, ...rest] = dates;
+  if (first === undefined) {
+    throw new Error('maxDateFromList requires at least one date');
+  }
+  return maxDate(first, ...rest);
 }
