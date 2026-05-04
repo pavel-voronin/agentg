@@ -6,7 +6,6 @@ import {
   type CapabilityRegistration,
   type CapabilityRegistry
 } from '@agentg/shared/rpc/capabilities';
-import { isProcedureErrorEnvelope, ProcedureDomainError } from '@agentg/shared/rpc/envelope';
 import { createTRPCUntypedClient, httpBatchLink } from '@trpc/client';
 
 export const DEFAULT_GATEWAY_CAPABILITY_CALL_TIMEOUT_MS = 15_000;
@@ -55,21 +54,10 @@ export function createTrpcGatewayCapabilityCaller(): GatewayCapabilityCaller {
         })
       ]
     });
-    const response =
-      capability.rpcType === 'mutation'
-        ? await client.mutation(capability.rpcMethod, input, { signal })
-        : await client.query(capability.rpcMethod, input, { signal });
-
-    return unwrapCapabilityResponse(response);
+    return capability.rpcType === 'mutation'
+      ? client.mutation(capability.rpcMethod, input, { signal })
+      : client.query(capability.rpcMethod, input, { signal });
   };
-}
-
-function unwrapCapabilityResponse(response: unknown): unknown {
-  if (isProcedureErrorEnvelope(response)) {
-    throw new ProcedureDomainError(response.error);
-  }
-
-  return response;
 }
 
 async function withTimeout<T>(

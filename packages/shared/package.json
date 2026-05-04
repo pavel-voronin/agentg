@@ -16,7 +16,6 @@
     "./rpc/capabilities": "./src/rpc/capabilities.ts",
     "./rpc/call-options": "./src/rpc/call-options.ts",
     "./rpc/call-events": "./src/rpc/call-events.ts",
-    "./rpc/envelope": "./src/rpc/envelope.ts",
     "./rpc/extensions": "./src/rpc/extensions.ts",
     "./rpc/model-refs": "./src/rpc/model-refs.ts"
   },

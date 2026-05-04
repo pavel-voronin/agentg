@@ -1,8 +1,7 @@
 import type { EventBus } from '../events/bus.js';
 import { createIntegrationEvent, type IntegrationEvent } from '../events/envelope.js';
-import type { JsonObject } from '../json.js';
+import type { JsonObject, JsonValue } from '../json.js';
 import { toJsonValue } from '../json.js';
-import type { DomainError } from './envelope.js';
 
 export const RPC_CALL_STARTED_EVENT_SUFFIX = 'started';
 export const RPC_CALL_PROGRESS_EVENT_SUFFIX = 'progress';
@@ -16,6 +15,12 @@ export type RpcCallEventSuffix =
   | typeof RPC_CALL_FAILED_EVENT_SUFFIX;
 
 export type RpcProgressData = JsonObject;
+
+export type RpcCallError = {
+  code: string;
+  details?: JsonValue | undefined;
+  message: string;
+};
 
 export type RpcCallEventBase = {
   callId: string;
@@ -36,7 +41,7 @@ export type RpcCallCompletedEventInput = RpcCallEventBase & {
 };
 
 export type RpcCallFailedEventInput = RpcCallEventBase & {
-  error: DomainError;
+  error: RpcCallError;
   output?: unknown;
 };
 
@@ -135,7 +140,7 @@ export function publishRpcCallEvent(eventBus: EventBus | undefined, event: Integ
   }
 }
 
-export function errorFromUnknown(error: unknown): DomainError {
+export function errorFromUnknown(error: unknown): RpcCallError {
   if (error instanceof Error) {
     return {
       code: 'internal_error',

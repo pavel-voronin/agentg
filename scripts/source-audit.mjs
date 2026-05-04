@@ -111,11 +111,7 @@ function auditGatewayCapabilities() {
     "'capabilities.list'",
     "'capabilities.call'"
   ];
-  const requiredCapabilityTokens = [
-    'createTrpcGatewayCapabilityCaller',
-    'unwrapCapabilityResponse',
-    'withTimeout'
-  ];
+  const requiredCapabilityTokens = ['createTrpcGatewayCapabilityCaller', 'withTimeout'];
   const requiredTestTokens = [
     'registers, refreshes, lists, and removes stale capabilities',
     'proxies capability calls to the owning module tRPC method'
@@ -158,8 +154,12 @@ function auditNoDomainEnrichedRuntime(files) {
     'createTrpcExtensionCallerResolver',
     'ExtensionCallerResolver',
     'extensionCallInputSchema',
+    '@agentg/shared/rpc/envelope',
+    'ProcedureErrorEnvelope',
+    'ProcedureDomainError',
     'ProcedureExtensionEnvelope',
     'ProcedureExtensions',
+    'isProcedureErrorEnvelope',
     'isProcedureSuccessEnvelope'
   ];
 

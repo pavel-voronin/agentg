@@ -154,8 +154,8 @@ directly.
 
 There is no shared internal domain RPC contracts package. `@agentg/shared` owns
 only cross-cutting helpers such as the event envelope, event bus abstraction,
-standard RPC envelope, call lifecycle events, capability contracts, extension
-contracts, and module runtime helpers.
+call lifecycle events, capability contracts, extension registry contracts, model
+markers, and module runtime helpers.
 
 ## Removed Command Subjects
 

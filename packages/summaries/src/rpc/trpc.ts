@@ -17,7 +17,6 @@ import {
   publishRpcCallEvent,
   type RpcProgressData
 } from '@agentg/shared/rpc/call-events';
-import { isProcedureErrorEnvelope } from '@agentg/shared/rpc/envelope';
 import { initTRPC } from '@trpc/server';
 import type { CreateHTTPContextOptions } from '@trpc/server/adapters/standalone';
 import { treeifyError, ZodError } from 'zod';
@@ -131,24 +130,6 @@ const lifecycleMiddleware = summariesRpc.middleware(
             callId,
             error: errorFromUnknown(result.error),
             input: eventInput,
-            source: SUMMARIES_RPC_SOURCE,
-            startedAt,
-            target
-          })
-        );
-      }
-      return result;
-    }
-
-    if (isProcedureErrorEnvelope(result.data)) {
-      if (publishLifecycle) {
-        publishRpcCallEvent(
-          eventBus,
-          createRpcCallFailedEvent({
-            callId,
-            error: result.data.error,
-            input: eventInput,
-            output: result.data,
             source: SUMMARIES_RPC_SOURCE,
             startedAt,
             target
