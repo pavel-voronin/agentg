@@ -178,7 +178,6 @@ const lifecycleMiddleware = summariesRpc.middleware(
 
 export const summariesRpcRouter = summariesRpc.router;
 export const rpc = summariesRpc.procedure.use(lifecycleMiddleware);
-export const extension = rpc;
 
 function optionalHeader(value: string | string[] | undefined): string | undefined {
   const firstValue = Array.isArray(value) ? value[0] : value;

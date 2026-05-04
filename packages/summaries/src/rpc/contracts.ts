@@ -1,4 +1,3 @@
-import { extensionCallInputSchema } from '@agentg/shared/rpc/extensions';
 import { z } from 'zod';
 
 const nonEmptyStringSchema = z.string().trim().min(1);
@@ -67,9 +66,14 @@ export const summariesReadSummaryRunOutputSchema = z.object({
   run: summaryRunSchema.nullable()
 });
 
-export const summariesChatSummaryExtensionInputSchema = extensionCallInputSchema;
+export const summariesChatSummaryInputSchema = z
+  .object({
+    _model: z.literal('telegram.chat'),
+    id: nonEmptyStringSchema
+  })
+  .catchall(z.unknown());
 
-export const summariesChatSummaryExtensionOutputSchema = z.object({
+export const summariesChatSummaryOutputSchema = z.object({
   invalidation: summaryInvalidationSchema.nullable(),
   stale: z.boolean(),
   summary: summaryResultSchema.nullable()
@@ -78,3 +82,4 @@ export const summariesChatSummaryExtensionOutputSchema = z.object({
 export type SummariesRequestSummaryInput = z.infer<typeof summariesRequestSummaryInputSchema>;
 export type SummariesReadChatSummaryInput = z.infer<typeof summariesReadChatSummaryInputSchema>;
 export type SummariesReadSummaryRunInput = z.infer<typeof summariesReadSummaryRunInputSchema>;
+export type SummariesChatSummaryInput = z.infer<typeof summariesChatSummaryInputSchema>;

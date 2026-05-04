@@ -1,14 +1,5 @@
 import type { TelegramDatabase as AppDatabase } from '../database.js';
 import { telegramChatFolders, telegramChats, telegramMessages, telegramUsers } from '../schema.js';
-import {
-  extensionListOutputSchema,
-  extensionRegistrationInputSchema,
-  extensionRegistrationOutputSchema,
-  serializeExtensionRegistration,
-  type ExtensionRegistry,
-  type ExtensionListOutput,
-  type ExtensionRegistrationOutput
-} from '@agentg/shared/rpc/extensions';
 import { and, asc, desc, eq, gte, ilike, inArray, isNotNull, lt, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
@@ -20,7 +11,7 @@ import {
   type TdObject
 } from '../normalize.js';
 import { persistTelegramUpdate, upsertChat } from '../store.js';
-import { enriched, rpc, telegramRpcRouter } from './trpc.js';
+import { rpc, telegramRpcRouter } from './trpc.js';
 
 const nonEmptyStringSchema = z.string().trim().min(1);
 const nonNegativeIntegerSchema = z.number().int().nonnegative();
@@ -275,7 +266,6 @@ type TelegramUserInfo = {
 export type TelegramHistoryRouterRuntime = {
   client: TelegramClient;
   database: AppDatabase;
-  extensionRegistry?: ExtensionRegistry;
 };
 
 export function createTelegramHistoryRouter(runtime: TelegramHistoryRouterRuntime) {
@@ -288,7 +278,7 @@ export function createTelegramHistoryRouter(runtime: TelegramHistoryRouterRuntim
       .input(telegramHistoryFetchPageInputSchema)
       .output(telegramHistoryFetchPageResultSchema)
       .mutation(({ input }) => handleFetchPage(runtime, input)),
-    getChat: enriched
+    getChat: rpc
       .input(telegramGetChatInputSchema)
       .output(telegramGetChatOutputSchema)
       .query(({ input }) => handleGetChat(runtime, input)),
@@ -312,11 +302,6 @@ export function createTelegramHistoryRouter(runtime: TelegramHistoryRouterRuntim
       .input(telegramListRecentMessagesInputSchema)
       .output(telegramListRecentMessagesOutputSchema)
       .query(({ input }) => handleListRecentMessages(runtime, input)),
-    listExtensions: rpc.output(extensionListOutputSchema).query(() => listExtensions(runtime)),
-    registerExtension: rpc
-      .input(extensionRegistrationInputSchema)
-      .output(extensionRegistrationOutputSchema)
-      .mutation(({ input }) => registerExtension(runtime, input)),
     searchMessages: rpc
       .input(telegramSearchMessagesInputSchema)
       .output(telegramSearchMessagesOutputSchema)
@@ -325,23 +310,6 @@ export function createTelegramHistoryRouter(runtime: TelegramHistoryRouterRuntim
 }
 
 export type TelegramHistoryRouter = ReturnType<typeof createTelegramHistoryRouter>;
-
-function registerExtension(
-  runtime: TelegramHistoryRouterRuntime,
-  input: Parameters<ExtensionRegistry['register']>[0]
-): ExtensionRegistrationOutput {
-  if (runtime.extensionRegistry === undefined) {
-    throw new Error('Telegram extension registry is not configured');
-  }
-
-  return runtime.extensionRegistry.register(input);
-}
-
-function listExtensions(runtime: TelegramHistoryRouterRuntime): ExtensionListOutput {
-  return {
-    extensions: (runtime.extensionRegistry?.listAll() ?? []).map(serializeExtensionRegistration)
-  };
-}
 
 async function handleListChats(
   runtime: TelegramHistoryRouterRuntime,

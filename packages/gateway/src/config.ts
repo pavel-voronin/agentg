@@ -19,6 +19,10 @@ export type GatewayConfig = {
     url: string;
   };
   services: {
+    extensionRegistry?: InternalTrpcClientConfig;
+    extensions: {
+      summaries?: InternalTrpcClientConfig | undefined;
+    };
     history: InternalTrpcClientConfig;
     telegram: TelegramInternalTrpcClientConfig;
   };
@@ -35,6 +39,25 @@ export function loadGatewayConfig(env: NodeJS.ProcessEnv = process.env): Gateway
       url: env.NATS_URL ?? 'nats://localhost:4222'
     },
     services: {
+      ...(env.EXTENSION_REGISTRY_RPC_URL === undefined ||
+      env.EXTENSION_REGISTRY_RPC_URL.length === 0
+        ? {}
+        : {
+            extensionRegistry: readInternalTrpcClientConfig(env, {
+              urlEnv: 'EXTENSION_REGISTRY_RPC_URL',
+              defaultUrl: env.EXTENSION_REGISTRY_RPC_URL
+            })
+          }),
+      extensions: {
+        ...(env.SUMMARIES_RPC_URL === undefined || env.SUMMARIES_RPC_URL.length === 0
+          ? {}
+          : {
+              summaries: readInternalTrpcClientConfig(env, {
+                urlEnv: 'SUMMARIES_RPC_URL',
+                defaultUrl: env.SUMMARIES_RPC_URL
+              })
+            })
+      },
       history: readInternalTrpcClientConfig(env, {
         urlEnv: 'HISTORY_RPC_URL',
         defaultUrl: 'http://127.0.0.1:18082'

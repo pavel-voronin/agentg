@@ -8,20 +8,25 @@ export const modelMarkerSchema = z.object({
 });
 
 export type ModelRef = z.output<typeof modelMarkerSchema>;
+export type ModelMarker = ModelRef & Record<string, unknown>;
 
 export function collectModelRefs(value: unknown): ModelRef[] {
-  const refs: ModelRef[] = [];
+  return collectModelMarkers(value).map(({ _model, id }) => ({ _model, id }));
+}
+
+export function collectModelMarkers(value: unknown): ModelMarker[] {
+  const markers: ModelMarker[] = [];
   const seenObjects = new WeakSet<object>();
   const seenRefs = new Set<string>();
 
-  visit(value, refs, seenObjects, seenRefs);
+  visit(value, markers, seenObjects, seenRefs);
 
-  return refs;
+  return markers;
 }
 
 function visit(
   value: unknown,
-  refs: ModelRef[],
+  refs: ModelMarker[],
   seenObjects: WeakSet<object>,
   seenRefs: Set<string>
 ): void {
@@ -46,7 +51,11 @@ function visit(
     const key = modelRefKey(parsed.data);
     if (!seenRefs.has(key)) {
       seenRefs.add(key);
-      refs.push(parsed.data);
+      refs.push({
+        ...(value as Record<string, unknown>),
+        _model: parsed.data._model,
+        id: parsed.data.id
+      });
     }
   }
 

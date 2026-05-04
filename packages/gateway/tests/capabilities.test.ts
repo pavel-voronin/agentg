@@ -2,7 +2,17 @@ import type { Server } from 'node:http';
 import { randomUUID } from 'node:crypto';
 
 import type { EventBus, EventSubscription } from '@agentg/shared/events/bus';
+import {
+  extensionRegistryListInputSchema,
+  extensionRegistryListOutputSchema
+} from '@agentg/shared/rpc/extensions';
 import { historyRpcRouter, rpc } from '@agentg/history-sync/rpc';
+import {
+  telegramGetChatInputSchema,
+  telegramGetChatOutputSchema,
+  telegramRpcRouter,
+  rpc as telegramRpc
+} from '@agentg/telegram/rpc';
 import { createHTTPServer } from '@trpc/server/adapters/standalone';
 import { WebSocket, type RawData } from 'ws';
 import { z } from 'zod';
@@ -121,11 +131,156 @@ describe('Agent Gateway capabilities', () => {
       client.close();
     }
   });
+
+  it('composes model extensions from the standalone extension registry', async () => {
+    const extensionInputs: unknown[] = [];
+    const registryServer = createHTTPServer({
+      router: historyRpcRouter({
+        listExtensions: rpc
+          .input(extensionRegistryListInputSchema.optional())
+          .output(extensionRegistryListOutputSchema)
+          .query(({ input }) => ({
+            extensions:
+              input?.target === 'telegram.chat'
+                ? [
+                    {
+                      expiresAt: '2026-05-02T00:01:00.000Z',
+                      extension: 'summaries.chatSummary',
+                      registeredAt: '2026-05-02T00:00:00.000Z',
+                      target: 'telegram.chat'
+                    }
+                  ]
+                : []
+          }))
+      })
+    });
+    httpServers.push(registryServer);
+    const registryPort = await listen(registryServer);
+
+    const summariesServer = createHTTPServer({
+      router: historyRpcRouter({
+        summaries: historyRpcRouter({
+          chatSummary: rpc
+            .input(
+              z
+                .object({
+                  _model: z.literal('telegram.chat'),
+                  id: z.string()
+                })
+                .catchall(z.unknown())
+            )
+            .query(({ input }) => {
+              extensionInputs.push(input);
+              return {
+                invalidation: null,
+                stale: false,
+                summary: {
+                  chatId: input.id
+                }
+              };
+            })
+        })
+      })
+    });
+    httpServers.push(summariesServer);
+    const summariesPort = await listen(summariesServer);
+
+    const telegramServer = createHTTPServer({
+      router: telegramRpcRouter({
+        getChat: telegramRpc
+          .input(telegramGetChatInputSchema)
+          .output(telegramGetChatOutputSchema)
+          .query(({ input }) => ({
+            chat: {
+              _model: 'telegram.chat',
+              id: input.chatId,
+              title: 'Alice',
+              type: 'private',
+              updatedAt: '2026-05-02T00:00:00.000Z'
+            }
+          }))
+      })
+    });
+    httpServers.push(telegramServer);
+    const telegramPort = await listen(telegramServer);
+
+    const gateway = await startGateway({
+      services: {
+        extensionRegistry: {
+          url: `http://127.0.0.1:${String(registryPort)}`
+        },
+        extensions: {
+          summaries: {
+            url: `http://127.0.0.1:${String(summariesPort)}`
+          }
+        },
+        history: {
+          url: 'http://127.0.0.1:1'
+        },
+        telegram: {
+          url: `http://127.0.0.1:${String(telegramPort)}`
+        }
+      }
+    });
+    const client = await connectGateway(gateway);
+
+    try {
+      await expect(
+        request(client, 'extensions.compose', {
+          method: 'telegram.getChat',
+          params: {
+            chatId: 'chat-a'
+          }
+        })
+      ).resolves.toMatchObject({
+        base: {
+          chat: {
+            _model: 'telegram.chat',
+            id: 'chat-a',
+            title: 'Alice'
+          }
+        },
+        extensions: [
+          {
+            extension: 'summaries.chatSummary',
+            model: {
+              _model: 'telegram.chat',
+              id: 'chat-a'
+            },
+            result: {
+              stale: false,
+              summary: {
+                chatId: 'chat-a'
+              }
+            }
+          }
+        ]
+      });
+
+      expect(extensionInputs).toEqual([
+        expect.objectContaining({
+          _model: 'telegram.chat',
+          id: 'chat-a',
+          title: 'Alice'
+        })
+      ]);
+    } finally {
+      client.close();
+    }
+  });
 });
 
 async function startGateway(
   options: {
     capabilityRegistrationTtlMs?: number;
+    services?: {
+      extensionRegistry?: { url: string };
+      extensions?: {
+        summaries?: { url: string } | undefined;
+      };
+      history: { url: string };
+      telegram: { url: string };
+    };
   } = {}
 ): Promise<AgentGatewayServerHandle> {
   const handle = await startAgentGatewayServer({
@@ -135,7 +290,7 @@ async function startGateway(
       port: 0
     },
     eventBus: createFakeEventBus(),
-    services: {
+    services: options.services ?? {
       history: {
         url: 'http://127.0.0.1:1'
       },

@@ -1,13 +1,4 @@
 import {
-  extensionListOutputSchema,
-  extensionRegistrationInputSchema,
-  extensionRegistrationOutputSchema,
-  serializeExtensionRegistration,
-  type ExtensionRegistry,
-  type ExtensionListOutput,
-  type ExtensionRegistrationOutput
-} from '@agentg/shared/rpc/extensions';
-import {
   historyChatHistoryStateOutputSchema,
   historyDeleteTargetInputSchema,
   historyGetChatHistoryStateInputSchema,
@@ -33,7 +24,7 @@ import {
   type HistoryTargetMutationOutput
 } from './history-contracts.js';
 import { callHistoryMethod, type HistoryRuntime } from '../observability.js';
-import { enriched, historyRpcRouter, rpc, type HistoryRpcContext } from './trpc.js';
+import { historyRpcRouter, rpc, type HistoryRpcContext } from './trpc.js';
 
 type HistoryMethod =
   | 'history.deleteTarget'
@@ -52,7 +43,6 @@ export type HistoryMethodCaller = (
 
 export type CreateHistoryRouterOptions = HistoryRuntime & {
   callMethod?: HistoryMethodCaller;
-  extensionRegistry?: ExtensionRegistry;
 };
 
 export function createHistoryRouter(options: CreateHistoryRouterOptions) {
@@ -72,7 +62,7 @@ export function createHistoryRouter(options: CreateHistoryRouterOptions) {
           )
         )
       ),
-    getChatHistoryState: enriched
+    getChatHistoryState: rpc
       .input(historyGetChatHistoryStateInputSchema)
       .output(historyChatHistoryStateOutputSchema)
       .query(async ({ ctx, input }) =>
@@ -124,7 +114,6 @@ export function createHistoryRouter(options: CreateHistoryRouterOptions) {
           )
         )
       ),
-    listExtensions: rpc.output(extensionListOutputSchema).query(() => listExtensions(options)),
     requestSync: rpc
       .input(historyRequestSyncInputSchema)
       .output(historyRequestSyncOutputSchema)
@@ -138,10 +127,6 @@ export function createHistoryRouter(options: CreateHistoryRouterOptions) {
           )
         )
       ),
-    registerExtension: rpc
-      .input(extensionRegistrationInputSchema)
-      .output(extensionRegistrationOutputSchema)
-      .mutation(({ input }) => registerExtension(options, input)),
     upsertTarget: rpc
       .input(historyUpsertTargetInputSchema)
       .output(historyTargetMutationOutputSchema)
@@ -185,23 +170,6 @@ function runtimeForCall(
   return {
     ...options,
     eventBus: ctx.eventBus
-  };
-}
-
-function registerExtension(
-  options: CreateHistoryRouterOptions,
-  input: Parameters<ExtensionRegistry['register']>[0]
-): ExtensionRegistrationOutput {
-  if (options.extensionRegistry === undefined) {
-    throw new Error('History extension registry is not configured');
-  }
-
-  return options.extensionRegistry.register(input);
-}
-
-function listExtensions(options: CreateHistoryRouterOptions): ExtensionListOutput {
-  return {
-    extensions: (options.extensionRegistry?.listAll() ?? []).map(serializeExtensionRegistration)
   };
 }
 

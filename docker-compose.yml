@@ -68,9 +68,9 @@ services:
     <<: *agentg-module-service
     command: ['npm', '--workspace', '@agentg/summaries', 'run', 'start']
     depends_on:
-      gateway:
+      extension-registry:
         condition: service_started
-      history-sync:
+      gateway:
         condition: service_started
       nats:
         condition: service_started
@@ -78,8 +78,8 @@ services:
         condition: service_healthy
     environment:
       <<: *agentg-module-environment
+      EXTENSION_REGISTRY_RPC_URL: http://extension-registry:8080
       GATEWAY_RPC_URL: ws://gateway:8787
-      HISTORY_RPC_URL: http://history-sync:8080
       MODULE_MIGRATION_FOLDER: packages/summaries/drizzle
       MODULE_RPC_URL: http://summaries:8080
       MODULE_SLUG: summaries
@@ -91,6 +91,8 @@ services:
   extension-registry:
     profiles:
       - extension-registry
+      - summaries
+      - gateway
     build:
       context: .
       target: runtime
@@ -108,12 +110,15 @@ services:
       target: runtime
     command: ['npm', '--workspace', '@agentg/gateway', 'run', 'start']
     depends_on:
+      extension-registry:
+        condition: service_started
       nats:
         condition: service_started
     environment:
       AGENT_GATEWAY_HOST: 0.0.0.0
       AGENT_GATEWAY_PORT: ${AGENT_GATEWAY_PORT:-8787}
       AGENT_GATEWAY_TOKEN: ${AGENT_GATEWAY_TOKEN:-}
+      EXTENSION_REGISTRY_RPC_URL: http://extension-registry:8080
       HISTORY_RPC_URL: http://history-sync:8080
       NATS_URL: nats://nats:4222
       SUMMARIES_RPC_URL: http://summaries:8080
@@ -164,7 +169,6 @@ services:
       HISTORY_RPC_HOST: 0.0.0.0
       HISTORY_RPC_PORT: 8080
       NATS_URL: nats://nats:4222
-      SUMMARIES_RPC_URL: http://summaries:8080
       TELEGRAM_RPC_URL: http://telegram:8080
     restart: 'no'
 

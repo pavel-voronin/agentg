@@ -15,10 +15,10 @@ export type SummariesServiceConfig = {
   };
   registrationRefreshMs: number;
   services: {
-    gateway: {
+    extensionRegistry: {
       url: string;
     };
-    history: {
+    gateway: {
       url: string;
     };
   };
@@ -40,9 +40,9 @@ export function loadSummariesServiceConfig(
     env.MODULE_RPC_URL ??
     `http://${bind.host === '0.0.0.0' ? '127.0.0.1' : bind.host}:${String(bind.port)}`;
   const gatewayUrl = parseGatewayUrl(env.GATEWAY_RPC_URL ?? 'ws://127.0.0.1:8787');
-  const historyUrl = parseHttpUrl(
-    env.HISTORY_RPC_URL ?? 'http://127.0.0.1:18082',
-    'HISTORY_RPC_URL'
+  const extensionRegistryUrl = parseHttpUrl(
+    env.EXTENSION_REGISTRY_RPC_URL ?? 'http://127.0.0.1:18084',
+    'EXTENSION_REGISTRY_RPC_URL'
   );
 
   return {
@@ -63,7 +63,7 @@ export function loadSummariesServiceConfig(
       extensionRegistrations: [
         {
           extension: 'summaries.chatSummary',
-          target: 'history.getChatHistoryState'
+          target: 'telegram.chat'
         }
       ],
       gatewayRpcUrl: gatewayUrl,
@@ -80,11 +80,11 @@ export function loadSummariesServiceConfig(
       parseOptionalInteger(env.MODULE_REGISTRATION_REFRESH_MS, 'MODULE_REGISTRATION_REFRESH_MS') ??
       30_000,
     services: {
+      extensionRegistry: {
+        url: extensionRegistryUrl
+      },
       gateway: {
         url: gatewayUrl
-      },
-      history: {
-        url: historyUrl
       }
     }
   };

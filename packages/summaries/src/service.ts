@@ -41,7 +41,10 @@ export async function runSummariesService(options: SummariesServiceOptions): Pro
         options.config.module,
         options.config.services.gateway.url
       );
-      await registerSummariesExtensions(options.config.module, options.config.services.history.url);
+      await registerSummariesExtensions(
+        options.config.module,
+        options.config.services.extensionRegistry.url
+      );
     }
   });
 

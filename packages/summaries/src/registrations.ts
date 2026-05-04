@@ -11,8 +11,7 @@ import type {
   ExtensionRegistrationInput,
   ExtensionRegistrationOutput
 } from '@agentg/shared/rpc/extensions';
-import { createTRPCClient, httpBatchLink } from '@trpc/client';
-import type { HistoryRouter } from '@agentg/history-sync/rpc';
+import { createTRPCUntypedClient, httpBatchLink } from '@trpc/client';
 import { WebSocket, type RawData } from 'ws';
 
 type JsonRpcResponse = {
@@ -37,19 +36,19 @@ export async function registerSummariesCapabilities(
 
 export async function registerSummariesExtensions(
   config: ModuleRuntimeConfig,
-  historyUrl: string
+  extensionRegistryUrl: string
 ): Promise<ExtensionRegistrationOutput[]> {
-  const client = createTRPCClient<HistoryRouter>({
+  const client = createTRPCUntypedClient({
     links: [
       httpBatchLink({
-        url: historyUrl
+        url: extensionRegistryUrl
       })
     ]
   });
 
   return registerModuleExtensions(config, {
     async registerExtension(input: ExtensionRegistrationInput) {
-      return client.registerExtension.mutate(input);
+      return (await client.mutation('registerExtension', input)) as ExtensionRegistrationOutput;
     }
   });
 }

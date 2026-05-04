@@ -1,5 +1,4 @@
 export * from './config.js';
-export * from './extension-client.js';
 export * from './history-client.js';
 export * from './history-contracts.js';
 export {

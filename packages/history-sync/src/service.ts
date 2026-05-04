@@ -9,7 +9,6 @@ import {
 } from './controller.js';
 import { createLiveCoverageObserver, type LiveCoverageObserver } from './live-coverage.js';
 import type { InternalTrpcBindConfig, InternalTrpcClientConfig } from './rpc/config.js';
-import { createTrpcExtensionCallerResolver } from './rpc/extension-client.js';
 import { startHistoryTrpcServer, stopHistoryTrpcServer } from './rpc/history-server.js';
 import { addHistoryCoverageBatch } from './store.js';
 import { createTrpcTelegramHistoryClient } from './telegram-client.js';
@@ -20,9 +19,6 @@ export type HistorySyncServiceOptions = {
   eventBus: EventBus;
   internalRpc: InternalTrpcBindConfig;
   services: {
-    extensions?: {
-      summaries?: InternalTrpcClientConfig | undefined;
-    };
     telegram: InternalTrpcClientConfig;
   };
 };
@@ -67,10 +63,6 @@ export async function runHistorySyncService(options: HistorySyncServiceOptions):
     eventBus: options.eventBus,
     liveCoverageObserver
   });
-  const resolveExtensionCaller = createTrpcExtensionCallerResolver(
-    extensionServicesFromConfig(options.services.extensions)
-  );
-
   liveCoverageTick = setInterval(() => {
     void liveCoverageObserver.tick();
   }, HISTORY_SYNC_STATUS_TICK_MS);
@@ -81,7 +73,6 @@ export async function runHistorySyncService(options: HistorySyncServiceOptions):
     requestSync(reason) {
       controller.request(reason);
     },
-    ...(resolveExtensionCaller === undefined ? {} : { resolveExtensionCaller }),
     telegram
   });
   controller.request('startup');
@@ -119,21 +110,6 @@ export async function runHistorySyncService(options: HistorySyncServiceOptions):
 
     return historyRpcStopped && historySyncStopped && liveCoverageStopped && eventBusClosed;
   });
-}
-
-function extensionServicesFromConfig(
-  services: HistorySyncServiceOptions['services']['extensions']
-): { slug: string; url: string }[] {
-  return [
-    ...(services?.summaries === undefined
-      ? []
-      : [
-          {
-            slug: 'summaries',
-            url: services.summaries.url
-          }
-        ])
-  ];
 }
 
 function subscribeHistorySyncService(options: {

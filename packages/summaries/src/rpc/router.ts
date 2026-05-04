@@ -1,6 +1,6 @@
 import {
-  summariesChatSummaryExtensionInputSchema,
-  summariesChatSummaryExtensionOutputSchema,
+  summariesChatSummaryInputSchema,
+  summariesChatSummaryOutputSchema,
   summariesReadChatSummaryInputSchema,
   summariesReadChatSummaryOutputSchema,
   summariesReadSummaryRunInputSchema,
@@ -8,7 +8,7 @@ import {
   summariesRequestSummaryInputSchema,
   summariesRequestSummaryOutputSchema
 } from './contracts.js';
-import { extension, rpc, summariesRpcRouter } from './trpc.js';
+import { rpc, summariesRpcRouter } from './trpc.js';
 import {
   getChatSummaryExtension,
   readChatSummary,
@@ -21,12 +21,10 @@ import type { SummariesRpcContext } from './trpc.js';
 export function createSummariesRouter(runtime: SummariesRuntime) {
   return summariesRpcRouter({
     summaries: summariesRpcRouter({
-      chatSummary: extension
-        .input(summariesChatSummaryExtensionInputSchema)
-        .output(summariesChatSummaryExtensionOutputSchema)
-        .query(({ input }) =>
-          getChatSummaryExtension(runtime, chatIdFromExtensionOutput(input.output))
-        ),
+      chatSummary: rpc
+        .input(summariesChatSummaryInputSchema)
+        .output(summariesChatSummaryOutputSchema)
+        .query(({ input }) => getChatSummaryExtension(runtime, input.id)),
       readChatSummary: rpc
         .input(summariesReadChatSummaryInputSchema)
         .output(summariesReadChatSummaryOutputSchema)
@@ -51,16 +49,6 @@ export function createSummariesRouter(runtime: SummariesRuntime) {
 
 export type SummariesRouter = ReturnType<typeof createSummariesRouter>;
 
-function chatIdFromExtensionOutput(output: unknown): string {
-  const record = asRecord(output);
-  const chat = asRecord(record?.chat);
-  if (typeof chat?.id === 'string' && chat.id.length > 0) {
-    return chat.id;
-  }
-
-  throw new Error('summaries.chatSummary extension requires output.chat.id');
-}
-
 function runtimeForCall(runtime: SummariesRuntime, ctx: SummariesRpcContext): SummariesRuntime {
   if (ctx.eventBus === undefined || ctx.eventBus === runtime.eventBus) {
     return runtime;
@@ -70,10 +58,4 @@ function runtimeForCall(runtime: SummariesRuntime, ctx: SummariesRpcContext): Su
     ...runtime,
     eventBus: ctx.eventBus
   };
-}
-
-function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null
-    ? (value as Record<string, unknown>)
-    : undefined;
 }

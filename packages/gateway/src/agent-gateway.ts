@@ -22,6 +22,14 @@ import {
   createTrpcGatewayHistoryClient,
   type GatewayHistoryClient
 } from './history-observability.js';
+import {
+  composeGatewayExtensions,
+  createTrpcGatewayExtensionGetterCaller,
+  createTrpcGatewayExtensionRegistryClient,
+  gatewayExtensionComposeInputSchema,
+  type ExtensionServiceConfig,
+  type GatewayExtensionComposer
+} from './extensions.js';
 import { createTrpcGatewayTelegramClient, type GatewayTelegramClient } from './telegram-reads.js';
 
 export type AgentGatewayConfig = {
@@ -38,6 +46,10 @@ export type AgentGatewayOptions = {
   config: AgentGatewayConfig;
   eventBus: EventBus;
   services: {
+    extensionRegistry?: InternalTrpcClientConfig;
+    extensions?: {
+      summaries?: InternalTrpcClientConfig | undefined;
+    };
     history: InternalTrpcClientConfig;
     telegram: TelegramInternalTrpcClientConfig;
   };
@@ -47,6 +59,7 @@ type AgentGatewayRuntime = AgentGatewayOptions & {
   capabilityCallTimeoutMs: number;
   capabilityCaller: GatewayCapabilityCaller;
   capabilityRegistry: CapabilityRegistry;
+  extensionComposer?: GatewayExtensionComposer;
   historyClient: GatewayHistoryClient;
   telegramClient: GatewayTelegramClient;
 };
@@ -77,6 +90,15 @@ export async function startAgentGatewayServer(
 ): Promise<AgentGatewayServerHandle> {
   const historyClient = createTrpcGatewayHistoryClient(options.services.history);
   const telegramClient = createTrpcGatewayTelegramClient(options.services.telegram);
+  const extensionComposer =
+    options.services.extensionRegistry === undefined
+      ? undefined
+      : {
+          callExtension: createTrpcGatewayExtensionGetterCaller(
+            extensionServicesFromConfig(options.services.extensions)
+          ),
+          registry: createTrpcGatewayExtensionRegistryClient(options.services.extensionRegistry)
+        };
   const capabilityRegistry =
     options.capabilityRegistry ??
     createCapabilityRegistry(
@@ -90,6 +112,7 @@ export async function startAgentGatewayServer(
       options.capabilityCallTimeoutMs ?? DEFAULT_GATEWAY_CAPABILITY_CALL_TIMEOUT_MS,
     capabilityCaller: options.capabilityCaller ?? createTrpcGatewayCapabilityCaller(),
     capabilityRegistry,
+    ...(extensionComposer === undefined ? {} : { extensionComposer }),
     historyClient,
     telegramClient
   };
@@ -228,6 +251,18 @@ async function callMethod(
   method: string,
   params: unknown
 ): Promise<unknown> {
+  if (method === 'extensions.compose') {
+    return composeGatewayMethod(options, params);
+  }
+
+  return callDomainOrGatewayMethod(options, method, params);
+}
+
+async function callDomainOrGatewayMethod(
+  options: AgentGatewayRuntime,
+  method: string,
+  params: unknown
+): Promise<unknown> {
   if (method.startsWith('history.')) {
     const result = await options.historyClient.call(method, params);
     if (result !== undefined) {
@@ -255,6 +290,34 @@ async function callMethod(
   }
 
   throw new Error(`Unknown method: ${method}`);
+}
+
+async function composeGatewayMethod(
+  options: AgentGatewayRuntime,
+  params: unknown
+): Promise<unknown> {
+  if (options.extensionComposer === undefined) {
+    throw new Error('Extension composition is not configured');
+  }
+
+  const input = gatewayExtensionComposeInputSchema.parse(params);
+  const base = await callDomainOrGatewayMethod(options, input.method, input.params);
+  return composeGatewayExtensions(options.extensionComposer, base);
+}
+
+function extensionServicesFromConfig(
+  services: AgentGatewayOptions['services']['extensions']
+): ExtensionServiceConfig[] {
+  return [
+    ...(services?.summaries === undefined
+      ? []
+      : [
+          {
+            slug: 'summaries',
+            url: services.summaries.url
+          }
+        ])
+  ];
 }
 
 function handleHttpRequest(request: IncomingMessage, response: ServerResponse): void {

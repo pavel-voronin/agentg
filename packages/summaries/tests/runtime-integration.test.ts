@@ -3,18 +3,17 @@ import { randomUUID } from 'node:crypto';
 
 import { createCapabilityRegistry, type CapabilityRegistry } from '@agentg/shared/rpc/capabilities';
 import type { EventBus, EventSubscription } from '@agentg/shared/events/bus';
-import { createExtensionRegistry } from '@agentg/shared/rpc/extensions';
-import { createHistoryRouter, createTrpcExtensionCallerResolver } from '@agentg/history-sync/rpc';
-import type { HistoryDatabase } from '@agentg/history-sync/database';
 import {
   startAgentGatewayServer,
   type AgentGatewayServerHandle
 } from '@agentg/gateway/src/agent-gateway.js';
+import { createTRPCClient, httpBatchLink } from '@trpc/client';
 import { WebSocket, type RawData } from 'ws';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { createInMemorySummaryRepository } from '../src/memory-store.js';
 import { registerSummariesCapabilities } from '../src/registrations.js';
+import type { SummariesRouter } from '../src/rpc/router.js';
 import { startSummariesTrpcServer, type SummariesRpcBindConfig } from '../src/rpc/server.js';
 import { requestChatSummary, type SummariesRuntime } from '../src/summary-service.js';
 
@@ -95,7 +94,7 @@ describe('summaries runtime integration', () => {
     }
   });
 
-  it('keeps History output direct when summaries.chatSummary is registered', async () => {
+  it('serves summaries.chatSummary as a telegram.chat getter', async () => {
     const eventBus = createFakeEventBus();
     const runtime = createTestRuntime(eventBus);
     const summariesServer = await startSummariesHttp(runtime, eventBus);
@@ -107,57 +106,25 @@ describe('summaries runtime integration', () => {
       sourceMessages: []
     });
 
-    const extensionRegistry = createExtensionRegistry({ ttlMs: 60_000 });
-    extensionRegistry.register({
-      extension: 'summaries.chatSummary',
-      target: 'history.getChatHistoryState'
-    });
-    const resolveExtensionCaller = createTrpcExtensionCallerResolver([
-      {
-        slug: 'summaries',
-        url: summariesUrl
-      }
-    ]);
-    if (resolveExtensionCaller === undefined) {
-      throw new Error('Expected summaries extension caller resolver');
-    }
-
-    const historyCaller = createHistoryRouter({
-      callMethod: (_runtime, method) =>
-        Promise.resolve(
-          method === 'history.getChatHistoryState'
-            ? {
-                chat: {
-                  _model: 'telegram.chat',
-                  historyBeginningReached: false,
-                  historyStartAt: null,
-                  id: 'chat-a',
-                  isBot: false,
-                  messageCount: 1,
-                  title: 'Alice',
-                  type: 'private',
-                  updatedAt: '2026-05-02T00:00:00.000Z'
-                },
-                coverage: [],
-                desired: [],
-                jobs: [],
-                missing: [],
-                targets: []
-              }
-            : undefined
-        ),
-      database: {} as HistoryDatabase,
-      eventBus,
-      extensionRegistry
-    }).createCaller({
-      extensionRegistry,
-      resolveExtensionCaller
+    const client = createTRPCClient<SummariesRouter>({
+      links: [
+        httpBatchLink({
+          url: summariesUrl
+        })
+      ]
     });
 
-    await expect(historyCaller.getChatHistoryState({ chatId: 'chat-a' })).resolves.toMatchObject({
-      chat: {
+    await expect(
+      client.summaries.chatSummary.query({
         _model: 'telegram.chat',
-        id: 'chat-a'
+        id: 'chat-a',
+        title: 'Alice',
+        type: 'private'
+      })
+    ).resolves.toMatchObject({
+      stale: false,
+      summary: {
+        chatId: 'chat-a'
       }
     });
   });

@@ -22,9 +22,6 @@ export type HistorySyncServiceConfig = {
   };
   internalRpc: InternalTrpcBindConfig;
   services: {
-    extensions: {
-      summaries?: InternalTrpcClientConfig | undefined;
-    };
     telegram: InternalTrpcClientConfig;
   };
 };
@@ -54,16 +51,6 @@ export function loadHistorySyncServiceConfig(
       defaultPort: 18082
     }),
     services: {
-      extensions: {
-        ...(env.SUMMARIES_RPC_URL === undefined || env.SUMMARIES_RPC_URL.length === 0
-          ? {}
-          : {
-              summaries: readInternalTrpcClientConfig(env, {
-                urlEnv: 'SUMMARIES_RPC_URL',
-                defaultUrl: env.SUMMARIES_RPC_URL
-              })
-            })
-      },
       telegram: readInternalTrpcClientConfig(env, {
         urlEnv: 'TELEGRAM_RPC_URL',
         defaultUrl: 'http://127.0.0.1:18081'

@@ -23,20 +23,25 @@ At the end of this stage, commit all changes with a conventional commit message.
 
 ## Concrete Scope
 
-- Remove `enriched` builders, middleware, and tests.
-- Remove local History and Telegram extension registry endpoints.
-- Remove registered-extension execution helpers from shared and domain runtime
-  code.
+- Remove `enriched` builders, middleware, exports, and tests from History and
+  Telegram RPC foundations.
+- Remove local History and Telegram extension registry endpoints and the
+  associated runtime config.
+- Remove registered-extension execution helpers from shared and History runtime
+  code while keeping the shared registration schemas used by the standalone
+  registry service.
 - Make Summaries register `summaries.chatSummary` against target `telegram.chat`
-  in the new registry.
+  in the standalone registry service.
 - Treat `summaries.chatSummary` as a getter RPC that receives the marked
-  `telegram.chat` object.
+  `telegram.chat` object directly.
 - Add caller-side composition helpers:
   - call base RPC;
   - collect `_model` markers;
   - query registry by exact target;
   - call extension getter RPC methods through known service config;
   - assemble the extended view locally.
+- Add a Gateway-side composition path and tests because Gateway already knows
+  core service URLs and extension service URLs through environment config.
 
 ## Explicit Non-Scope
 
@@ -44,6 +49,8 @@ At the end of this stage, commit all changes with a conventional commit message.
 - Do not add `kind` to registrations.
 - Do not put extension results back into domain procedure outputs.
 - Do not make domains call extension RPC methods.
+- Do not update broad architecture docs or compose smoke in this stage; Stage 5
+  owns docs and audit cleanup.
 
 ## Definition of Done
 
@@ -51,6 +58,8 @@ At the end of this stage, commit all changes with a conventional commit message.
 - Summaries registration goes to the separate registry.
 - A caller-side test or integration path composes a Telegram chat model with
   `summaries.chatSummary`.
+- `rg` over runtime packages finds no `enriched` builder or local domain
+  `registerExtension` / `listExtensions` endpoints.
 - Package typecheck and tests pass for touched packages.
 
 ## Stop Rule
