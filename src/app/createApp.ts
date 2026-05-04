@@ -4,10 +4,9 @@ import {
   createTelegramRepository,
   type TelegramRepository
 } from '../telegram/telegramRepository.js';
-import {
-  createTelegramService,
-  type TelegramService
-} from '../telegram/telegramService.js';
+import { createTelegramService, type TelegramService } from '../telegram/telegramService.js';
+import { createHistoryRepository, type HistoryRepository } from '../history/historyRepository.js';
+import { createHistoryService, type HistoryService } from '../history/historyService.js';
 import { openSqliteDatabase, type SqliteDatabase } from '../storage/sqlite.js';
 import { loadAppConfig, type AppConfig, type LoadAppConfigInput } from './config.js';
 import { createLifecycle, type AppLifecycle, type LifecycleResource } from './lifecycle.js';
@@ -34,10 +33,12 @@ export type AppStorageHandle = {
 };
 
 export type AppRepositoryRegistry = {
+  history: HistoryRepository;
   telegram: TelegramRepository;
 };
 
 export type AppServiceRegistry = {
+  history: HistoryService;
   telegram: TelegramService;
 };
 
@@ -54,6 +55,12 @@ export function createApp(input: CreateAppInput = {}): AppRuntime {
     eventBus,
     repository: telegramRepository
   });
+  const historyRepository = createHistoryRepository(sqlite.connection);
+  const historyService = createHistoryService({
+    eventBus,
+    repository: historyRepository,
+    telegramService
+  });
   const storage: AppStorageHandle = {
     sqlite
   };
@@ -62,6 +69,15 @@ export function createApp(input: CreateAppInput = {}): AppRuntime {
       name: 'sqlite',
       stop(): void {
         sqlite.close();
+      }
+    },
+    {
+      name: 'history',
+      start(): void {
+        historyService.start();
+      },
+      stop(): void {
+        historyService.stop();
       }
     },
     ...(input.lifecycleResources ?? [])
@@ -75,9 +91,11 @@ export function createApp(input: CreateAppInput = {}): AppRuntime {
     lifecycle,
     plugins: {},
     repositories: {
+      history: historyRepository,
       telegram: telegramRepository
     },
     services: {
+      history: historyService,
       telegram: telegramService
     },
     storage,
