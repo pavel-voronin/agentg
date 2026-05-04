@@ -20,5 +20,5 @@
     "target": "ES2024",
     "types": ["node"]
   },
-  "include": []
+  "include": ["src/**/*.ts", "tests/**/*.ts", "vitest.config.ts"]
 }

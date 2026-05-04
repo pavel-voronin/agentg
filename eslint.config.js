@@ -9,7 +9,9 @@ export default tseslint.config(
       'dist-server/**',
       '**/dist-server/**',
       'coverage/**',
-      'node_modules/**'
+      'node_modules/**',
+      'packages/**',
+      'td-data/**'
     ]
   },
   js.configs.recommended,
@@ -25,23 +27,6 @@ export default tseslint.config(
     rules: {
       '@typescript-eslint/consistent-type-definitions': ['error', 'type'],
       '@typescript-eslint/no-confusing-void-expression': 'off'
-    }
-  },
-  {
-    files: ['packages/**/*.ts'],
-    ignores: ['packages/*/src/rpc/trpc.ts'],
-    rules: {
-      'no-restricted-imports': [
-        'error',
-        {
-          paths: [
-            {
-              message: 'Use the package-local RPC runtime exports instead.',
-              name: '@trpc/server'
-            }
-          ]
-        }
-      ]
     }
   },
   {
