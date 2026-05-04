@@ -85,4 +85,89 @@ describe('TelegramService', () => {
       await app.stop();
     }
   });
+
+  it('lists chats by Telegram chat folders', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'agentg-telegram-folders-'));
+    const app = createApp({
+      cwd,
+      env: {
+        AGENTG_SQLITE_PATH: './telegram-folders.sqlite'
+      }
+    });
+    const chatListEvents: AppEvent[] = [];
+
+    app.eventBus.subscribe('telegram.chat_list.updated', (event) => {
+      chatListEvents.push(event);
+    });
+
+    try {
+      await app.services.telegram.ingestUpdate({
+        _: 'updateChatFolders',
+        chat_folders: [
+          {
+            _: 'chatFolderInfo',
+            id: 7,
+            name: {
+              _: 'chatFolderName',
+              text: {
+                _: 'formattedText',
+                text: 'Work'
+              }
+            }
+          }
+        ]
+      });
+      await app.services.telegram.ingestUpdate({
+        _: 'updateNewChat',
+        chat: {
+          _: 'chat',
+          id: 2001,
+          title: 'Folder Chat',
+          type: {
+            _: 'chatTypePrivate',
+            user_id: 2001
+          }
+        }
+      });
+      await app.services.telegram.ingestUpdate({
+        _: 'updateChatAddedToList',
+        chat_id: 2001,
+        chat_list: {
+          _: 'chatListFolder',
+          chat_folder_id: 7
+        }
+      });
+      await app.services.telegram.ingestUpdate({
+        _: 'updateChatAddedToList',
+        chat_id: 2001,
+        chat_list: {
+          _: 'chatListMain'
+        }
+      });
+
+      expect(app.services.telegram.listChatFolders()).toEqual([
+        {
+          count: 1,
+          iconName: null,
+          id: 7,
+          position: 0,
+          title: 'Work'
+        }
+      ]);
+      expect(app.services.history.listChats({ folderId: 7, list: 'folder' }).chats).toEqual([
+        expect.objectContaining({
+          id: '2001',
+          title: 'Folder Chat'
+        })
+      ]);
+      expect(app.services.history.listChats({ list: 'main' }).chats).toEqual([
+        expect.objectContaining({
+          id: '2001'
+        })
+      ]);
+      expect(chatListEvents).toHaveLength(2);
+    } finally {
+      await app.stop();
+    }
+  });
 });

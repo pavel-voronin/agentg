@@ -7,6 +7,7 @@ import {
 } from './normalize.js';
 import type {
   TelegramChatFolderDto,
+  TelegramChatCountInput,
   TelegramChatListInput,
   TelegramChatDto,
   TelegramChatTypeCountDto,
@@ -18,7 +19,7 @@ import type { TelegramTdlibClient } from './tdlibClient.js';
 
 export type TelegramService = {
   clearTdlibClient(client: TelegramTdlibClient): void;
-  countChats(): number;
+  countChats(input?: TelegramChatCountInput): number;
   getChat(chatId: string): Promise<TelegramChatDto | undefined>;
   getMessage(chatId: string, messageId: string): Promise<TelegramMessageDto | undefined>;
   ingestHistoricalMessage(message: unknown): Promise<TelegramIngestResult>;
@@ -43,6 +44,7 @@ export type TelegramIngestResult = {
 const EMPTY_PERSIST_RESULT: TelegramPersistResult = {
   chat: false,
   chatFolders: false,
+  chatList: false,
   event: false,
   message: false,
   user: false
@@ -56,8 +58,8 @@ export function createTelegramService(dependencies: TelegramServiceDependencies)
         tdlibClient = undefined;
       }
     },
-    countChats(): number {
-      return dependencies.repository.countChats();
+    countChats(input): number {
+      return dependencies.repository.countChats(input);
     },
     async getChat(chatId): Promise<TelegramChatDto | undefined> {
       const storedChat = dependencies.repository.getChat(chatId);
@@ -147,6 +149,22 @@ async function publishTelegramEvents(
         },
         source: 'telegram',
         type: 'telegram.chat.updated'
+      })
+    );
+  }
+
+  if (persisted.chatList) {
+    const chatId = update.chatList?.chatId ?? update.chat?.id;
+    await eventBus.publish(
+      createAppEvent({
+        data: {
+          chatId: chatId ?? null,
+          lists: update.chat?.lists ?? null,
+          update: update.chatList ?? null
+        },
+        ...(chatId === undefined ? {} : { meta: { chatId } }),
+        source: 'telegram',
+        type: 'telegram.chat_list.updated'
       })
     );
   }

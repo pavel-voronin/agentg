@@ -177,6 +177,7 @@ export function useControlPlaneRuntime() {
     return (
       event.type?.startsWith('history.') === true ||
       event.type === 'telegram.chat.updated' ||
+      event.type === 'telegram.chat_list.updated' ||
       event.type === 'telegram.chat_folders.updated'
     );
   }

@@ -221,13 +221,12 @@ export function createHistoryService(dependencies: HistoryServiceDependencies): 
       };
     },
     listChats(input): HistoryChatListResult {
-      const chats =
-        input.list === 'archive' || input.list === 'folder'
-          ? []
-          : dependencies.telegramService.listChats({
-              ...(input.limit === undefined ? {} : { limit: input.limit }),
-              ...(input.query === undefined ? {} : { query: input.query })
-            });
+      const chats = dependencies.telegramService.listChats({
+        ...(input.folderId === undefined ? {} : { folderId: input.folderId }),
+        ...(input.limit === undefined ? {} : { limit: input.limit }),
+        ...(input.list === undefined ? {} : { list: input.list }),
+        ...(input.query === undefined ? {} : { query: input.query })
+      });
       const stats = dependencies.repository.listChatStats(chats.map((chat) => chat.id));
 
       return {
@@ -235,9 +234,9 @@ export function createHistoryService(dependencies: HistoryServiceDependencies): 
           chatSummary(chat, stats.get(chat.id) ?? emptyHistoryChatStats())
         ),
         navigation: {
-          archiveCount: 0,
+          archiveCount: dependencies.telegramService.countChats({ list: 'archive' }),
           folders: dependencies.telegramService.listChatFolders(),
-          mainCount: dependencies.telegramService.countChats()
+          mainCount: dependencies.telegramService.countChats({ list: 'main' })
         },
         types: dependencies.telegramService.listChatTypeCounts()
       };

@@ -333,10 +333,17 @@ export const EVENT_GROUPS: EventGroup[] = [
   },
   {
     color: '#10b981',
-    eventTypes: ['telegram.chat.updated', 'telegram.chat_folders.updated'],
+    eventTypes: [
+      'telegram.chat.updated',
+      'telegram.chat_list.updated',
+      'telegram.chat_folders.updated'
+    ],
     id: 'telegram_chats',
     label: 'Telegram chats',
-    match: (type) => type.startsWith('telegram.chat.') || type.startsWith('telegram.chat_folders.')
+    match: (type) =>
+      type.startsWith('telegram.chat.') ||
+      type.startsWith('telegram.chat_list.') ||
+      type.startsWith('telegram.chat_folders.')
   },
   {
     color: '#f59e0b',

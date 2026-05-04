@@ -22,9 +22,21 @@ export type RawTelegramEvent = {
 
 export type NormalizedTelegramChat = {
   id: string;
+  lists: NormalizedTelegramChatList[];
   raw: JsonObject;
   title: string;
   type: string;
+};
+
+export type NormalizedTelegramChatList = {
+  type: 'archive' | 'folder' | 'main';
+  folderId?: number;
+};
+
+export type NormalizedTelegramChatListUpdate = {
+  action: 'add' | 'remove';
+  chatId: string;
+  list: NormalizedTelegramChatList;
 };
 
 export type NormalizedTelegramUser = {
@@ -82,6 +94,7 @@ export type NormalizedTelegramMessageDelete = {
 export type NormalizedTelegramUpdate = {
   chat?: NormalizedTelegramChat;
   chatFolders?: NormalizedTelegramChatFolders;
+  chatList?: NormalizedTelegramChatListUpdate;
   contentUpdate?: NormalizedTelegramMessageContentUpdate;
   delete?: NormalizedTelegramMessageDelete;
   event?: RawTelegramEvent;
@@ -113,6 +126,21 @@ export function normalizeTelegramUpdate(update: unknown): NormalizedTelegramUpda
     const chatFolders = normalizeChatFolders(tdUpdate);
     if (chatFolders !== undefined) {
       normalized.chatFolders = chatFolders;
+    }
+  } else if (tdUpdate._ === 'updateChatAddedToList') {
+    const chatList = normalizeChatListUpdate(tdUpdate, 'add');
+    if (chatList !== undefined) {
+      normalized.chatList = chatList;
+    }
+  } else if (tdUpdate._ === 'updateChatRemovedFromList') {
+    const chatList = normalizeChatListUpdate(tdUpdate, 'remove');
+    if (chatList !== undefined) {
+      normalized.chatList = chatList;
+    }
+  } else if (tdUpdate._ === 'updateChatPosition') {
+    const chatList = normalizeChatPositionUpdate(tdUpdate);
+    if (chatList !== undefined) {
+      normalized.chatList = chatList;
     }
   } else if (tdUpdate._ === 'updateNewMessage') {
     const message = asTdObject(tdUpdate.message);
@@ -233,6 +261,7 @@ export function normalizeChat(chat: TdObject | undefined): NormalizedTelegramCha
 
   return {
     id,
+    lists: normalizeChatLists(chat),
     raw: toJsonObject(chat),
     title: typeof chat.title === 'string' ? chat.title : '',
     type: normalizeChatType(chat.type)
@@ -308,9 +337,14 @@ function normalizeRawEvent(
   const chat = normalized.chat;
   const contentUpdate = normalized.contentUpdate;
   const deletedMessages = normalized.delete;
+  const chatList = normalized.chatList;
   const occurredAt = message?.messageDate ?? contentUpdate?.editDate ?? deletedMessages?.deletedAt;
   const telegramChatId =
-    message?.chatId ?? chat?.id ?? contentUpdate?.chatId ?? deletedMessages?.chatId;
+    message?.chatId ??
+    chat?.id ??
+    chatList?.chatId ??
+    contentUpdate?.chatId ??
+    deletedMessages?.chatId;
   const telegramMessageId =
     message?.messageId ?? contentUpdate?.messageId ?? deletedMessages?.messageIds[0];
 
@@ -434,6 +468,13 @@ function mapEventType(tdlibUpdateType: string): string {
   if (tdlibUpdateType === 'updateChatFolders') {
     return 'chat_folders_updated';
   }
+  if (
+    tdlibUpdateType === 'updateChatAddedToList' ||
+    tdlibUpdateType === 'updateChatRemovedFromList' ||
+    tdlibUpdateType === 'updateChatPosition'
+  ) {
+    return 'chat_list_updated';
+  }
   if (tdlibUpdateType === 'updateMessageContent') {
     return 'message_content_updated';
   }
@@ -442,6 +483,85 @@ function mapEventType(tdlibUpdateType: string): string {
   }
 
   return 'tdlib_update';
+}
+
+function normalizeChatListUpdate(
+  update: TdObject,
+  action: 'add' | 'remove'
+): NormalizedTelegramChatListUpdate | undefined {
+  const chatId = stringifyTelegramId(update.chat_id);
+  const list = normalizeChatList(update.chat_list);
+  if (chatId === undefined || list === undefined) {
+    return undefined;
+  }
+
+  return {
+    action,
+    chatId,
+    list
+  };
+}
+
+function normalizeChatPositionUpdate(
+  update: TdObject
+): NormalizedTelegramChatListUpdate | undefined {
+  const chatId = stringifyTelegramId(update.chat_id);
+  const position = asTdObject(update.position);
+  const list = normalizeChatList(position?.list);
+  if (chatId === undefined || position === undefined || list === undefined) {
+    return undefined;
+  }
+
+  return {
+    action: position.order === 0 ? 'remove' : 'add',
+    chatId,
+    list
+  };
+}
+
+function normalizeChatLists(chat: TdObject): NormalizedTelegramChatList[] {
+  const fromChatLists = Array.isArray(chat.chat_lists)
+    ? chat.chat_lists.map(normalizeChatList).filter(isChatList)
+    : [];
+  const fromPositions = Array.isArray(chat.positions)
+    ? chat.positions
+        .map(asTdObject)
+        .map((position) => normalizeChatList(position?.list))
+        .filter(isChatList)
+    : [];
+  const unique = new Map<string, NormalizedTelegramChatList>();
+
+  for (const list of [...fromChatLists, ...fromPositions]) {
+    unique.set(chatListKey(list), list);
+  }
+
+  return [...unique.values()];
+}
+
+function normalizeChatList(value: unknown): NormalizedTelegramChatList | undefined {
+  const list = asTdObject(value);
+  if (list?._ === 'chatListMain') {
+    return { type: 'main' };
+  }
+  if (list?._ === 'chatListArchive') {
+    return { type: 'archive' };
+  }
+  if (list?._ === 'chatListFolder') {
+    const folderId = extractSafeInteger(list.chat_folder_id ?? list.chatFolderId);
+    return folderId === undefined ? undefined : { folderId, type: 'folder' };
+  }
+
+  return undefined;
+}
+
+function chatListKey(list: NormalizedTelegramChatList): string {
+  return list.type === 'folder' ? `${list.type}:${String(list.folderId)}` : list.type;
+}
+
+function isChatList(
+  value: NormalizedTelegramChatList | undefined
+): value is NormalizedTelegramChatList {
+  return value !== undefined;
 }
 
 function hashPayload(payload: JsonObject): string {

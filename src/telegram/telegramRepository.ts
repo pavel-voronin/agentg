@@ -2,6 +2,8 @@ import type { Database } from 'better-sqlite3';
 
 import type {
   NormalizedTelegramChat,
+  NormalizedTelegramChatList,
+  NormalizedTelegramChatListUpdate,
   NormalizedTelegramChatFolders,
   NormalizedTelegramMessage,
   NormalizedTelegramMessageContentUpdate,
@@ -12,7 +14,7 @@ import type {
 } from './normalize.js';
 
 export type TelegramRepository = {
-  countChats(): number;
+  countChats(input?: TelegramChatCountInput): number;
   getChat(chatId: string): TelegramChatDto | undefined;
   getMessage(chatId: string, messageId: string): TelegramMessageDto | undefined;
   listChatFolders(): TelegramChatFolderDto[];
@@ -25,6 +27,7 @@ export type TelegramRepository = {
 export type TelegramPersistResult = {
   chat: boolean;
   chatFolders: boolean;
+  chatList: boolean;
   event: boolean;
   message: boolean;
   user: boolean;
@@ -46,9 +49,13 @@ export type TelegramChatFolderDto = {
 };
 
 export type TelegramChatListInput = {
+  folderId?: number | null;
   limit?: number;
+  list?: 'archive' | 'folder' | 'main';
   query?: string;
 };
+
+export type TelegramChatCountInput = Pick<TelegramChatListInput, 'folderId' | 'list'>;
 
 export type TelegramChatTypeCountDto = {
   count: number;
@@ -76,6 +83,7 @@ type ChatRow = {
 };
 
 type ChatFolderRow = {
+  count: number;
   icon_name: string | null;
   position: number;
   telegram_chat_folder_id: number;
@@ -102,8 +110,17 @@ type MessageRow = {
 
 export function createTelegramRepository(database: Database): TelegramRepository {
   return {
-    countChats(): number {
-      const row = database.prepare('SELECT count(*) AS count FROM telegram_chats').get() as {
+    countChats(input = {}): number {
+      const query = chatListQuery(input);
+      const row = database
+        .prepare(
+          `
+            SELECT count(DISTINCT c.telegram_chat_id) AS count
+            ${query.from}
+            ${query.where}
+          `
+        )
+        .get(...query.params) as {
         count: number;
       };
       return row.count;
@@ -148,9 +165,18 @@ export function createTelegramRepository(database: Database): TelegramRepository
       return database
         .prepare(
           `
-            SELECT telegram_chat_folder_id, position, title, icon_name
-            FROM telegram_chat_folders
-            ORDER BY position ASC, title ASC
+            SELECT
+              f.telegram_chat_folder_id,
+              f.position,
+              f.title,
+              f.icon_name,
+              count(m.telegram_chat_id) AS count
+            FROM telegram_chat_folders f
+            LEFT JOIN telegram_chat_list_memberships m
+              ON m.list_type = 'folder'
+             AND m.telegram_chat_folder_id = f.telegram_chat_folder_id
+            GROUP BY f.telegram_chat_folder_id, f.position, f.title, f.icon_name
+            ORDER BY f.position ASC, f.title ASC
           `
         )
         .all()
@@ -179,21 +205,26 @@ export function createTelegramRepository(database: Database): TelegramRepository
       const limit = normalizeChatListLimit(input.limit);
       const query = input.query?.trim();
       const hasQuery = query !== undefined && query.length > 0;
+      const listQuery = chatListQuery(hasQuery ? {} : input);
       const rows = database
         .prepare(
           `
-            SELECT telegram_chat_id, title, type, updated_at
-            FROM telegram_chats
+            SELECT DISTINCT c.telegram_chat_id, c.title, c.type, c.updated_at
+            ${listQuery.from}
             ${
               hasQuery
-                ? "WHERE title LIKE ? ESCAPE '\\' OR telegram_chat_id LIKE ? ESCAPE '\\'"
-                : ''
+                ? `${listQuery.where.length > 0 ? `${listQuery.where} AND` : 'WHERE'} (c.title LIKE ? ESCAPE '\\' OR c.telegram_chat_id LIKE ? ESCAPE '\\')`
+                : listQuery.where
             }
-            ORDER BY updated_at DESC, title ASC
+            ORDER BY c.updated_at DESC, c.title ASC
             LIMIT ?
           `
         )
-        .all(...(hasQuery ? [likePattern(query), likePattern(query), limit] : [limit]));
+        .all(
+          ...listQuery.params,
+          ...(hasQuery ? [likePattern(query), likePattern(query)] : []),
+          limit
+        );
 
       return rows.map((row) => mapChatRow(row as ChatRow));
     },
@@ -219,16 +250,25 @@ export function createTelegramRepository(database: Database): TelegramRepository
       return transaction();
     },
     persistUpdate(update): TelegramPersistResult {
-      const transaction = database.transaction(() => ({
-        chat: update.chat === undefined ? false : upsertChat(database, update.chat),
-        chatFolders:
-          update.chatFolders === undefined
-            ? false
-            : replaceChatFolders(database, update.chatFolders),
-        event: update.event === undefined ? false : insertRawEvent(database, update.event),
-        message: persistMessageChange(database, update),
-        user: update.user === undefined ? false : upsertUser(database, update.user)
-      }));
+      const transaction = database.transaction(() => {
+        const chat = update.chat === undefined ? false : upsertChat(database, update.chat);
+        const chatListsFromChat =
+          update.chat === undefined ? false : replaceChatListMemberships(database, update.chat);
+        const chatListUpdate =
+          update.chatList === undefined ? false : applyChatListUpdate(database, update.chatList);
+
+        return {
+          chat,
+          chatFolders:
+            update.chatFolders === undefined
+              ? false
+              : replaceChatFolders(database, update.chatFolders),
+          chatList: chatListsFromChat || chatListUpdate,
+          event: update.event === undefined ? false : insertRawEvent(database, update.event),
+          message: persistMessageChange(database, update),
+          user: update.user === undefined ? false : upsertUser(database, update.user)
+        };
+      });
 
       return transaction();
     }
@@ -351,6 +391,76 @@ function replaceChatFolders(database: Database, update: NormalizedTelegramChatFo
   }
 
   return true;
+}
+
+function replaceChatListMemberships(database: Database, chat: NormalizedTelegramChat): boolean {
+  if (chat.lists.length === 0) {
+    return false;
+  }
+
+  database
+    .prepare(
+      `
+        DELETE FROM telegram_chat_list_memberships
+        WHERE telegram_chat_id = ?
+      `
+    )
+    .run(chat.id);
+
+  for (const list of chat.lists) {
+    insertChatListMembership(database, chat.id, list);
+  }
+
+  return true;
+}
+
+function applyChatListUpdate(
+  database: Database,
+  update: NormalizedTelegramChatListUpdate
+): boolean {
+  if (update.action === 'remove') {
+    const result = database
+      .prepare(
+        `
+          DELETE FROM telegram_chat_list_memberships
+          WHERE telegram_chat_id = ?
+            AND list_type = ?
+            AND telegram_chat_folder_id = ?
+        `
+      )
+      .run(update.chatId, update.list.type, chatListFolderId(update.list));
+
+    return result.changes > 0;
+  }
+
+  return insertChatListMembership(database, update.chatId, update.list);
+}
+
+function insertChatListMembership(
+  database: Database,
+  chatId: string,
+  list: NormalizedTelegramChatList
+): boolean {
+  const result = database
+    .prepare(
+      `
+        INSERT INTO telegram_chat_list_memberships (
+          telegram_chat_id,
+          list_type,
+          telegram_chat_folder_id
+        )
+        VALUES (?, ?, ?)
+        ON CONFLICT (telegram_chat_id, list_type, telegram_chat_folder_id) DO UPDATE SET
+          updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+      `
+    )
+    .run(chatId, list.type, chatListFolderId(list));
+
+  return result.changes > 0;
+}
+
+function chatListFolderId(list: NormalizedTelegramChatList): number {
+  return list.type === 'folder' ? (list.folderId ?? 0) : 0;
 }
 
 function insertRawEvent(database: Database, event: RawTelegramEvent): boolean {
@@ -505,7 +615,7 @@ function mapChatRow(row: ChatRow): TelegramChatDto {
 
 function mapChatFolderRow(row: ChatFolderRow): TelegramChatFolderDto {
   return {
-    count: 0,
+    count: row.count,
     iconName: row.icon_name,
     id: row.telegram_chat_folder_id,
     position: row.position,
@@ -525,6 +635,41 @@ function mapMessageRow(row: MessageRow): TelegramMessageDto {
     ...(row.sender_id === null ? {} : { senderId: row.sender_id }),
     ...(row.sender_type === null ? {} : { senderType: row.sender_type }),
     ...(row.text === null ? {} : { text: row.text })
+  };
+}
+
+function chatListQuery(input: TelegramChatCountInput): {
+  from: string;
+  params: unknown[];
+  where: string;
+} {
+  if (input.list === undefined) {
+    return {
+      from: 'FROM telegram_chats c',
+      params: [],
+      where: ''
+    };
+  }
+
+  if (input.list === 'folder' && input.folderId === undefined) {
+    return {
+      from: 'FROM telegram_chats c',
+      params: [],
+      where: 'WHERE 1 = 0'
+    };
+  }
+
+  return {
+    from: `
+      FROM telegram_chats c
+      JOIN telegram_chat_list_memberships m
+        ON m.telegram_chat_id = c.telegram_chat_id
+    `,
+    params: input.list === 'folder' ? [input.list, input.folderId ?? null] : [input.list],
+    where:
+      input.list === 'folder'
+        ? 'WHERE m.list_type = ? AND m.telegram_chat_folder_id = ?'
+        : 'WHERE m.list_type = ?'
   };
 }
 
