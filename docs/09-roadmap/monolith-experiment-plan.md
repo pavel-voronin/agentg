@@ -1,32 +1,26 @@
 # Monolith Experiment Plan
 
-This branch turns AgenTG into one Node.js application:
+This branch turns AgenTG into one local Node.js application:
 
-- one `package.json`
-- one `src/`
+- one root package
+- one `src/` tree
 - one Node.js process
 - one SQLite database
 - one in-memory event bus
 - trusted in-process plugins
-- no Docker runtime
-- no npm workspaces or `packages/*` architecture
-- no internal tRPC
-- no NATS
-- no Postgres requirement at runtime
+- external WebSocket edges for Control Plane and Gateway
 
-## Hard Decisions
+## Hard Rules
 
-- `packages/*` is removed as an architecture boundary.
-- `src/domains/*` is not used; domain modules live directly under `src/<domain>`.
-- Docker Compose, Dockerfiles, NATS scripts, and Postgres runtime scripts are removed.
-- Internal tRPC is removed completely.
+- The legacy workspace tree is removed as an architecture boundary.
 - Internal calls use direct TypeScript service interfaces.
-- Events use an in-memory pub/sub bus.
+- Internal events use the in-memory event bus.
 - Storage is SQLite-first.
-- Media and files live in a filesystem blob store, not SQLite blobs.
+- Telegram media and files live in the filesystem blob store.
 - Plugins load in-process from `src/plugins`.
-- Control Plane and Gateway remain external edge APIs and call app services directly.
-- Capability configuration is static configuration, not runtime extension registration.
+- `src/domains/*` is not used; domain modules live directly under `src/<domain>`.
+- Capability configuration is static configuration.
+- `npm run dev` uses a watcher and reloads on runtime source changes.
 
 ## Target Structure
 
@@ -34,50 +28,23 @@ This branch turns AgenTG into one Node.js application:
 src/
   main.ts
   app/
-    createApp.ts
-    config.ts
-    lifecycle.ts
   bus/
-    eventBus.ts
-    events.ts
-  td-data/
   storage/
-    sqlite.ts
-    migrations/
-    schema.ts
   telegram/
-    telegramService.ts
-    telegramRepository.ts
-    tdlibClient.ts
-    normalize.ts
-    files.ts
-    migrations.ts
   history/
-    historyService.ts
-    historyRepository.ts
-    reconciler.ts
-    coverage.ts
-    ranges.ts
   plugins/
-    registry.ts
-    types.ts
     summaries/
-      plugin.ts
-      repository.ts
   edges/
     control-plane/
-      server.ts
-      client/
     gateway/
-      server.ts
 ```
 
 ## Stage Rules
 
 Each stage starts with a short re-plan against the current repository state.
 Each stage ends with a conventional commit using an allowed project scope.
-No stage may add a compatibility layer, fallback path, legacy branch, or duplicated old/new runtime.
-If a stage appears to require one, the implementation stops and the stage is re-planned.
+No stage may add a compatibility layer, fallback path, legacy branch, or
+duplicated old/new runtime.
 
 ## Stages
 
@@ -87,112 +54,55 @@ If a stage appears to require one, the implementation stops and the stage is re-
 - Add this staged migration plan.
 - Commit only the plan.
 
-Exit check:
-
-- `git branch --show-current` returns `codex/monolith-experiment`.
-- Plan exists in `docs/09-roadmap/monolith-experiment-plan.md`.
-
 ### Stage 1: Root Runtime Skeleton
 
 - Replace the root package model with a single application package.
-- Remove npm workspace declarations.
-- Keep one set of root scripts: `dev`, `build`, `typecheck`, `lint`, `test`, `check`, and formatting scripts.
-- Add a SQLite driver.
-- Keep Vue/Vite dependencies needed by the Control Plane UI in the root package.
-- Create `src/main.ts`, `src/app/createApp.ts`, `src/app/config.ts`, and `src/app/lifecycle.ts`.
-- Create `src/bus/eventBus.ts` and `src/bus/events.ts`.
-- `npm run dev` uses a watcher and reloads on meaningful runtime changes.
-- `createApp()` wires config, SQLite placeholder, event bus, repositories placeholder, services placeholder, plugins placeholder, and edge server placeholders.
-
-Exit check:
-
-- `npm install`
-- `npm run typecheck`
-- `npm test`
+- Keep one set of root scripts.
+- Add the SQLite driver.
+- Create the app bootstrap, config, lifecycle, and event bus.
 
 ### Stage 2: SQLite Storage Foundation
 
-- Add `src/storage/sqlite.ts`, `src/storage/schema.ts`, and `src/storage/migrations`.
-- Use one database file, `agentg.sqlite`, by default.
+- Add SQLite open/close code.
 - Enable WAL.
-- Establish one migration flow for all domains and plugins.
-- Prefix tables by owner: `telegram_*`, `history_*`, `summaries_*`, and `pluginName_*`.
-- Add repository-level tests on temporary SQLite databases.
+- Establish one migration stream.
+- Add temporary-file SQLite tests.
 
-Exit check:
+### Stage 3: Telegram
 
-- `npm run typecheck`
-- `npm test`
-
-### Stage 3: Telegram Domain
-
-- Move useful Telegram code from `packages/telegram/src` into `src/telegram`.
-- Remove Telegram tRPC server/client code from runtime.
+- Move Telegram runtime code into `src/telegram`.
 - Keep TDLib behind `TelegramService`.
-- Expose direct methods such as `getChat()` and `getMessage()`.
-- Store media and files through filesystem blob storage.
-- Prevent raw TDLib DTO leakage from public service DTOs.
+- Expose direct service methods.
+- Store public DTOs without raw TDLib leakage.
 
-Exit check:
+### Stage 4: History
 
-- `npm run typecheck`
-- `npm test`
-- Telegram read DTO test proves no raw leakage.
-
-### Stage 4: History Domain
-
-- Move controller, reconciler, coverage, ranges, jobs, and observability logic from `packages/history-sync` into `src/history`.
-- Replace Telegram tRPC client usage with injected `TelegramService`.
-- Replace NATS events with the in-memory event bus.
-- Persist history data through SQLite repositories.
-
-Exit check:
-
-- `npm run typecheck`
-- `npm test`
-- Integration test runs `createApp()` with temporary SQLite.
+- Move History runtime code into `src/history`.
+- Inject `TelegramService` directly.
+- Replace brokered events with the in-memory event bus.
+- Persist History data through SQLite repositories.
 
 ### Stage 5: Summaries Plugin
 
 - Move Summaries into `src/plugins/summaries`.
-- Remove capability registration and extension registration.
 - Load it as a trusted in-process plugin.
-- Pass dependencies directly: `eventBus`, `historyService`, `telegramService`, and repository.
+- Pass dependencies directly.
 - Add plugin loading tests.
-
-Exit check:
-
-- `npm run typecheck`
-- `npm test`
 
 ### Stage 6: Edge APIs
 
 - Move Control Plane server into `src/edges/control-plane`.
-- Keep the Control Plane UI in the repo and build it from the root package.
-- Remove History tRPC client usage.
 - Move Gateway WebSocket into `src/edges/gateway`.
-- Make Gateway methods call services and plugins directly.
+- Make edge methods call services and plugins directly.
 - Make capabilities statically configured.
-
-Exit check:
-
-- `npm run typecheck`
-- `npm run lint`
-- `npm test`
 
 ### Stage 7: Remove Old Runtime Infrastructure
 
-- Delete `packages/`.
-- Delete `docker-compose.yml` and `Dockerfile`.
-- Delete `scripts/compose-*`.
-- Delete source audit rules about packages and tRPC.
-- Delete package-level drizzle configs and obsolete package-level migrations.
-- Update architecture docs so they describe only the monolith target.
-
-Exit check:
-
-- `rg "packages/" package.json tsconfig.json eslint.config.js docs src tests` returns no runtime references.
-- `rg "@trpc|trpc|nats|docker compose|postgres" package.json src tests scripts docs` returns no runtime dependency references.
+- Delete the legacy workspace tree.
+- Delete container runtime files and helper scripts.
+- Delete obsolete source audit rules.
+- Delete stale architecture documents for replaced behavior.
+- Keep docs focused on the current monolith target.
 
 ### Stage 8: Full Verification and Real Event Smoke
 
@@ -201,18 +111,15 @@ Exit check:
 - `npm run lint`
 - `npm test`
 - `npm run build`
-- `npm run dev` starts one Node.js application.
-- With a real Telegram session, receive one real Telegram event.
-- Connected Claude plugin reacts once and exits.
-- Control Plane receives runtime events.
-- Control Plane UI works against the monolith edge server.
+- `npm run dev`
+- Receive one real Telegram event.
+- Verify the connected Claude plugin reacts once and exits.
+- Verify Control Plane receives runtime events.
+- Verify Control Plane UI works against the monolith edge server.
 
-Exit check:
+Exit state:
 
-- Docker is not required.
-- Postgres is not required.
-- NATS is not required.
-- tRPC is absent from runtime dependencies.
 - Internal calls use direct TypeScript interfaces.
 - Events use the in-memory event bus.
 - Persistent data is written to SQLite.
+- The app starts with one watched dev command.

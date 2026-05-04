@@ -1,27 +1,52 @@
 # AgenTG
 
-AgenTG is a Telegram client for a personal agent.
+AgenTG is a single Node.js application for local Telegram ingestion, history
+tracking, summaries, and external WebSocket edges.
 
-AgenTG is not the assistant itself and not a Telegram bot. It is a Telegram client service that gives an external personal assistant controlled access to the user's Telegram data.
+Current runtime:
 
-The first implementation target is deliberately small and concrete:
+- one root `package.json`
+- one `src/` tree
+- one Node.js process
+- one SQLite database file, `agentg.sqlite`
+- one in-memory event bus
+- trusted in-process plugins under `src/plugins`
+- filesystem storage for Telegram media/files
 
-- log in as the user through Telegram client infrastructure;
-- synchronize the chat list;
-- read personal chats, groups, channels, and Saved Messages;
-- maintain requested visible text history coverage;
-- persist text-oriented Telegram data into Postgres;
-- keep attachment payloads lazy while storing basic attachment metadata;
-- make new Telegram messages visible in Postgres shortly after they appear in the normal Telegram client.
+## Commands
 
-## Documentation
+```sh
+npm install
+npm run dev
+npm run typecheck
+npm run lint
+npm test
+npm run build
+```
 
-- [Docs Index](docs/README.md)
-- [Vision](docs/01-product/vision.md)
-- [Non-Goals](docs/01-product/non-goals.md)
-- [System Overview](docs/02-architecture/system-overview.md)
-- [Component Boundaries](docs/02-architecture/component-boundaries.md)
-- [Domain Map](docs/03-domains/domain-map.md)
-- [History Sync](docs/03-domains/history-sync.md)
-- [Data Model](docs/04-data/data-model.md)
-- [MVP](docs/09-roadmap/mvp.md)
+`npm run dev` runs the monolith through a watcher and reloads on runtime source
+changes.
+
+## Runtime Shape
+
+`src/app/createApp.ts` wires config, SQLite, event bus, repositories, services,
+plugins, and edge servers. Internal calls use direct TypeScript interfaces.
+
+Main modules:
+
+- `src/telegram`: Telegram service, repository, TDLib adapter, normalization,
+  file store, and migrations.
+- `src/history`: History service, repository, coverage, ranges, reconciler, and
+  jobs.
+- `src/plugins/summaries`: trusted in-process summaries plugin.
+- `src/edges/control-plane`: Control Plane WebSocket/static edge.
+- `src/edges/gateway`: external Gateway WebSocket edge.
+
+Persistent data is stored in SQLite owner-prefixed tables:
+
+- `telegram_*`
+- `history_*`
+- `summaries_*`
+
+External edge APIs are WebSocket boundaries. Inside the process they call app
+services and plugins directly.

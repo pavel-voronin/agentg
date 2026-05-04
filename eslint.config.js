@@ -10,7 +10,6 @@ export default tseslint.config(
       '**/dist-server/**',
       'coverage/**',
       'node_modules/**',
-      'packages/**',
       'td-data/**'
     ]
   },
