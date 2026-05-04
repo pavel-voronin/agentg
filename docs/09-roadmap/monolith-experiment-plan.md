@@ -204,6 +204,8 @@ Exit check:
 - `npm run dev` starts one Node.js application.
 - With a real Telegram session, receive one real Telegram event.
 - Connected Claude plugin reacts once and exits.
+- Control Plane receives runtime events.
+- Control Plane UI works against the monolith edge server.
 
 Exit check:
 

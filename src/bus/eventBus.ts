@@ -12,6 +12,7 @@ export type EventBus<TEvent extends AppEvent = AppEvent> = {
   close(): void;
   listenerCount(type?: TEvent['type']): number;
   publish(event: TEvent): Promise<void>;
+  subscribeAll(handler: EventHandler<TEvent>): EventSubscription;
   subscribe<TType extends TEvent['type']>(
     type: TType,
     handler: EventHandler<TEvent & { type: TType }>
@@ -20,12 +21,14 @@ export type EventBus<TEvent extends AppEvent = AppEvent> = {
 
 export function createEventBus<TEvent extends AppEvent = AppEvent>(): EventBus<TEvent> {
   const handlers = new Map<TEvent['type'], Set<EventHandler<TEvent>>>();
+  const allHandlers = new Set<EventHandler<TEvent>>();
   let closed = false;
 
   return {
     close(): void {
       closed = true;
       handlers.clear();
+      allHandlers.clear();
     },
     listenerCount(type?: TEvent['type']): number {
       if (type !== undefined) {
@@ -36,7 +39,7 @@ export function createEventBus<TEvent extends AppEvent = AppEvent>(): EventBus<T
       for (const typedHandlers of handlers.values()) {
         count += typedHandlers.size;
       }
-      return count;
+      return count + allHandlers.size;
     },
     async publish(event: TEvent): Promise<void> {
       if (closed) {
@@ -44,12 +47,12 @@ export function createEventBus<TEvent extends AppEvent = AppEvent>(): EventBus<T
       }
 
       const typedHandlers = handlers.get(event.type);
-      if (typedHandlers === undefined || typedHandlers.size === 0) {
+      if ((typedHandlers === undefined || typedHandlers.size === 0) && allHandlers.size === 0) {
         return;
       }
 
       const errors: unknown[] = [];
-      for (const handler of [...typedHandlers]) {
+      for (const handler of [...(typedHandlers ?? []), ...allHandlers]) {
         try {
           await handler(event);
         } catch (error) {
@@ -60,6 +63,19 @@ export function createEventBus<TEvent extends AppEvent = AppEvent>(): EventBus<T
       if (errors.length > 0) {
         throw new AggregateError(errors, `Event handlers failed for ${event.type}`);
       }
+    },
+    subscribeAll(handler): EventSubscription {
+      if (closed) {
+        throw new Error('Event bus is closed');
+      }
+
+      allHandlers.add(handler);
+
+      return {
+        unsubscribe(): void {
+          allHandlers.delete(handler);
+        }
+      };
     },
     subscribe<TType extends TEvent['type']>(
       type: TType,

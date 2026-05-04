@@ -1,6 +1,11 @@
 import { createEventBus, type EventBus } from '../bus/eventBus.js';
 import { createAppEvent } from '../bus/events.js';
 import {
+  startControlPlaneServer,
+  type ControlPlaneServerHandle
+} from '../edges/control-plane/server.js';
+import { startGatewayServer, type GatewayServerHandle } from '../edges/gateway/server.js';
+import {
   createTelegramRepository,
   type TelegramRepository
 } from '../telegram/telegramRepository.js';
@@ -54,7 +59,10 @@ export type AppPluginRegistry = {
   summaries: SummariesPlugin;
 };
 
-export type AppEdgeRegistry = Record<string, unknown>;
+export type AppEdgeRegistry = {
+  controlPlane?: ControlPlaneServerHandle;
+  gateway?: GatewayServerHandle;
+};
 
 export function createApp(input: CreateAppInput = {}): AppRuntime {
   const config = loadAppConfig(input);
@@ -76,6 +84,7 @@ export function createApp(input: CreateAppInput = {}): AppRuntime {
     repository: summariesRepository
   });
   const pluginRegistry = createPluginRegistry([summariesPlugin]);
+  const edges: AppEdgeRegistry = {};
   const storage: AppStorageHandle = {
     sqlite
   };
@@ -108,13 +117,51 @@ export function createApp(input: CreateAppInput = {}): AppRuntime {
         await pluginRegistry.stop();
       }
     },
+    {
+      name: 'edges',
+      async start(): Promise<void> {
+        const plugins: AppPluginRegistry = {
+          registry: pluginRegistry,
+          summaries: summariesPlugin
+        };
+        const services: AppServiceRegistry = {
+          history: historyService,
+          telegram: telegramService
+        };
+
+        if (config.controlPlane.enabled) {
+          edges.controlPlane = await startControlPlaneServer({
+            config: config.controlPlane,
+            eventBus,
+            plugins,
+            services
+          });
+        }
+
+        if (config.gateway.enabled) {
+          edges.gateway = await startGatewayServer({
+            capabilities: config.gatewayCapabilities.enabled,
+            config: config.gateway,
+            eventBus,
+            plugins,
+            services
+          });
+        }
+      },
+      async stop(): Promise<void> {
+        await edges.gateway?.close();
+        delete edges.gateway;
+        await edges.controlPlane?.close();
+        delete edges.controlPlane;
+      }
+    },
     ...(input.lifecycleResources ?? [])
   ]);
   let stopped = false;
 
   return {
     config,
-    edges: {},
+    edges,
     eventBus,
     lifecycle,
     plugins: {

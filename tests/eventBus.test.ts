@@ -57,6 +57,32 @@ describe('createEventBus', () => {
     expect(eventBus.listenerCount()).toBe(1);
   });
 
+  it('publishes every event to all-event subscribers', async () => {
+    const eventBus = createEventBus();
+    const received: string[] = [];
+
+    eventBus.subscribeAll((event) => {
+      received.push(event.type);
+    });
+
+    await eventBus.publish(
+      createAppEvent({
+        data: {},
+        source: 'telegram',
+        type: 'telegram.chat.updated'
+      })
+    );
+    await eventBus.publish(
+      createAppEvent({
+        data: {},
+        source: 'history',
+        type: 'history.coverage.changed'
+      })
+    );
+
+    expect(received).toEqual(['telegram.chat.updated', 'history.coverage.changed']);
+  });
+
   it('rejects publishing after close', async () => {
     const eventBus = createEventBus();
     eventBus.close();

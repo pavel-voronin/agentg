@@ -11,6 +11,7 @@ export type AppConfig = {
     enabled: boolean;
     host: string;
     port: number;
+    staticDir: string;
   };
   database: {
     path: string;
@@ -19,6 +20,10 @@ export type AppConfig = {
     enabled: boolean;
     host: string;
     port: number;
+    token?: string;
+  };
+  gatewayCapabilities: {
+    enabled: string[];
   };
   plugins: {
     enabled: string[];
@@ -50,7 +55,11 @@ export function loadAppConfig(input: LoadAppConfigInput = {}): AppConfig {
     controlPlane: {
       enabled: parseBoolean(env.CONTROL_PLANE_ENABLED, false),
       host: env.CONTROL_PLANE_HOST ?? '127.0.0.1',
-      port: parsePort(env.CONTROL_PLANE_PORT, 8789, 'CONTROL_PLANE_PORT')
+      port: parsePort(env.CONTROL_PLANE_PORT, 8789, 'CONTROL_PLANE_PORT'),
+      staticDir: resolveConfigPath(
+        env.CONTROL_PLANE_STATIC_DIR ?? './dist-control-plane',
+        baseDirectory
+      )
     },
     database: {
       path: resolveConfigPath(env.AGENTG_SQLITE_PATH ?? './agentg.sqlite', baseDirectory)
@@ -58,7 +67,13 @@ export function loadAppConfig(input: LoadAppConfigInput = {}): AppConfig {
     gateway: {
       enabled: parseBoolean(env.GATEWAY_ENABLED, false),
       host: env.GATEWAY_HOST ?? '127.0.0.1',
-      port: parsePort(env.GATEWAY_PORT, 8787, 'GATEWAY_PORT')
+      port: parsePort(env.GATEWAY_PORT, 8787, 'GATEWAY_PORT'),
+      ...(env.GATEWAY_TOKEN === undefined ? {} : { token: env.GATEWAY_TOKEN })
+    },
+    gatewayCapabilities: {
+      enabled: parseList(
+        env.GATEWAY_CAPABILITIES ?? 'telegram.read,history.read,summaries.read,summaries.request'
+      )
     },
     plugins: {
       enabled: parseList(env.AGENTG_PLUGINS)
