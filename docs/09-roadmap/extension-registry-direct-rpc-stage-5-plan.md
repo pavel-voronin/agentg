@@ -23,18 +23,29 @@ At the end of this stage, commit all changes with a conventional commit message.
 
 ## Concrete Scope
 
-- Update architecture docs that mention `enriched`, envelope extensions, or
-  domain-owned extension execution.
-- Update operations docs and smoke scripts to check the separate registry and
-  caller-side composition path.
-- Update interface docs to describe direct RPC results, `_model` markers, and
-  extension getter calls.
-- Add or update source-audit checks to prevent reintroducing:
+- Update current architecture docs that still describe `enriched`, envelope
+  extensions, or domain-owned extension execution:
+  - `docs/02-architecture/module-runtime-and-extensions.md`;
+  - `docs/02-architecture/system-overview.md`;
+  - `docs/02-architecture/component-boundaries.md`.
+- Update current interface and operations docs:
+  - `docs/05-interfaces/agent-gateway-api.md`;
+  - `docs/06-operations/local-dev.md`;
+  - `docs/06-operations/observability.md`;
+  - ADR-0006 status/content if needed so it no longer reads as the current
+    extension contract.
+- Update `scripts/compose-smoke.mjs` to:
+  - include the standalone `extension-registry` service;
+  - poll `extension-registry.listExtensions({ target: 'telegram.chat' })`;
+  - call `summaries.chatSummary` as a getter with a marked
+    `{ _model: 'telegram.chat', id }` object;
+  - assemble and print a caller-composed view in the smoke output.
+- Add source-audit checks to prevent reintroducing:
   - domain `enriched` behavior;
   - local domain extension registries;
   - registry-side RPC execution.
-- Remove stale tests and helpers that exist only for old envelope extension
-  behavior.
+- Leave old migration stage files as historical records; they may mention older
+  intermediate states.
 
 ## Explicit Non-Scope
 

@@ -82,7 +82,7 @@ Own:
 - Module-owned tRPC methods.
 - Module-owned NATS events with the slug prefix.
 - Gateway capability registration and refresh.
-- Extension registration and refresh against enriched target methods.
+- Extension getter registration and refresh in the standalone extension registry.
 
 Do not own:
 
@@ -98,14 +98,14 @@ Owns:
   invalidation state.
 - `summaries.*` tRPC methods.
 - `summaries.requestChatSummary` Gateway capability.
-- `summaries.chatSummary` extension for `history.getChatHistoryState`.
+- `summaries.chatSummary` getter for `telegram.chat` model objects.
 - `summaries.*` lifecycle events.
 
 Does not own:
 
 - Telegram-shaped message storage.
 - History targets, coverage, or backfill jobs.
-- The base `history.getChatHistoryState` result.
+- Telegram chat base models or any domain-owned base result.
 
 ## Storage Layer
 

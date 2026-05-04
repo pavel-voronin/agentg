@@ -13,8 +13,8 @@
 - duplicate event count
 - attachment metadata count
 - active Gateway capability registrations
-- active extension registrations per enriched service
-- observable RPC call lifecycle by `callId`
+- active Extension Registry registrations per target
+- RPC call lifecycle by `callId`
 - module-owned event counts by slug prefix
 
 ## Debug Views
@@ -30,13 +30,13 @@ The system should support answering:
 - Was a specific Telegram message persisted?
 - Which raw event produced a specific current message record?
 - Which module capabilities are currently active in Gateway?
-- Which extensions are active for an enriched target?
-- Did an observable call start, report progress, complete, or fail for a given
+- Which extension getters are active for a model target such as `telegram.chat`?
+- Did an RPC call start, report progress, complete, or fail for a given
   `callId`?
 
 ## RPC Call Events
 
-Observable and enriched RPC methods publish these live events:
+RPC methods publish these live events by default:
 
 The event name is `{target}.{lifecycle}`. For target
 `history.getChatHistoryState`, the lifecycle events are:
@@ -58,3 +58,7 @@ module work:
 - cross-domain storage schema imports stay out of runtime code
 - domain and module table prefixes match ownership
 - Gateway capability registration and proxy behavior remain covered
+- domain runtime code does not reintroduce `enriched`
+- History and Telegram do not expose local extension registries
+- Extension Registry does not import tRPC client code
+- Gateway extension composition remains covered

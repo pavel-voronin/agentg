@@ -1,5 +1,9 @@
 # Module Runtime And Extensions Plan
 
+Status: historical. The direct result and standalone registry architecture is
+tracked in
+[Extension Registry And Direct RPC Migration](extension-registry-direct-rpc-migration.md).
+
 This plan defines how AgenTG adds trusted internal modules, gives each module
 owned storage, exposes module capabilities through Gateway, and supports
 controlled data and RPC result extensions.

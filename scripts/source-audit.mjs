@@ -12,6 +12,7 @@ auditRawTrpcBuilderImports(tsFiles);
 auditCrossDomainSchemaImports(tsFiles);
 auditTablePrefixes();
 auditGatewayCapabilities();
+auditExtensionBoundaries(tsFiles);
 
 if (failures.length > 0) {
   for (const failure of failures) {
@@ -133,6 +134,117 @@ function auditGatewayCapabilities() {
   for (const token of requiredTestTokens) {
     if (!tests.includes(token)) {
       failures.push(`Gateway capability behavior lacks regression test token: ${token}`);
+    }
+  }
+}
+
+function auditExtensionBoundaries(files) {
+  auditNoDomainEnrichedRuntime(files);
+  auditNoDomainExtensionEndpoints(files);
+  auditRegistryDoesNotCallRpc(files);
+  auditGatewayExtensionComposition();
+}
+
+function auditNoDomainEnrichedRuntime(files) {
+  const auditedPrefixes = [
+    'packages/shared/src/',
+    'packages/history-sync/src/',
+    'packages/telegram/src/',
+    'packages/summaries/src/',
+    'packages/gateway/src/'
+  ];
+  const forbiddenTokens = [
+    'callRegisteredExtensions',
+    'createTrpcExtensionCallerResolver',
+    'ExtensionCallerResolver',
+    'extensionCallInputSchema',
+    'ProcedureExtensionEnvelope',
+    'ProcedureExtensions',
+    'isProcedureSuccessEnvelope'
+  ];
+
+  for (const file of files) {
+    const rel = toRel(file);
+    if (!auditedPrefixes.some((prefix) => rel.startsWith(prefix))) {
+      continue;
+    }
+
+    const source = readFileSync(file, 'utf8');
+    if (/\benriched\b/.test(source)) {
+      failures.push(`domain runtime must not reintroduce enriched RPC behavior: ${rel}`);
+    }
+
+    for (const token of forbiddenTokens) {
+      if (source.includes(token)) {
+        failures.push(
+          `old extension envelope helper is not allowed in runtime: ${rel} -> ${token}`
+        );
+      }
+    }
+  }
+}
+
+function auditNoDomainExtensionEndpoints(files) {
+  const domainRpcPrefixes = ['packages/history-sync/src/rpc/', 'packages/telegram/src/rpc/'];
+  const forbiddenTokens = ['registerExtension', 'listExtensions'];
+
+  for (const file of files) {
+    const rel = toRel(file);
+    if (!domainRpcPrefixes.some((prefix) => rel.startsWith(prefix))) {
+      continue;
+    }
+
+    const source = readFileSync(file, 'utf8');
+    for (const token of forbiddenTokens) {
+      if (source.includes(token)) {
+        failures.push(`domain RPC must not expose a local extension registry: ${rel} -> ${token}`);
+      }
+    }
+  }
+}
+
+function auditRegistryDoesNotCallRpc(files) {
+  for (const file of files) {
+    const rel = toRel(file);
+    if (!rel.startsWith('packages/extension-registry/src/')) {
+      continue;
+    }
+
+    const source = readFileSync(file, 'utf8');
+    const forbiddenTokens = ['@trpc/client', 'createTRPCClient', 'createTRPCUntypedClient'];
+    for (const token of forbiddenTokens) {
+      if (source.includes(token)) {
+        failures.push(`extension registry must not call RPC methods: ${rel} -> ${token}`);
+      }
+    }
+  }
+}
+
+function auditGatewayExtensionComposition() {
+  const agentGateway = readFileSync(join(root, 'packages/gateway/src/agent-gateway.ts'), 'utf8');
+  const extensions = readFileSync(join(root, 'packages/gateway/src/extensions.ts'), 'utf8');
+  const tests = readFileSync(join(root, 'packages/gateway/tests/capabilities.test.ts'), 'utf8');
+  const requiredGatewayTokens = ["'extensions.compose'", 'composeGatewayExtensions'];
+  const requiredExtensionTokens = [
+    'collectModelMarkers',
+    'createTrpcGatewayExtensionRegistryClient',
+    'createTrpcGatewayExtensionGetterCaller'
+  ];
+  const requiredTestTokens = ['composes model extensions from the standalone extension registry'];
+
+  for (const token of requiredGatewayTokens) {
+    if (!agentGateway.includes(token)) {
+      failures.push(`Gateway extension composition behavior is missing token: ${token}`);
+    }
+  }
+  for (const token of requiredExtensionTokens) {
+    if (!extensions.includes(token)) {
+      failures.push(`Gateway extension composer is missing token: ${token}`);
+    }
+  }
+  for (const token of requiredTestTokens) {
+    if (!tests.includes(token)) {
+      failures.push(`Gateway extension composition lacks regression test token: ${token}`);
     }
   }
 }

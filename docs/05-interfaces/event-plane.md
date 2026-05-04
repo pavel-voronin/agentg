@@ -85,7 +85,7 @@ Summaries publishes:
 - `summaries.summary.completed`
 - `summaries.summary.invalidated`
 
-Observable RPC calls publish:
+RPC calls publish lifecycle events by default:
 
 - `{target}.started`
 - `{target}.progress`

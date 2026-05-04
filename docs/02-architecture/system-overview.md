@@ -61,7 +61,10 @@ Plane server, and Control Plane server calls internal domain RPC directly.
 Gateway remains the external agent edge.
 Trusted modules run as independent services inside the same internal contour.
 They own their storage and tRPC surface, register agent-facing capabilities with
-Gateway, and may register extension methods against enriched core domain reads.
+Gateway, and may register extension getter methods in the standalone extension
+registry. Callers that need extended views compose them outside the owning
+domain by reading registry entries and calling the registered getter RPC
+methods.
 
 The preferred starting runtime is TypeScript/Node.js, provided TDLib can be integrated reliably through its JSON/C interface or a maintained wrapper. Go or Rust remain fallback choices if the Node.js integration becomes the risky part of the project.
 

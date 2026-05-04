@@ -6,11 +6,7 @@ import {
   type CapabilityRegistration,
   type CapabilityRegistry
 } from '@agentg/shared/rpc/capabilities';
-import {
-  isProcedureErrorEnvelope,
-  isProcedureSuccessEnvelope,
-  ProcedureDomainError
-} from '@agentg/shared/rpc/envelope';
+import { isProcedureErrorEnvelope, ProcedureDomainError } from '@agentg/shared/rpc/envelope';
 import { createTRPCUntypedClient, httpBatchLink } from '@trpc/client';
 
 export const DEFAULT_GATEWAY_CAPABILITY_CALL_TIMEOUT_MS = 15_000;
@@ -69,10 +65,6 @@ export function createTrpcGatewayCapabilityCaller(): GatewayCapabilityCaller {
 }
 
 function unwrapCapabilityResponse(response: unknown): unknown {
-  if (isProcedureSuccessEnvelope(response)) {
-    return response.result;
-  }
-
   if (isProcedureErrorEnvelope(response)) {
     throw new ProcedureDomainError(response.error);
   }

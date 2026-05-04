@@ -13,6 +13,7 @@ const compose = ['docker', 'compose', ...profiles.flatMap((profile) => ['--profi
 const services = [
   'postgres',
   'nats',
+  'extension-registry',
   'history-sync',
   'gateway',
   'summaries',
@@ -107,6 +108,19 @@ async function fetchUntilReady(url, service, acceptedStatuses, attempts = 30) {
   throw new Error(service + ' did not become ready: ' + (lastError instanceof Error ? lastError.message : String(lastError)));
 }
 
+async function waitForExtensionRegistration(client, target, extension, attempts = 20) {
+  let registrations;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    registrations = await client.query('listExtensions', { target });
+    if (registrations.extensions?.some((item) => item.target === target && item.extension === extension)) {
+      return registrations;
+    }
+    await sleep(2_000);
+  }
+
+  throw new Error(extension + ' is not registered for ' + target + ': ' + JSON.stringify(registrations));
+}
+
 async function withGateway(fn) {
   const socket = new WebSocket('ws://gateway:8787');
   const pending = new Map();
@@ -183,14 +197,45 @@ const gatewayResult = await withGateway(async (request) => {
   return { capabilities, capabilityCall };
 });
 
-const historyClient = createTRPCUntypedClient({
-  links: [httpBatchLink({ url: 'http://history-sync:8080' })]
+const extensionTarget = 'telegram.chat';
+const extensionMethod = 'summaries.chatSummary';
+const base = {
+  chat: {
+    _model: extensionTarget,
+    id: 'compose-smoke-chat',
+    title: 'Compose Smoke Chat',
+    type: 'private'
+  }
+};
+const registryClient = createTRPCUntypedClient({
+  links: [httpBatchLink({ url: 'http://extension-registry:8080' })]
 });
-const extensionsEnvelope = await historyClient.query('listExtensions');
-const extensions = extensionsEnvelope?.result ?? extensionsEnvelope;
-if (!extensions.extensions?.some((item) => item.target === 'history.getChatHistoryState' && item.extension === 'summaries.chatSummary')) {
-  throw new Error('summaries.chatSummary extension is not registered: ' + JSON.stringify(extensionsEnvelope));
+const extensionRegistry = await waitForExtensionRegistration(
+  registryClient,
+  extensionTarget,
+  extensionMethod
+);
+
+const summariesClient = createTRPCUntypedClient({
+  links: [httpBatchLink({ url: 'http://summaries:8080' })]
+});
+const summaryExtension = await summariesClient.query(extensionMethod, base.chat);
+if (summaryExtension.summary?.chatId !== base.chat.id || summaryExtension.stale !== false) {
+  throw new Error(extensionMethod + ' did not return a fresh summary: ' + JSON.stringify(summaryExtension));
 }
+const composed = {
+  base,
+  extensions: [
+    {
+      extension: extensionMethod,
+      model: {
+        _model: base.chat._model,
+        id: base.chat.id
+      },
+      result: summaryExtension
+    }
+  ]
+};
 
 const controlPlaneResponse = await fetchUntilReady('http://control-plane:8788/', 'control-plane', [200]);
 
@@ -205,7 +250,8 @@ console.log(JSON.stringify({
     contentType: controlPlaneResponse.headers.get('content-type'),
     status: controlPlaneResponse.status
   },
-  extensions
+  composed,
+  extensionRegistry
 }, null, 2));
 `;
 }

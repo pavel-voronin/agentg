@@ -30,6 +30,8 @@ Agent Gateway
   <-> tRPC to Telegram ingestion for Telegram reads
   <-> tRPC to History Sync
   <-> tRPC to module services for registered capabilities
+  <-> tRPC to Extension Registry for extension registrations
+  <-> tRPC to extension services for caller-composed views
 ```
 
 Start locally:
@@ -61,6 +63,9 @@ Configuration:
 - `AGENT_GATEWAY_TOKEN`, optional query-string token
 - `TELEGRAM_RPC_URL`, default `http://127.0.0.1:18081`
 - `HISTORY_RPC_URL`, default `http://127.0.0.1:18082`
+- `EXTENSION_REGISTRY_RPC_URL`, optional registry URL for `extensions.compose`
+- `SUMMARIES_RPC_URL`, optional Summaries service URL for
+  `summaries.*` extension getters
 
 When `AGENT_GATEWAY_TOKEN` is set, connect with:
 
@@ -298,23 +303,63 @@ Returns active capability registrations:
 }
 ```
 
-Gateway routes the call to the owning module tRPC method and unwraps the
-standard AgenTG response envelope before returning the result to the WebSocket
-client.
+Gateway routes the call to the owning module tRPC method and returns the direct
+result to the WebSocket client.
 
 Gateway does not persist capability registrations. Modules refresh active
 registrations periodically, and Gateway removes stale entries when listing or
 resolving capabilities.
 
-## Extension Registry Reads
+## Extension Composition
 
-Core services expose their active extension registry through internal tRPC:
+Gateway can compose an extended view when it is configured with
+`EXTENSION_REGISTRY_RPC_URL` and the required extension service URLs.
 
-- History Sync: `listExtensions`
-- Telegram ingestion: `listExtensions`
+`extensions.compose`
 
-These methods return the standard AgenTG envelope. The registry is in-memory and
-describes only active registrations known to that service process.
+```json
+{
+  "method": "telegram.getChat",
+  "params": {
+    "chatId": "123"
+  }
+}
+```
+
+Gateway calls the base method first, scans the returned body for objects with
+`_model` and `id`, asks Extension Registry for getters registered against each
+`_model`, calls those getter RPC methods, and returns a caller-composed view:
+
+```json
+{
+  "base": {
+    "chat": {
+      "_model": "telegram.chat",
+      "id": "123",
+      "title": "Saved Messages",
+      "type": "private"
+    }
+  },
+  "extensions": [
+    {
+      "extension": "summaries.chatSummary",
+      "model": {
+        "_model": "telegram.chat",
+        "id": "123"
+      },
+      "result": {
+        "summary": null,
+        "stale": false,
+        "invalidation": null
+      }
+    }
+  ]
+}
+```
+
+Extension Registry itself exposes `registerExtension` and `listExtensions`
+through internal tRPC. It stores `{ target, extension }` entries only; it does
+not invoke extension RPC methods or perform service discovery.
 
 ## Telegram History RPC
 

@@ -12,6 +12,7 @@ npm run infra:up
 npm run db:migrate
 npm run dev:telegram
 npm run dev:history-sync
+npm run dev:extension-registry
 npm run dev:gateway
 npm run dev:summaries
 npm run dev:control-plane-server
@@ -36,7 +37,10 @@ the history sync lifecycle. It talks to Telegram ingestion through internal tRPC
 `summaries_*` tables, subscribes to Telegram and History events for summary
 invalidation, exposes `summaries.*` tRPC methods, registers
 `summaries.requestChatSummary` with Gateway, and registers
-`summaries.chatSummary` against `history.getChatHistoryState`.
+`summaries.chatSummary` against `telegram.chat` in Extension Registry.
+
+`npm run dev:extension-registry` runs the `@agentg/extension-registry` package.
+It stores and lists active `{ target, extension }` registrations only.
 
 `npm run dev:control-plane-server` runs the server-side Control Plane boundary.
 It serves the browser-facing operator WebSocket on `127.0.0.1:8789`, subscribes
@@ -47,8 +51,9 @@ to live NATS events, and calls History Sync through internal tRPC.
 
 `npm run dev:gateway` runs the `@agentg/gateway` package. It subscribes to live
 NATS events, serves external agent WebSocket clients with Postgres-backed
-Telegram reads, and calls History Sync through internal tRPC. Operator views do
-not require Gateway.
+Telegram reads, calls History Sync through internal tRPC, and can compose
+extension views when configured with Extension Registry and extension service
+URLs. Operator views do not require Gateway.
 
 ## Internal RPC Addresses
 
@@ -67,12 +72,18 @@ Local development defaults:
 - History to Telegram URL: `TELEGRAM_RPC_URL=http://127.0.0.1:18081`
 - Gateway to Telegram URL: `TELEGRAM_RPC_URL=http://127.0.0.1:18081`
 - Gateway to History URL: `HISTORY_RPC_URL=http://127.0.0.1:18082`
+- Extension Registry internal RPC bind:
+  `EXTENSION_REGISTRY_RPC_HOST=127.0.0.1`,
+  `EXTENSION_REGISTRY_RPC_PORT=18084`
+- Gateway to Extension Registry URL:
+  `EXTENSION_REGISTRY_RPC_URL=http://127.0.0.1:18084`
+- Gateway to Summaries URL: `SUMMARIES_RPC_URL=http://127.0.0.1:18083`
 - Summaries internal RPC bind: `SUMMARIES_RPC_HOST=127.0.0.1`,
   `SUMMARIES_RPC_PORT=18083`
 - Summaries module URL: `MODULE_RPC_URL=http://127.0.0.1:18083`
 - Summaries to Gateway URL: `GATEWAY_RPC_URL=ws://127.0.0.1:8787`
-- Summaries to History URL: `HISTORY_RPC_URL=http://127.0.0.1:18082`
-- History to Summaries URL: `SUMMARIES_RPC_URL=http://127.0.0.1:18083`
+- Summaries to Extension Registry URL:
+  `EXTENSION_REGISTRY_RPC_URL=http://127.0.0.1:18084`
 - Control Plane server bind: `CONTROL_PLANE_HOST=127.0.0.1`,
   `CONTROL_PLANE_PORT=8789`
 - Control Plane server to History URL:
@@ -84,10 +95,14 @@ Docker Compose uses internal service DNS names:
 - History Sync binds `0.0.0.0:8080` inside its container.
 - History Sync calls `http://telegram:8080`.
 - Gateway calls `http://telegram:8080` and `http://history-sync:8080`.
+- Extension Registry binds `0.0.0.0:8080` inside its container.
+- Gateway calls `http://extension-registry:8080` for extension registration
+  reads.
 - Summaries binds `0.0.0.0:8080` inside its container.
-- Summaries calls `ws://gateway:8787` and `http://history-sync:8080`.
-- History Sync calls `http://summaries:8080` for registered summaries
-  extensions when `SUMMARIES_RPC_URL` is configured.
+- Summaries calls `ws://gateway:8787` and
+  `http://extension-registry:8080`.
+- Gateway calls `http://summaries:8080` when composing
+  `summaries.chatSummary`.
 - Control Plane server calls `http://history-sync:8080` and exposes the browser
   UI on `${CONTROL_PLANE_PORT:-8788}`.
 
@@ -114,12 +129,14 @@ Module runtime environment:
 - `DATABASE_URL`: shared Postgres connection string
 - `NATS_URL`: shared NATS connection string
 - `GATEWAY_RPC_URL`: Gateway WebSocket URL for capability registration
-- needed domain URLs such as `TELEGRAM_RPC_URL` and `HISTORY_RPC_URL`
+- `EXTENSION_REGISTRY_RPC_URL`: registry URL for extension registration
+- needed domain URLs such as `TELEGRAM_RPC_URL` or `HISTORY_RPC_URL`
 
 Capability names are namespaced by slug, for example
 `summaries.requestChatSummary`. Extension RPC names follow the same convention
-and are registered directly with the target service at startup, then refreshed
-periodically.
+and are registered directly with Extension Registry at startup, then refreshed
+periodically. Model extension getters target the model marker value, for example
+`telegram.chat`.
 
 Docker Compose includes a `module-smoke` profile with the `modulesmoke` service.
 It is a packaging smoke service for the module environment shape, not a product
@@ -148,26 +165,26 @@ ws.on('message', (data) => { console.log(data.toString()); ws.close(); });
 "
 ```
 
-History extension registrations are exposed through History tRPC:
+Extension registrations are exposed through Extension Registry tRPC:
 
 ```bash
 npx tsx -e "
-import { createTRPCClient, httpBatchLink } from '@trpc/client';
-const client = createTRPCClient({
-  links: [httpBatchLink({ url: process.env.HISTORY_RPC_URL ?? 'http://127.0.0.1:18082' })]
+import { createTRPCUntypedClient, httpBatchLink } from '@trpc/client';
+const client = createTRPCUntypedClient({
+  links: [httpBatchLink({ url: process.env.EXTENSION_REGISTRY_RPC_URL ?? 'http://127.0.0.1:18084' })]
 });
-console.log(JSON.stringify(await client.listExtensions.query(), null, 2));
+console.log(JSON.stringify(await client.query('listExtensions', { target: 'telegram.chat' }), null, 2));
 "
 ```
 
-The `listExtensions` result is an AgenTG response envelope. The registry is
-process-local and ephemeral.
+The registry response is direct data. Extension Registry stores active
+registrations only; it does not call extension RPC methods.
 
 ## Debugging `callId` Flows
 
-Observable and enriched RPC methods publish `{target}.{lifecycle}` events with
-one `callId` per invocation. To inspect one procedure flow, subscribe to that
-target in NATS directly:
+RPC methods publish `{target}.{lifecycle}` events with one `callId` per
+invocation by default. To inspect one procedure flow, subscribe to that target
+in NATS directly:
 
 ```bash
 node --input-type=module -e "
@@ -182,9 +199,9 @@ for await (const msg of nc.subscribe('history.getChatHistoryState.>')) {
 
 Then:
 
-1. Invoke the subscribed observable or enriched method, for example
-   `history.getChatHistoryState`. Use `history.requestSync.>` or
-   `summaries.summaries.requestSummary.>` when inspecting those targets.
+1. Invoke the subscribed RPC method, for example `history.getChatHistoryState`.
+   Use `history.requestSync.>` or `summaries.summaries.requestSummary.>` when
+   inspecting those targets.
 2. Correlate `{target}.started`, optional `{target}.progress`,
    `{target}.completed`, and `{target}.failed` by `event.data.callId`.
 
@@ -197,6 +214,7 @@ Initial local stack includes:
 
 - Telegram ingestion process backed by TDLib
 - History Sync process
+- Extension Registry process
 - Summaries pilot module
 - Control Plane server and browser UI for operator views
 - Agent Gateway process when testing agent-facing APIs
