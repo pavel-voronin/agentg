@@ -134,7 +134,7 @@ function subscribeHistorySyncService(options: {
         void options.liveCoverageObserver.recordLiveMessage(chatId, messageDate);
       }
     }),
-    options.eventBus.subscribe('telegram.tdlib.status', (event) => {
+    options.eventBus.subscribe('telegram.status', (event) => {
       const data = asRecord(event.data);
       if (data?.connected === true) {
         void options.liveCoverageObserver.markConnected();

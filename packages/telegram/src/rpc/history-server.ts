@@ -25,7 +25,8 @@ export async function startTelegramHistoryTrpcServer(options: {
       }),
     router: createTelegramHistoryRouter({
       client: options.client,
-      database: options.database
+      database: options.database,
+      eventBus: options.eventBus
     })
   });
   const address = formatInternalTrpcBindAddress(options.bind);

@@ -21,6 +21,11 @@ import {
   hasTelegramCredentials,
   type TelegramClientConfig
 } from './tdlib.js';
+import {
+  invokeTdlibWithEvents,
+  publishTdlibOperationEvents,
+  publishTelegramOperationEvents
+} from './telegram-operation-events.js';
 
 export type TelegramIngestionOptions = {
   database: AppDatabase;
@@ -76,12 +81,12 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
     void persistLiveUpdate(options.database, update, persistenceStats, options.eventBus);
   });
 
-  await client.login();
-  await persistAndLogAuthenticatedClient(options.database, client);
+  await publishTelegramOperationEvents(options.eventBus, 'login', {}, () => client.login());
+  await persistAndLogAuthenticatedClient(options.database, client, options.eventBus);
   tdlibStatus.markAuthenticated(true);
   tdlibStatus.markConnectionState('connectionStateReady');
   tdlibStatusHeartbeat = startTdlibStatusHeartbeat(tdlibStatus);
-  await syncInitialChats(options.database, client);
+  await syncInitialChats(options.database, client, options.eventBus);
 
   telegramHistoryServer = await startTelegramHistoryTrpcServer({
     bind: options.internalRpc,
@@ -107,7 +112,9 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
     if (historyRpcClosed) {
       telegramHistoryServer = undefined;
     }
-    const tdlibClosed = await runShutdownStep('telegram.tdlib_close', () => client.close());
+    const tdlibClosed = await runShutdownStep('telegram.tdlib.close', () =>
+      publishTdlibOperationEvents(options.eventBus, 'close', {}, () => client.close())
+    );
     const eventBusClosed = await runShutdownStep('telegram.event_bus_close', () =>
       options.eventBus.close()
     );
@@ -136,8 +143,8 @@ function createTdlibStatusTracker(eventBus: EventBus): TdlibStatusTracker {
           authenticated: state.authenticated,
           connected: state.connected
         },
-        source: 'telegram.tdlib',
-        type: 'telegram.tdlib.status'
+        source: 'telegram',
+        type: 'telegram.status'
       })
     );
   };
@@ -163,16 +170,17 @@ function createTdlibStatusTracker(eventBus: EventBus): TdlibStatusTracker {
 
 async function persistAndLogAuthenticatedClient(
   database: AppDatabase,
-  client: TelegramClient
+  client: TelegramClient,
+  eventBus: EventBus
 ): Promise<void> {
-  const me = asTdObject(await client.invoke({ _: 'getMe' }));
+  const me = asTdObject(await invokeTdlib(eventBus, client, { _: 'getMe' }));
   const currentUser = normalizeUser(me, { isSelf: true });
   if (currentUser !== undefined) {
     await persistCurrentTelegramUser(database, currentUser);
   }
 
   const chats = asTdObject(
-    await client.invoke({
+    await invokeTdlib(eventBus, client, {
       _: 'getChats',
       chat_list: { _: 'chatListMain' },
       limit: 20
@@ -248,13 +256,16 @@ function handleTdlibConnectionUpdate(update: unknown, status: TdlibStatusTracker
 async function syncInitialChats(
   database: AppDatabase,
   client: TelegramClient,
+  eventBus: EventBus,
   limit = 100
 ): Promise<void> {
-  const chatIds = await getMainChatIds(client, limit);
+  const chatIds = await getMainChatIds(eventBus, client, limit);
   let storedChatCount = 0;
 
   for (const chatId of chatIds) {
-    const chat = normalizeChat(asTdObject(await client.invoke({ _: 'getChat', chat_id: chatId })));
+    const chat = normalizeChat(
+      asTdObject(await invokeTdlib(eventBus, client, { _: 'getChat', chat_id: chatId }))
+    );
     if (chat !== undefined && (await upsertChat(database, chat))) {
       storedChatCount += 1;
     }
@@ -268,11 +279,16 @@ async function syncInitialChats(
   );
 }
 
-async function getMainChatIds(client: TelegramClient, limit: number): Promise<number[]> {
-  return getChatIds(client, 'main', limit);
+async function getMainChatIds(
+  eventBus: EventBus,
+  client: TelegramClient,
+  limit: number
+): Promise<number[]> {
+  return getChatIds(eventBus, client, 'main', limit);
 }
 
 async function getChatIds(
+  eventBus: EventBus,
   client: TelegramClient,
   chatList: ChatListKind,
   limit: number
@@ -280,7 +296,7 @@ async function getChatIds(
   let chats: TdObject | undefined;
   try {
     chats = asTdObject(
-      await invokeTdlib(client, {
+      await invokeTdlib(eventBus, client, {
         _: 'getChats',
         chat_list: toTdChatList(chatList),
         limit
@@ -301,10 +317,14 @@ function toTdChatList(chatList: ChatListKind): TdObject {
   return chatList === 'main' ? { _: 'chatListMain' } : { _: 'chatListArchive' };
 }
 
-async function invokeTdlib(client: TelegramClient, request: TdObject): Promise<unknown> {
+async function invokeTdlib(
+  eventBus: EventBus,
+  client: TelegramClient,
+  request: TdObject
+): Promise<unknown> {
   for (;;) {
     try {
-      return await client.invoke(request as Parameters<TelegramClient['invoke']>[0]);
+      return await invokeTdlibWithEvents(eventBus, client, request);
     } catch (error) {
       const floodWaitSeconds = parseFloodWaitSeconds(error);
       if (floodWaitSeconds === undefined) {

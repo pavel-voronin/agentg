@@ -55,12 +55,18 @@ Telegram, History Sync, Gateway, Control Plane, or Shared.
 
 Telegram publishes:
 
-- `telegram.tdlib.status`
+- `telegram.status`
+- `telegram.login.started`
+- `telegram.login.completed`
+- `telegram.login.failed`
 - `telegram.chat.updated`
 - `telegram.chat_folders.updated`
 - `telegram.message.created`
 - `telegram.message.updated`
 - `telegram.message.deleted`
+- `telegram.tdlib.{method}.started`
+- `telegram.tdlib.{method}.completed`
+- `telegram.tdlib.{method}.failed`
 
 History Sync publishes:
 
@@ -108,7 +114,7 @@ History Sync subscribes to Telegram events:
 - `telegram.chat.updated` wakes reconciliation because the known chat set may
   have changed.
 - `telegram.message.created` updates live coverage for message-history updates.
-- `telegram.tdlib.status` opens and closes the live coverage session.
+- `telegram.status` opens and closes the live coverage session.
 
 Gateway subscribes to `telegram.>` and `history.>` and forwards live events to
 external agent WebSocket clients.

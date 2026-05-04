@@ -1,5 +1,6 @@
 import type { TelegramDatabase as AppDatabase } from '../database.js';
 import { telegramChatFolders, telegramChats, telegramMessages, telegramUsers } from '../schema.js';
+import type { EventBus } from '@agentg/shared/events/bus';
 import { and, asc, desc, eq, gte, ilike, inArray, isNotNull, lt, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
@@ -11,6 +12,7 @@ import {
   type TdObject
 } from '../normalize.js';
 import { persistTelegramUpdate, upsertChat } from '../store.js';
+import { invokeTdlibWithEvents } from '../telegram-operation-events.js';
 import { rpc, telegramRpcRouter } from './trpc.js';
 
 const nonEmptyStringSchema = z.string().trim().min(1);
@@ -266,6 +268,7 @@ type TelegramUserInfo = {
 export type TelegramHistoryRouterRuntime = {
   client: TelegramClient;
   database: AppDatabase;
+  eventBus: EventBus;
 };
 
 export function createTelegramHistoryRouter(runtime: TelegramHistoryRouterRuntime) {
@@ -318,7 +321,7 @@ async function handleListChats(
   const { discover } = input;
   const loadBatchSize = parseLimit(input.loadBatchSize, 100, 1000);
   return discover === true
-    ? discoverHistoryChats(runtime.database, runtime.client, loadBatchSize)
+    ? discoverHistoryChats(runtime.database, runtime.client, runtime.eventBus, loadBatchSize)
     : listKnownHistoryChats(runtime.database);
 }
 
@@ -581,7 +584,7 @@ async function handleFetchPage(
   let cursorMessageId = optionalTelegramMessageId(input.cursorMessageId);
 
   if (cursorMessageId === undefined) {
-    const anchor = await getLastMessageNoLaterThan(runtime.client, chatId, endAt);
+    const anchor = await getLastMessageNoLaterThan(runtime.client, runtime.eventBus, chatId, endAt);
     const anchorDate = tdMessageDate(anchor);
     const anchorMessageId = tdMessageId(anchor);
 
@@ -606,7 +609,7 @@ async function handleFetchPage(
   }
 
   const history = asTdObject(
-    await invokeTdlib(runtime.client, {
+    await invokeTdlib(runtime.eventBus, runtime.client, {
       _: 'getChatHistory',
       chat_id: chatId,
       from_message_id: cursorMessageId,
@@ -666,19 +669,20 @@ async function handleFetchPage(
 async function discoverHistoryChats(
   database: AppDatabase,
   client: TelegramClient,
+  eventBus: EventBus,
   loadBatchSize: number
 ): Promise<TelegramHistoryChat[]> {
   const folderIds = await listKnownFolderIds(database);
-  await loadAllChats(client, loadBatchSize, folderIds);
+  await loadAllChats(client, eventBus, loadBatchSize, folderIds);
   const chatIds = dedupeTelegramIds([
-    ...(await getChatIds(client, { kind: 'main' }, 100000)),
-    ...(await getChatIds(client, { kind: 'archive' }, 100000)),
-    ...(await getFolderChatIds(client, folderIds, 100000))
+    ...(await getChatIds(client, eventBus, { kind: 'main' }, 100000)),
+    ...(await getChatIds(client, eventBus, { kind: 'archive' }, 100000)),
+    ...(await getFolderChatIds(client, eventBus, folderIds, 100000))
   ]);
   const chats: TelegramHistoryChat[] = [];
 
   for (const chatId of chatIds) {
-    const chat = await getChatOrUndefined(client, chatId);
+    const chat = await getChatOrUndefined(client, eventBus, chatId);
     const normalized = normalizeChat(chat);
     if (normalized === undefined) {
       continue;
@@ -732,24 +736,26 @@ async function listKnownFolderIds(database: AppDatabase): Promise<number[]> {
 
 async function loadAllChats(
   client: TelegramClient,
+  eventBus: EventBus,
   batchSize: number,
   folderIds: number[]
 ): Promise<void> {
-  await loadAllChatsFromList(client, { kind: 'main' }, batchSize);
-  await loadAllChatsFromList(client, { kind: 'archive' }, batchSize);
+  await loadAllChatsFromList(client, eventBus, { kind: 'main' }, batchSize);
+  await loadAllChatsFromList(client, eventBus, { kind: 'archive' }, batchSize);
   for (const folderId of folderIds) {
-    await loadAllChatsFromList(client, { folderId, kind: 'folder' }, batchSize);
+    await loadAllChatsFromList(client, eventBus, { folderId, kind: 'folder' }, batchSize);
   }
 }
 
 async function loadAllChatsFromList(
   client: TelegramClient,
+  eventBus: EventBus,
   chatList: ChatListKind,
   batchSize: number
 ): Promise<void> {
   for (;;) {
     try {
-      await invokeTdlib(client, {
+      await invokeTdlib(eventBus, client, {
         _: 'loadChats',
         chat_list: toTdChatList(chatList),
         limit: batchSize
@@ -766,13 +772,14 @@ async function loadAllChatsFromList(
 
 async function getChatIds(
   client: TelegramClient,
+  eventBus: EventBus,
   chatList: ChatListKind,
   limit: number
 ): Promise<number[]> {
   let chats: TdObject | undefined;
   try {
     chats = asTdObject(
-      await invokeTdlib(client, {
+      await invokeTdlib(eventBus, client, {
         _: 'getChats',
         chat_list: toTdChatList(chatList),
         limit
@@ -791,22 +798,24 @@ async function getChatIds(
 
 async function getFolderChatIds(
   client: TelegramClient,
+  eventBus: EventBus,
   folderIds: number[],
   limit: number
 ): Promise<number[]> {
   const chatIds: number[] = [];
   for (const folderId of folderIds) {
-    chatIds.push(...(await getChatIds(client, { folderId, kind: 'folder' }, limit)));
+    chatIds.push(...(await getChatIds(client, eventBus, { folderId, kind: 'folder' }, limit)));
   }
   return chatIds;
 }
 
 async function getChatOrUndefined(
   client: TelegramClient,
+  eventBus: EventBus,
   chatId: number
 ): Promise<TdObject | undefined> {
   try {
-    return asTdObject(await invokeTdlib(client, { _: 'getChat', chat_id: chatId }));
+    return asTdObject(await invokeTdlib(eventBus, client, { _: 'getChat', chat_id: chatId }));
   } catch (error) {
     if (isTdlibNotFound(error)) {
       return undefined;
@@ -818,12 +827,13 @@ async function getChatOrUndefined(
 
 async function getLastMessageNoLaterThan(
   client: TelegramClient,
+  eventBus: EventBus,
   chatId: number,
   end: Date
 ): Promise<TdObject | undefined> {
   try {
     return asTdObject(
-      await invokeTdlib(client, {
+      await invokeTdlib(eventBus, client, {
         _: 'getChatMessageByDate',
         chat_id: chatId,
         date: Math.floor((end.getTime() - 1) / 1000)
@@ -838,10 +848,14 @@ async function getLastMessageNoLaterThan(
   }
 }
 
-async function invokeTdlib(client: TelegramClient, request: TdObject): Promise<unknown> {
+async function invokeTdlib(
+  eventBus: EventBus,
+  client: TelegramClient,
+  request: TdObject
+): Promise<unknown> {
   for (;;) {
     try {
-      return await client.invoke(request);
+      return await invokeTdlibWithEvents(eventBus, client, request);
     } catch (error) {
       const floodWaitSeconds = parseFloodWaitSeconds(error);
       if (floodWaitSeconds === undefined) {

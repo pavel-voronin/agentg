@@ -283,11 +283,36 @@ const RPC_CALL_EVENT_TARGETS = [
   'history.getChatHistoryState',
   'history.requestSync',
   'summaries.summaries.requestSummary',
+  'telegram.countMessagesInIntervals',
   'telegram.fetchPage',
-  'telegram.getChat'
+  'telegram.getChat',
+  'telegram.getChatHistoryFacts',
+  'telegram.getMessage',
+  'telegram.listChatDirectory',
+  'telegram.listChats',
+  'telegram.listRecentMessages',
+  'telegram.searchMessages'
 ] as const;
 const RPC_CALL_EVENT_TYPES = RPC_CALL_EVENT_TARGETS.flatMap((target) =>
   RPC_CALL_EVENT_SUFFIXES.map((suffix) => `${target}.${suffix}`)
+);
+const TELEGRAM_OPERATION_EVENT_SUFFIXES = ['started', 'completed', 'failed'] as const;
+const TELEGRAM_OPERATION_EVENT_TARGETS = ['telegram.login'] as const;
+const TELEGRAM_OPERATION_EVENT_TYPES = TELEGRAM_OPERATION_EVENT_TARGETS.flatMap((target) =>
+  TELEGRAM_OPERATION_EVENT_SUFFIXES.map((suffix) => `${target}.${suffix}`)
+);
+const TDLIB_CALL_EVENT_SUFFIXES = ['started', 'completed', 'failed'] as const;
+const TDLIB_CALL_EVENT_TARGETS = [
+  'telegram.tdlib.close',
+  'telegram.tdlib.getChat',
+  'telegram.tdlib.getChatHistory',
+  'telegram.tdlib.getChatMessageByDate',
+  'telegram.tdlib.getChats',
+  'telegram.tdlib.getMe',
+  'telegram.tdlib.loadChats'
+] as const;
+const TDLIB_CALL_EVENT_TYPES = TDLIB_CALL_EVENT_TARGETS.flatMap((target) =>
+  TDLIB_CALL_EVENT_SUFFIXES.map((suffix) => `${target}.${suffix}`)
 );
 
 export const EVENT_GROUPS: EventGroup[] = [
@@ -340,10 +365,24 @@ export const EVENT_GROUPS: EventGroup[] = [
   },
   {
     color: '#f59e0b',
-    eventTypes: ['telegram.tdlib.status'],
+    eventTypes: ['telegram.status'],
     id: 'telegram_status',
     label: 'Telegram status',
-    match: (type) => type === 'telegram.tdlib.status'
+    match: (type) => type === 'telegram.status'
+  },
+  {
+    color: '#fb923c',
+    eventTypes: TELEGRAM_OPERATION_EVENT_TYPES,
+    id: 'telegram_operations',
+    label: 'Telegram operations',
+    match: (type) => TELEGRAM_OPERATION_EVENT_TYPES.includes(type)
+  },
+  {
+    color: '#f97316',
+    eventTypes: TDLIB_CALL_EVENT_TYPES,
+    id: 'telegram_tdlib',
+    label: 'TDLib calls',
+    match: (type) => type.startsWith('telegram.tdlib.')
   },
   {
     color: '#14b8a6',
