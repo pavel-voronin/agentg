@@ -36,6 +36,11 @@ describe('openSqliteDatabase', () => {
           appliedAt: expect.any(String) as string,
           id: '0003',
           name: 'history_domain'
+        },
+        {
+          appliedAt: expect.any(String) as string,
+          id: '0004',
+          name: 'summaries_plugin'
         }
       ]);
     } finally {

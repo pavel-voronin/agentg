@@ -7,6 +7,12 @@ import {
 import { createTelegramService, type TelegramService } from '../telegram/telegramService.js';
 import { createHistoryRepository, type HistoryRepository } from '../history/historyRepository.js';
 import { createHistoryService, type HistoryService } from '../history/historyService.js';
+import { createPluginRegistry, type PluginRegistry } from '../plugins/registry.js';
+import { createSummariesPlugin, type SummariesPlugin } from '../plugins/summaries/plugin.js';
+import {
+  createSummariesRepository,
+  type SummariesRepository
+} from '../plugins/summaries/repository.js';
 import { openSqliteDatabase, type SqliteDatabase } from '../storage/sqlite.js';
 import { loadAppConfig, type AppConfig, type LoadAppConfigInput } from './config.js';
 import { createLifecycle, type AppLifecycle, type LifecycleResource } from './lifecycle.js';
@@ -34,6 +40,7 @@ export type AppStorageHandle = {
 
 export type AppRepositoryRegistry = {
   history: HistoryRepository;
+  summaries: SummariesRepository;
   telegram: TelegramRepository;
 };
 
@@ -42,7 +49,10 @@ export type AppServiceRegistry = {
   telegram: TelegramService;
 };
 
-export type AppPluginRegistry = Record<string, unknown>;
+export type AppPluginRegistry = {
+  registry: PluginRegistry;
+  summaries: SummariesPlugin;
+};
 
 export type AppEdgeRegistry = Record<string, unknown>;
 
@@ -61,6 +71,11 @@ export function createApp(input: CreateAppInput = {}): AppRuntime {
     repository: historyRepository,
     telegramService
   });
+  const summariesRepository = createSummariesRepository(sqlite.connection);
+  const summariesPlugin = createSummariesPlugin({
+    repository: summariesRepository
+  });
+  const pluginRegistry = createPluginRegistry([summariesPlugin]);
   const storage: AppStorageHandle = {
     sqlite
   };
@@ -80,6 +95,19 @@ export function createApp(input: CreateAppInput = {}): AppRuntime {
         historyService.stop();
       }
     },
+    {
+      name: 'plugins',
+      async start(): Promise<void> {
+        await pluginRegistry.start({
+          eventBus,
+          historyService,
+          telegramService
+        });
+      },
+      async stop(): Promise<void> {
+        await pluginRegistry.stop();
+      }
+    },
     ...(input.lifecycleResources ?? [])
   ]);
   let stopped = false;
@@ -89,9 +117,13 @@ export function createApp(input: CreateAppInput = {}): AppRuntime {
     edges: {},
     eventBus,
     lifecycle,
-    plugins: {},
+    plugins: {
+      registry: pluginRegistry,
+      summaries: summariesPlugin
+    },
     repositories: {
       history: historyRepository,
+      summaries: summariesRepository,
       telegram: telegramRepository
     },
     services: {
