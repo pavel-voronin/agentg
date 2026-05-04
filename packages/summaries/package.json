@@ -4,17 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./config": "./src/config.ts",
-    "./database": "./src/database.ts",
-    "./migrate": "./src/migrate.ts",
-    "./memory-store": "./src/memory-store.ts",
-    "./registrations": "./src/registrations.ts",
-    "./rpc": "./src/rpc/index.ts",
-    "./schema": "./src/schema.ts",
-    "./service": "./src/service.ts",
-    "./store": "./src/store.ts",
-    "./summary-service": "./src/summary-service.ts",
-    "./types": "./src/types.ts"
+    "./rpc": "./src/rpc/index.ts"
   },
   "scripts": {
     "dev": "tsx watch --clear-screen=false src/main.ts",

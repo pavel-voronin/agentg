@@ -154,8 +154,11 @@ Internal RPC contracts are owned by the serving domain package:
   bind config, storage schema, commands, and domain types remain
   package-internal.
 - Modules own package-local RPC contracts. The pilot summaries module owns
-  `@agentg/summaries/rpc` and registers its capability and extension methods
-  through the module runtime.
+  `@agentg/summaries/rpc`, whose only public export is
+  `createSummariesRpcClient`. The helper returns the explicit summaries
+  procedures used by capability and extension callers. The summaries schemas,
+  router, server bind config, storage schema, registrations, and service runtime
+  remain package-internal.
 
 Gateway owns the external agent WebSocket protocol. Control Plane owns the
 browser-facing WebSocket protocol. Neither protocol is an internal domain RPC

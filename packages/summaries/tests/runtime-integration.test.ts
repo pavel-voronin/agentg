@@ -7,13 +7,12 @@ import {
   startAgentGatewayServer,
   type AgentGatewayServerHandle
 } from '@agentg/gateway/src/agent-gateway.js';
-import { createTRPCClient, httpBatchLink } from '@trpc/client';
 import { WebSocket, type RawData } from 'ws';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { createInMemorySummaryRepository } from '../src/memory-store.js';
 import { registerSummariesCapabilities } from '../src/registrations.js';
-import type { SummariesRouter } from '../src/rpc/router.js';
+import { createSummariesRpcClient } from '../src/rpc/index.js';
 import { startSummariesTrpcServer, type SummariesRpcBindConfig } from '../src/rpc/server.js';
 import { requestChatSummary, type SummariesRuntime } from '../src/summary-service.js';
 
@@ -106,27 +105,27 @@ describe('summaries runtime integration', () => {
       sourceMessages: []
     });
 
-    const client = createTRPCClient<SummariesRouter>({
-      links: [
-        httpBatchLink({
-          url: summariesUrl
-        })
-      ]
+    const client = createSummariesRpcClient({
+      url: summariesUrl
     });
 
-    await expect(
-      client.summaries.chatSummary.query({
-        _model: 'telegram.chat',
-        id: 'chat-a',
-        title: 'Alice',
-        type: 'private'
-      })
-    ).resolves.toMatchObject({
-      stale: false,
-      summary: {
-        chatId: 'chat-a'
-      }
-    });
+    try {
+      await expect(
+        client.chatSummary({
+          _model: 'telegram.chat',
+          id: 'chat-a',
+          title: 'Alice',
+          type: 'private'
+        })
+      ).resolves.toMatchObject({
+        stale: false,
+        summary: {
+          chatId: 'chat-a'
+        }
+      });
+    } finally {
+      client.close();
+    }
   });
 });
 
