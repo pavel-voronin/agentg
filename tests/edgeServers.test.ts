@@ -6,6 +6,7 @@ import { WebSocket } from 'ws';
 import { describe, expect, it } from 'vitest';
 
 import { createApp } from '../src/app/createApp.js';
+import { createAppEvent } from '../src/bus/events.js';
 import { startControlPlaneServer } from '../src/edges/control-plane/server.js';
 import { startGatewayServer } from '../src/edges/gateway/server.js';
 import { rawDataToString } from '../src/edges/rpc.js';
@@ -110,6 +111,60 @@ describe('edge servers', () => {
       });
     } finally {
       client.close();
+      await server.close();
+      await app.stop();
+    }
+  });
+
+  it('replays the latest TDLib status to new Control Plane clients', async () => {
+    const app = createApp({
+      cwd: mkdtempSync(join(tmpdir(), 'agentg-control-plane-tdlib-')),
+      env: {
+        AGENTG_SQLITE_PATH: './control-plane-tdlib.sqlite'
+      }
+    });
+
+    await app.start();
+    const server = await startControlPlaneServer({
+      config: {
+        enabled: true,
+        host: '127.0.0.1',
+        port: 0,
+        staticDir: join(tmpdir(), 'agentg-empty-control-plane')
+      },
+      eventBus: app.eventBus,
+      plugins: app.plugins,
+      services: app.services
+    });
+
+    try {
+      await app.eventBus.publish(
+        createAppEvent({
+          data: {
+            authenticated: true,
+            configured: true,
+            connected: true
+          },
+          source: 'telegram.tdlib',
+          type: 'telegram.tdlib.status'
+        })
+      );
+
+      const client = new WebSocket(`ws://${server.host}:${String(server.port)}/ws`);
+      const message = readJsonMessage(client);
+      try {
+        await expect(message).resolves.toMatchObject({
+          event: {
+            data: {
+              connected: true
+            },
+            type: 'telegram.tdlib.status'
+          }
+        });
+      } finally {
+        client.close();
+      }
+    } finally {
       await server.close();
       await app.stop();
     }

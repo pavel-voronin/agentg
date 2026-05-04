@@ -5,6 +5,7 @@ import { extname, resolve, sep } from 'node:path';
 import { WebSocket, WebSocketServer } from 'ws';
 
 import type { EventBus } from '../../bus/eventBus.js';
+import type { AppEvent } from '../../bus/events.js';
 import type { AppPluginRegistry, AppServiceRegistry } from '../../app/createApp.js';
 import {
   closeHttpServer,
@@ -53,6 +54,7 @@ export async function startControlPlaneServer(
   });
   const webSocketServer = new WebSocketServer({ noServer: true });
   const clients = new Set<WebSocket>();
+  let latestTdlibStatusEvent: AppEvent | undefined;
 
   server.on('upgrade', (request, socket, head) => {
     if (requestPath(request) !== '/ws') {
@@ -68,6 +70,9 @@ export async function startControlPlaneServer(
 
   webSocketServer.on('connection', (client) => {
     clients.add(client);
+    if (latestTdlibStatusEvent !== undefined) {
+      sendEvent(client, latestTdlibStatusEvent);
+    }
     client.on('message', (payload) => {
       void handleClientMessage(runtime, client, rawDataToString(payload));
     });
@@ -77,6 +82,9 @@ export async function startControlPlaneServer(
   });
 
   const subscription = options.eventBus.subscribeAll((event) => {
+    if (event.type === 'telegram.tdlib.status') {
+      latestTdlibStatusEvent = event;
+    }
     broadcast(clients, { event });
   });
   const port = await listen(server, options.config.host, options.config.port);
@@ -222,6 +230,12 @@ function broadcast(clients: Set<WebSocket>, message: unknown): void {
     if (client.readyState === WebSocket.OPEN) {
       client.send(payload);
     }
+  }
+}
+
+function sendEvent(client: WebSocket, event: AppEvent): void {
+  if (client.readyState === WebSocket.OPEN) {
+    client.send(JSON.stringify({ event }));
   }
 }
 

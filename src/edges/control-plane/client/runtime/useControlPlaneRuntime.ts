@@ -33,6 +33,7 @@ export function useControlPlaneRuntime() {
   const selectedHistoryStore = useSelectedHistoryStore();
   let runtimeStarted = false;
   let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+  let tdlibConfigured = false;
   let tdlibConnected = false;
   let lastTdlibStatusAt: Date | null = null;
   let tdlibStatusWatchdog: ReturnType<typeof setInterval> | null = null;
@@ -150,6 +151,12 @@ export function useControlPlaneRuntime() {
     if (event.type === 'telegram.tdlib.status') {
       receiveTdlibStatus(event);
     }
+    if (event.type === 'telegram.tdlib.error') {
+      tdlibConfigured = true;
+      tdlibConnected = false;
+      lastTdlibStatusAt = new Date(event.occurredAt ?? Date.now());
+      setTdlibStatus('bad');
+    }
     if (event.type) {
       eventsStore.pushEvent(event);
     }
@@ -160,6 +167,7 @@ export function useControlPlaneRuntime() {
 
   function receiveTdlibStatus(event: ControlPlaneEvent): void {
     const data = isPlainRecord(event.data) ? event.data : {};
+    tdlibConfigured = data.configured !== false;
     tdlibConnected = data.connected === true;
     lastTdlibStatusAt = new Date(event.occurredAt ?? Date.now());
     updateTdlibStatus();
@@ -236,8 +244,12 @@ export function useControlPlaneRuntime() {
       return;
     }
 
-    const age = now - lastTdlibStatusAt.getTime();
-    setTdlibStatus(tdlibConnected && age <= 15000 ? 'ok' : 'bad');
+    if (!tdlibConfigured) {
+      setTdlibStatus('bad');
+      return;
+    }
+
+    setTdlibStatus(tdlibConnected ? 'ok' : 'warn');
   }
 
   function startTdlibStatusWatchdog(): void {
