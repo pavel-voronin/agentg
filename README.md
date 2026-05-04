@@ -18,14 +18,36 @@ Current runtime:
 ```sh
 npm install
 npm run dev
+npm run dev:control-plane
 npm run typecheck
 npm run lint
 npm test
 npm run build
 ```
 
+Run local development in two terminals:
+
+```sh
+npm run dev:control-plane
+npm run dev
+```
+
+`npm run dev:control-plane` rebuilds the Control Plane UI on client changes.
 `npm run dev` runs the monolith through a watcher and reloads on runtime source
-changes.
+changes. The monolith prints the local URLs and Telegram connection state at
+startup:
+
+```json
+{
+  "event": "agentg.starting",
+  "controlPlaneUrl": "http://127.0.0.1:8789/",
+  "gatewayUrl": "ws://127.0.0.1:8787/",
+  "telegramConfigured": true
+}
+```
+
+In dev mode, Control Plane and Gateway are enabled by default unless the
+corresponding environment variables explicitly disable them.
 
 ## Runtime Shape
 

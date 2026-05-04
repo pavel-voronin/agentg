@@ -8,7 +8,9 @@
     "npm": ">=11.0.0"
   },
   "scripts": {
-    "dev": "tsx watch --clear-screen=false src/main.ts",
+    "dev": "CONTROL_PLANE_ENABLED=${CONTROL_PLANE_ENABLED:-true} GATEWAY_ENABLED=${GATEWAY_ENABLED:-true} tsx watch --clear-screen=false --include 'src/**/*.ts' --include .env --exclude 'src/edges/control-plane/client/**' src/main.ts",
+    "dev:app": "CONTROL_PLANE_ENABLED=${CONTROL_PLANE_ENABLED:-true} GATEWAY_ENABLED=${GATEWAY_ENABLED:-true} tsx watch --clear-screen=false --include 'src/**/*.ts' --include .env --exclude 'src/edges/control-plane/client/**' src/main.ts",
+    "dev:control-plane": "vite build --watch --config vite.control-plane.config.ts",
     "start": "node dist/main.js",
     "build": "tsc -p tsconfig.build.json && vite build --config vite.control-plane.config.ts",
     "lint": "eslint src tests eslint.config.js vitest.config.ts vite.control-plane.config.ts --max-warnings=0",

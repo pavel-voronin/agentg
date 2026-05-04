@@ -259,6 +259,11 @@ function createTelegramTdlibLifecycleResource(
     name: 'telegram.tdlib',
     async start(): Promise<void> {
       if (!hasTelegramCredentials(config.tdlib)) {
+        await publishTelegramTdlibStatus(eventBus, {
+          authenticated: false,
+          configured: false,
+          connected: false
+        });
         return;
       }
 
@@ -276,11 +281,13 @@ function createTelegramTdlibLifecycleResource(
 
       await publishTelegramTdlibStatus(eventBus, {
         authenticated: false,
+        configured: true,
         connected: false
       });
       await tdlibClient.login();
       await publishTelegramTdlibStatus(eventBus, {
         authenticated: true,
+        configured: true,
         connected: true
       });
     },
@@ -299,6 +306,7 @@ function createTelegramTdlibLifecycleResource(
       client = undefined;
       await publishTelegramTdlibStatus(eventBus, {
         authenticated: false,
+        configured: true,
         connected: false
       });
       await tdlibClient.close();
@@ -315,6 +323,7 @@ async function handleTelegramTdlibUpdate(
   if (connectionState !== undefined) {
     await publishTelegramTdlibStatus(eventBus, {
       authenticated: connectionState === 'connectionStateReady',
+      configured: true,
       connected: connectionState === 'connectionStateReady'
     });
   }
@@ -326,6 +335,7 @@ async function publishTelegramTdlibStatus(
   eventBus: EventBus,
   data: {
     authenticated: boolean;
+    configured: boolean;
     connected: boolean;
   }
 ): Promise<void> {
