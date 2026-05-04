@@ -21,6 +21,10 @@ describe('Control Plane server boundary', () => {
       }),
       close: vi.fn()
     };
+    const telegramClient = {
+      close: vi.fn(),
+      listChatDirectory: vi.fn()
+    };
 
     const server = await startControlPlaneServer({
       config: {
@@ -30,9 +34,13 @@ describe('Control Plane server boundary', () => {
       },
       eventBus,
       historyClient,
+      telegramClient,
       services: {
         history: {
           url: 'http://127.0.0.1:1'
+        },
+        telegram: {
+          url: 'http://127.0.0.1:2'
         }
       }
     });
@@ -90,6 +98,119 @@ describe('Control Plane server boundary', () => {
 
       await expect(nextJsonMessage(socket)).resolves.toEqual({
         event: summariesEvent
+      });
+    } finally {
+      socket.close();
+      await server.close();
+    }
+  });
+
+  it('builds Control Plane chat lists from Telegram directory and History stats', async () => {
+    const eventBus = createFakeEventBus();
+    const historyClient = {
+      call: vi.fn((method: string, params: unknown): Promise<unknown> => {
+        if (method === 'history.getChatStats') {
+          return Promise.resolve({
+            stats: [
+              {
+                chatId: 'chat-b',
+                coverageIntervals: 2,
+                coverageNewestAt: '2026-05-01T01:00:00.000Z',
+                coverageOldestAt: '2026-05-01T00:00:00.000Z',
+                pendingJobs: 1,
+                runningJobs: 0,
+                targets: 3
+              }
+            ]
+          });
+        }
+        return Promise.resolve({ params });
+      }),
+      close: vi.fn()
+    };
+    const mainChat = {
+      _model: 'telegram.chat' as const,
+      id: 'chat-b',
+      isBot: false,
+      isSelf: false,
+      lastMessageDate: 20,
+      placements: [{ kind: 'main' as const, order: '200' }],
+      title: 'Beta',
+      type: 'private',
+      updatedAt: '2026-05-01T01:00:00.000Z'
+    };
+    const archiveChat = {
+      _model: 'telegram.chat' as const,
+      id: 'chat-a',
+      isBot: false,
+      isSelf: false,
+      lastMessageDate: 10,
+      placements: [{ kind: 'archive' as const, order: '100' }],
+      title: 'Alpha',
+      type: 'basic_group',
+      updatedAt: '2026-05-01T00:00:00.000Z'
+    };
+    const telegramClient = {
+      close: vi.fn(),
+      listChatDirectory: vi.fn(() =>
+        Promise.resolve({
+          chats: [mainChat, archiveChat],
+          folders: [],
+          navigationChats: [mainChat, archiveChat],
+          types: [{ count: 1, type: 'private' }]
+        })
+      )
+    };
+
+    const server = await startControlPlaneServer({
+      config: {
+        host: '127.0.0.1',
+        port: 0,
+        staticDir: '/tmp/agentg-control-plane-test-missing'
+      },
+      eventBus,
+      historyClient,
+      telegramClient,
+      services: {
+        history: {
+          url: 'http://127.0.0.1:1'
+        },
+        telegram: {
+          url: 'http://127.0.0.1:2'
+        }
+      }
+    });
+    const socket = await openWebSocket(`ws://127.0.0.1:${String(server.port)}/ws`);
+
+    try {
+      socket.send(
+        JSON.stringify({ id: 2, method: 'controlPlane.listChats', params: { list: 'main' } })
+      );
+
+      await expect(nextJsonMessage(socket)).resolves.toMatchObject({
+        id: 2,
+        result: {
+          chats: [
+            {
+              coverageIntervals: 2,
+              id: 'chat-b',
+              pendingJobs: 1,
+              runningJobs: 0,
+              targets: 3,
+              title: 'Beta',
+              type: 'private'
+            }
+          ],
+          navigation: {
+            archiveCount: 1,
+            mainCount: 1
+          },
+          types: [{ count: 1, type: 'private' }]
+        }
+      });
+      expect(telegramClient.listChatDirectory).toHaveBeenCalledWith({});
+      expect(historyClient.call).toHaveBeenCalledWith('history.getChatStats', {
+        chatIds: ['chat-b']
       });
     } finally {
       socket.close();

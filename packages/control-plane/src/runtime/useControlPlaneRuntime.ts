@@ -4,7 +4,7 @@ import {
   createControlPlaneClient,
   type ControlPlaneEvent
 } from '../control-plane/controlPlaneClient.js';
-import { createHistoryApi } from '../control-plane/historyApi.js';
+import { createControlPlaneApi } from '../control-plane/controlPlaneApi.js';
 import type { StatusBadgeKind } from '../stores/controlPlaneTypes.js';
 import { useAppShellStore } from '../stores/appShell.js';
 import { useChatStore } from '../stores/chat.js';
@@ -54,25 +54,24 @@ export function useControlPlaneRuntime() {
         return;
       }
       setControlPlaneStatus('ok');
-      void refreshAll().catch(showError);
+      void Promise.all([loadOverview(), loadChats()])
+        .then(async () => {
+          if (selectedHistoryStore.selectedChatId) {
+            await loadSelectedState();
+          }
+        })
+        .catch(showError);
     }
   });
-  const historyApi = createHistoryApi(controlPlane);
-
-  async function refreshAll(): Promise<void> {
-    await Promise.all([loadOverview(), loadChats()]);
-    if (selectedHistoryStore.selectedChatId) {
-      await loadSelectedState();
-    }
-  }
+  const controlPlaneApi = createControlPlaneApi(controlPlane);
 
   async function loadOverview(): Promise<void> {
-    overviewStore.setOverview(await historyApi.getOverview());
+    overviewStore.setOverview(await controlPlaneApi.getOverview());
   }
 
   async function loadChats(): Promise<void> {
     const query = chatStore.chatFilter.trim();
-    const result = await historyApi.listChats({
+    const result = await controlPlaneApi.listChats({
       folderId: chatStore.chatFolderId,
       listMode: chatStore.chatListMode,
       query
@@ -98,7 +97,7 @@ export function useControlPlaneRuntime() {
     }
     selectedHistoryStore.markSelectedHistoryLoading();
     try {
-      const selectedState = await historyApi.getChatHistoryState(selectedChatId);
+      const selectedState = await controlPlaneApi.getChatHistoryState(selectedChatId);
       if (selectedHistoryStore.selectedChatId !== selectedChatId) {
         return;
       }
@@ -125,8 +124,8 @@ export function useControlPlaneRuntime() {
     if (!chatId) {
       return;
     }
-    await historyApi.upsertPresetTarget(chatId, preset);
-    await refreshAll();
+    await controlPlaneApi.upsertPresetTarget(chatId, preset);
+    await Promise.all([loadOverview(), loadChats(), loadSelectedState()]);
   }
 
   async function upsertCustomTarget(start: string, end: string): Promise<void> {
@@ -134,27 +133,24 @@ export function useControlPlaneRuntime() {
     if (!chatId) {
       return;
     }
-    await historyApi.upsertCustomTarget(chatId, start, end);
-    await refreshAll();
+    await controlPlaneApi.upsertCustomTarget(chatId, start, end);
+    await Promise.all([loadOverview(), loadChats(), loadSelectedState()]);
   }
 
   async function deleteHistoryTarget(targetId: string): Promise<void> {
     if (!targetId) {
       return;
     }
-    await historyApi.deleteTarget(targetId);
-    await refreshAll();
+    await controlPlaneApi.deleteTarget(targetId);
+    await Promise.all([loadOverview(), loadChats(), loadSelectedState()]);
   }
 
   function receiveEvent(event: ControlPlaneEvent): void {
-    if (event.type === 'telegram.tdlib.status') {
+    if (event.type === 'telegram.status') {
       receiveTdlibStatus(event);
     }
     if (event.type) {
       eventsStore.pushEvent(event);
-    }
-    if (shouldRefreshForEvent(event)) {
-      debounceRefresh();
     }
   }
 
@@ -163,21 +159,6 @@ export function useControlPlaneRuntime() {
     tdlibConnected = data.connected === true;
     lastTdlibStatusAt = new Date(event.occurredAt ?? Date.now());
     updateTdlibStatus();
-  }
-
-  function shouldRefreshForEvent(event: ControlPlaneEvent): boolean {
-    return (
-      event.type?.startsWith('history.') === true ||
-      event.type === 'telegram.chat.updated' ||
-      event.type === 'telegram.chat_folders.updated'
-    );
-  }
-
-  function debounceRefresh(): void {
-    clearRefreshTimer();
-    refreshTimer = setTimeout(() => {
-      void refreshAll().catch(showError);
-    }, 350);
   }
 
   async function openMainChats(): Promise<void> {
@@ -248,7 +229,7 @@ export function useControlPlaneRuntime() {
   function showError(error: unknown): void {
     if (selectedHistoryStore.selectedChatId && isNotFoundLikeError(error)) {
       clearSelectedChat();
-      void refreshAll().catch((refreshError: unknown) => {
+      void Promise.all([loadOverview(), loadChats()]).catch((refreshError: unknown) => {
         pushLocalError(refreshError);
       });
       return;

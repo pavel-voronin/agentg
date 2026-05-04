@@ -17,37 +17,37 @@ export type ControlPlaneRpcClient = {
   rpc<T = unknown>(method: string, params?: Record<string, unknown>): Promise<T>;
 };
 
-export type HistoryChatListRequest = {
+export type ControlPlaneChatListRequest = {
   folderId: number | null;
   limit?: number;
   listMode: ChatListMode;
   query: string;
 };
 
-export type HistoryChatListResult = {
+export type ControlPlaneChatListResult = {
   chats: ControlPlaneChat[];
   navigation: ChatNavigation;
   types: HistoryChatTypeCount[];
 };
 
-type HistoryChatListRpcResult = {
+type ControlPlaneChatListRpcResult = {
   chats?: unknown;
   navigation?: unknown;
   types?: unknown;
 };
 
-export type HistoryApi = {
+export type ControlPlaneApi = {
   deleteTarget: (targetId: string) => Promise<unknown>;
   getChatHistoryState: (chatId: string) => Promise<SelectedHistoryState>;
   getOverview: () => Promise<HistoryOverview>;
-  listChats: (request: HistoryChatListRequest) => Promise<HistoryChatListResult>;
+  listChats: (request: ControlPlaneChatListRequest) => Promise<ControlPlaneChatListResult>;
   upsertCustomTarget: (chatId: string, start: string, end: string) => Promise<unknown>;
   upsertPresetTarget: (chatId: string, preset: string) => Promise<unknown>;
 };
 
 const DEFAULT_CHAT_LIMIT = 500;
 
-export function createHistoryApi(client: ControlPlaneRpcClient): HistoryApi {
+export function createControlPlaneApi(client: ControlPlaneRpcClient): ControlPlaneApi {
   return {
     deleteTarget(targetId) {
       return client.rpc('history.deleteTarget', { targetId });
@@ -58,12 +58,12 @@ export function createHistoryApi(client: ControlPlaneRpcClient): HistoryApi {
         .then(normalizeSelectedHistoryState);
     },
     getOverview() {
-      return client.rpc('history.getOverview').then(normalizeHistoryOverview);
+      return client.rpc('controlPlane.getOverview').then(normalizeHistoryOverview);
     },
     async listChats(request) {
-      const result = await client.rpc<HistoryChatListRpcResult>(
-        'history.listChats',
-        historyChatListParams(request)
+      const result = await client.rpc<ControlPlaneChatListRpcResult>(
+        'controlPlane.listChats',
+        controlPlaneChatListParams(request)
       );
       return {
         chats: asArray(result.chats).map(normalizeControlPlaneChat),
@@ -80,7 +80,7 @@ export function createHistoryApi(client: ControlPlaneRpcClient): HistoryApi {
   };
 }
 
-function historyChatListParams(request: HistoryChatListRequest): Record<string, unknown> {
+function controlPlaneChatListParams(request: ControlPlaneChatListRequest): Record<string, unknown> {
   const query = request.query.trim();
   const params: Record<string, unknown> = {
     limit: request.limit ?? DEFAULT_CHAT_LIMIT

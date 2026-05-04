@@ -8,7 +8,6 @@ import {
 import type { EventBus } from '@agentg/shared/events/bus';
 import { createIntegrationEvent } from '@agentg/shared/events/envelope';
 import type { JsonObject } from '@agentg/shared/json';
-import type { TelegramChatDirectoryEntry, TelegramChatFolder } from '@agentg/telegram/rpc';
 import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 
 import { TELEGRAM_HISTORY_PAST_BOUNDARY } from './constants.js';
@@ -44,26 +43,6 @@ type HistoryTargetResponse = {
   templateId: string | null;
 };
 
-type TelegramChatSortKey = {
-  id: string;
-  lastMessageDate: number;
-  listRank: number;
-  order: bigint;
-  title: string;
-};
-
-type ChatListFilter =
-  | {
-      kind: 'archive';
-    }
-  | {
-      kind: 'main';
-    }
-  | {
-      folderId: number;
-      kind: 'folder';
-    };
-
 export type HistoryRuntime = {
   database: AppDatabase;
   eventBus: EventBus;
@@ -82,8 +61,8 @@ export async function callHistoryMethod(
     return getHistoryOverview(runtime);
   }
 
-  if (method === 'history.listChats') {
-    return listHistoryChats(runtime, params);
+  if (method === 'history.getChatStats') {
+    return getHistoryChatStats(runtime, params);
   }
 
   if (method === 'history.getChatHistoryState') {
@@ -110,9 +89,7 @@ export async function callHistoryMethod(
 }
 
 async function getHistoryOverview(runtime: HistoryRuntime): Promise<unknown> {
-  const telegram = requireTelegramReadClient(runtime);
-  const [directory, templates, targets, coverage, activeJobs] = await Promise.all([
-    telegram.listChatDirectory({}),
+  const [templates, targets, coverage, activeJobs] = await Promise.all([
     runtime.database.select({ id: historyTemplates.id }).from(historyTemplates),
     runtime.database.select({ id: historyTargets.id }).from(historyTargets),
     runtime.database.select({ id: historyCoverage.id }).from(historyCoverage),
@@ -151,7 +128,6 @@ async function getHistoryOverview(runtime: HistoryRuntime): Promise<unknown> {
             startAt: activeJob.startAt.toISOString(),
             status: activeJob.status
           },
-    chats: directory.chats.length,
     coverageIntervals: coverage.length,
     pendingJobs: jobCounts.pending ?? 0,
     runningJobs: jobCounts.running ?? 0,
@@ -160,24 +136,9 @@ async function getHistoryOverview(runtime: HistoryRuntime): Promise<unknown> {
   };
 }
 
-async function listHistoryChats(runtime: HistoryRuntime, params: unknown): Promise<unknown> {
-  const telegram = requireTelegramReadClient(runtime);
+async function getHistoryChatStats(runtime: HistoryRuntime, params: unknown): Promise<unknown> {
   const input = asRecord(params);
-  const query = asString(input?.query)?.trim();
-  const type = asString(input?.type)?.trim();
-  const limit = parseLimit(input?.limit, 100, 500);
-  const listFilter =
-    query === undefined || query.length === 0 ? chatListFilterFromInput(input) : undefined;
-
-  const directory = await telegram.listChatDirectory({
-    ...(query === undefined || query.length === 0 ? {} : { query }),
-    ...(type === undefined || type.length === 0 ? {} : { type })
-  });
-  const chats = directory.chats
-    .filter((chat) => (listFilter === undefined ? true : chatMatchesListFilter(chat, listFilter)))
-    .sort((left, right) => compareTelegramChatsByTdlibOrder(left, right, listFilter))
-    .slice(0, limit);
-  const chatIds = chats.map((chat) => chat.id);
+  const chatIds = uniqueStrings(input?.chatIds);
   const [targets, coverage, jobs] =
     chatIds.length === 0
       ? [[], [], []]
@@ -215,28 +176,21 @@ async function listHistoryChats(runtime: HistoryRuntime, params: unknown): Promi
   const coverageByChat = groupBy(coverage, (interval) => interval.telegramChatId);
 
   return {
-    chats: chats.map((chat) => {
-      const chatCoverage = coverageByChat.get(chat.id) ?? [];
-      const chatJobs = jobsByChat.get(chat.id) ?? [];
+    stats: chatIds.map((chatId) => {
+      const chatCoverage = coverageByChat.get(chatId) ?? [];
+      const chatJobs = jobsByChat.get(chatId) ?? [];
       const jobCounts = countBy(chatJobs, (job) => job.status);
 
       return {
-        _model: 'telegram.chat',
+        chatId,
         coverageIntervals: chatCoverage.length,
         coverageNewestAt: maxOptionalDate(chatCoverage.map((interval) => interval.endAt)),
         coverageOldestAt: minOptionalDate(chatCoverage.map((interval) => interval.startAt)),
-        id: chat.id,
-        isBot: chat.isBot,
         pendingJobs: jobCounts.pending ?? 0,
         runningJobs: jobCounts.running ?? 0,
-        targets: targetsByChat[chat.id] ?? 0,
-        title: chat.title,
-        type: chat.type,
-        updatedAt: chat.updatedAt
+        targets: targetsByChat[chatId] ?? 0
       };
-    }),
-    navigation: historyChatNavigation(directory.navigationChats, directory.folders),
-    types: directory.types
+    })
   };
 }
 
@@ -444,196 +398,6 @@ async function listHistoryJobs(database: AppDatabase, params: unknown): Promise<
   };
 }
 
-function chatListFilterFromInput(input: Record<string, unknown> | undefined): ChatListFilter {
-  const list = asString(input?.list);
-  if (list === 'archive') {
-    return { kind: 'archive' };
-  }
-
-  if (list === 'folder') {
-    return {
-      folderId: requireSafeInteger(
-        input?.folderId,
-        'history.listChats folder list requires folderId'
-      ),
-      kind: 'folder'
-    };
-  }
-
-  return { kind: 'main' };
-}
-
-function historyChatNavigation(
-  chats: TelegramChatDirectoryEntry[],
-  folderRows: TelegramChatFolder[]
-) {
-  const folderCounts = new Map<number, number>();
-  let archiveCount = 0;
-  let mainCount = 0;
-
-  for (const chat of chats) {
-    if (chatMatchesListFilter(chat, { kind: 'main' })) {
-      mainCount += 1;
-    }
-    if (chatMatchesListFilter(chat, { kind: 'archive' })) {
-      archiveCount += 1;
-    }
-    for (const folderId of chatFolderIds(chat)) {
-      folderCounts.set(folderId, (folderCounts.get(folderId) ?? 0) + 1);
-    }
-  }
-
-  const knownFolderIds = new Set(folderRows.map((folder) => folder.id));
-  const unknownFolderIds = [...folderCounts.keys()]
-    .filter((id) => !knownFolderIds.has(id))
-    .sort((left, right) => left - right);
-
-  return {
-    archiveCount,
-    folders: [
-      ...folderRows.map((folder) => ({
-        count: folderCounts.get(folder.id) ?? 0,
-        iconName: folder.iconName,
-        id: folder.id,
-        position: folder.position,
-        title: folder.title
-      })),
-      ...unknownFolderIds.map((id) => ({
-        count: folderCounts.get(id) ?? 0,
-        iconName: null,
-        id,
-        title: `Folder ${String(id)}`
-      }))
-    ],
-    mainCount
-  };
-}
-
-function chatMatchesListFilter(chat: TelegramChatDirectoryEntry, filter: ChatListFilter): boolean {
-  return chat.placements.some((placement) => chatPlacementMatchesFilter(placement, filter));
-}
-
-function chatFolderIds(chat: TelegramChatDirectoryEntry): number[] {
-  return chat.placements
-    .filter((placement) => placement.kind === 'folder')
-    .map((placement) => placement.folderId);
-}
-
-function compareTelegramChatsByTdlibOrder(
-  left: TelegramChatDirectoryEntry,
-  right: TelegramChatDirectoryEntry,
-  filter?: ChatListFilter
-): number {
-  const leftKey = telegramChatSortKey(left, filter);
-  const rightKey = telegramChatSortKey(right, filter);
-
-  if (leftKey.listRank !== rightKey.listRank) {
-    return leftKey.listRank - rightKey.listRank;
-  }
-
-  const orderComparison = compareBigIntDescending(leftKey.order, rightKey.order);
-  if (orderComparison !== 0) {
-    return orderComparison;
-  }
-
-  if (leftKey.lastMessageDate !== rightKey.lastMessageDate) {
-    return rightKey.lastMessageDate - leftKey.lastMessageDate;
-  }
-
-  return leftKey.title.localeCompare(rightKey.title) || leftKey.id.localeCompare(rightKey.id);
-}
-
-function telegramChatSortKey(
-  chat: TelegramChatDirectoryEntry,
-  filter?: ChatListFilter
-): TelegramChatSortKey {
-  const position = preferredChatPlacement(chat, filter);
-  return {
-    id: chat.id,
-    lastMessageDate: chat.lastMessageDate,
-    listRank: position?.listRank ?? 3,
-    order: position?.order ?? 0n,
-    title: chat.title
-  };
-}
-
-function preferredChatPlacement(
-  chat: TelegramChatDirectoryEntry,
-  filter?: ChatListFilter
-): { listRank: number; order: bigint } | undefined {
-  const placements = chat.placements
-    .map((placement) => {
-      const order = parsePositiveBigInt(placement.order);
-      if (order === undefined) {
-        return undefined;
-      }
-
-      if (filter !== undefined && !chatPlacementMatchesFilter(placement, filter)) {
-        return undefined;
-      }
-
-      return {
-        listRank: chatPlacementRank(placement),
-        order
-      };
-    })
-    .filter(isDefined);
-
-  return placements.sort((left, right) => {
-    if (left.listRank !== right.listRank) {
-      return left.listRank - right.listRank;
-    }
-
-    return compareBigIntDescending(left.order, right.order);
-  })[0];
-}
-
-function chatPlacementMatchesFilter(
-  placement: TelegramChatDirectoryEntry['placements'][number],
-  filter: ChatListFilter
-): boolean {
-  if (filter.kind === 'main') {
-    return placement.kind === 'main';
-  }
-  if (filter.kind === 'archive') {
-    return placement.kind === 'archive';
-  }
-  return placement.kind === 'folder' && placement.folderId === filter.folderId;
-}
-
-function chatPlacementRank(placement: TelegramChatDirectoryEntry['placements'][number]): number {
-  if (placement.kind === 'main') {
-    return 0;
-  }
-
-  if (placement.kind === 'archive') {
-    return 1;
-  }
-
-  return 2;
-}
-
-function compareBigIntDescending(left: bigint, right: bigint): number {
-  if (left === right) {
-    return 0;
-  }
-
-  return left > right ? -1 : 1;
-}
-
-function parsePositiveBigInt(value: unknown): bigint | undefined {
-  if (typeof value === 'number' && Number.isSafeInteger(value) && value > 0) {
-    return BigInt(value);
-  }
-
-  if (typeof value === 'string' && /^[0-9]+$/.test(value)) {
-    const parsed = BigInt(value);
-    return parsed > 0n ? parsed : undefined;
-  }
-
-  return undefined;
-}
-
 function toTargetResponse(
   row: {
     id: string;
@@ -722,10 +486,6 @@ function groupBy<T>(items: T[], key: (item: T) => string): Map<string, T[]> {
   return groups;
 }
 
-function isDefined<T>(value: T | undefined): value is T {
-  return value !== undefined;
-}
-
 function minOptionalDate(values: Date[]): string | null {
   if (values.length === 0) {
     return null;
@@ -767,14 +527,6 @@ function requireString(value: unknown, message: string): string {
   return stringValue;
 }
 
-function requireSafeInteger(value: unknown, message: string): number {
-  if (typeof value !== 'number' || !Number.isSafeInteger(value)) {
-    throw new Error(message);
-  }
-
-  return value;
-}
-
 function requireJsonObject(value: unknown, message: string): JsonObject {
   const record = asRecord(value);
   if (record === undefined || Array.isArray(value)) {
@@ -792,4 +544,14 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
 
 function asString(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+function uniqueStrings(value: unknown): string[] {
+  return Array.isArray(value)
+    ? [
+        ...new Set(
+          value.filter((item): item is string => typeof item === 'string' && item.length > 0)
+        )
+      ]
+    : [];
 }

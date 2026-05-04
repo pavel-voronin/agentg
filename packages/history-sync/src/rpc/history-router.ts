@@ -2,9 +2,9 @@ import {
   historyChatHistoryStateOutputSchema,
   historyDeleteTargetInputSchema,
   historyGetChatHistoryStateInputSchema,
+  historyGetChatStatsInputSchema,
+  historyGetChatStatsOutputSchema,
   historyGetOverviewInputSchema,
-  historyListChatsInputSchema,
-  historyListChatsOutputSchema,
   historyListJobsInputSchema,
   historyListJobsOutputSchema,
   historyOverviewOutputSchema,
@@ -13,9 +13,9 @@ import {
   historyTargetMutationOutputSchema,
   historyUpsertTargetInputSchema,
   type HistoryChatHistoryStateOutput,
+  type HistoryGetChatStatsOutput,
   type HistoryIntervalOutput,
   type HistoryJobOutput,
-  type HistoryListChatsOutput,
   type HistoryListJobsOutput,
   type HistoryOverviewOutput,
   type HistoryRequestSyncOutput,
@@ -29,8 +29,8 @@ import { historyRpcRouter, rpc, type HistoryRpcContext } from './trpc.js';
 type HistoryMethod =
   | 'history.deleteTarget'
   | 'history.getChatHistoryState'
+  | 'history.getChatStats'
   | 'history.getOverview'
-  | 'history.listChats'
   | 'history.listJobs'
   | 'history.requestSync'
   | 'history.upsertTarget';
@@ -75,6 +75,19 @@ export function createHistoryRouter(options: CreateHistoryRouterOptions) {
           )
         )
       ),
+    getChatStats: rpc
+      .input(historyGetChatStatsInputSchema)
+      .output(historyGetChatStatsOutputSchema)
+      .query(async ({ ctx, input }) =>
+        normalizeChatStats(
+          await callKnownHistoryMethod(
+            runtimeForCall(options, ctx),
+            callMethod,
+            'history.getChatStats',
+            input
+          )
+        )
+      ),
     getOverview: rpc
       .input(historyGetOverviewInputSchema)
       .output(historyOverviewOutputSchema)
@@ -85,19 +98,6 @@ export function createHistoryRouter(options: CreateHistoryRouterOptions) {
             callMethod,
             'history.getOverview',
             undefined
-          )
-        )
-      ),
-    listChats: rpc
-      .input(historyListChatsInputSchema)
-      .output(historyListChatsOutputSchema)
-      .query(async ({ ctx, input }) =>
-        normalizeListChats(
-          await callKnownHistoryMethod(
-            runtimeForCall(options, ctx),
-            callMethod,
-            'history.listChats',
-            input
           )
         )
       ),
@@ -187,7 +187,6 @@ function normalizeOverview(value: unknown): HistoryOverviewOutput {
             startAt: toDateText(activeJob.startAt),
             status: asString(activeJob.status) ?? ''
           },
-    chats: asNonNegativeInteger(input.chats),
     coverageIntervals: asNonNegativeInteger(input.coverageIntervals),
     pendingJobs: asNonNegativeInteger(input.pendingJobs),
     runningJobs: asNonNegativeInteger(input.runningJobs),
@@ -196,50 +195,20 @@ function normalizeOverview(value: unknown): HistoryOverviewOutput {
   };
 }
 
-function normalizeListChats(value: unknown): HistoryListChatsOutput {
-  const input = requireRecord(value, 'History chat list requires object result');
-  const navigation = asRecord(input.navigation);
-
+function normalizeChatStats(value: unknown): HistoryGetChatStatsOutput {
+  const input = requireRecord(value, 'History chat stats requires object result');
   return {
-    chats: asArray(input.chats).map((chat) => {
-      const record = requireRecord(chat, 'History chat requires object');
+    stats: asArray(input.stats).map((stat) => {
+      const record = requireRecord(stat, 'History chat stats item requires object');
 
       return {
-        _model: 'telegram.chat',
+        chatId: asString(record.chatId) ?? '',
         coverageIntervals: asNonNegativeInteger(record.coverageIntervals),
         coverageNewestAt: toNullableDateText(record.coverageNewestAt),
         coverageOldestAt: toNullableDateText(record.coverageOldestAt),
-        id: asString(record.id) ?? '',
-        isBot: record.isBot === true,
         pendingJobs: asNonNegativeInteger(record.pendingJobs),
         runningJobs: asNonNegativeInteger(record.runningJobs),
-        targets: asNonNegativeInteger(record.targets),
-        title: asString(record.title) ?? '',
-        type: asString(record.type) ?? '',
-        updatedAt: toDateText(record.updatedAt)
-      };
-    }),
-    navigation: {
-      archiveCount: asNonNegativeInteger(navigation?.archiveCount),
-      folders: asArray(navigation?.folders).map((folder) => {
-        const record = requireRecord(folder, 'History folder requires object');
-
-        return {
-          count: asNonNegativeInteger(record.count),
-          iconName: asString(record.iconName) ?? null,
-          id: asNonNegativeInteger(record.id),
-          position: asNonNegativeInteger(record.position),
-          title: asString(record.title) ?? ''
-        };
-      }),
-      mainCount: asNonNegativeInteger(navigation?.mainCount)
-    },
-    types: asArray(input.types).map((typeCount) => {
-      const record = requireRecord(typeCount, 'History type count requires object');
-
-      return {
-        count: asNonNegativeInteger(record.count),
-        type: asString(record.type) ?? ''
+        targets: asNonNegativeInteger(record.targets)
       };
     })
   };

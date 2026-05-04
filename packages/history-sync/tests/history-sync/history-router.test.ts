@@ -19,12 +19,27 @@ describe('createHistoryRouter', () => {
             startAt: new Date('2026-04-30T01:00:00.000Z'),
             status: 'running'
           },
-          chats: 1,
           coverageIntervals: 2,
           pendingJobs: 0,
           runningJobs: 1,
           targets: 1,
           templates: 1
+        });
+      }
+
+      if (method === 'history.getChatStats') {
+        return Promise.resolve({
+          stats: [
+            {
+              chatId: 'chat-a',
+              coverageIntervals: 2,
+              coverageNewestAt: new Date('2026-04-30T02:00:00.000Z'),
+              coverageOldestAt: new Date('2026-04-30T01:00:00.000Z'),
+              pendingJobs: 0,
+              runningJobs: 1,
+              targets: 1
+            }
+          ]
         });
       }
 
@@ -57,12 +72,25 @@ describe('createHistoryRouter', () => {
         startAt: '2026-04-30T01:00:00.000Z',
         status: 'running'
       },
-      chats: 1,
       coverageIntervals: 2,
       pendingJobs: 0,
       runningJobs: 1,
       targets: 1,
       templates: 1
+    });
+
+    await expect(caller.getChatStats({ chatIds: ['chat-a'] })).resolves.toEqual({
+      stats: [
+        {
+          chatId: 'chat-a',
+          coverageIntervals: 2,
+          coverageNewestAt: '2026-04-30T02:00:00.000Z',
+          coverageOldestAt: '2026-04-30T01:00:00.000Z',
+          pendingJobs: 0,
+          runningJobs: 1,
+          targets: 1
+        }
+      ]
     });
 
     await expect(
@@ -85,6 +113,7 @@ describe('createHistoryRouter', () => {
 
     expect(calls).toEqual([
       { method: 'history.getOverview', params: undefined },
+      { method: 'history.getChatStats', params: { chatIds: ['chat-a'] } },
       { method: 'history.upsertTarget', params: { chatId: 'chat-a', preset: 'last7d' } }
     ]);
   });

@@ -33,16 +33,19 @@ untyped ingress shapes.
 
 - Keep Gateway's external WebSocket protocol and `telegram.*` method names
   stable.
-- Keep Control Plane's browser-facing WebSocket protocol stable.
+- Keep Control Plane's browser-facing WebSocket envelope stable. Browser read
+  methods that compose cross-domain UI models are `controlPlane.*` methods.
 - Keep the current Telegram History tRPC procedures used by History Sync stable.
 - Add Telegram-owned read models for Telegram chat and message reads instead of
   letting Gateway or History Sync read Telegram tables directly.
 - Use Telegram tRPC for Telegram-owned read data, even when the backing data is
   still stored in Postgres.
 - Keep History Sync as the only owner of history targets, coverage, backfill
-  jobs, and history-specific read aggregation.
-- Let History Sync compose history state from its own tables plus stable
-  Telegram-owned read models.
+  jobs, and History-owned stats.
+- Let Control Plane compose browser chat lists from Telegram-owned chat
+  directory data plus History-owned stats.
+- Let History Sync compose selected history state from its own tables plus
+  stable Telegram-owned read models.
 - Do not expose raw TDLib objects, Telegram raw JSON, or Drizzle row shapes from
   Gateway, History Sync, or Control Plane browser models.
 - Prefer narrow DTOs and mappers at every edge over returning full database
@@ -58,8 +61,9 @@ untyped ingress shapes.
   importing Telegram database schema tables.
 - Add Telegram-owned read procedures that give History Sync the chat directory
   and message-count facts it currently derives from Telegram storage tables.
-- Change History Sync observability reads to use those Telegram read procedures
-  and its own history tables.
+- Remove History Sync chat-directory browser reads. History Sync exposes stats
+  keyed by `telegramChatId`; Control Plane owns the browser chat list read
+  model.
 - Replace loose Control Plane history UI types with explicit browser-facing
   models and adapters.
 - Update interface and architecture documentation to reflect the new recovery
@@ -71,6 +75,8 @@ untyped ingress shapes.
 - Do not change Gateway's external WebSocket request or response envelope.
 - Do not rename existing Gateway `telegram.*` or `history.*` methods.
 - Do not let browser code call internal Telegram or History tRPC directly.
+- Do not expose Telegram chat directory, folders, or navigation through
+  `history.*` methods.
 - Do not introduce a shared internal contracts package.
 - Do not move History target, coverage, or backfill job ownership out of History
   Sync.
@@ -150,17 +156,20 @@ JSON while keeping History Sync in charge of history aggregation.
   - `lastMessageDate`
 - Keep Telegram-owned DTOs free of raw TDLib payloads.
 - Introduce a History Sync-side Telegram read client interface so
-  `history.listChats`, `history.getOverview`, and
   `history.getChatHistoryState` can be tested without Telegram storage tables.
-- Change History Sync `history.listChats` to:
-  - request the Telegram chat directory through the Telegram read client
-  - filter and sort using stable Telegram placement fields
-  - join in History-owned target, coverage, and active job counts from History
-    tables
-  - return the existing History-owned output DTO
-- Change History Sync `history.getOverview` to get Telegram chat counts through
-  Telegram read procedures while counting templates, targets, coverage, and jobs
-  from History tables.
+- Remove the History Sync chat-list RPC.
+- Add History Sync `history.getChatStats`:
+  - accept explicit `chatIds`
+  - return only History-owned target, coverage, pending job, and running job
+    counters keyed by `chatId`
+  - return no Telegram title, folder, navigation, placement, or type data
+- Keep `history.getOverview` limited to History-owned template, target,
+  coverage, and job counters.
+- Add Control Plane read methods:
+  - `controlPlane.getOverview` composes Telegram chat count with
+    `history.getOverview`
+  - `controlPlane.listChats` composes `telegram.listChatDirectory` with
+    `history.getChatStats`
 - Change History Sync `history.getChatHistoryState` to get selected chat
   metadata, message count, earliest message date, and interval message counts
   through Telegram read procedures.
@@ -178,11 +187,10 @@ JSON while keeping History Sync in charge of history aggregation.
 - History Sync still owns and validates the `history.*` output models.
 - History Sync still owns target writes, coverage writes, backfill job state,
   reconciliation, and sync lifecycle events.
-- `history.listChats`, `history.getOverview`, and
-  `history.getChatHistoryState` keep their current externally visible response
-  shape.
-- Tests cover chat list filtering for main, archive, and folder placement
-  without raw Telegram JSON fixtures.
+- History Sync does not expose a chat-list RPC.
+- `history.getOverview` does not return chat counts.
+- `controlPlane.listChats` owns chat list filtering for main, archive, and
+  folder placement without raw Telegram JSON fixtures.
 - Tests cover selected chat history state message counts without direct
   `telegramMessages` access.
 - Existing `npm run check` passes.
@@ -230,7 +238,7 @@ letting untyped history ingress flow through stores and view models.
 - Control Plane history stores and view models no longer rely on `unknown[]` for
   known History response sections.
 - `SelectedHistoryState` has no open string index signature.
-- `historyApi.ts` contains the Control Plane boundary adapter for History
+- `controlPlaneApi.ts` contains the Control Plane boundary adapter for browser
   WebSocket responses.
 - Browser-facing models are Control Plane-owned and do not expose raw Telegram
   payloads or database rows.
@@ -320,6 +328,8 @@ The final repository validation command `npm run check` passed.
   Telegram-owned read DTOs.
 - Control Plane has explicit browser-facing models for known History response
   shapes.
-- Gateway and Control Plane external protocols remain backward compatible.
+- Gateway external protocol remains stable. Control Plane browser chat-list
+  reads use `controlPlane.*` methods because they are Control Plane-owned
+  browser models.
 - No shared internal contracts package is introduced.
 - The documentation and source audits agree with the implemented boundaries.

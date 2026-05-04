@@ -194,16 +194,19 @@ semantics.
 
 `history.getOverview`
 
-Returns chat, template, target, coverage, and job counters.
+Returns template, target, coverage, and job counters. Chat directory counts are
+not History-owned.
 
-`history.listChats`
+`history.getChatStats`
 
 ```json
 {
-  "query": "optional title or id filter",
-  "limit": 200
+  "chatIds": ["123", "456"]
 }
 ```
+
+Returns History-owned counters keyed by Telegram chat id. It does not return
+Telegram chat titles, folders, list placement, or navigation.
 
 `history.getChatHistoryState`
 

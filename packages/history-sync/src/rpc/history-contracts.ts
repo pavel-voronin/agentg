@@ -22,24 +22,9 @@ export const historyRangeSchema = z.object({
 
 export const historyGetOverviewInputSchema = z.void();
 
-export const historyListChatsInputSchema = z
-  .object({
-    folderId: nonNegativeIntegerSchema.optional(),
-    limit: positiveIntegerSchema.optional(),
-    list: z.enum(['archive', 'folder', 'main']).optional(),
-    query: nonEmptyStringSchema.optional(),
-    type: nonEmptyStringSchema.optional()
-  })
-  .default({})
-  .superRefine((value, context) => {
-    if (value.list === 'folder' && value.folderId === undefined) {
-      context.addIssue({
-        code: 'custom',
-        message: 'history.listChats folder list requires folderId',
-        path: ['folderId']
-      });
-    }
-  });
+export const historyGetChatStatsInputSchema = z.object({
+  chatIds: z.array(nonEmptyStringSchema)
+});
 
 export const historyGetChatHistoryStateInputSchema = z.object({
   chatId: nonEmptyStringSchema
@@ -94,7 +79,6 @@ export const historyActiveJobOutputSchema = z.object({
 
 export const historyOverviewOutputSchema = z.object({
   activeJob: historyActiveJobOutputSchema.nullable(),
-  chats: nonNegativeIntegerSchema,
   coverageIntervals: nonNegativeIntegerSchema,
   pendingJobs: nonNegativeIntegerSchema,
   runningJobs: nonNegativeIntegerSchema,
@@ -102,44 +86,18 @@ export const historyOverviewOutputSchema = z.object({
   templates: nonNegativeIntegerSchema
 });
 
-export const historyChatOutputSchema = z.object({
-  _model: z.literal('telegram.chat'),
+export const historyChatStatsOutputSchema = z.object({
+  chatId: z.string(),
   coverageIntervals: nonNegativeIntegerSchema,
   coverageNewestAt: z.string().nullable(),
   coverageOldestAt: z.string().nullable(),
-  id: z.string(),
-  isBot: z.boolean(),
   pendingJobs: nonNegativeIntegerSchema,
   runningJobs: nonNegativeIntegerSchema,
-  targets: nonNegativeIntegerSchema,
-  title: z.string(),
-  type: z.string(),
-  updatedAt: z.string()
+  targets: nonNegativeIntegerSchema
 });
 
-export const historyChatFolderOutputSchema = z.object({
-  count: nonNegativeIntegerSchema,
-  iconName: z.string().nullable(),
-  id: nonNegativeIntegerSchema,
-  position: nonNegativeIntegerSchema,
-  title: z.string()
-});
-
-export const historyChatNavigationOutputSchema = z.object({
-  archiveCount: nonNegativeIntegerSchema,
-  folders: z.array(historyChatFolderOutputSchema),
-  mainCount: nonNegativeIntegerSchema
-});
-
-export const historyChatTypeCountOutputSchema = z.object({
-  count: nonNegativeIntegerSchema,
-  type: z.string()
-});
-
-export const historyListChatsOutputSchema = z.object({
-  chats: z.array(historyChatOutputSchema),
-  navigation: historyChatNavigationOutputSchema,
-  types: z.array(historyChatTypeCountOutputSchema)
+export const historyGetChatStatsOutputSchema = z.object({
+  stats: z.array(historyChatStatsOutputSchema)
 });
 
 export const historySelectedChatOutputSchema = z.object({
@@ -209,7 +167,7 @@ export const historyListJobsOutputSchema = z.object({
 });
 
 export type HistoryGetOverviewInput = z.infer<typeof historyGetOverviewInputSchema>;
-export type HistoryListChatsInput = z.infer<typeof historyListChatsInputSchema>;
+export type HistoryGetChatStatsInput = z.infer<typeof historyGetChatStatsInputSchema>;
 export type HistoryGetChatHistoryStateInput = z.infer<typeof historyGetChatHistoryStateInputSchema>;
 export type HistoryUpsertTargetInput = z.infer<typeof historyUpsertTargetInputSchema>;
 export type HistoryDeleteTargetInput = z.infer<typeof historyDeleteTargetInputSchema>;
@@ -217,7 +175,7 @@ export type HistoryRequestSyncInput = z.infer<typeof historyRequestSyncInputSche
 export type HistoryListJobsInput = z.infer<typeof historyListJobsInputSchema>;
 
 export type HistoryOverviewOutput = z.infer<typeof historyOverviewOutputSchema>;
-export type HistoryListChatsOutput = z.infer<typeof historyListChatsOutputSchema>;
+export type HistoryGetChatStatsOutput = z.infer<typeof historyGetChatStatsOutputSchema>;
 export type HistoryChatHistoryStateOutput = z.infer<typeof historyChatHistoryStateOutputSchema>;
 export type HistoryIntervalOutput = z.infer<typeof historyIntervalOutputSchema>;
 export type HistoryJobOutput = z.infer<typeof historyJobOutputSchema>;

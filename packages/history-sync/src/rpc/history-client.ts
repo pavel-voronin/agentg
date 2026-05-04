@@ -9,7 +9,7 @@ import type { InternalTrpcClientConfig } from './config.js';
 import {
   historyDeleteTargetInputSchema,
   historyGetChatHistoryStateInputSchema,
-  historyListChatsInputSchema,
+  historyGetChatStatsInputSchema,
   historyListJobsInputSchema,
   historyRequestSyncInputSchema,
   historyUpsertTargetInputSchema
@@ -72,13 +72,13 @@ async function callHistoryJsonRpcMethod(
         historyGetChatHistoryStateInputSchema.parse(params),
         internalRpcProcedureOptions(callOptions, signal)
       );
-    case 'history.getOverview':
-      return client.getOverview.query(undefined, internalRpcProcedureOptions(callOptions, signal));
-    case 'history.listChats':
-      return client.listChats.query(
-        historyListChatsInputSchema.parse(params ?? {}),
+    case 'history.getChatStats':
+      return client.getChatStats.query(
+        historyGetChatStatsInputSchema.parse(params),
         internalRpcProcedureOptions(callOptions, signal)
       );
+    case 'history.getOverview':
+      return client.getOverview.query(undefined, internalRpcProcedureOptions(callOptions, signal));
     case 'history.listJobs':
       return client.listJobs.query(
         historyListJobsInputSchema.parse(params ?? {}),

@@ -1,15 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createHistoryApi } from '../src/control-plane/historyApi.js';
+import { createControlPlaneApi } from '../src/control-plane/controlPlaneApi.js';
 
-describe('createHistoryApi', () => {
-  it('omits an empty chat search query for history.listChats', async () => {
+describe('createControlPlaneApi', () => {
+  it('omits an empty chat search query for controlPlane.listChats', async () => {
     const rpc = vi.fn().mockResolvedValue({
       chats: [],
       navigation: {}
     });
-    const api = createHistoryApi({
-      rpc: rpc as Parameters<typeof createHistoryApi>[0]['rpc']
+    const api = createControlPlaneApi({
+      rpc: rpc as Parameters<typeof createControlPlaneApi>[0]['rpc']
     });
 
     await api.listChats({
@@ -18,19 +18,19 @@ describe('createHistoryApi', () => {
       query: ''
     });
 
-    expect(rpc).toHaveBeenCalledWith('history.listChats', {
+    expect(rpc).toHaveBeenCalledWith('controlPlane.listChats', {
       limit: 500,
       list: 'main'
     });
   });
 
-  it('sends a trimmed non-empty chat search query for history.listChats', async () => {
+  it('sends a trimmed non-empty chat search query for controlPlane.listChats', async () => {
     const rpc = vi.fn().mockResolvedValue({
       chats: [],
       navigation: {}
     });
-    const api = createHistoryApi({
-      rpc: rpc as Parameters<typeof createHistoryApi>[0]['rpc']
+    const api = createControlPlaneApi({
+      rpc: rpc as Parameters<typeof createControlPlaneApi>[0]['rpc']
     });
 
     await api.listChats({
@@ -39,15 +39,15 @@ describe('createHistoryApi', () => {
       query: '  kolpaque  '
     });
 
-    expect(rpc).toHaveBeenCalledWith('history.listChats', {
+    expect(rpc).toHaveBeenCalledWith('controlPlane.listChats', {
       limit: 500,
       query: 'kolpaque'
     });
   });
 
-  it('normalizes History RPC responses into Control Plane-owned models', async () => {
+  it('normalizes Control Plane and History RPC responses into UI models', async () => {
     const rpc = vi.fn(<T = unknown>(method: string): Promise<T> => {
-      if (method === 'history.getOverview') {
+      if (method === 'controlPlane.getOverview') {
         return Promise.resolve({
           activeJob: {
             chatId: 'chat-a',
@@ -96,8 +96,8 @@ describe('createHistoryApi', () => {
         ]
       } as T);
     });
-    const api = createHistoryApi({
-      rpc: rpc as Parameters<typeof createHistoryApi>[0]['rpc']
+    const api = createControlPlaneApi({
+      rpc: rpc as Parameters<typeof createControlPlaneApi>[0]['rpc']
     });
 
     await expect(api.getOverview()).resolves.toEqual({

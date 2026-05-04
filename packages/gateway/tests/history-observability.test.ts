@@ -4,9 +4,9 @@ import {
   historyChatHistoryStateOutputSchema,
   historyDeleteTargetInputSchema,
   historyGetChatHistoryStateInputSchema,
+  historyGetChatStatsInputSchema,
+  historyGetChatStatsOutputSchema,
   historyGetOverviewInputSchema,
-  historyListChatsInputSchema,
-  historyListChatsOutputSchema,
   historyListJobsInputSchema,
   historyListJobsOutputSchema,
   historyOverviewOutputSchema,
@@ -58,6 +58,23 @@ describe('createTrpcGatewayHistoryClient', () => {
               targets: []
             };
           }),
+        getChatStats: rpc
+          .input(historyGetChatStatsInputSchema)
+          .output(historyGetChatStatsOutputSchema)
+          .query(({ input }) => {
+            calls.push({ method: 'getChatStats', params: input });
+            return {
+              stats: input.chatIds.map((chatId) => ({
+                chatId,
+                coverageIntervals: 1,
+                coverageNewestAt: null,
+                coverageOldestAt: null,
+                pendingJobs: 0,
+                runningJobs: 0,
+                targets: 1
+              }))
+            };
+          }),
         getOverview: rpc
           .input(historyGetOverviewInputSchema)
           .output(historyOverviewOutputSchema)
@@ -65,42 +82,11 @@ describe('createTrpcGatewayHistoryClient', () => {
             calls.push({ method: 'getOverview', params: undefined });
             return {
               activeJob: null,
-              chats: 10,
               coverageIntervals: 30,
               pendingJobs: 1,
               runningJobs: 0,
               targets: 2,
               templates: 3
-            };
-          }),
-        listChats: rpc
-          .input(historyListChatsInputSchema)
-          .output(historyListChatsOutputSchema)
-          .query(({ input }) => {
-            calls.push({ method: 'listChats', params: input });
-            return {
-              chats: [
-                {
-                  _model: 'telegram.chat',
-                  coverageIntervals: 1,
-                  coverageNewestAt: null,
-                  coverageOldestAt: null,
-                  id: input.query ?? 'chat-a',
-                  isBot: false,
-                  pendingJobs: 0,
-                  runningJobs: 0,
-                  targets: 1,
-                  title: 'Alice',
-                  type: 'private',
-                  updatedAt: '2026-04-30T00:00:00.000Z'
-                }
-              ],
-              navigation: {
-                archiveCount: 0,
-                folders: [],
-                mainCount: input.list === 'main' ? 1 : 0
-              },
-              types: [{ count: 1, type: 'private' }]
             };
           }),
         listJobs: rpc
@@ -145,7 +131,6 @@ describe('createTrpcGatewayHistoryClient', () => {
 
     try {
       await expect(client.call('history.getOverview', undefined)).resolves.toMatchObject({
-        chats: 10,
         coverageIntervals: 30,
         pendingJobs: 1,
         targets: 2,
@@ -153,21 +138,21 @@ describe('createTrpcGatewayHistoryClient', () => {
       });
 
       await expect(
-        client.call('history.listChats', {
-          list: 'main',
-          query: 'chat-a'
+        client.call('history.getChatStats', {
+          chatIds: ['chat-a']
         })
-      ).resolves.toMatchObject({
-        chats: [
+      ).resolves.toEqual({
+        stats: [
           {
-            id: 'chat-a',
-            title: 'Alice',
-            type: 'private'
+            chatId: 'chat-a',
+            coverageIntervals: 1,
+            coverageNewestAt: null,
+            coverageOldestAt: null,
+            pendingJobs: 0,
+            runningJobs: 0,
+            targets: 1
           }
-        ],
-        navigation: {
-          mainCount: 1
-        }
+        ]
       });
 
       await expect(
@@ -198,7 +183,7 @@ describe('createTrpcGatewayHistoryClient', () => {
       expect(calls).toEqual(
         expect.arrayContaining([
           { method: 'getOverview', params: undefined },
-          { method: 'listChats', params: { list: 'main', query: 'chat-a' } },
+          { method: 'getChatStats', params: { chatIds: ['chat-a'] } },
           { method: 'getChatHistoryState', params: { chatId: 'chat-a' } },
           { method: 'upsertTarget', params: { chatId: 'chat-a', preset: 'last7d' } }
         ])

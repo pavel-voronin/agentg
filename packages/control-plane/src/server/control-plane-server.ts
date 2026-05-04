@@ -6,10 +6,20 @@ import {
   createTrpcHistoryJsonRpcClient,
   type HistoryJsonRpcClient
 } from '@agentg/history-sync/rpc';
-import type { InternalTrpcClientConfig } from '@agentg/history-sync/rpc';
+import type { InternalTrpcClientConfig as HistoryInternalTrpcClientConfig } from '@agentg/history-sync/rpc';
+import type { InternalTrpcClientConfig as TelegramInternalTrpcClientConfig } from '@agentg/telegram/rpc';
 import type { EventBus } from '@agentg/shared/events/bus';
 import type { IntegrationEvent } from '@agentg/shared/events/envelope';
 import { WebSocket, WebSocketServer, type RawData } from 'ws';
+
+import {
+  callControlPlaneReadMethod,
+  type ControlPlaneReadModelRuntime
+} from './control-plane-read-model.js';
+import {
+  createTrpcTelegramDirectoryClient,
+  type TelegramDirectoryClient
+} from './telegram-client.js';
 
 export type ControlPlaneServerConfig = {
   host: string;
@@ -21,8 +31,10 @@ export type ControlPlaneServerOptions = {
   config: ControlPlaneServerConfig;
   eventBus: EventBus;
   historyClient?: HistoryJsonRpcClient;
+  telegramClient?: TelegramDirectoryClient;
   services: {
-    history: InternalTrpcClientConfig;
+    history: HistoryInternalTrpcClientConfig;
+    telegram: TelegramInternalTrpcClientConfig;
   };
 };
 
@@ -32,9 +44,7 @@ export type ControlPlaneServerHandle = {
   port: number;
 };
 
-type ControlPlaneRuntime = {
-  historyClient: HistoryJsonRpcClient;
-};
+type ControlPlaneRuntime = ControlPlaneReadModelRuntime;
 
 type RpcRequest = {
   id?: unknown;
@@ -52,6 +62,7 @@ type RpcResponse = {
 };
 
 const CONTROL_PLANE_HISTORY_REQUEST_TIMEOUT_MS = 15000;
+const CONTROL_PLANE_TELEGRAM_REQUEST_TIMEOUT_MS = 15000;
 
 export async function startControlPlaneServer(
   options: ControlPlaneServerOptions
@@ -61,8 +72,14 @@ export async function startControlPlaneServer(
     createTrpcHistoryJsonRpcClient(options.services.history, {
       timeoutMs: CONTROL_PLANE_HISTORY_REQUEST_TIMEOUT_MS
     });
+  const telegramClient =
+    options.telegramClient ??
+    createTrpcTelegramDirectoryClient(options.services.telegram, {
+      timeoutMs: CONTROL_PLANE_TELEGRAM_REQUEST_TIMEOUT_MS
+    });
   const runtime: ControlPlaneRuntime = {
-    historyClient
+    historyClient,
+    telegramClient
   };
   const staticRoot = resolve(options.config.staticDir);
   const server = createServer((request, response) => {
@@ -111,6 +128,7 @@ export async function startControlPlaneServer(
         subscription.unsubscribe();
       }
       historyClient.close();
+      telegramClient.close();
       closeWebSocketClients(clients);
       await closeWebSocketServer(webSocketServer);
       await closeHttpServer(server);
@@ -195,6 +213,11 @@ async function callMethod(
   method: string,
   params: unknown
 ): Promise<unknown> {
+  const controlPlaneResult = await callControlPlaneReadMethod(runtime, method, params);
+  if (controlPlaneResult !== undefined) {
+    return controlPlaneResult;
+  }
+
   if (method.startsWith('history.')) {
     const result = await runtime.historyClient.call(method, params);
     if (result !== undefined) {

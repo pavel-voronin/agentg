@@ -26,8 +26,8 @@ events. Gateway remains the external agent edge.
   Docker runs.
 - Route current `history.*` operator calls from Control Plane server to History
   Sync through the generated History gRPC client.
-- Subscribe Control Plane server to `telegram.>` and `history.>` NATS events and
-  forward them to connected browser clients.
+- Subscribe Control Plane server to live NATS events and forward them to
+  connected browser clients.
 - Change the browser UI client to connect to Control Plane server instead of
   Agent Gateway.
 - Keep the current Gateway WebSocket protocol for external agent clients.
@@ -59,8 +59,7 @@ events. Gateway remains the external agent edge.
 - Control Plane UI connects to Control Plane server by default.
 - Control Plane server uses generated History gRPC client code for `history.*`
   operator calls.
-- Control Plane server forwards live `telegram.>` and `history.>` events to the
-  browser UI.
+- Control Plane server forwards live integration events to the browser UI.
 - Gateway remains available for external clients and is not required for operator
   views.
 - Tests cover the Control Plane browser-facing boundary.

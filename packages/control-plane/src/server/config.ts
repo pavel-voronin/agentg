@@ -1,9 +1,13 @@
 import 'dotenv/config';
 
 import {
-  readInternalTrpcClientConfig,
-  type InternalTrpcClientConfig
+  readInternalTrpcClientConfig as readHistoryInternalTrpcClientConfig,
+  type InternalTrpcClientConfig as HistoryInternalTrpcClientConfig
 } from '@agentg/history-sync/rpc';
+import {
+  readInternalTrpcClientConfig as readTelegramInternalTrpcClientConfig,
+  type InternalTrpcClientConfig as TelegramInternalTrpcClientConfig
+} from '@agentg/telegram/rpc';
 import { resolve } from 'node:path';
 
 export type ControlPlaneConfig = {
@@ -16,7 +20,8 @@ export type ControlPlaneConfig = {
     url: string;
   };
   services: {
-    history: InternalTrpcClientConfig;
+    history: HistoryInternalTrpcClientConfig;
+    telegram: TelegramInternalTrpcClientConfig;
   };
 };
 
@@ -33,9 +38,13 @@ export function loadControlPlaneConfig(env: NodeJS.ProcessEnv = process.env): Co
       url: env.NATS_URL ?? 'nats://localhost:4222'
     },
     services: {
-      history: readInternalTrpcClientConfig(env, {
+      history: readHistoryInternalTrpcClientConfig(env, {
         defaultUrl: 'http://127.0.0.1:18082',
         urlEnv: 'HISTORY_RPC_URL'
+      }),
+      telegram: readTelegramInternalTrpcClientConfig(env, {
+        defaultUrl: 'http://127.0.0.1:18081',
+        urlEnv: 'TELEGRAM_RPC_URL'
       })
     }
   };
