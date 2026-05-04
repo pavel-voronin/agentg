@@ -55,6 +55,63 @@ describe('events store', () => {
 
     expect(storage.setItem).not.toHaveBeenCalled();
   });
+
+  it('mutes future events without removing existing events of that type', () => {
+    const store = useEventsStore();
+    const firstEvent = event('telegram.status');
+    const mutedEvent = event('telegram.status');
+    const otherEvent = event('history.sync.started');
+    const storage = localStorage as Storage & {
+      setItem: ReturnType<typeof vi.fn>;
+    };
+
+    expect(store.pushEvent(firstEvent)).toBe(true);
+
+    store.setEventTypeMuted('telegram.status', true);
+
+    expect(store.isEventTypeMuted('telegram.status')).toBe(true);
+    expect(store.eventFilters.types['telegram.status']).toBe(false);
+    expect(storage.setItem).toHaveBeenCalled();
+    expect(store.events.map((item) => item.type)).toEqual(['telegram.status']);
+    expect(store.pushEvent(mutedEvent)).toBe(false);
+    expect(store.pushEvent(otherEvent)).toBe(true);
+    expect(store.events.map((item) => item.type)).toEqual([
+      'history.sync.started',
+      'telegram.status'
+    ]);
+
+    store.setEventTypeMuted('telegram.status', false);
+
+    expect(store.isEventTypeMuted('telegram.status')).toBe(false);
+    expect(store.eventFilters.types['telegram.status']).toBe(true);
+    expect(store.pushEvent(mutedEvent)).toBe(true);
+    expect(store.events.map((item) => item.type)).toEqual([
+      'telegram.status',
+      'history.sync.started',
+      'telegram.status'
+    ]);
+  });
+
+  it('clears muted event types only when explicitly requested', () => {
+    const store = useEventsStore();
+
+    store.setEvents([
+      event('telegram.status'),
+      event('history.sync.started'),
+      event('telegram.status')
+    ]);
+    store.setEventTypeMuted('telegram.status', true);
+
+    expect(store.events.map((item) => item.type)).toEqual([
+      'telegram.status',
+      'history.sync.started',
+      'telegram.status'
+    ]);
+
+    store.clearEventsOfType('telegram.status');
+
+    expect(store.events.map((item) => item.type)).toEqual(['history.sync.started']);
+  });
 });
 
 function event(type: string): ControlPlaneEvent {
