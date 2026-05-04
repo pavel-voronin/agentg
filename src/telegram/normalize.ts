@@ -31,6 +31,7 @@ export type NormalizedTelegramChat = {
 export type NormalizedTelegramChatList = {
   type: 'archive' | 'folder' | 'main';
   folderId?: number;
+  order?: string;
 };
 
 export type NormalizedTelegramChatListUpdate = {
@@ -512,10 +513,26 @@ function normalizeChatPositionUpdate(
     return undefined;
   }
 
+  if (isZeroChatListOrder(position.order)) {
+    return {
+      action: 'remove',
+      chatId,
+      list
+    };
+  }
+
+  const order = normalizeChatListOrder(position.order);
+  if (order === undefined) {
+    return undefined;
+  }
+
   return {
-    action: position.order === 0 ? 'remove' : 'add',
+    action: 'add',
     chatId,
-    list
+    list: {
+      ...list,
+      order
+    }
   };
 }
 
@@ -524,10 +541,7 @@ function normalizeChatLists(chat: TdObject): NormalizedTelegramChatList[] {
     ? chat.chat_lists.map(normalizeChatList).filter(isChatList)
     : [];
   const fromPositions = Array.isArray(chat.positions)
-    ? chat.positions
-        .map(asTdObject)
-        .map((position) => normalizeChatList(position?.list))
-        .filter(isChatList)
+    ? chat.positions.map(asTdObject).map(normalizeChatPositionList).filter(isChatList)
     : [];
   const unique = new Map<string, NormalizedTelegramChatList>();
 
@@ -554,6 +568,21 @@ function normalizeChatList(value: unknown): NormalizedTelegramChatList | undefin
   return undefined;
 }
 
+function normalizeChatPositionList(
+  position: TdObject | undefined
+): NormalizedTelegramChatList | undefined {
+  const list = normalizeChatList(position?.list);
+  const order = normalizeChatListOrder(position?.order);
+  if (list === undefined || order === undefined) {
+    return undefined;
+  }
+
+  return {
+    ...list,
+    order
+  };
+}
+
 function chatListKey(list: NormalizedTelegramChatList): string {
   return list.type === 'folder' ? `${list.type}:${String(list.folderId)}` : list.type;
 }
@@ -574,6 +603,35 @@ function unixSecondsToDate(value: unknown): Date | undefined {
 
 function extractSafeInteger(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isSafeInteger(value) ? value : undefined;
+}
+
+function normalizeChatListOrder(value: unknown): string | undefined {
+  if (typeof value === 'bigint') {
+    return value > 0n ? value.toString() : undefined;
+  }
+
+  if (typeof value === 'number') {
+    return Number.isFinite(value) && value > 0 ? String(Math.trunc(value)) : undefined;
+  }
+
+  if (typeof value === 'string' && /^[0-9]+$/u.test(value)) {
+    const normalized = value.replace(/^0+/u, '');
+    return normalized.length > 0 ? normalized : undefined;
+  }
+
+  return undefined;
+}
+
+function isZeroChatListOrder(value: unknown): boolean {
+  if (typeof value === 'bigint') {
+    return value === 0n;
+  }
+
+  if (typeof value === 'number') {
+    return value === 0;
+  }
+
+  return typeof value === 'string' && /^0+$/u.test(value);
 }
 
 function extractTdType(value: unknown): string {

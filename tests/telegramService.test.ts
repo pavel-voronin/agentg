@@ -172,6 +172,78 @@ describe('TelegramService', () => {
     }
   });
 
+  it('lists chats by TDLib chat list order', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'agentg-telegram-order-'));
+    const app = createApp({
+      cwd,
+      env: {
+        AGENTG_SQLITE_PATH: './telegram-order.sqlite'
+      }
+    });
+
+    try {
+      await app.services.telegram.ingestUpdate(
+        telegramChatWithPositions('3001', 'Low', {
+          folder: '9221294784512000001',
+          main: '9221294784512000001'
+        })
+      );
+      await app.services.telegram.ingestUpdate(
+        telegramChatWithPositions('3002', 'High', {
+          folder: '9221294784512000003',
+          main: '9221294784512000003'
+        })
+      );
+      await app.services.telegram.ingestUpdate(
+        telegramChatWithPositions('3003', 'Middle', {
+          folder: '9221294784512000002',
+          main: '9221294784512000002'
+        })
+      );
+
+      expect(app.services.history.listChats({ list: 'main' }).chats.map((chat) => chat.id)).toEqual(
+        ['3002', '3003', '3001']
+      );
+      expect(
+        app.services.history
+          .listChats({
+            folderId: 7,
+            list: 'folder'
+          })
+          .chats.map((chat) => chat.id)
+      ).toEqual(['3002', '3003', '3001']);
+
+      await app.services.telegram.ingestUpdate({
+        _: 'updateChatPosition',
+        chat_id: 3001,
+        position: {
+          _: 'chatPosition',
+          list: {
+            _: 'chatListMain'
+          },
+          order: '9221294784512000004'
+        }
+      });
+      await app.services.telegram.ingestUpdate({
+        _: 'updateChatPosition',
+        chat_id: 3002,
+        position: {
+          _: 'chatPosition',
+          list: {
+            _: 'chatListMain'
+          },
+          order: '0'
+        }
+      });
+
+      expect(app.services.history.listChats({ list: 'main' }).chats.map((chat) => chat.id)).toEqual(
+        ['3001', '3003']
+      );
+    } finally {
+      await app.stop();
+    }
+  });
+
   it('uses private user names when TDLib chat title is empty', async () => {
     const cwd = mkdtempSync(join(tmpdir(), 'agentg-telegram-names-'));
     const app = createApp({
@@ -348,5 +420,44 @@ function createPrivateNameTdlibClient(): TelegramTdlibClient {
         return;
       }
     })
+  };
+}
+
+function telegramChatWithPositions(
+  id: string,
+  title: string,
+  orders: {
+    folder: string;
+    main: string;
+  }
+): unknown {
+  return {
+    _: 'updateNewChat',
+    chat: {
+      _: 'chat',
+      id: Number(id),
+      positions: [
+        {
+          _: 'chatPosition',
+          list: {
+            _: 'chatListMain'
+          },
+          order: orders.main
+        },
+        {
+          _: 'chatPosition',
+          list: {
+            _: 'chatListFolder',
+            chat_folder_id: 7
+          },
+          order: orders.folder
+        }
+      ],
+      title,
+      type: {
+        _: 'chatTypeSupergroup',
+        is_channel: false
+      }
+    }
   };
 }

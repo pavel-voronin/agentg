@@ -224,10 +224,26 @@ export function createTelegramRepository(database: Database): TelegramRepository
       const query = input.query?.trim();
       const hasQuery = query !== undefined && query.length > 0;
       const listQuery = chatListQuery(hasQuery ? {} : input);
+      const orderBy =
+        !hasQuery && input.list !== undefined
+          ? `
+            ORDER BY
+              CASE WHEN m.list_order IS NULL THEN 1 ELSE 0 END ASC,
+              length(m.list_order) DESC,
+              m.list_order DESC,
+              title ASC,
+              c.telegram_chat_id ASC
+          `
+          : `
+            ORDER BY
+              c.updated_at DESC,
+              title ASC,
+              c.telegram_chat_id ASC
+          `;
       const rows = database
         .prepare(
           `
-            SELECT DISTINCT
+            SELECT
               c.telegram_chat_id,
               ${chatDisplayTitleSql()} AS title,
               c.type,
@@ -238,7 +254,7 @@ export function createTelegramRepository(database: Database): TelegramRepository
                 ? `${listQuery.where.length > 0 ? `${listQuery.where} AND` : 'WHERE'} (${chatDisplayTitleSql()} LIKE ? ESCAPE '\\' OR c.telegram_chat_id LIKE ? ESCAPE '\\')`
                 : listQuery.where
             }
-            ORDER BY c.updated_at DESC, title ASC
+            ${orderBy}
             LIMIT ?
           `
         )
@@ -572,14 +588,19 @@ function insertChatListMembership(
         INSERT INTO telegram_chat_list_memberships (
           telegram_chat_id,
           list_type,
-          telegram_chat_folder_id
+          telegram_chat_folder_id,
+          list_order
         )
-        VALUES (?, ?, ?)
+        VALUES (?, ?, ?, ?)
         ON CONFLICT (telegram_chat_id, list_type, telegram_chat_folder_id) DO UPDATE SET
+          list_order = coalesce(
+            excluded.list_order,
+            telegram_chat_list_memberships.list_order
+          ),
           updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
       `
     )
-    .run(chatId, list.type, chatListFolderId(list));
+    .run(chatId, list.type, chatListFolderId(list), list.order ?? null);
 
   return result.changes > 0;
 }
