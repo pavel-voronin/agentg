@@ -33,7 +33,7 @@ import {
   type HistoryTargetMutationOutput
 } from './history-contracts.js';
 import { callHistoryMethod, type HistoryRuntime } from '../observability.js';
-import { enriched, historyRpcRouter, observable, rpc } from './trpc.js';
+import { enriched, historyRpcRouter, rpc, type HistoryRpcContext } from './trpc.js';
 
 type HistoryMethod =
   | 'history.deleteTarget'
@@ -62,50 +62,80 @@ export function createHistoryRouter(options: CreateHistoryRouterOptions) {
     deleteTarget: rpc
       .input(historyDeleteTargetInputSchema)
       .output(historyTargetMutationOutputSchema)
-      .mutation(async ({ input }) =>
+      .mutation(async ({ ctx, input }) =>
         normalizeTargetMutation(
-          await callKnownHistoryMethod(options, callMethod, 'history.deleteTarget', input)
+          await callKnownHistoryMethod(
+            runtimeForCall(options, ctx),
+            callMethod,
+            'history.deleteTarget',
+            input
+          )
         )
       ),
     getChatHistoryState: enriched
       .input(historyGetChatHistoryStateInputSchema)
       .output(historyChatHistoryStateOutputSchema)
-      .query(async ({ input }) =>
+      .query(async ({ ctx, input }) =>
         normalizeChatHistoryState(
-          await callKnownHistoryMethod(options, callMethod, 'history.getChatHistoryState', input)
+          await callKnownHistoryMethod(
+            runtimeForCall(options, ctx),
+            callMethod,
+            'history.getChatHistoryState',
+            input
+          )
         )
       ),
     getOverview: rpc
       .input(historyGetOverviewInputSchema)
       .output(historyOverviewOutputSchema)
-      .query(async () =>
+      .query(async ({ ctx }) =>
         normalizeOverview(
-          await callKnownHistoryMethod(options, callMethod, 'history.getOverview', undefined)
+          await callKnownHistoryMethod(
+            runtimeForCall(options, ctx),
+            callMethod,
+            'history.getOverview',
+            undefined
+          )
         )
       ),
     listChats: rpc
       .input(historyListChatsInputSchema)
       .output(historyListChatsOutputSchema)
-      .query(async ({ input }) =>
+      .query(async ({ ctx, input }) =>
         normalizeListChats(
-          await callKnownHistoryMethod(options, callMethod, 'history.listChats', input)
+          await callKnownHistoryMethod(
+            runtimeForCall(options, ctx),
+            callMethod,
+            'history.listChats',
+            input
+          )
         )
       ),
     listJobs: rpc
       .input(historyListJobsInputSchema)
       .output(historyListJobsOutputSchema)
-      .query(async ({ input }) =>
+      .query(async ({ ctx, input }) =>
         normalizeListJobs(
-          await callKnownHistoryMethod(options, callMethod, 'history.listJobs', input)
+          await callKnownHistoryMethod(
+            runtimeForCall(options, ctx),
+            callMethod,
+            'history.listJobs',
+            input
+          )
         )
       ),
     listExtensions: rpc.output(extensionListOutputSchema).query(() => listExtensions(options)),
-    requestSync: observable
+    requestSync: rpc
       .input(historyRequestSyncInputSchema)
       .output(historyRequestSyncOutputSchema)
-      .mutation(async ({ input }) =>
+      .mutation(async ({ ctx, input }) =>
         normalizeRequestSync(
-          await callKnownHistoryMethod(options, callMethod, 'history.requestSync', input)
+          await callKnownHistoryMethod(
+            runtimeForCall(options, ctx),
+            callMethod,
+            'history.requestSync',
+            input
+          )
         )
       ),
     registerExtension: rpc
@@ -115,9 +145,14 @@ export function createHistoryRouter(options: CreateHistoryRouterOptions) {
     upsertTarget: rpc
       .input(historyUpsertTargetInputSchema)
       .output(historyTargetMutationOutputSchema)
-      .mutation(async ({ input }) =>
+      .mutation(async ({ ctx, input }) =>
         normalizeTargetMutation(
-          await callKnownHistoryMethod(options, callMethod, 'history.upsertTarget', input)
+          await callKnownHistoryMethod(
+            runtimeForCall(options, ctx),
+            callMethod,
+            'history.upsertTarget',
+            input
+          )
         )
       )
   });
@@ -137,6 +172,20 @@ async function callKnownHistoryMethod(
   }
 
   return result;
+}
+
+function runtimeForCall(
+  options: CreateHistoryRouterOptions,
+  ctx: HistoryRpcContext
+): CreateHistoryRouterOptions {
+  if (ctx.eventBus === undefined || ctx.eventBus === options.eventBus) {
+    return options;
+  }
+
+  return {
+    ...options,
+    eventBus: ctx.eventBus
+  };
 }
 
 function registerExtension(

@@ -23,20 +23,25 @@ At the end of this stage, commit all changes with a conventional commit message.
 
 ## Concrete Scope
 
-- Publish `started`, `progress`, `completed`, and `failed` lifecycle events by
-  default for internal RPC procedures.
-- Remove `observable` as a procedure builder.
-- Add call options:
+- Add a shared internal RPC call options helper:
   - `observable?: boolean`;
-  - `silent?: boolean`.
-- Pass call options outside domain input through tRPC operation context and HTTP
-  headers.
-- Use per-request header handling that can preserve different call options for
-  different calls.
+  - `silent?: boolean`;
+  - HTTP header serialization for tRPC operation context;
+  - per-request header parsing that keeps options attached to the matching
+    operation path.
+- Publish `started`, `progress`, `completed`, and `failed` lifecycle events by
+  default from the base History, Telegram, and Summaries `rpc` procedure.
+- Remove `observable` as an exported procedure builder and convert current
+  `observable` procedure uses to `rpc`.
+- Pass call options outside domain input through tRPC operation context and
+  generated HTTP headers in internal clients.
 - Make `observable: false` suppress only lifecycle events for the current RPC
   call.
 - Make `silent: true` suppress lifecycle events and synchronously published fact
   events for the current RPC handler only.
+- Keep `enriched` as a compatibility builder for Stage 4 cleanup, but make it
+  build on the same base `rpc` procedure rather than on a separate observable
+  branch.
 
 ## Explicit Non-Scope
 
@@ -45,6 +50,8 @@ At the end of this stage, commit all changes with a conventional commit message.
 - Do not add cancellation semantics.
 - Do not alter event subject names except where direct RPC result conversion
   requires test fixture updates.
+- Do not add lifecycle publishing to the standalone Extension Registry service
+  in this stage; it has no event bus dependency today.
 
 ## Definition of Done
 
@@ -52,6 +59,7 @@ At the end of this stage, commit all changes with a conventional commit message.
 - Tests cover `observable: false` preserving synchronous fact events.
 - Tests cover `silent: true` suppressing lifecycle and synchronous fact events.
 - No procedure imports or uses an `observable` builder.
+- Internal tRPC clients can forward call options through request context.
 - Package typecheck and tests pass for touched packages.
 
 ## Stop Rule

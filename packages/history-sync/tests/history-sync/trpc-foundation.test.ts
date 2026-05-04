@@ -2,7 +2,7 @@ import type { Server } from 'node:http';
 
 import { createTRPCClient, httpBatchLink } from '@trpc/client';
 import type { EventBus, EventSubscription } from '@agentg/shared/events/bus';
-import type { IntegrationEvent } from '@agentg/shared/events/envelope';
+import { createIntegrationEvent, type IntegrationEvent } from '@agentg/shared/events/envelope';
 import {
   RPC_CALL_COMPLETED_EVENT_SUFFIX,
   RPC_CALL_FAILED_EVENT_SUFFIX,
@@ -10,6 +10,7 @@ import {
   RPC_CALL_STARTED_EVENT_SUFFIX,
   rpcCallEventType
 } from '@agentg/shared/rpc/call-events';
+import { createInternalRpcCallOptionsHeaders } from '@agentg/shared/rpc/call-options';
 import { createExtensionRegistry, extensionCallInputSchema } from '@agentg/shared/rpc/extensions';
 import { createHTTPServer } from '@trpc/server/adapters/standalone';
 import { describe, expect, it } from 'vitest';
@@ -21,7 +22,6 @@ import {
   extension,
   historyRpcRouter,
   INTERNAL_RPC_CORRELATION_ID_HEADER,
-  observable,
   rpc
 } from '../../src/rpc/trpc.js';
 
@@ -47,8 +47,11 @@ describe('History tRPC foundation', () => {
     const client = createTRPCClient<typeof testRouter>({
       links: [
         httpBatchLink({
-          headers: {
-            [INTERNAL_RPC_CORRELATION_ID_HEADER]: 'history-stage-1'
+          headers({ opList }) {
+            return {
+              [INTERNAL_RPC_CORRELATION_ID_HEADER]: 'history-stage-1',
+              ...createInternalRpcCallOptionsHeaders(opList)
+            };
           },
           url: `http://127.0.0.1:${String(port)}`
         })
@@ -66,30 +69,30 @@ describe('History tRPC foundation', () => {
     }
   });
 
-  it('publishes observable lifecycle, progress, and failed events', async () => {
+  it('publishes lifecycle, progress, and failed events by default', async () => {
     const publishedEvents: IntegrationEvent[] = [];
     const caller = historyRpcRouter({
-      domainError: observable
+      domainError: rpc
         .input(z.object({ value: z.string() }))
         .output(z.object({ value: z.string() }))
         .query(() => {
           throw new Error('History value was denied');
         }),
-      echo: observable
+      echo: rpc
         .input(z.object({ value: z.string() }))
         .output(z.object({ callId: z.string(), value: z.string() }))
         .query(({ ctx, input }) => {
-          ctx.progress({
+          ctx.progress?.({
             step: 'loaded'
           });
 
           return {
-            callId: ctx.callId,
+            callId: ctx.callId ?? '',
             value: input.value
           };
         }),
-      throwing: observable.output(z.object({ value: z.string() })).query(() => {
-        throw new Error('observable boom');
+      throwing: rpc.output(z.object({ value: z.string() })).query(() => {
+        throw new Error('lifecycle boom');
       })
     }).createCaller({
       eventBus: createRecordingEventBus(publishedEvents)
@@ -158,7 +161,7 @@ describe('History tRPC foundation', () => {
 
     publishedEvents.length = 0;
 
-    await expect(caller.throwing()).rejects.toThrow('observable boom');
+    await expect(caller.throwing()).rejects.toThrow('lifecycle boom');
 
     expect(publishedEvents.map((event) => event.type)).toEqual([
       rpcCallEventType('history.throwing', RPC_CALL_STARTED_EVENT_SUFFIX),
@@ -169,11 +172,121 @@ describe('History tRPC foundation', () => {
       data: {
         callId: thrownCallId,
         error: {
-          message: 'observable boom'
+          message: 'lifecycle boom'
         },
         target: 'history.throwing'
       }
     });
+  });
+
+  it('applies per-call observable and silent options from batched HTTP headers', async () => {
+    const publishedEvents: IntegrationEvent[] = [];
+    const testRouter = historyRpcRouter({
+      defaultFact: rpc
+        .input(z.object({ value: z.string() }))
+        .output(z.object({ value: z.string() }))
+        .query(({ ctx, input }) => {
+          ctx.eventBus?.publish(createFactEvent('history.fact.default', input.value));
+          return {
+            value: input.value
+          };
+        }),
+      quietFact: rpc
+        .input(z.object({ value: z.string() }))
+        .output(z.object({ value: z.string() }))
+        .query(({ ctx, input }) => {
+          ctx.eventBus?.publish(createFactEvent('history.fact.quiet', input.value));
+          ctx.progress?.({
+            step: 'quiet-progress'
+          });
+          return {
+            value: input.value
+          };
+        }),
+      silentFact: rpc
+        .input(z.object({ value: z.string() }))
+        .output(z.object({ value: z.string() }))
+        .query(({ ctx, input }) => {
+          ctx.eventBus?.publish(createFactEvent('history.fact.silent', input.value));
+          ctx.progress?.({
+            step: 'silent-progress'
+          });
+          return {
+            value: input.value
+          };
+        })
+    });
+    const server = createHTTPServer({
+      createContext: (options) =>
+        createHistoryRpcContext(options, {
+          eventBus: createRecordingEventBus(publishedEvents)
+        }),
+      router: testRouter
+    });
+    const port = await listenEphemeral(server);
+    const client = createTRPCClient<typeof testRouter>({
+      links: [
+        httpBatchLink({
+          headers: ({ opList }) => createInternalRpcCallOptionsHeaders(opList),
+          url: `http://127.0.0.1:${String(port)}`
+        })
+      ]
+    });
+
+    try {
+      await expect(
+        Promise.all([
+          client.defaultFact.query({ value: 'default' }),
+          client.quietFact.query(
+            { value: 'quiet' },
+            {
+              context: {
+                observable: false
+              }
+            }
+          ),
+          client.silentFact.query(
+            { value: 'silent' },
+            {
+              context: {
+                silent: true
+              }
+            }
+          )
+        ])
+      ).resolves.toEqual([{ value: 'default' }, { value: 'quiet' }, { value: 'silent' }]);
+    } finally {
+      await closeServer(server);
+    }
+
+    const eventTypes = publishedEvents.map((event) => event.type);
+    expect(eventTypes).toContain(
+      rpcCallEventType('history.defaultFact', RPC_CALL_STARTED_EVENT_SUFFIX)
+    );
+    expect(eventTypes).toContain(
+      rpcCallEventType('history.defaultFact', RPC_CALL_COMPLETED_EVENT_SUFFIX)
+    );
+    expect(eventTypes).toContain('history.fact.default');
+    expect(eventTypes).toContain('history.fact.quiet');
+    expect(eventTypes).not.toContain(
+      rpcCallEventType('history.quietFact', RPC_CALL_STARTED_EVENT_SUFFIX)
+    );
+    expect(eventTypes).not.toContain(
+      rpcCallEventType('history.quietFact', RPC_CALL_PROGRESS_EVENT_SUFFIX)
+    );
+    expect(eventTypes).not.toContain(
+      rpcCallEventType('history.quietFact', RPC_CALL_COMPLETED_EVENT_SUFFIX)
+    );
+    expect(eventTypes).not.toContain('history.fact.silent');
+    expect(eventTypes).not.toContain(
+      rpcCallEventType('history.silentFact', RPC_CALL_STARTED_EVENT_SUFFIX)
+    );
+    expect(eventTypes).not.toContain(
+      rpcCallEventType('history.silentFact', RPC_CALL_PROGRESS_EVENT_SUFFIX)
+    );
+    expect(eventTypes).not.toContain(
+      rpcCallEventType('history.silentFact', RPC_CALL_COMPLETED_EVENT_SUFFIX)
+    );
   });
 
   it('refreshes registrations and removes stale extension entries', () => {
@@ -312,6 +425,16 @@ describe('History tRPC foundation', () => {
     });
   });
 });
+
+function createFactEvent(type: string, value: string): IntegrationEvent {
+  return createIntegrationEvent({
+    data: {
+      value
+    },
+    source: 'history-sync',
+    type
+  });
+}
 
 function listenEphemeral(server: Server): Promise<number> {
   return new Promise((resolve) => {

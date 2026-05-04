@@ -1,5 +1,10 @@
 import { createTRPCClient, httpBatchLink, type TRPCClient } from '@trpc/client';
 import {
+  createInternalRpcCallOptionsHeaders,
+  internalRpcProcedureOptions,
+  type InternalRpcCallOptions
+} from '@agentg/shared/rpc/call-options';
+import {
   telegramGetChatInputSchema,
   telegramGetMessageInputSchema,
   telegramListRecentMessagesInputSchema,
@@ -9,7 +14,7 @@ import {
 } from '@agentg/telegram/rpc';
 
 export type GatewayTelegramClient = {
-  call(method: string, params: unknown): Promise<unknown>;
+  call(method: string, params: unknown, options?: InternalRpcCallOptions): Promise<unknown>;
   close(): void;
 };
 
@@ -26,6 +31,7 @@ export function createTrpcGatewayTelegramClient(
   const client = createTRPCClient<TelegramHistoryRouter>({
     links: [
       httpBatchLink({
+        headers: ({ opList }) => createInternalRpcCallOptionsHeaders(opList),
         url: config.url
       })
     ]
@@ -33,9 +39,9 @@ export function createTrpcGatewayTelegramClient(
   const timeoutMs = options.timeoutMs ?? DEFAULT_TELEGRAM_REQUEST_TIMEOUT_MS;
 
   return {
-    call(method, params) {
+    call(method, params, callOptions) {
       return withTimeout(
-        (signal) => callTelegramJsonRpcMethod(client, method, params, signal),
+        (signal) => callTelegramJsonRpcMethod(client, method, params, signal, callOptions),
         timeoutMs
       );
     },
@@ -49,22 +55,30 @@ async function callTelegramJsonRpcMethod(
   client: TRPCClient<TelegramHistoryRouter>,
   method: string,
   params: unknown,
-  signal: AbortSignal
+  signal: AbortSignal,
+  callOptions?: InternalRpcCallOptions
 ): Promise<unknown> {
   switch (method) {
     case 'telegram.getChat':
-      return client.getChat.query(telegramGetChatInputSchema.parse(params), { signal });
+      return client.getChat.query(
+        telegramGetChatInputSchema.parse(params),
+        internalRpcProcedureOptions(callOptions, signal)
+      );
     case 'telegram.getMessage':
-      return client.getMessage.query(telegramGetMessageInputSchema.parse(params), { signal });
+      return client.getMessage.query(
+        telegramGetMessageInputSchema.parse(params),
+        internalRpcProcedureOptions(callOptions, signal)
+      );
     case 'telegram.listRecentMessages':
       return client.listRecentMessages.query(
         telegramListRecentMessagesInputSchema.parse(params ?? {}),
-        { signal }
+        internalRpcProcedureOptions(callOptions, signal)
       );
     case 'telegram.searchMessages':
-      return client.searchMessages.query(telegramSearchMessagesInputSchema.parse(params), {
-        signal
-      });
+      return client.searchMessages.query(
+        telegramSearchMessagesInputSchema.parse(params),
+        internalRpcProcedureOptions(callOptions, signal)
+      );
     default:
       return undefined;
   }

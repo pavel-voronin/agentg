@@ -8,7 +8,7 @@ import {
   summariesRequestSummaryInputSchema,
   summariesRequestSummaryOutputSchema
 } from './contracts.js';
-import { extension, observable, rpc, summariesRpcRouter } from './trpc.js';
+import { extension, rpc, summariesRpcRouter } from './trpc.js';
 import {
   getChatSummaryExtension,
   readChatSummary,
@@ -16,6 +16,7 @@ import {
   requestChatSummary,
   type SummariesRuntime
 } from '../summary-service.js';
+import type { SummariesRpcContext } from './trpc.js';
 
 export function createSummariesRouter(runtime: SummariesRuntime) {
   return summariesRpcRouter({
@@ -34,15 +35,15 @@ export function createSummariesRouter(runtime: SummariesRuntime) {
         .input(summariesReadSummaryRunInputSchema)
         .output(summariesReadSummaryRunOutputSchema)
         .query(({ input }) => readSummaryRun(runtime, input.runId)),
-      requestSummary: observable
+      requestSummary: rpc
         .input(summariesRequestSummaryInputSchema)
         .output(summariesRequestSummaryOutputSchema)
         .mutation(({ ctx, input }) => {
-          ctx.progress({
+          ctx.progress?.({
             message: 'Creating chat summary',
             stage: 'summaries.requested'
           });
-          return requestChatSummary(runtime, input);
+          return requestChatSummary(runtimeForCall(runtime, ctx), input);
         })
     })
   });
@@ -58,6 +59,17 @@ function chatIdFromExtensionOutput(output: unknown): string {
   }
 
   throw new Error('summaries.chatSummary extension requires output.chat.id');
+}
+
+function runtimeForCall(runtime: SummariesRuntime, ctx: SummariesRpcContext): SummariesRuntime {
+  if (ctx.eventBus === undefined || ctx.eventBus === runtime.eventBus) {
+    return runtime;
+  }
+
+  return {
+    ...runtime,
+    eventBus: ctx.eventBus
+  };
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {

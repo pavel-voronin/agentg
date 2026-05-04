@@ -1,4 +1,9 @@
 import { createTRPCClient, httpBatchLink, type TRPCClient } from '@trpc/client';
+import {
+  createInternalRpcCallOptionsHeaders,
+  internalRpcProcedureOptions,
+  type InternalRpcCallOptions
+} from '@agentg/shared/rpc/call-options';
 
 import type { InternalTrpcClientConfig } from './config.js';
 import {
@@ -12,7 +17,7 @@ import {
 import type { HistoryRouter } from './history-router.js';
 
 export type HistoryJsonRpcClient = {
-  call(method: string, params: unknown): Promise<unknown>;
+  call(method: string, params: unknown, options?: InternalRpcCallOptions): Promise<unknown>;
   close(): void;
 };
 
@@ -29,6 +34,7 @@ export function createTrpcHistoryJsonRpcClient(
   const client = createTRPCClient<HistoryRouter>({
     links: [
       httpBatchLink({
+        headers: ({ opList }) => createInternalRpcCallOptionsHeaders(opList),
         url: config.url
       })
     ]
@@ -36,9 +42,9 @@ export function createTrpcHistoryJsonRpcClient(
   const timeoutMs = options.timeoutMs ?? DEFAULT_HISTORY_REQUEST_TIMEOUT_MS;
 
   return {
-    call(method, params) {
+    call(method, params, callOptions) {
       return withTimeout(
-        (signal) => callHistoryJsonRpcMethod(client, method, params, signal),
+        (signal) => callHistoryJsonRpcMethod(client, method, params, signal, callOptions),
         timeoutMs
       );
     },
@@ -52,27 +58,42 @@ async function callHistoryJsonRpcMethod(
   client: TRPCClient<HistoryRouter>,
   method: string,
   params: unknown,
-  signal: AbortSignal
+  signal: AbortSignal,
+  callOptions?: InternalRpcCallOptions
 ): Promise<unknown> {
   switch (method) {
     case 'history.deleteTarget':
-      return client.deleteTarget.mutate(historyDeleteTargetInputSchema.parse(params), { signal });
+      return client.deleteTarget.mutate(
+        historyDeleteTargetInputSchema.parse(params),
+        internalRpcProcedureOptions(callOptions, signal)
+      );
     case 'history.getChatHistoryState':
-      return client.getChatHistoryState.query(historyGetChatHistoryStateInputSchema.parse(params), {
-        signal
-      });
+      return client.getChatHistoryState.query(
+        historyGetChatHistoryStateInputSchema.parse(params),
+        internalRpcProcedureOptions(callOptions, signal)
+      );
     case 'history.getOverview':
-      return client.getOverview.query(undefined, { signal });
+      return client.getOverview.query(undefined, internalRpcProcedureOptions(callOptions, signal));
     case 'history.listChats':
-      return client.listChats.query(historyListChatsInputSchema.parse(params ?? {}), { signal });
+      return client.listChats.query(
+        historyListChatsInputSchema.parse(params ?? {}),
+        internalRpcProcedureOptions(callOptions, signal)
+      );
     case 'history.listJobs':
-      return client.listJobs.query(historyListJobsInputSchema.parse(params ?? {}), { signal });
+      return client.listJobs.query(
+        historyListJobsInputSchema.parse(params ?? {}),
+        internalRpcProcedureOptions(callOptions, signal)
+      );
     case 'history.requestSync':
-      return client.requestSync.mutate(historyRequestSyncInputSchema.parse(params ?? {}), {
-        signal
-      });
+      return client.requestSync.mutate(
+        historyRequestSyncInputSchema.parse(params ?? {}),
+        internalRpcProcedureOptions(callOptions, signal)
+      );
     case 'history.upsertTarget':
-      return client.upsertTarget.mutate(historyUpsertTargetInputSchema.parse(params), { signal });
+      return client.upsertTarget.mutate(
+        historyUpsertTargetInputSchema.parse(params),
+        internalRpcProcedureOptions(callOptions, signal)
+      );
     default:
       return undefined;
   }

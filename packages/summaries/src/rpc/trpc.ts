@@ -2,6 +2,13 @@ import { randomUUID } from 'node:crypto';
 
 import type { EventBus } from '@agentg/shared/events/bus';
 import {
+  createInternalRpcCallOptionsResolver,
+  eventBusForInternalRpcCall,
+  INTERNAL_RPC_CALL_OPTIONS_HEADER,
+  shouldPublishInternalRpcLifecycle,
+  type InternalRpcCallOptions
+} from '@agentg/shared/rpc/call-options';
+import {
   createRpcCallCompletedEvent,
   createRpcCallFailedEvent,
   createRpcCallProgressEvent,
@@ -18,15 +25,17 @@ import { treeifyError, ZodError } from 'zod';
 export const INTERNAL_RPC_CORRELATION_ID_HEADER = 'x-agentg-correlation-id';
 
 export type SummariesRpcContext = {
-  callId?: string;
+  callId?: string | undefined;
   callInput?: unknown;
-  correlationId?: string;
-  eventBus?: EventBus;
-  progress?: (progress: RpcProgressData) => void;
+  callOptions?: InternalRpcCallOptions | undefined;
+  correlationId?: string | undefined;
+  eventBus?: EventBus | undefined;
+  progress?: ((progress: RpcProgressData) => void) | undefined;
+  resolveCallOptions?: ((path: string) => InternalRpcCallOptions) | undefined;
 };
 
 export type SummariesRpcContextRuntime = {
-  eventBus?: EventBus;
+  eventBus?: EventBus | undefined;
 };
 
 const SUMMARIES_RPC_SOURCE = 'summaries';
@@ -37,10 +46,14 @@ export function createSummariesRpcContext(
   runtime: SummariesRpcContextRuntime = {}
 ): SummariesRpcContext {
   const correlationId = optionalHeader(options.req.headers[INTERNAL_RPC_CORRELATION_ID_HEADER]);
+  const resolveCallOptions = createInternalRpcCallOptionsResolver(
+    options.req.headers[INTERNAL_RPC_CALL_OPTIONS_HEADER]
+  );
 
   return {
     ...(correlationId === undefined ? {} : { correlationId }),
-    ...(runtime.eventBus === undefined ? {} : { eventBus: runtime.eventBus })
+    ...(runtime.eventBus === undefined ? {} : { eventBus: runtime.eventBus }),
+    resolveCallOptions
   };
 }
 
@@ -56,27 +69,37 @@ const summariesRpc = initTRPC.context<SummariesRpcContext>().create({
   }
 });
 
-const observableMiddleware = summariesRpc.middleware(
+const lifecycleMiddleware = summariesRpc.middleware(
   async ({ ctx, getRawInput, input, next, path }) => {
+    const currentCtx = (ctx as SummariesRpcContext | undefined) ?? {};
+    const callOptions = currentCtx.callOptions ?? currentCtx.resolveCallOptions?.(path) ?? {};
+    const publishLifecycle = shouldPublishInternalRpcLifecycle(callOptions);
+    const eventBus = eventBusForInternalRpcCall(currentCtx.eventBus, callOptions);
     const callId = `call_${randomUUID()}`;
     const eventInput = input === undefined ? await readRawInput(getRawInput) : input;
     const startedAt = new Date();
     const target = `${SUMMARIES_RPC_TARGET_PREFIX}.${path}`;
 
-    publishRpcCallEvent(
-      ctx.eventBus,
-      createRpcCallStartedEvent({
-        callId,
-        input: eventInput,
-        source: SUMMARIES_RPC_SOURCE,
-        startedAt,
-        target
-      })
-    );
+    if (publishLifecycle) {
+      publishRpcCallEvent(
+        eventBus,
+        createRpcCallStartedEvent({
+          callId,
+          input: eventInput,
+          source: SUMMARIES_RPC_SOURCE,
+          startedAt,
+          target
+        })
+      );
+    }
 
     const progress = (progressData: RpcProgressData): void => {
+      if (!publishLifecycle) {
+        return;
+      }
+
       publishRpcCallEvent(
-        ctx.eventBus,
+        eventBus,
         createRpcCallProgressEvent({
           callId,
           input: eventInput,
@@ -88,35 +111,58 @@ const observableMiddleware = summariesRpc.middleware(
       );
     };
 
-    const result = await next({
-      ctx: {
-        callId,
-        callInput: eventInput,
-        progress
-      }
-    });
+    const nextContext: Partial<SummariesRpcContext> = {
+      callId,
+      callInput: eventInput,
+      callOptions,
+      progress
+    };
+    if (eventBus !== undefined) {
+      nextContext.eventBus = eventBus;
+    }
+
+    const result = await next({ ctx: nextContext });
 
     if (!result.ok) {
-      publishRpcCallEvent(
-        ctx.eventBus,
-        createRpcCallFailedEvent({
-          callId,
-          error: errorFromUnknown(result.error),
-          input: eventInput,
-          source: SUMMARIES_RPC_SOURCE,
-          startedAt,
-          target
-        })
-      );
+      if (publishLifecycle) {
+        publishRpcCallEvent(
+          eventBus,
+          createRpcCallFailedEvent({
+            callId,
+            error: errorFromUnknown(result.error),
+            input: eventInput,
+            source: SUMMARIES_RPC_SOURCE,
+            startedAt,
+            target
+          })
+        );
+      }
       return result;
     }
 
     if (isProcedureErrorEnvelope(result.data)) {
+      if (publishLifecycle) {
+        publishRpcCallEvent(
+          eventBus,
+          createRpcCallFailedEvent({
+            callId,
+            error: result.data.error,
+            input: eventInput,
+            output: result.data,
+            source: SUMMARIES_RPC_SOURCE,
+            startedAt,
+            target
+          })
+        );
+      }
+      return result;
+    }
+
+    if (publishLifecycle) {
       publishRpcCallEvent(
-        ctx.eventBus,
-        createRpcCallFailedEvent({
+        eventBus,
+        createRpcCallCompletedEvent({
           callId,
-          error: result.data.error,
           input: eventInput,
           output: result.data,
           source: SUMMARIES_RPC_SOURCE,
@@ -124,28 +170,14 @@ const observableMiddleware = summariesRpc.middleware(
           target
         })
       );
-      return result;
     }
-
-    publishRpcCallEvent(
-      ctx.eventBus,
-      createRpcCallCompletedEvent({
-        callId,
-        input: eventInput,
-        output: result.data,
-        source: SUMMARIES_RPC_SOURCE,
-        startedAt,
-        target
-      })
-    );
 
     return result;
   }
 );
 
 export const summariesRpcRouter = summariesRpc.router;
-export const rpc = summariesRpc.procedure;
-export const observable = rpc.use(observableMiddleware);
+export const rpc = summariesRpc.procedure.use(lifecycleMiddleware);
 export const extension = rpc;
 
 function optionalHeader(value: string | string[] | undefined): string | undefined {

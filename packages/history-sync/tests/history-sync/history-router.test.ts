@@ -1,5 +1,6 @@
 import type { HistoryDatabase as AppDatabase } from '../../src/database.js';
-import type { EventBus } from '@agentg/shared/events/bus';
+import type { EventBus, EventSubscription } from '@agentg/shared/events/bus';
+import { createIntegrationEvent, type IntegrationEvent } from '@agentg/shared/events/envelope';
 import { createExtensionRegistry } from '@agentg/shared/rpc/extensions';
 import { describe, expect, it } from 'vitest';
 
@@ -134,4 +135,62 @@ describe('createHistoryRouter', () => {
       ]
     });
   });
+
+  it('applies call-scoped event suppression to History domain fact events', async () => {
+    const publishedEvents: IntegrationEvent[] = [];
+    const eventBus = createRecordingEventBus(publishedEvents);
+    const callMethod: HistoryMethodCaller = (runtime) => {
+      runtime.eventBus.publish(
+        createIntegrationEvent({
+          data: {
+            requested: true
+          },
+          source: 'history-sync',
+          type: 'history.fact.requested'
+        })
+      );
+      return Promise.resolve({
+        requested: true
+      });
+    };
+    const router = createHistoryRouter({
+      callMethod,
+      database: {} as AppDatabase,
+      eventBus
+    });
+
+    await expect(
+      router.createCaller({ callOptions: { observable: false }, eventBus }).requestSync({})
+    ).resolves.toEqual({
+      requested: true
+    });
+    expect(publishedEvents.map((event) => event.type)).toEqual(['history.fact.requested']);
+
+    publishedEvents.length = 0;
+
+    await expect(
+      router.createCaller({ callOptions: { silent: true }, eventBus }).requestSync({})
+    ).resolves.toEqual({
+      requested: true
+    });
+    expect(publishedEvents).toEqual([]);
+  });
 });
+
+function createRecordingEventBus(events: IntegrationEvent[]): EventBus {
+  return {
+    close(): Promise<void> {
+      return Promise.resolve();
+    },
+    publish(event): void {
+      events.push(event);
+    },
+    subscribe(): EventSubscription {
+      return {
+        unsubscribe(): void {
+          return;
+        }
+      };
+    }
+  };
+}

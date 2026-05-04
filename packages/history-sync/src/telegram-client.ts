@@ -1,4 +1,9 @@
 import { createTRPCClient, httpBatchLink } from '@trpc/client';
+import {
+  createInternalRpcCallOptionsHeaders,
+  internalRpcProcedureOptions,
+  type InternalRpcCallOptions
+} from '@agentg/shared/rpc/call-options';
 import type {
   TelegramChatDirectoryEntry,
   TelegramChatFolder,
@@ -76,32 +81,59 @@ export type TelegramChatHistoryFacts = {
 };
 
 export type TelegramReadClient = {
-  countMessagesInIntervals(request: {
-    chatId: string;
-    intervals: TelegramMessageInterval[];
-  }): Promise<{ counts: number[] }>;
-  getChat(request: { chatId: string }): Promise<{ chat: TelegramReadChat | null }>;
-  getChatHistoryFacts(request: { chatId: string }): Promise<TelegramChatHistoryFacts>;
-  getMessage(request: {
-    chatId: string;
-    messageId: string;
-  }): Promise<{ message: TelegramReadMessage | null }>;
-  listChatDirectory(request: TelegramChatDirectoryRequest): Promise<TelegramChatDirectoryResult>;
-  listRecentMessages(request: {
-    chatId?: string;
-    limit?: number;
-  }): Promise<{ messages: TelegramReadMessage[] }>;
-  searchMessages(request: {
-    chatId?: string;
-    limit?: number;
-    query: string;
-  }): Promise<{ messages: TelegramReadMessage[] }>;
+  countMessagesInIntervals(
+    request: {
+      chatId: string;
+      intervals: TelegramMessageInterval[];
+    },
+    options?: InternalRpcCallOptions
+  ): Promise<{ counts: number[] }>;
+  getChat(
+    request: { chatId: string },
+    options?: InternalRpcCallOptions
+  ): Promise<{ chat: TelegramReadChat | null }>;
+  getChatHistoryFacts(
+    request: { chatId: string },
+    options?: InternalRpcCallOptions
+  ): Promise<TelegramChatHistoryFacts>;
+  getMessage(
+    request: {
+      chatId: string;
+      messageId: string;
+    },
+    options?: InternalRpcCallOptions
+  ): Promise<{ message: TelegramReadMessage | null }>;
+  listChatDirectory(
+    request: TelegramChatDirectoryRequest,
+    options?: InternalRpcCallOptions
+  ): Promise<TelegramChatDirectoryResult>;
+  listRecentMessages(
+    request: {
+      chatId?: string;
+      limit?: number;
+    },
+    options?: InternalRpcCallOptions
+  ): Promise<{ messages: TelegramReadMessage[] }>;
+  searchMessages(
+    request: {
+      chatId?: string;
+      limit?: number;
+      query: string;
+    },
+    options?: InternalRpcCallOptions
+  ): Promise<{ messages: TelegramReadMessage[] }>;
 };
 
 export type TelegramHistoryClient = {
   close?(): void;
-  fetchPage(request: TelegramHistoryFetchPageRequest): Promise<TelegramHistoryFetchPageResult>;
-  listChats(request: TelegramHistoryListChatsRequest): Promise<TelegramHistoryChat[]>;
+  fetchPage(
+    request: TelegramHistoryFetchPageRequest,
+    options?: InternalRpcCallOptions
+  ): Promise<TelegramHistoryFetchPageResult>;
+  listChats(
+    request: TelegramHistoryListChatsRequest,
+    options?: InternalRpcCallOptions
+  ): Promise<TelegramHistoryChat[]>;
 } & TelegramReadClient;
 
 const TELEGRAM_HISTORY_REQUEST_TIMEOUT_MS = 30000;
@@ -112,6 +144,7 @@ export function createTrpcTelegramHistoryClient(
   const client = createTRPCClient<TelegramHistoryRouter>({
     links: [
       httpBatchLink({
+        headers: ({ opList }) => createInternalRpcCallOptionsHeaders(opList),
         url: config.url
       })
     ]
@@ -121,57 +154,75 @@ export function createTrpcTelegramHistoryClient(
     close() {
       return;
     },
-    countMessagesInIntervals(request) {
+    countMessagesInIntervals(request, callOptions) {
       return withTimeout(
-        async (signal) => client.countMessagesInIntervals.query(request, { signal }),
+        async (signal) =>
+          client.countMessagesInIntervals.query(
+            request,
+            internalRpcProcedureOptions(callOptions, signal)
+          ),
         TELEGRAM_HISTORY_REQUEST_TIMEOUT_MS
       );
     },
-    fetchPage(request) {
+    fetchPage(request, callOptions) {
       return withTimeout(
-        async (signal) => client.fetchPage.mutate(request, { signal }),
+        async (signal) =>
+          client.fetchPage.mutate(request, internalRpcProcedureOptions(callOptions, signal)),
         TELEGRAM_HISTORY_REQUEST_TIMEOUT_MS
       );
     },
-    getChat(request) {
+    getChat(request, callOptions) {
       return withTimeout(
-        async (signal) => client.getChat.query(request, { signal }),
+        async (signal) =>
+          client.getChat.query(request, internalRpcProcedureOptions(callOptions, signal)),
         TELEGRAM_HISTORY_REQUEST_TIMEOUT_MS
       );
     },
-    getChatHistoryFacts(request) {
+    getChatHistoryFacts(request, callOptions) {
       return withTimeout(
-        async (signal) => client.getChatHistoryFacts.query(request, { signal }),
+        async (signal) =>
+          client.getChatHistoryFacts.query(
+            request,
+            internalRpcProcedureOptions(callOptions, signal)
+          ),
         TELEGRAM_HISTORY_REQUEST_TIMEOUT_MS
       );
     },
-    getMessage(request) {
+    getMessage(request, callOptions) {
       return withTimeout(
-        async (signal) => client.getMessage.query(request, { signal }),
+        async (signal) =>
+          client.getMessage.query(request, internalRpcProcedureOptions(callOptions, signal)),
         TELEGRAM_HISTORY_REQUEST_TIMEOUT_MS
       );
     },
-    listChatDirectory(request) {
+    listChatDirectory(request, callOptions) {
       return withTimeout(
-        async (signal) => client.listChatDirectory.query(request, { signal }),
+        async (signal) =>
+          client.listChatDirectory.query(request, internalRpcProcedureOptions(callOptions, signal)),
         TELEGRAM_HISTORY_REQUEST_TIMEOUT_MS
       );
     },
-    listChats(request) {
+    listChats(request, callOptions) {
       return withTimeout(
-        async (signal) => client.listChats.query(request, { signal }),
+        async (signal) =>
+          client.listChats.query(request, internalRpcProcedureOptions(callOptions, signal)),
         TELEGRAM_HISTORY_REQUEST_TIMEOUT_MS
       );
     },
-    listRecentMessages(request) {
+    listRecentMessages(request, callOptions) {
       return withTimeout(
-        async (signal) => client.listRecentMessages.query(request, { signal }),
+        async (signal) =>
+          client.listRecentMessages.query(
+            request,
+            internalRpcProcedureOptions(callOptions, signal)
+          ),
         TELEGRAM_HISTORY_REQUEST_TIMEOUT_MS
       );
     },
-    searchMessages(request) {
+    searchMessages(request, callOptions) {
       return withTimeout(
-        async (signal) => client.searchMessages.query(request, { signal }),
+        async (signal) =>
+          client.searchMessages.query(request, internalRpcProcedureOptions(callOptions, signal)),
         TELEGRAM_HISTORY_REQUEST_TIMEOUT_MS
       );
     }

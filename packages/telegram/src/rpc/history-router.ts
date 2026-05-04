@@ -20,7 +20,7 @@ import {
   type TdObject
 } from '../normalize.js';
 import { persistTelegramUpdate, upsertChat } from '../store.js';
-import { enriched, observable, rpc, telegramRpcRouter } from './trpc.js';
+import { enriched, rpc, telegramRpcRouter } from './trpc.js';
 
 const nonEmptyStringSchema = z.string().trim().min(1);
 const nonNegativeIntegerSchema = z.number().int().nonnegative();
@@ -284,7 +284,7 @@ export function createTelegramHistoryRouter(runtime: TelegramHistoryRouterRuntim
       .input(telegramCountMessagesInIntervalsInputSchema)
       .output(telegramCountMessagesInIntervalsOutputSchema)
       .query(({ input }) => handleCountMessagesInIntervals(runtime, input)),
-    fetchPage: observable
+    fetchPage: rpc
       .input(telegramHistoryFetchPageInputSchema)
       .output(telegramHistoryFetchPageResultSchema)
       .mutation(({ input }) => handleFetchPage(runtime, input)),
