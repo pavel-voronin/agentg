@@ -3,8 +3,7 @@ import { historyBackfillMigration } from '../../history/backfillMigrations.js';
 import { historyPruneCompletedJobsMigration } from '../../history/jobPruneMigrations.js';
 import { historyTargetsMigration } from '../../history/targetMigrations.js';
 import { summariesPluginMigration } from '../../plugins/summaries/migrations.js';
-import { telegramChatListMembershipsMigration } from '../../telegram/chatListMigrations.js';
-import { telegramChatListOrderMigration } from '../../telegram/chatListOrderMigrations.js';
+import { telegramDropChatListProjectionMigration } from '../../telegram/dropChatListProjectionMigration.js';
 import { telegramDomainMigration } from '../../telegram/migrations.js';
 import { storageMigrationsMigration } from './0001_storage_migrations.js';
 import type { SqliteMigration } from './types.js';
@@ -15,8 +14,7 @@ export const sqliteMigrations: readonly SqliteMigration[] = [
   historyDomainMigration,
   summariesPluginMigration,
   historyTargetsMigration,
-  telegramChatListMembershipsMigration,
   historyBackfillMigration,
-  telegramChatListOrderMigration,
-  historyPruneCompletedJobsMigration
+  historyPruneCompletedJobsMigration,
+  telegramDropChatListProjectionMigration
 ];

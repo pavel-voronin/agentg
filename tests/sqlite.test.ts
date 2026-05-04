@@ -49,25 +49,31 @@ describe('openSqliteDatabase', () => {
         },
         {
           appliedAt: expect.any(String) as string,
-          id: '0007',
-          name: 'telegram_chat_list_memberships'
-        },
-        {
-          appliedAt: expect.any(String) as string,
           id: '0008',
           name: 'history_backfill_jobs'
         },
         {
           appliedAt: expect.any(String) as string,
-          id: '0009',
-          name: 'telegram_chat_list_order'
+          id: '0010',
+          name: 'history_prune_completed_jobs'
         },
         {
           appliedAt: expect.any(String) as string,
-          id: '0010',
-          name: 'history_prune_completed_jobs'
+          id: '0011',
+          name: 'telegram_drop_chat_list_projection'
         }
       ]);
+      expect(
+        database.connection
+          .prepare(
+            `
+              SELECT name
+              FROM sqlite_master
+              WHERE type = 'table' AND name = 'telegram_chat_list_memberships'
+            `
+          )
+          .get()
+      ).toBeUndefined();
     } finally {
       database.close();
     }

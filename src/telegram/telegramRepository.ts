@@ -190,7 +190,7 @@ export function createTelegramRepository(database: Database): TelegramRepository
               f.icon_name,
               count(m.telegram_chat_id) AS count
             FROM telegram_chat_folders f
-            LEFT JOIN telegram_chat_list_memberships m
+            LEFT JOIN (${chatListProjectionSql()}) m
               ON m.list_type = 'folder'
              AND m.telegram_chat_folder_id = f.telegram_chat_folder_id
             GROUP BY f.telegram_chat_folder_id, f.position, f.title, f.icon_name
@@ -338,8 +338,7 @@ export function createTelegramRepository(database: Database): TelegramRepository
     persistUpdate(update): TelegramPersistResult {
       const transaction = database.transaction(() => {
         const chat = update.chat === undefined ? false : upsertChat(database, update.chat);
-        const chatListsFromChat =
-          update.chat === undefined ? false : replaceChatListMemberships(database, update.chat);
+        const chatListsFromChat = update.chat === undefined ? false : update.chat.lists.length > 0;
         const chatListUpdate =
           update.chatList === undefined ? false : applyChatListUpdate(database, update.chatList);
 
@@ -534,79 +533,137 @@ function replaceChatFolders(database: Database, update: NormalizedTelegramChatFo
   return true;
 }
 
-function replaceChatListMemberships(database: Database, chat: NormalizedTelegramChat): boolean {
-  if (chat.lists.length === 0) {
-    return false;
-  }
-
-  database
-    .prepare(
-      `
-        DELETE FROM telegram_chat_list_memberships
-        WHERE telegram_chat_id = ?
-      `
-    )
-    .run(chat.id);
-
-  for (const list of chat.lists) {
-    insertChatListMembership(database, chat.id, list);
-  }
-
-  return true;
-}
-
 function applyChatListUpdate(
   database: Database,
   update: NormalizedTelegramChatListUpdate
 ): boolean {
-  if (update.action === 'remove') {
-    const result = database
-      .prepare(
-        `
-          DELETE FROM telegram_chat_list_memberships
-          WHERE telegram_chat_id = ?
-            AND list_type = ?
-            AND telegram_chat_folder_id = ?
-        `
-      )
-      .run(update.chatId, update.list.type, chatListFolderId(update.list));
-
-    return result.changes > 0;
-  }
-
-  return insertChatListMembership(database, update.chatId, update.list);
-}
-
-function insertChatListMembership(
-  database: Database,
-  chatId: string,
-  list: NormalizedTelegramChatList
-): boolean {
-  const result = database
+  const row = database
     .prepare(
       `
-        INSERT INTO telegram_chat_list_memberships (
-          telegram_chat_id,
-          list_type,
-          telegram_chat_folder_id,
-          list_order
-        )
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT (telegram_chat_id, list_type, telegram_chat_folder_id) DO UPDATE SET
-          list_order = coalesce(
-            excluded.list_order,
-            telegram_chat_list_memberships.list_order
-          ),
-          updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+        SELECT raw_json
+        FROM telegram_chats
+        WHERE telegram_chat_id = ?
       `
     )
-    .run(chatId, list.type, chatListFolderId(list), list.order ?? null);
+    .get(update.chatId) as { raw_json: string } | undefined;
+  if (row === undefined) {
+    return false;
+  }
 
-  return result.changes > 0;
+  const result = applyChatListUpdateToRaw(readStoredChatRaw(row.raw_json), update);
+  if (!result.changed) {
+    return false;
+  }
+
+  const updateResult = database
+    .prepare(
+      `
+        UPDATE telegram_chats
+        SET raw_json = ?,
+            updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+        WHERE telegram_chat_id = ?
+      `
+    )
+    .run(JSON.stringify(result.raw), update.chatId);
+
+  return updateResult.changes > 0;
 }
 
 function chatListFolderId(list: NormalizedTelegramChatList): number {
   return list.type === 'folder' ? (list.folderId ?? 0) : 0;
+}
+
+function applyChatListUpdateToRaw(
+  raw: Record<string, unknown>,
+  update: NormalizedTelegramChatListUpdate
+): {
+  changed: boolean;
+  raw: Record<string, unknown>;
+} {
+  const listKey = chatListKey(update.list);
+  const positions = Array.isArray(raw.positions) ? raw.positions : [];
+  const chatLists = Array.isArray(raw.chat_lists) ? raw.chat_lists : [];
+  const nextPositions = positions.filter((position) => {
+    const currentList = readRecord(position)?.list;
+    return chatListKeyFromTdValue(currentList) !== listKey;
+  });
+  const nextChatLists = chatLists.filter((list) => chatListKeyFromTdValue(list) !== listKey);
+  let changed =
+    nextPositions.length !== positions.length || nextChatLists.length !== chatLists.length;
+
+  if (update.action === 'add') {
+    const tdList = tdChatListValue(update.list);
+    nextChatLists.push(tdList);
+    changed = true;
+
+    if (update.list.order !== undefined) {
+      nextPositions.push({
+        _: 'chatPosition',
+        list: tdList,
+        order: update.list.order
+      });
+    }
+  }
+
+  if (!changed) {
+    return {
+      changed: false,
+      raw
+    };
+  }
+
+  return {
+    changed: true,
+    raw: {
+      ...raw,
+      chat_lists: nextChatLists,
+      positions: nextPositions
+    }
+  };
+}
+
+function readStoredChatRaw(value: string): Record<string, unknown> {
+  const parsed = JSON.parse(value) as unknown;
+  const raw = readRecord(parsed);
+  if (raw === undefined) {
+    throw new Error('Stored Telegram chat raw is invalid');
+  }
+
+  return raw;
+}
+
+function tdChatListValue(list: NormalizedTelegramChatList): Record<string, unknown> {
+  if (list.type === 'main') {
+    return { _: 'chatListMain' };
+  }
+  if (list.type === 'archive') {
+    return { _: 'chatListArchive' };
+  }
+
+  return {
+    _: 'chatListFolder',
+    chat_folder_id: chatListFolderId(list)
+  };
+}
+
+function chatListKey(list: NormalizedTelegramChatList): string {
+  return list.type === 'folder' ? `${list.type}:${String(chatListFolderId(list))}` : list.type;
+}
+
+function chatListKeyFromTdValue(value: unknown): string | undefined {
+  const list = readRecord(value);
+  if (list?._ === 'chatListMain') {
+    return 'main';
+  }
+  if (list?._ === 'chatListArchive') {
+    return 'archive';
+  }
+  if (list?._ === 'chatListFolder') {
+    const folderId = readSafeInteger(list.chat_folder_id ?? list.chatFolderId);
+    return folderId === undefined ? undefined : `folder:${String(folderId)}`;
+  }
+
+  return undefined;
 }
 
 function insertRawEvent(database: Database, event: RawTelegramEvent): boolean {
@@ -809,7 +866,7 @@ function chatListQuery(input: TelegramChatCountInput): {
     from: `
       FROM telegram_chats c
       ${chatUserJoinSql()}
-      JOIN telegram_chat_list_memberships m
+      JOIN (${chatListProjectionSql()}) m
         ON m.telegram_chat_id = c.telegram_chat_id
     `,
     params: input.list === 'folder' ? [input.list, input.folderId ?? null] : [input.list],
@@ -818,6 +875,77 @@ function chatListQuery(input: TelegramChatCountInput): {
         ? 'WHERE m.list_type = ? AND m.telegram_chat_folder_id = ?'
         : 'WHERE m.list_type = ?'
   };
+}
+
+function chatListProjectionSql(): string {
+  return `
+    SELECT
+      telegram_chat_id,
+      list_type,
+      telegram_chat_folder_id,
+      max(list_order) AS list_order
+    FROM (
+      SELECT
+        telegram_chat_id,
+        list_type,
+        telegram_chat_folder_id,
+        list_order
+      FROM (
+        SELECT
+          source_chats.telegram_chat_id,
+          CASE json_extract(position.value, '$.list._')
+            WHEN 'chatListMain' THEN 'main'
+            WHEN 'chatListArchive' THEN 'archive'
+            WHEN 'chatListFolder' THEN 'folder'
+            ELSE NULL
+          END AS list_type,
+          CASE json_extract(position.value, '$.list._')
+            WHEN 'chatListFolder'
+              THEN CAST(coalesce(
+                json_extract(position.value, '$.list.chat_folder_id'),
+                json_extract(position.value, '$.list.chatFolderId')
+              ) AS INTEGER)
+            ELSE 0
+          END AS telegram_chat_folder_id,
+          CAST(json_extract(position.value, '$.order') AS TEXT) AS list_order
+        FROM telegram_chats source_chats, json_each(source_chats.raw_json, '$.positions') position
+        WHERE json_extract(position.value, '$.order') IS NOT NULL
+          AND CAST(json_extract(position.value, '$.order') AS TEXT) <> '0'
+      )
+      WHERE list_type IS NOT NULL
+        AND telegram_chat_folder_id IS NOT NULL
+
+      UNION ALL
+
+      SELECT
+        telegram_chat_id,
+        list_type,
+        telegram_chat_folder_id,
+        NULL AS list_order
+      FROM (
+        SELECT
+          source_chats.telegram_chat_id,
+          CASE json_extract(chat_list.value, '$._')
+            WHEN 'chatListMain' THEN 'main'
+            WHEN 'chatListArchive' THEN 'archive'
+            WHEN 'chatListFolder' THEN 'folder'
+            ELSE NULL
+          END AS list_type,
+          CASE json_extract(chat_list.value, '$._')
+            WHEN 'chatListFolder'
+              THEN CAST(coalesce(
+                json_extract(chat_list.value, '$.chat_folder_id'),
+                json_extract(chat_list.value, '$.chatFolderId')
+              ) AS INTEGER)
+            ELSE 0
+          END AS telegram_chat_folder_id
+        FROM telegram_chats source_chats, json_each(source_chats.raw_json, '$.chat_lists') chat_list
+      )
+      WHERE list_type IS NOT NULL
+        AND telegram_chat_folder_id IS NOT NULL
+    )
+    GROUP BY telegram_chat_id, list_type, telegram_chat_folder_id
+  `;
 }
 
 function normalizeChatListLimit(value: number | undefined): number {
@@ -873,4 +1001,14 @@ function chatUserJoinSql(): string {
 
 function likePattern(value: string): string {
   return `%${value.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_')}%`;
+}
+
+function readRecord(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+function readSafeInteger(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isSafeInteger(value) ? value : undefined;
 }
