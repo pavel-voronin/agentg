@@ -1,5 +1,13 @@
 import { createEventBus, type EventBus } from '../bus/eventBus.js';
 import { createAppEvent } from '../bus/events.js';
+import {
+  createTelegramRepository,
+  type TelegramRepository
+} from '../domains/telegram/telegramRepository.js';
+import {
+  createTelegramService,
+  type TelegramService
+} from '../domains/telegram/telegramService.js';
 import { openSqliteDatabase, type SqliteDatabase } from '../storage/sqlite.js';
 import { loadAppConfig, type AppConfig, type LoadAppConfigInput } from './config.js';
 import { createLifecycle, type AppLifecycle, type LifecycleResource } from './lifecycle.js';
@@ -25,9 +33,13 @@ export type AppStorageHandle = {
   sqlite: SqliteDatabase;
 };
 
-export type AppRepositoryRegistry = Record<string, unknown>;
+export type AppRepositoryRegistry = {
+  telegram: TelegramRepository;
+};
 
-export type AppServiceRegistry = Record<string, unknown>;
+export type AppServiceRegistry = {
+  telegram: TelegramService;
+};
 
 export type AppPluginRegistry = Record<string, unknown>;
 
@@ -37,6 +49,11 @@ export function createApp(input: CreateAppInput = {}): AppRuntime {
   const config = loadAppConfig(input);
   const sqlite = openSqliteDatabase(config.database);
   const eventBus = createEventBus();
+  const telegramRepository = createTelegramRepository(sqlite.connection);
+  const telegramService = createTelegramService({
+    eventBus,
+    repository: telegramRepository
+  });
   const storage: AppStorageHandle = {
     sqlite
   };
@@ -57,8 +74,12 @@ export function createApp(input: CreateAppInput = {}): AppRuntime {
     eventBus,
     lifecycle,
     plugins: {},
-    repositories: {},
-    services: {},
+    repositories: {
+      telegram: telegramRepository
+    },
+    services: {
+      telegram: telegramService
+    },
     storage,
     async start(): Promise<void> {
       await lifecycle.start();

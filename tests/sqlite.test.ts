@@ -26,6 +26,11 @@ describe('openSqliteDatabase', () => {
           appliedAt: expect.any(String) as string,
           id: '0001',
           name: 'storage_migrations'
+        },
+        {
+          appliedAt: expect.any(String) as string,
+          id: '0002',
+          name: 'telegram_domain'
         }
       ]);
     } finally {
