@@ -11,7 +11,6 @@ export type AppConfig = {
     enabled: boolean;
     host: string;
     port: number;
-    staticDir: string;
   };
   database: {
     path: string;
@@ -55,11 +54,7 @@ export function loadAppConfig(input: LoadAppConfigInput = {}): AppConfig {
     controlPlane: {
       enabled: parseBoolean(env.CONTROL_PLANE_ENABLED, false),
       host: env.CONTROL_PLANE_HOST ?? '127.0.0.1',
-      port: parsePort(env.CONTROL_PLANE_PORT, 8789, 'CONTROL_PLANE_PORT'),
-      staticDir: resolveConfigPath(
-        env.CONTROL_PLANE_STATIC_DIR ?? './dist-control-plane',
-        baseDirectory
-      )
+      port: parsePort(env.CONTROL_PLANE_PORT, 8789, 'CONTROL_PLANE_PORT')
     },
     database: {
       path: resolveConfigPath(env.AGENTG_SQLITE_PATH ?? './agentg.sqlite', baseDirectory)

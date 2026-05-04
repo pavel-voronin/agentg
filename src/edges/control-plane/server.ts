@@ -1,6 +1,4 @@
-import { readFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { extname, resolve, sep } from 'node:path';
 
 import { WebSocket, WebSocketServer } from 'ws';
 
@@ -23,7 +21,6 @@ export type ControlPlaneServerConfig = {
   enabled: boolean;
   host: string;
   port: number;
-  staticDir: string;
 };
 
 export type ControlPlaneServerOptions = {
@@ -48,10 +45,7 @@ export async function startControlPlaneServer(
     plugins: options.plugins,
     services: options.services
   };
-  const staticRoot = resolve(options.config.staticDir);
-  const server = createServer((request, response) => {
-    void handleHttpRequest(staticRoot, request, response);
-  });
+  const server = createServer(handleHttpRequest);
   const webSocketServer = new WebSocketServer({ noServer: true });
   const clients = new Set<WebSocket>();
   let latestTdlibStatusEvent: AppEvent | undefined;
@@ -185,11 +179,7 @@ async function handleClientMessage(
   }
 }
 
-async function handleHttpRequest(
-  staticRoot: string,
-  request: IncomingMessage,
-  response: ServerResponse
-): Promise<void> {
+function handleHttpRequest(request: IncomingMessage, response: ServerResponse): void {
   if (request.method !== 'GET' && request.method !== 'HEAD') {
     sendHttp(response, 405, 'Method Not Allowed');
     return;
@@ -201,27 +191,12 @@ async function handleHttpRequest(
     return;
   }
 
-  const filePath = resolveStaticPath(staticRoot, path);
-  if (filePath === null) {
-    sendHttp(response, 403, 'Forbidden');
+  if (path === '/') {
+    sendHttp(response, 200, 'Control Plane WebSocket edge is available at /ws');
     return;
   }
 
-  const body = await readStaticFile(filePath, staticRoot);
-  if (body === null) {
-    sendHttp(response, 404, 'Not Found');
-    return;
-  }
-
-  response.writeHead(200, {
-    'content-length': body.byteLength,
-    'content-type': contentType(filePath)
-  });
-  if (request.method === 'HEAD') {
-    response.end();
-    return;
-  }
-  response.end(body);
+  sendHttp(response, 404, 'Not Found');
 }
 
 function broadcast(clients: Set<WebSocket>, message: unknown): void {
@@ -239,50 +214,8 @@ function sendEvent(client: WebSocket, event: AppEvent): void {
   }
 }
 
-async function readStaticFile(filePath: string, staticRoot: string): Promise<Buffer | null> {
-  try {
-    return await readFile(filePath);
-  } catch (error) {
-    if (isNotFoundError(error) && filePath !== resolve(staticRoot, 'index.html')) {
-      return readStaticFile(resolve(staticRoot, 'index.html'), staticRoot);
-    }
-    if (isNotFoundError(error)) {
-      return null;
-    }
-    throw error;
-  }
-}
-
-function resolveStaticPath(staticRoot: string, path: string): string | null {
-  const relativePath = path === '/' ? 'index.html' : decodeURIComponent(path.slice(1));
-  const candidate = resolve(staticRoot, relativePath);
-  const rootWithSeparator = staticRoot.endsWith(sep) ? staticRoot : `${staticRoot}${sep}`;
-  if (candidate !== staticRoot && !candidate.startsWith(rootWithSeparator)) {
-    return null;
-  }
-
-  return candidate;
-}
-
 function requestPath(request: IncomingMessage): string {
   return new URL(request.url ?? '/', 'http://localhost').pathname;
-}
-
-function contentType(filePath: string): string {
-  switch (extname(filePath)) {
-    case '.css':
-      return 'text/css; charset=utf-8';
-    case '.html':
-      return 'text/html; charset=utf-8';
-    case '.js':
-      return 'text/javascript; charset=utf-8';
-    case '.json':
-      return 'application/json; charset=utf-8';
-    case '.svg':
-      return 'image/svg+xml';
-    default:
-      return 'application/octet-stream';
-  }
 }
 
 function sendHttp(response: ServerResponse, status: number, body: string): void {
@@ -291,10 +224,6 @@ function sendHttp(response: ServerResponse, status: number, body: string): void 
     'content-type': 'text/plain; charset=utf-8'
   });
   response.end(body);
-}
-
-function isNotFoundError(error: unknown): boolean {
-  return isRecord(error) && error.code === 'ENOENT';
 }
 
 function readStringParam(params: unknown, key: string): string {

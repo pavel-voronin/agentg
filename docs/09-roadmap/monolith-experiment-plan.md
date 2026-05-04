@@ -244,7 +244,8 @@ Checks:
 - Re-run the full Definition of Done from a clean working tree.
 - Verify `npm run dev` starts the watched monolith command.
 - Verify the Control Plane WebSocket receives runtime events.
-- Verify the Control Plane UI serves and works against the monolith edge.
+- Verify the live Control Plane UI works through Vite HMR and proxies to the
+  monolith edge.
 - Verify one real Telegram event reaches the monolith.
 - Verify the external Claude channel plugin receives that event from Gateway, reacts once, and exits.
 
@@ -262,7 +263,7 @@ Checks:
   - publish or receive a runtime event
   - confirm the event is delivered to the client
 - Control Plane UI smoke:
-  - serve the UI from the monolith Control Plane edge
+  - start the live Vite Control Plane UI
   - open the UI in a browser
   - confirm it renders against the monolith edge
 - Real Telegram and Claude channel smoke:

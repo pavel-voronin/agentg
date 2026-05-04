@@ -18,32 +18,29 @@ Current runtime:
 ```sh
 npm install
 npm run dev
-npm run dev:control-plane
 npm run typecheck
 npm run lint
 npm test
 npm run build
 ```
 
-Run local development in two terminals:
+Run local development with one command:
 
 ```sh
-npm run dev:control-plane
 npm run dev
 ```
 
-`npm run dev:control-plane` rebuilds the Control Plane UI on client changes.
-It starts a Vite dev server with HMR at `http://127.0.0.1:8790/` and proxies
-`/ws` to the monolith Control Plane edge.
-
-`npm run dev` runs the monolith through a watcher and reloads on runtime source
-changes. The monolith prints the static edge URLs and Telegram connection state
-at startup:
+`npm run dev` starts the monolith watcher and the live Control Plane UI. The UI
+runs through Vite with HMR at `http://127.0.0.1:8790/` and proxies `/ws` to the
+monolith Control Plane WebSocket edge. The app watcher reloads on runtime source
+changes. The command prints the browser URL, edge URLs, and Telegram connection
+state at startup:
 
 ```json
 {
-  "event": "agentg.starting",
-  "controlPlaneUrl": "http://127.0.0.1:8789/",
+  "event": "agentg.dev.starting",
+  "controlPlaneUiUrl": "http://127.0.0.1:8790/",
+  "controlPlaneWsUrl": "ws://127.0.0.1:8789/ws",
   "gatewayUrl": "ws://127.0.0.1:8787/",
   "telegramConfigured": true
 }
@@ -52,14 +49,11 @@ at startup:
 In dev mode, Control Plane and Gateway are enabled by default unless the
 corresponding environment variables explicitly disable them.
 
-Open the Vite URL during frontend development:
+Open this URL during development:
 
 ```text
 http://127.0.0.1:8790/
 ```
-
-Open `http://127.0.0.1:8789/` only when checking the static Control Plane bundle
-served by the monolith.
 
 ## Runtime Shape
 
@@ -73,7 +67,7 @@ Main modules:
 - `src/history`: History service, repository, coverage, ranges, reconciler, and
   jobs.
 - `src/plugins/summaries`: trusted in-process summaries plugin.
-- `src/edges/control-plane`: Control Plane WebSocket/static edge.
+- `src/edges/control-plane`: Control Plane WebSocket edge and UI client.
 - `src/edges/gateway`: external Gateway WebSocket edge.
 
 Persistent data is stored in SQLite owner-prefixed tables:

@@ -11,8 +11,8 @@ async function main(): Promise<void> {
 
   try {
     logInfo('agentg.starting', {
-      controlPlaneUrl: app.config.controlPlane.enabled
-        ? httpUrl(app.config.controlPlane.host, app.config.controlPlane.port)
+      controlPlaneWsUrl: app.config.controlPlane.enabled
+        ? controlPlaneWsUrl(app.config.controlPlane.host, app.config.controlPlane.port)
         : null,
       databasePath: app.storage.sqlite.path,
       gatewayUrl: app.config.gateway.enabled
@@ -23,8 +23,8 @@ async function main(): Promise<void> {
 
     await app.start();
     logInfo('agentg.started', {
-      controlPlaneUrl: app.edges.controlPlane
-        ? httpUrl(app.edges.controlPlane.host, app.edges.controlPlane.port)
+      controlPlaneWsUrl: app.edges.controlPlane
+        ? controlPlaneWsUrl(app.edges.controlPlane.host, app.edges.controlPlane.port)
         : null,
       databasePath: app.storage.sqlite.path,
       gatewayUrl: app.edges.gateway ? wsUrl(app.edges.gateway.host, app.edges.gateway.port) : null,
@@ -42,8 +42,8 @@ async function main(): Promise<void> {
   }
 }
 
-function httpUrl(host: string, port: number): string {
-  return `http://${displayHost(host)}:${String(port)}/`;
+function controlPlaneWsUrl(host: string, port: number): string {
+  return `${wsUrl(host, port)}ws`;
 }
 
 function wsUrl(host: string, port: number): string {
