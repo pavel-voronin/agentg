@@ -225,9 +225,9 @@ server.setRequestHandler(ListToolsRequestSchema, () => ({
       inputSchema: {
         type: 'object',
         properties: {
-          chatId: { type: 'string' }
-        },
-        required: ['chatId']
+          chatId: { type: 'string' },
+          limit: { type: 'number' }
+        }
       }
     }
   ]
@@ -238,8 +238,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
   if (request.params.name === 'list_recent_messages') {
     return toolResult(
-      await channel.call('history.listMessages', {
-        chatId: readRequiredString(args?.chatId, 'chatId')
+      await channel.call('telegram.listRecentMessages', {
+        ...(typeof args?.chatId === 'string' ? { chatId: args.chatId } : {}),
+        ...(typeof args?.limit === 'number' ? { limit: args.limit } : {})
       })
     );
   }
@@ -296,13 +297,6 @@ function readRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : undefined;
-}
-
-function readRequiredString(value: unknown, name: string): string {
-  if (typeof value !== 'string' || value.length === 0) {
-    throw new Error(`${name} is required`);
-  }
-  return value;
 }
 
 function optionalString(value: unknown): string | undefined {

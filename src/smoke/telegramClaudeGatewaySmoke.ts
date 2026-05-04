@@ -43,7 +43,11 @@ async function main(): Promise<void> {
       }
     }
   );
-  const channelNotification = waitForClaudeChannelNotification(mcpClient, SMOKE_TIMEOUT_MS);
+  const channelNotification = waitForClaudeChannelEvent(
+    mcpClient,
+    'telegram.message.created',
+    SMOKE_TIMEOUT_MS
+  );
   const transport = new StdioClientTransport({
     args: ['run', '--silent', 'claude:channel'],
     command: 'npm',
@@ -62,7 +66,8 @@ async function main(): Promise<void> {
     console.log(
       JSON.stringify({
         event: 'telegram_claude_smoke.reacted',
-        notification: notification.method
+        notification: notification.method,
+        telegramEvent: notification.telegramEvent
       })
     );
   } finally {
@@ -81,22 +86,43 @@ async function waitForGatewayHandle(app: AppRuntime): Promise<void> {
   }
 }
 
-function waitForClaudeChannelNotification(
+function waitForClaudeChannelEvent(
   client: Client,
+  eventType: string,
   timeoutMs: number
-): Promise<{ method: string }> {
+): Promise<{ method: string; telegramEvent: string }> {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
-      reject(new Error('Timed out waiting for Claude channel notification'));
+      reject(new Error(`Timed out waiting for Claude channel event: ${eventType}`));
     }, timeoutMs);
 
     client.setNotificationHandler(ClaudeChannelNotificationSchema, (notification) => {
+      const payload = readClaudeChannelPayload(notification.params);
+      if (payload?.event !== eventType) {
+        return;
+      }
+
       clearTimeout(timeout);
       resolve({
-        method: notification.method
+        method: notification.method,
+        telegramEvent: payload.event
       });
     });
   });
+}
+
+function readClaudeChannelPayload(params: unknown): { event: string } | undefined {
+  const record = readRecord(params);
+  if (typeof record?.content !== 'string') {
+    return undefined;
+  }
+
+  try {
+    const payload = readRecord(JSON.parse(record.content) as unknown);
+    return typeof payload?.event === 'string' ? { event: payload.event } : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 async function reservePort(): Promise<number> {
@@ -125,6 +151,12 @@ function stringEnvironment(env: NodeJS.ProcessEnv): Record<string, string> {
   return Object.fromEntries(
     Object.entries(env).filter((entry): entry is [string, string] => entry[1] !== undefined)
   );
+}
+
+function readRecord(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
 }
 
 async function delay(milliseconds: number): Promise<void> {
