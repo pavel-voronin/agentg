@@ -1,26 +1,60 @@
 <script setup lang="ts">
-import type { EventFiltersPanelView } from '../stores/controlPlaneTypes.js';
+import { computed, ref, watchEffect } from 'vue';
 
-defineProps<{
+import type {
+  EventFilterDomainView,
+  EventFilterGroupView,
+  EventFilterLifecycleColumnView,
+  EventFiltersPanelView
+} from '../stores/controlPlaneTypes.js';
+
+const props = defineProps<{
   view: EventFiltersPanelView;
 }>();
 
 const emit = defineEmits<{
   close: [];
-  groupChange: [groupId: string, enabled: boolean];
-  limitChange: [value: string];
   typeChange: [type: string, enabled: boolean];
 }>();
 
 type InputEventTarget = {
   checked: boolean;
-  value: string;
 };
 
-function onGroupChange(groupId: string, event: Event): void {
-  const input = inputTarget(event);
-  if (input !== null) {
-    emit('groupChange', groupId, input.checked);
+const activeDomainId = ref<string | null>(null);
+const activeDomain = computed(
+  () =>
+    props.view.domains.find((domain) => domain.id === activeDomainId.value) ??
+    props.view.domains[0] ??
+    null
+);
+const allFilterTypes = computed(() => [
+  ...new Set(
+    props.view.domains.flatMap((domain) => [
+      ...domain.eventTypes,
+      ...domain.rpc.flatMap((group) => group.rpcCalls.flatMap((call) => call.lifecycleTypes))
+    ])
+  )
+]);
+
+watchEffect(() => {
+  const firstDomain = props.view.domains[0];
+  if (firstDomain === undefined) {
+    activeDomainId.value = null;
+    return;
+  }
+  if (!props.view.domains.some((domain) => domain.id === activeDomainId.value)) {
+    activeDomainId.value = firstDomain.id;
+  }
+});
+
+function setActiveDomain(domainId: string): void {
+  activeDomainId.value = domainId;
+}
+
+function setAllFiltersEnabled(enabled: boolean): void {
+  for (const type of allFilterTypes.value) {
+    emit('typeChange', type, enabled);
   }
 }
 
@@ -31,10 +65,42 @@ function onTypeChange(type: string, event: Event): void {
   }
 }
 
-function onLimitChange(event: Event): void {
+function onEventGroupChange(domain: EventFilterDomainView, event: Event): void {
   const input = inputTarget(event);
-  if (input !== null) {
-    emit('limitChange', input.value);
+  if (input === null) {
+    return;
+  }
+  for (const type of domain.eventTypes) {
+    emit('typeChange', type, input.checked);
+  }
+}
+
+function onRpcCallChange(types: string[], event: Event): void {
+  const input = inputTarget(event);
+  if (input === null) {
+    return;
+  }
+  for (const type of types) {
+    emit('typeChange', type, input.checked);
+  }
+}
+
+function onRpcGroupChange(group: EventFilterGroupView, event: Event): void {
+  const input = inputTarget(event);
+  if (input === null) {
+    return;
+  }
+  for (const call of group.rpcCalls) {
+    for (const type of call.lifecycleTypes) {
+      emit('typeChange', type, input.checked);
+    }
+  }
+}
+
+function onRpcLifecycleChange(lifecycle: EventFilterLifecycleColumnView): void {
+  const enabled = !lifecycle.checked;
+  for (const type of lifecycle.types) {
+    emit('typeChange', type, enabled);
   }
 }
 
@@ -45,55 +111,152 @@ function inputTarget(event: Event): InputEventTarget | null {
 
 <template>
   <div class="min-h-0 flex-1 overflow-auto bg-white">
-    <div class="grid gap-3 p-3">
-      <section
-        v-for="group in view.groups"
-        :key="group.id"
-        class="rounded-lg border border-zinc-200 bg-white p-3"
-      >
-        <label class="flex cursor-pointer items-center gap-2">
-          <input
-            :checked="group.checked"
-            :indeterminate.prop="group.indeterminate"
-            type="checkbox"
-            class="h-4 w-4 rounded border-zinc-300"
-            @change="onGroupChange(group.id, $event)"
-          />
-          <span class="h-3 w-3 rounded-sm" :style="{ background: group.color }"></span>
-          <span class="min-w-0 flex-1 text-sm font-semibold">{{ group.label }}</span>
-        </label>
-        <div class="mt-2 flex flex-wrap gap-1.5 pl-6">
-          <label
-            v-for="type in group.types"
-            :key="type.type"
-            class="inline-flex min-w-0 cursor-pointer items-center gap-1 rounded border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 font-mono text-[10px] text-zinc-600"
+    <div class="sticky top-0 z-10 border-b border-zinc-200 bg-white p-3">
+      <div class="flex flex-wrap items-center gap-1.5">
+        <button
+          type="button"
+          class="inline-flex h-8 shrink-0 items-center rounded-md border border-zinc-300 bg-white px-2.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 hover:text-zinc-950"
+          @click="setAllFiltersEnabled(true)"
+        >
+          All
+        </button>
+        <button
+          type="button"
+          class="inline-flex h-8 shrink-0 items-center rounded-md border border-zinc-300 bg-white px-2.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 hover:text-zinc-950"
+          @click="setAllFiltersEnabled(false)"
+        >
+          None
+        </button>
+        <span class="mx-0.5 h-6 w-px shrink-0 bg-zinc-200" aria-hidden="true"></span>
+        <div class="contents" role="tablist" aria-label="Event filter domains">
+          <button
+            v-for="domain in view.domains"
+            :key="domain.id"
+            :aria-selected="activeDomain?.id === domain.id"
+            :class="[
+              'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium',
+              activeDomain?.id === domain.id
+                ? 'border-zinc-900 bg-zinc-900 text-white'
+                : 'border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900'
+            ]"
+            role="tab"
+            type="button"
+            @click="setActiveDomain(domain.id)"
           >
-            <input
-              :checked="type.enabled"
-              type="checkbox"
-              class="h-3 w-3 rounded border-zinc-300"
-              @change="onTypeChange(type.type, $event)"
-            />
-            <span class="truncate">{{ type.type }}</span>
-          </label>
+            <span>{{ domain.label }}</span>
+            <span
+              :class="[
+                'rounded px-1.5 py-0.5 text-[10px] leading-none',
+                activeDomain?.id === domain.id
+                  ? 'bg-white/15 text-white'
+                  : 'bg-zinc-100 text-zinc-500'
+              ]"
+            >
+              {{ domain.enabledCount }}
+            </span>
+          </button>
         </div>
-      </section>
-
-      <section class="rounded-lg border border-zinc-200 bg-white p-3">
-        <label class="grid gap-2">
-          <span class="text-sm font-semibold">Event limit</span>
-          <input
-            :max="view.maxLimit"
-            :min="view.minLimit"
-            :step="view.step"
-            :value="view.limit"
-            type="number"
-            class="h-9 rounded-lg border border-zinc-300 bg-white px-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
-            @change="onLimitChange"
-          />
-        </label>
-      </section>
-
+      </div>
+    </div>
+    <div v-if="activeDomain !== null" class="grid gap-3 p-3">
+      <div v-if="activeDomain.events.length > 0" class="grid gap-2">
+        <section class="rounded-lg border border-zinc-200 bg-white p-3">
+          <label class="flex min-w-0 cursor-pointer items-center gap-2">
+            <input
+              :checked="activeDomain.eventsChecked"
+              :indeterminate.prop="activeDomain.eventsIndeterminate"
+              type="checkbox"
+              class="h-4 w-4 rounded border-zinc-300"
+              @change="onEventGroupChange(activeDomain, $event)"
+            />
+            <span class="min-w-0 flex-1 truncate whitespace-nowrap text-sm font-semibold">
+              Events
+            </span>
+          </label>
+          <div class="mt-2 grid gap-1 pl-6">
+            <label
+              v-for="type in activeDomain.events"
+              :key="type.type"
+              class="flex min-w-0 cursor-pointer items-center gap-1.5 rounded border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 font-mono text-[10px] text-zinc-600"
+            >
+              <input
+                :checked="type.enabled"
+                type="checkbox"
+                class="h-3 w-3 shrink-0 rounded border-zinc-300"
+                @change="onTypeChange(type.type, $event)"
+              />
+              <span class="min-w-0 truncate whitespace-nowrap">{{ type.type }}</span>
+            </label>
+          </div>
+        </section>
+      </div>
+      <div v-if="activeDomain.rpc.length > 0" class="grid gap-2">
+        <section
+          v-for="group in activeDomain.rpc"
+          :key="group.id"
+          class="rounded-lg border border-zinc-200 bg-white p-3"
+        >
+          <div class="grid grid-cols-[minmax(0,1fr)_repeat(4,1rem)] items-center gap-x-2 pr-px">
+            <label class="flex min-w-0 cursor-pointer items-center gap-2">
+              <input
+                :checked="group.checked"
+                :indeterminate.prop="group.indeterminate"
+                type="checkbox"
+                class="h-4 w-4 rounded border-zinc-300"
+                @change="onRpcGroupChange(group, $event)"
+              />
+              <span class="h-3 w-3 shrink-0 rounded-sm" :style="{ background: group.color }"></span>
+              <span class="min-w-0 flex-1 truncate whitespace-nowrap text-sm font-semibold">
+                {{ group.label }}
+              </span>
+            </label>
+            <button
+              v-for="lifecycle in group.lifecycleColumns"
+              :key="lifecycle.suffix"
+              :aria-label="`Toggle ${lifecycle.title} RPC calls`"
+              :aria-pressed="lifecycle.indeterminate ? 'mixed' : lifecycle.checked"
+              :title="lifecycle.title"
+              type="button"
+              class="h-4 w-4 justify-self-center rounded-sm font-mono text-[10px] font-semibold text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200"
+              @click="onRpcLifecycleChange(lifecycle)"
+            >
+              {{ lifecycle.label }}
+            </button>
+          </div>
+          <div class="mt-2 grid gap-1 pl-6">
+            <div
+              v-for="call in group.rpcCalls"
+              :key="call.target"
+              class="grid grid-cols-[minmax(0,1fr)_repeat(4,1rem)] items-center gap-x-2 rounded border border-zinc-200 bg-zinc-50 py-0.5"
+            >
+              <label class="flex min-w-0 cursor-pointer items-center gap-1.5 pl-1.5">
+                <input
+                  :checked="call.checked"
+                  :indeterminate.prop="call.indeterminate"
+                  type="checkbox"
+                  class="h-3 w-3 shrink-0 rounded border-zinc-300"
+                  @change="onRpcCallChange(call.lifecycleTypes, $event)"
+                />
+                <span
+                  class="min-w-0 truncate whitespace-nowrap font-mono text-[10px] text-zinc-600"
+                >
+                  {{ call.target }}
+                </span>
+              </label>
+              <input
+                v-for="lifecycle in call.lifecycles"
+                :key="lifecycle.type"
+                :aria-label="`${call.target} ${lifecycle.title}`"
+                :checked="lifecycle.enabled"
+                :title="`${call.target} ${lifecycle.title}`"
+                type="checkbox"
+                class="h-3 w-3 justify-self-center rounded border-zinc-300"
+                @change="onTypeChange(lifecycle.type, $event)"
+              />
+            </div>
+          </div>
+        </section>
+      </div>
       <button
         type="button"
         class="mt-1 h-9 rounded-lg border border-zinc-800 bg-zinc-800 px-3 text-sm font-medium text-white hover:bg-zinc-950"

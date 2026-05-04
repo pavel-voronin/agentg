@@ -64,13 +64,65 @@ export type AppShellView = {
   tdlibStatus: StatusBadgeView;
 };
 
-export type AppEventItem = {
+export type AppEventBodyView = {
+  raw: string;
+  yaml: string;
+  yamlLines: AppEventYamlLine[];
+};
+
+export type AppEventYamlLine = {
+  indent: number;
+  tokens: AppEventYamlToken[];
+};
+
+export type AppEventYamlToken =
+  | {
+      kind: 'modelRef';
+      color: string;
+      id: string;
+      model: string;
+    }
+  | {
+      kind: 'text';
+      text: string;
+    };
+
+export type AppStandardEventItem = {
+  body: AppEventBodyView;
   color: string;
-  dataJson: string;
+  filterable: boolean;
+  kind: 'event';
   key: string;
+  muted: boolean;
   occurredAt: string;
   type: string;
 };
+
+export type AppRpcLifecycleItem = {
+  body: AppEventBodyView;
+  key: string;
+  label: string;
+  muted: boolean;
+  occurredAt: string;
+  occurredAtMs: number | null;
+  suffix: string;
+  title: string;
+  type: string;
+};
+
+export type AppRpcEventItem = {
+  callId: string;
+  color: string;
+  filterable: boolean;
+  kind: 'rpc';
+  key: string;
+  lifecycleTypes: string[];
+  lifecycles: AppRpcLifecycleItem[];
+  muted: boolean;
+  target: string;
+};
+
+export type AppEventItem = AppStandardEventItem | AppRpcEventItem;
 
 export type ChatListMode = 'archive' | 'folder' | 'main';
 
@@ -258,27 +310,69 @@ export type EventFilterTypeView = {
   type: string;
 };
 
+export type EventFilterLifecycleColumnView = {
+  checked: boolean;
+  indeterminate: boolean;
+  label: string;
+  suffix: string;
+  title: string;
+  types: string[];
+};
+
+export type EventFilterRpcLifecycleView = {
+  enabled: boolean;
+  label: string;
+  suffix: string;
+  title: string;
+  type: string;
+};
+
+export type EventFilterRpcCallView = {
+  checked: boolean;
+  indeterminate: boolean;
+  lifecycles: EventFilterRpcLifecycleView[];
+  lifecycleTypes: string[];
+  target: string;
+};
+
 export type EventFilterGroupView = {
   checked: boolean;
   color: string;
   id: string;
   indeterminate: boolean;
+  kind: 'rpc' | 'types';
   label: string;
+  lifecycleColumns: EventFilterLifecycleColumnView[];
+  rpcCalls: EventFilterRpcCallView[];
   types: EventFilterTypeView[];
 };
 
+export type EventFilterDomainView = {
+  enabledCount: string;
+  events: EventFilterTypeView[];
+  eventsChecked: boolean;
+  eventsIndeterminate: boolean;
+  eventTypes: string[];
+  id: string;
+  label: string;
+  rpc: EventFilterGroupView[];
+};
+
 export type EventFiltersPanelView = {
+  domains: EventFilterDomainView[];
   enabledCount: string;
   groups: EventFilterGroupView[];
-  limit: number;
-  maxLimit: number;
-  minLimit: number;
-  step: number;
 };
 
 export type EventsPanelMode = 'events' | 'filters';
 
-const RPC_CALL_EVENT_SUFFIXES = ['started', 'progress', 'completed', 'failed'] as const;
+export const RPC_CALL_EVENT_LIFECYCLES = [
+  { label: 'S', suffix: 'started', title: 'Started' },
+  { label: 'C', suffix: 'completed', title: 'Completed' },
+  { label: 'F', suffix: 'failed', title: 'Failed' },
+  { label: 'P', suffix: 'progress', title: 'Progress' }
+] as const;
+
 const RPC_CALL_EVENT_TARGETS = [
   'history.getChatHistoryState',
   'history.requestSync',
@@ -294,7 +388,7 @@ const RPC_CALL_EVENT_TARGETS = [
   'telegram.searchMessages'
 ] as const;
 const RPC_CALL_EVENT_TYPES = RPC_CALL_EVENT_TARGETS.flatMap((target) =>
-  RPC_CALL_EVENT_SUFFIXES.map((suffix) => `${target}.${suffix}`)
+  RPC_CALL_EVENT_LIFECYCLES.map((lifecycle) => `${target}.${lifecycle.suffix}`)
 );
 const TELEGRAM_OPERATION_EVENT_SUFFIXES = ['started', 'completed', 'failed'] as const;
 const TELEGRAM_OPERATION_EVENT_TARGETS = ['telegram.login'] as const;

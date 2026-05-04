@@ -8,6 +8,7 @@ import {
   eventTypesForGroupInState,
   filterableEventGroups,
   isEventEnabledInState,
+  isEventTypeEnabledInState,
   normalizeEventLimit
 } from '../domain/events.js';
 import {
@@ -39,6 +40,10 @@ export const useEventsStore = defineStore('controlPlane.events', {
     },
     isEventEnabled(event: ControlPlaneEvent): boolean {
       return isEventEnabledInState(this, event);
+    },
+    isEventTypeMuted(type: string): boolean {
+      const group = eventGroupForType(type);
+      return group.filterable !== false && !isEventTypeEnabledInState(this, group, type);
     },
     pushEvent(event: ControlPlaneEvent): boolean {
       if (this.eventsPaused) {
@@ -84,6 +89,22 @@ export const useEventsStore = defineStore('controlPlane.events', {
     },
     setEvents(events: ControlPlaneEvent[]) {
       this.events = events.slice(0, this.eventLimit);
+    },
+    setEventTypeMuted(type: string, muted: boolean) {
+      if (type.length === 0) {
+        return;
+      }
+      const group = eventGroupForType(type);
+      if (group.filterable === false) {
+        return;
+      }
+      this.eventFilters.types[type] = !muted;
+      const groupState = eventGroupFilterStateInState(this, group);
+      this.eventFilters.groups[group.id] = groupState.checked || groupState.indeterminate;
+      writeStoredEventFilters(this.eventFilters);
+    },
+    clearEventsOfType(type: string) {
+      this.events = this.events.filter((event) => (event.type ?? '') !== type);
     },
     setEventsPaused(paused: boolean) {
       this.eventsPaused = paused;

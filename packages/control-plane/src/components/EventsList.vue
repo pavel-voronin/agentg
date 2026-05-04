@@ -1,11 +1,18 @@
 <script setup lang="ts">
 import { nextTick, ref, watch } from 'vue';
 
-import type { AppEventItem } from '../stores/controlPlaneTypes.js';
+import type { AppEventItem, AppRpcEventItem } from '../stores/controlPlaneTypes.js';
+import RpcEventListItem from './RpcEventListItem.vue';
+import StandardEventListItem from './StandardEventListItem.vue';
 
 const props = defineProps<{
   events: AppEventItem[];
   hasEvents: boolean;
+}>();
+
+const emit = defineEmits<{
+  clearType: [type: string];
+  muteChange: [type: string, muted: boolean];
 }>();
 
 type ScrollContainer = {
@@ -20,10 +27,12 @@ type ScrollState = {
 };
 
 const container = ref<ScrollContainer | null>(null);
+const rpcMuteSnapshots = ref<Record<string, Record<string, boolean>>>({});
 
 watch(
   () => props.events,
   () => {
+    pruneRpcMuteSnapshots();
     const scrollState = captureScrollState();
     void nextTick(() => {
       restoreScrollState(scrollState);
@@ -55,22 +64,63 @@ function restoreScrollState(state: ScrollState | null): void {
   }
   current.scrollTop = state.scrollTop + current.scrollHeight - state.scrollHeight;
 }
+
+function toggleRpcMute(item: AppRpcEventItem): void {
+  if (item.muted) {
+    restoreRpcMute(item);
+    return;
+  }
+  rpcMuteSnapshots.value = {
+    ...rpcMuteSnapshots.value,
+    [item.target]: Object.fromEntries(
+      item.lifecycleTypes.map((type) => [
+        type,
+        item.lifecycles.find((lifecycle) => lifecycle.type === type)?.muted ?? false
+      ])
+    )
+  };
+  for (const type of item.lifecycleTypes) {
+    emit('muteChange', type, true);
+  }
+}
+
+function restoreRpcMute(item: AppRpcEventItem): void {
+  const snapshot = rpcMuteSnapshots.value[item.target];
+  for (const type of item.lifecycleTypes) {
+    emit('muteChange', type, snapshot?.[type] ?? false);
+  }
+  rpcMuteSnapshots.value = Object.fromEntries(
+    Object.entries(rpcMuteSnapshots.value).filter(([target]) => target !== item.target)
+  );
+}
+
+function pruneRpcMuteSnapshots(): void {
+  const activeRpcTargets = new Set(
+    props.events.flatMap((event) => (event.kind === 'rpc' ? [event.target] : []))
+  );
+  rpcMuteSnapshots.value = Object.fromEntries(
+    Object.entries(rpcMuteSnapshots.value).filter(([target]) => activeRpcTargets.has(target))
+  );
+}
 </script>
 
 <template>
   <div ref="container" class="min-h-0 flex-1 overflow-auto bg-white">
     <div v-if="!hasEvents" class="p-6 text-center text-sm text-zinc-500">No events yet.</div>
-    <div
-      v-for="event in events"
-      :key="event.key"
-      class="relative border-b border-zinc-200 bg-white py-2 pl-4 pr-3 font-mono text-xs leading-relaxed"
-    >
-      <div class="absolute left-0 top-0 h-full w-1.5" :style="{ background: event.color }"></div>
-      <div class="mb-1 flex flex-wrap items-center gap-2">
-        <span class="text-zinc-500">{{ event.occurredAt }}</span>
-        <span class="font-semibold text-zinc-900">{{ event.type }}</span>
-      </div>
-      <pre class="m-0 whitespace-pre-wrap break-words text-zinc-700">{{ event.dataJson }}</pre>
-    </div>
+    <template v-for="event in events" :key="event.key">
+      <StandardEventListItem
+        v-if="event.kind === 'event'"
+        :event="event"
+        @clear-type="(type) => emit('clearType', type)"
+        @mute-change="(type, muted) => emit('muteChange', type, muted)"
+      />
+      <RpcEventListItem
+        v-else
+        :event="event"
+        @clear-type="(type) => emit('clearType', type)"
+        @mute-change="(type, muted) => emit('muteChange', type, muted)"
+        @procedure-mute-toggle="toggleRpcMute"
+      />
+    </template>
   </div>
 </template>
