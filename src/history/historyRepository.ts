@@ -1,13 +1,17 @@
 import type { Database } from 'better-sqlite3';
 
 import { addCoverageInterval, type HistoryCoverageInterval } from './coverage.js';
-import type { HistoryJob } from './jobs.js';
+import type { BackfillPageCheckpoint, HistoryJob, HistoryJobCursor } from './jobs.js';
 import type { HistoryBackfillJobInput } from './reconciler.js';
 import type { TelegramMessageDto } from '../telegram/telegramRepository.js';
 
 export type HistoryRepository = {
   addCoverage(interval: HistoryCoverageInterval): HistoryCoverageInterval[];
+  checkpointJob(job: HistoryJob, checkpoint: HistoryJobCheckpoint): void;
+  claimNextJob(): HistoryJob | undefined;
+  completeJob(job: HistoryJob, coveredInterval: HistoryCoverageInterval): void;
   countCoverageIntervals(): number;
+  countJobs(status?: HistoryJob['status']): number;
   countMessages(chatId: string): number;
   countTargets(): number;
   createJobs(jobs: HistoryBackfillJobInput[]): HistoryJob[];
@@ -18,7 +22,17 @@ export type HistoryRepository = {
   listMessages(chatId: string): HistoryMessage[];
   listTargets(chatId?: string): HistoryTarget[];
   recordTelegramMessage(message: TelegramMessageDto, observedAt: Date): HistoryMessage | undefined;
+  resetJob(job: HistoryJob): void;
+  resetRunningJobs(): void;
   upsertTarget(target: HistoryTarget): HistoryTarget;
+};
+
+export type HistoryJobCheckpoint = Pick<
+  BackfillPageCheckpoint,
+  'complete' | 'remainingEndAt'
+> & {
+  coveredInterval?: HistoryCoverageInterval;
+  cursor?: HistoryJobCursor;
 };
 
 export type HistoryMessage = {
@@ -80,11 +94,13 @@ type MessageRow = {
 
 type JobRow = {
   created_at: string;
+  cursor_json: string | null;
   end_at: string;
   id: number;
   start_at: string;
   status: HistoryJob['status'];
   telegram_chat_id: string;
+  updated_at: string | null;
 };
 
 type TargetRow = {
@@ -124,10 +140,126 @@ export function createHistoryRepository(database: Database): HistoryRepository {
       transaction();
       return this.listCoverage(interval.chatId);
     },
+    checkpointJob(job, checkpoint): void {
+      if (checkpoint.coveredInterval !== undefined) {
+        this.addCoverage({
+          ...checkpoint.coveredInterval,
+          source: 'backfill'
+        });
+      }
+
+      if (checkpoint.complete) {
+        database
+          .prepare(
+            `
+              UPDATE history_jobs
+              SET status = 'completed',
+                  cursor_json = NULL,
+                  updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+              WHERE id = ?
+            `
+          )
+          .run(job.id);
+        return;
+      }
+
+      database
+        .prepare(
+          `
+            UPDATE history_jobs
+            SET end_at = ?,
+                cursor_json = ?,
+                status = 'running',
+                updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+            WHERE id = ?
+          `
+        )
+        .run(
+          checkpoint.remainingEndAt.toISOString(),
+          checkpoint.cursor === undefined ? null : JSON.stringify(checkpoint.cursor),
+          job.id
+        );
+    },
+    claimNextJob(): HistoryJob | undefined {
+      const transaction = database.transaction(() => {
+        const row = database
+          .prepare(
+            `
+              SELECT
+                id,
+                telegram_chat_id,
+                start_at,
+                end_at,
+                status,
+                cursor_json,
+                created_at,
+                updated_at
+              FROM history_jobs
+              WHERE status = 'queued'
+              ORDER BY end_at DESC, start_at DESC, id ASC
+              LIMIT 1
+            `
+          )
+          .get() as JobRow | undefined;
+
+        if (row === undefined) {
+          return undefined;
+        }
+
+        const updated = database
+          .prepare(
+            `
+              UPDATE history_jobs
+              SET status = 'running',
+                  updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+              WHERE id = ?
+              RETURNING
+                id,
+                telegram_chat_id,
+                start_at,
+                end_at,
+                status,
+                cursor_json,
+                created_at,
+                updated_at
+            `
+          )
+          .get(row.id) as JobRow;
+
+        return mapJobRow(updated);
+      });
+
+      return transaction();
+    },
+    completeJob(job, coveredInterval): void {
+      this.checkpointJob(job, {
+        complete: true,
+        coveredInterval,
+        remainingEndAt: job.endAt
+      });
+    },
     countCoverageIntervals(): number {
       const row = database.prepare('SELECT count(*) AS count FROM history_coverage').get() as {
         count: number;
       };
+      return row.count;
+    },
+    countJobs(status): number {
+      const row =
+        status === undefined
+          ? (database.prepare('SELECT count(*) AS count FROM history_jobs').get() as {
+              count: number;
+            })
+          : (database
+              .prepare(
+                `
+                  SELECT count(*) AS count
+                  FROM history_jobs
+                  WHERE status = ?
+                `
+              )
+              .get(status) as { count: number });
+
       return row.count;
     },
     countMessages(chatId): number {
@@ -152,19 +284,47 @@ export function createHistoryRepository(database: Database): HistoryRepository {
     createJobs(jobs): HistoryJob[] {
       const statement = database.prepare(
         `
-          INSERT INTO history_jobs (telegram_chat_id, start_at, end_at)
-          VALUES (?, ?, ?)
-          RETURNING id, telegram_chat_id, start_at, end_at, status, created_at
+          INSERT INTO history_jobs (telegram_chat_id, start_at, end_at, updated_at)
+          VALUES (?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+          RETURNING
+            id,
+            telegram_chat_id,
+            start_at,
+            end_at,
+            status,
+            cursor_json,
+            created_at,
+            updated_at
+        `
+      );
+      const existing = database.prepare(
+        `
+          SELECT id
+          FROM history_jobs
+          WHERE telegram_chat_id = ?
+            AND start_at = ?
+            AND end_at = ?
+          LIMIT 1
         `
       );
 
-      const transaction = database.transaction(() =>
-        jobs.map((job) =>
-          mapJobRow(
-            statement.get(job.chatId, job.startAt.toISOString(), job.endAt.toISOString()) as JobRow
-          )
-        )
-      );
+      const transaction = database.transaction(() => {
+        const inserted: HistoryJob[] = [];
+        for (const job of jobs) {
+          const startAt = job.startAt.toISOString();
+          const endAt = job.endAt.toISOString();
+          const existingRow = existing.get(job.chatId, startAt, endAt) as
+            | { id: number }
+            | undefined;
+          if (existingRow !== undefined) {
+            continue;
+          }
+
+          inserted.push(mapJobRow(statement.get(job.chatId, startAt, endAt) as JobRow));
+        }
+
+        return inserted;
+      });
 
       return transaction();
     },
@@ -280,7 +440,15 @@ export function createHistoryRepository(database: Database): HistoryRepository {
       return database
         .prepare(
           `
-            SELECT id, telegram_chat_id, start_at, end_at, status, created_at
+            SELECT
+              id,
+              telegram_chat_id,
+              start_at,
+              end_at,
+              status,
+              cursor_json,
+              created_at,
+              updated_at
             FROM history_jobs
             WHERE telegram_chat_id = ?
             ORDER BY created_at DESC, id DESC
@@ -378,6 +546,30 @@ export function createHistoryRepository(database: Database): HistoryRepository {
 
       return mapMessageRow(row);
     },
+    resetJob(job): void {
+      database
+        .prepare(
+          `
+            UPDATE history_jobs
+            SET status = 'queued',
+                updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+            WHERE id = ?
+          `
+        )
+        .run(job.id);
+    },
+    resetRunningJobs(): void {
+      database
+        .prepare(
+          `
+            UPDATE history_jobs
+            SET status = 'queued',
+                updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+            WHERE status = 'running'
+          `
+        )
+        .run();
+    },
     upsertTarget(target): HistoryTarget {
       const row = database
         .prepare(
@@ -438,10 +630,12 @@ function mapJobRow(row: JobRow): HistoryJob {
   return {
     chatId: row.telegram_chat_id,
     createdAt: row.created_at,
+    ...(row.cursor_json === null ? {} : { cursor: parseJobCursor(row.cursor_json) }),
     endAt: new Date(row.end_at),
     id: row.id,
     startAt: new Date(row.start_at),
-    status: row.status
+    status: row.status,
+    updatedAt: row.updated_at ?? row.created_at
   };
 }
 
@@ -482,6 +676,16 @@ function parseHistoryBoundary(value: unknown): HistoryBoundary | undefined {
   }
 
   return undefined;
+}
+
+function parseJobCursor(value: string): HistoryJobCursor {
+  const parsed = JSON.parse(value) as unknown;
+  const cursor = readRecord(parsed);
+  if (cursor === undefined) {
+    throw new Error('Stored history job cursor is invalid');
+  }
+
+  return cursor;
 }
 
 function readRecord(value: unknown): Record<string, unknown> | undefined {

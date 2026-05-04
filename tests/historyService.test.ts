@@ -6,6 +6,8 @@ import { describe, expect, it } from 'vitest';
 
 import { createApp } from '../src/app/createApp.js';
 import { createAppEvent, type AppEvent } from '../src/bus/events.js';
+import type { EventBus } from '../src/bus/eventBus.js';
+import type { TelegramTdlibClient } from '../src/telegram/tdlibClient.js';
 
 describe('HistoryService', () => {
   it('records Telegram message events through direct TelegramService DI', async () => {
@@ -103,4 +105,134 @@ describe('HistoryService', () => {
       await app.stop();
     }
   });
+
+  it('executes target backfill jobs through direct TelegramService calls', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'agentg-history-backfill-'));
+    const app = createApp({
+      cwd,
+      env: {
+        AGENTG_SQLITE_PATH: './history-backfill.sqlite',
+        BACKFILL_REQUEST_DELAY_MS: '1'
+      }
+    });
+
+    try {
+      await app.start();
+      app.services.telegram.setTdlibClient(createFakeHistoryTdlibClient());
+      await app.services.telegram.ingestUpdate({
+        _: 'updateNewChat',
+        chat: {
+          _: 'chat',
+          id: 42,
+          title: 'Backfill Chat',
+          type: {
+            _: 'chatTypePrivate',
+            user_id: 42
+          }
+        }
+      });
+
+      const completed = waitForEvent(app.eventBus, 'history.job.completed');
+      app.services.history.upsertTarget({
+        chatId: '42',
+        end: '2024-01-01T00:01:00.000Z',
+        start: '2024-01-01T00:00:00.000Z'
+      });
+      await completed;
+
+      expect(app.services.history.listMessages('42')).toEqual([
+        expect.objectContaining({
+          chatId: '42',
+          contentType: 'messageText',
+          messageDate: '2024-01-01T00:00:30.000Z',
+          messageId: '2',
+          text: 'from history'
+        })
+      ]);
+      expect(app.services.history.getCoverage('42')).toEqual([
+        {
+          chatId: '42',
+          endAt: new Date('2024-01-01T00:01:00.000Z'),
+          source: 'backfill',
+          startAt: new Date('2024-01-01T00:00:00.000Z')
+        }
+      ]);
+      expect(app.services.history.getOverview()).toMatchObject({
+        pendingJobs: 0,
+        runningJobs: 0
+      });
+    } finally {
+      await app.stop();
+    }
+  });
 });
+
+function createFakeHistoryTdlibClient(): TelegramTdlibClient {
+  return {
+    close: () => Promise.resolve(),
+    getChat: () =>
+      Promise.resolve({
+        _: 'chat',
+        id: 42,
+        title: 'Backfill Chat',
+        type: {
+          _: 'chatTypePrivate',
+          user_id: 42
+        }
+      }),
+    getChatHistory: () =>
+      Promise.resolve({
+        _: 'messages',
+        messages: [
+          telegramTextMessage(2, 1_704_067_230, 'from history'),
+          telegramTextMessage(1, 1_704_067_190, 'before target')
+        ]
+      }),
+    getChatMessageByDate: () => Promise.resolve(telegramTextMessage(2, 1_704_067_230, 'anchor')),
+    getChats: () => Promise.resolve({ _: 'chats', chat_ids: [42] }),
+    getMessage: (_chatId, messageId) =>
+      Promise.resolve(telegramTextMessage(Number(messageId), 1_704_067_230, 'from history')),
+    loadChats: () => Promise.resolve(),
+    login: () => Promise.resolve(),
+    onError: () => ({
+      unsubscribe() {
+        return;
+      }
+    }),
+    onUpdate: () => ({
+      unsubscribe() {
+        return;
+      }
+    })
+  };
+}
+
+function telegramTextMessage(messageId: number, date: number, text: string): Record<string, unknown> {
+  return {
+    _: 'message',
+    chat_id: 42,
+    content: {
+      _: 'messageText',
+      text: {
+        _: 'formattedText',
+        text
+      }
+    },
+    date,
+    id: messageId
+  };
+}
+
+function waitForEvent(eventBus: EventBus, type: string): Promise<AppEvent> {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      subscription.unsubscribe();
+      reject(new Error(`Timed out waiting for ${type}`));
+    }, 2000);
+    const subscription = eventBus.subscribe(type, (event) => {
+      clearTimeout(timeout);
+      subscription.unsubscribe();
+      resolve(event);
+    });
+  });
+}

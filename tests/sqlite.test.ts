@@ -51,6 +51,11 @@ describe('openSqliteDatabase', () => {
           appliedAt: expect.any(String) as string,
           id: '0007',
           name: 'telegram_chat_list_memberships'
+        },
+        {
+          appliedAt: expect.any(String) as string,
+          id: '0008',
+          name: 'history_backfill_jobs'
         }
       ]);
     } finally {

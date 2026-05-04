@@ -23,10 +23,14 @@ export function normalizeCoverageIntervals(
       .filter((interval) => interval.chatId === chatId)
       .map(normalizeHistoryInterval);
 
+    const source = normalized.some((interval) => interval.source === 'backfill')
+      ? 'backfill'
+      : 'live';
+
     return mergeCoverageIntervals(normalized).map((interval) => ({
       ...interval,
       chatId,
-      source: 'live'
+      source
     }));
   });
 }

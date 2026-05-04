@@ -24,6 +24,14 @@ export type AppConfig = {
   gatewayCapabilities: {
     enabled: string[];
   };
+  history: {
+    backfill: {
+      chatLoadBatchSize: number;
+      messageLimit: number;
+      requestDelayMs: number;
+      windowDays: number;
+    };
+  };
   plugins: {
     enabled: string[];
   };
@@ -69,6 +77,25 @@ export function loadAppConfig(input: LoadAppConfigInput = {}): AppConfig {
       enabled: parseList(
         env.GATEWAY_CAPABILITIES ?? 'telegram.read,history.read,summaries.read,summaries.request'
       )
+    },
+    history: {
+      backfill: {
+        chatLoadBatchSize:
+          parseOptionalPositiveInteger(
+            env.BACKFILL_CHAT_LOAD_BATCH_SIZE,
+            'BACKFILL_CHAT_LOAD_BATCH_SIZE'
+          ) ?? 100,
+        messageLimit:
+          parseOptionalPositiveInteger(env.BACKFILL_MESSAGE_LIMIT, 'BACKFILL_MESSAGE_LIMIT') ??
+          100,
+        requestDelayMs:
+          parseOptionalPositiveInteger(
+            env.BACKFILL_REQUEST_DELAY_MS,
+            'BACKFILL_REQUEST_DELAY_MS'
+          ) ?? 1000,
+        windowDays:
+          parseOptionalPositiveInteger(env.BACKFILL_WINDOW_DAYS, 'BACKFILL_WINDOW_DAYS') ?? 31
+      }
     },
     plugins: {
       enabled: parseList(env.AGENTG_PLUGINS)

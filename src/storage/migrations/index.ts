@@ -1,4 +1,5 @@
 import { historyDomainMigration } from '../../history/migrations.js';
+import { historyBackfillMigration } from '../../history/backfillMigrations.js';
 import { historyTargetsMigration } from '../../history/targetMigrations.js';
 import { summariesPluginMigration } from '../../plugins/summaries/migrations.js';
 import { telegramChatListMembershipsMigration } from '../../telegram/chatListMigrations.js';
@@ -12,5 +13,6 @@ export const sqliteMigrations: readonly SqliteMigration[] = [
   historyDomainMigration,
   summariesPluginMigration,
   historyTargetsMigration,
-  telegramChatListMembershipsMigration
+  telegramChatListMembershipsMigration,
+  historyBackfillMigration
 ];

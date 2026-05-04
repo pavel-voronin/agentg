@@ -82,6 +82,7 @@ export function createApp(input: CreateAppInput = {}): AppRuntime {
   });
   const historyRepository = createHistoryRepository(sqlite.connection);
   const historyService = createHistoryService({
+    backfill: config.history.backfill,
     eventBus,
     repository: historyRepository,
     telegramService

@@ -5,6 +5,11 @@ import { createAppEvent, type AppEvent } from '../bus/events.js';
 import type { TelegramService } from '../telegram/telegramService.js';
 import type { TelegramChatDto } from '../telegram/telegramRepository.js';
 import type { HistoryCoverageInterval } from './coverage.js';
+import {
+  createHistorySyncController,
+  type BackfillOptions,
+  type HistorySyncController
+} from './controller.js';
 import type { HistoryJob } from './jobs.js';
 import { createLiveCoverageObserver } from './liveCoverage.js';
 import type {
@@ -27,12 +32,14 @@ export type HistoryService = {
   getOverview(): HistoryOverview;
   listChats(input: HistoryChatListInput): HistoryChatListResult;
   listMessages(chatId: string): HistoryMessage[];
+  requestSync(reason: string): void;
   start(): void;
   stop(): Promise<void>;
   upsertTarget(input: HistoryTargetUpsertInput): HistoryTargetMutationResult;
 };
 
 export type HistoryServiceDependencies = {
+  backfill?: BackfillOptions;
   eventBus: EventBus;
   repository: HistoryRepository;
   telegramService: TelegramService;
@@ -148,6 +155,14 @@ export type HistoryTargetMutationResult = {
 export function createHistoryService(dependencies: HistoryServiceDependencies): HistoryService {
   let subscriptions: EventSubscription[] = [];
   let liveCoverageTick: ReturnType<typeof setInterval> | undefined;
+  let shuttingDown = false;
+  let controller: HistorySyncController | undefined;
+  const backfillOptions = dependencies.backfill ?? {
+    chatLoadBatchSize: 100,
+    messageLimit: 100,
+    requestDelayMs: 1000,
+    windowDays: 31
+  };
   const liveCoverageObserver = createLiveCoverageObserver({
     addCoverageBatch(intervals): Promise<void> {
       for (const interval of intervals) {
@@ -183,6 +198,7 @@ export function createHistoryService(dependencies: HistoryServiceDependencies): 
         throw new Error(`Unknown history target: ${targetId}`);
       }
 
+      controller?.request('target-deleted');
       return {
         deleted: true,
         target
@@ -231,8 +247,8 @@ export function createHistoryService(dependencies: HistoryServiceDependencies): 
         activeJob: null,
         chats: dependencies.telegramService.countChats(),
         coverageIntervals: dependencies.repository.countCoverageIntervals(),
-        pendingJobs: 0,
-        runningJobs: 0,
+        pendingJobs: dependencies.repository.countJobs('queued'),
+        runningJobs: dependencies.repository.countJobs('running'),
         targets: dependencies.repository.countTargets(),
         templates: 0
       };
@@ -261,12 +277,26 @@ export function createHistoryService(dependencies: HistoryServiceDependencies): 
     listMessages(chatId): HistoryMessage[] {
       return dependencies.repository.listMessages(chatId);
     },
+    requestSync(reason): void {
+      controller?.request(reason);
+    },
     start(): void {
       if (subscriptions.length > 0) {
         return;
       }
 
+      shuttingDown = false;
+      controller = createHistorySyncController(
+        dependencies.repository,
+        dependencies.telegramService,
+        backfillOptions,
+        dependencies.eventBus,
+        () => shuttingDown
+      );
       subscriptions = [
+        dependencies.eventBus.subscribe('telegram.chat.updated', () => {
+          controller?.request('chat-updated');
+        }),
         dependencies.eventBus.subscribe('telegram.message.created', async (event) => {
           const message = await recordTelegramMessageEvent(dependencies, event);
           if (message?.messageDate !== undefined) {
@@ -280,16 +310,22 @@ export function createHistoryService(dependencies: HistoryServiceDependencies): 
         dependencies.eventBus.subscribe('telegram.message.updated', async (event) => {
           await recordTelegramMessageEvent(dependencies, event);
         }),
-        dependencies.eventBus.subscribe('telegram.tdlib.status', (event) =>
-          handleTelegramTdlibStatus(liveCoverageObserver, event)
-        )
+        dependencies.eventBus.subscribe('telegram.tdlib.status', async (event) => {
+          await handleTelegramTdlibStatus(liveCoverageObserver, event);
+          const data = readRecord(event.data);
+          if (data?.connected === true) {
+            controller?.request('tdlib-connected');
+          }
+        })
       ];
       liveCoverageTick = setInterval(() => {
         void liveCoverageObserver.tick();
       }, HISTORY_LIVE_COVERAGE_TICK_MS);
       liveCoverageTick.unref();
+      controller.request('startup');
     },
     async stop(): Promise<void> {
+      shuttingDown = true;
       if (liveCoverageTick !== undefined) {
         clearInterval(liveCoverageTick);
         liveCoverageTick = undefined;
@@ -300,6 +336,9 @@ export function createHistoryService(dependencies: HistoryServiceDependencies): 
       subscriptions = [];
       await liveCoverageObserver.markDisconnected();
       await liveCoverageObserver.wait();
+      controller?.stop();
+      await controller?.wait();
+      controller = undefined;
     },
     upsertTarget(input): HistoryTargetMutationResult {
       const range = targetRangeFromInput(input);
@@ -309,6 +348,7 @@ export function createHistoryService(dependencies: HistoryServiceDependencies): 
         range
       });
 
+      controller?.request('target-updated');
       return {
         target,
         upserted: true
