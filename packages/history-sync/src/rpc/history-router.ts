@@ -32,7 +32,6 @@ import {
   type HistoryTargetOutput,
   type HistoryTargetMutationOutput
 } from './history-contracts.js';
-import { procedureEnvelopeSchema } from '@agentg/shared/rpc/envelope';
 import { callHistoryMethod, type HistoryRuntime } from '../observability.js';
 import { enriched, historyRpcRouter, observable, rpc } from './trpc.js';
 
@@ -62,7 +61,7 @@ export function createHistoryRouter(options: CreateHistoryRouterOptions) {
   return historyRpcRouter({
     deleteTarget: rpc
       .input(historyDeleteTargetInputSchema)
-      .output(procedureEnvelopeSchema(historyTargetMutationOutputSchema))
+      .output(historyTargetMutationOutputSchema)
       .mutation(async ({ input }) =>
         normalizeTargetMutation(
           await callKnownHistoryMethod(options, callMethod, 'history.deleteTarget', input)
@@ -70,7 +69,7 @@ export function createHistoryRouter(options: CreateHistoryRouterOptions) {
       ),
     getChatHistoryState: enriched
       .input(historyGetChatHistoryStateInputSchema)
-      .output(procedureEnvelopeSchema(historyChatHistoryStateOutputSchema))
+      .output(historyChatHistoryStateOutputSchema)
       .query(async ({ input }) =>
         normalizeChatHistoryState(
           await callKnownHistoryMethod(options, callMethod, 'history.getChatHistoryState', input)
@@ -78,7 +77,7 @@ export function createHistoryRouter(options: CreateHistoryRouterOptions) {
       ),
     getOverview: rpc
       .input(historyGetOverviewInputSchema)
-      .output(procedureEnvelopeSchema(historyOverviewOutputSchema))
+      .output(historyOverviewOutputSchema)
       .query(async () =>
         normalizeOverview(
           await callKnownHistoryMethod(options, callMethod, 'history.getOverview', undefined)
@@ -86,7 +85,7 @@ export function createHistoryRouter(options: CreateHistoryRouterOptions) {
       ),
     listChats: rpc
       .input(historyListChatsInputSchema)
-      .output(procedureEnvelopeSchema(historyListChatsOutputSchema))
+      .output(historyListChatsOutputSchema)
       .query(async ({ input }) =>
         normalizeListChats(
           await callKnownHistoryMethod(options, callMethod, 'history.listChats', input)
@@ -94,18 +93,16 @@ export function createHistoryRouter(options: CreateHistoryRouterOptions) {
       ),
     listJobs: rpc
       .input(historyListJobsInputSchema)
-      .output(procedureEnvelopeSchema(historyListJobsOutputSchema))
+      .output(historyListJobsOutputSchema)
       .query(async ({ input }) =>
         normalizeListJobs(
           await callKnownHistoryMethod(options, callMethod, 'history.listJobs', input)
         )
       ),
-    listExtensions: rpc
-      .output(procedureEnvelopeSchema(extensionListOutputSchema))
-      .query(() => listExtensions(options)),
+    listExtensions: rpc.output(extensionListOutputSchema).query(() => listExtensions(options)),
     requestSync: observable
       .input(historyRequestSyncInputSchema)
-      .output(procedureEnvelopeSchema(historyRequestSyncOutputSchema))
+      .output(historyRequestSyncOutputSchema)
       .mutation(async ({ input }) =>
         normalizeRequestSync(
           await callKnownHistoryMethod(options, callMethod, 'history.requestSync', input)
@@ -113,11 +110,11 @@ export function createHistoryRouter(options: CreateHistoryRouterOptions) {
       ),
     registerExtension: rpc
       .input(extensionRegistrationInputSchema)
-      .output(procedureEnvelopeSchema(extensionRegistrationOutputSchema))
+      .output(extensionRegistrationOutputSchema)
       .mutation(({ input }) => registerExtension(options, input)),
     upsertTarget: rpc
       .input(historyUpsertTargetInputSchema)
-      .output(procedureEnvelopeSchema(historyTargetMutationOutputSchema))
+      .output(historyTargetMutationOutputSchema)
       .mutation(async ({ input }) =>
         normalizeTargetMutation(
           await callKnownHistoryMethod(options, callMethod, 'history.upsertTarget', input)
@@ -191,6 +188,7 @@ function normalizeListChats(value: unknown): HistoryListChatsOutput {
       const record = requireRecord(chat, 'History chat requires object');
 
       return {
+        _model: 'telegram.chat',
         coverageIntervals: asNonNegativeInteger(record.coverageIntervals),
         coverageNewestAt: toNullableDateText(record.coverageNewestAt),
         coverageOldestAt: toNullableDateText(record.coverageOldestAt),
@@ -239,6 +237,7 @@ function normalizeChatHistoryState(value: unknown): HistoryChatHistoryStateOutpu
       chat === undefined
         ? null
         : {
+            _model: 'telegram.chat',
             historyBeginningReached: chat.historyBeginningReached === true,
             historyStartAt: toNullableDateText(chat.historyStartAt),
             id: asString(chat.id) ?? '',

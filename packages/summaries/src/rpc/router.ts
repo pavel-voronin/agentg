@@ -1,5 +1,3 @@
-import { procedureEnvelopeSchema } from '@agentg/shared/rpc/envelope';
-
 import {
   summariesChatSummaryExtensionInputSchema,
   summariesChatSummaryExtensionOutputSchema,
@@ -24,21 +22,21 @@ export function createSummariesRouter(runtime: SummariesRuntime) {
     summaries: summariesRpcRouter({
       chatSummary: extension
         .input(summariesChatSummaryExtensionInputSchema)
-        .output(procedureEnvelopeSchema(summariesChatSummaryExtensionOutputSchema))
+        .output(summariesChatSummaryExtensionOutputSchema)
         .query(({ input }) =>
           getChatSummaryExtension(runtime, chatIdFromExtensionOutput(input.output))
         ),
       readChatSummary: rpc
         .input(summariesReadChatSummaryInputSchema)
-        .output(procedureEnvelopeSchema(summariesReadChatSummaryOutputSchema))
+        .output(summariesReadChatSummaryOutputSchema)
         .query(({ input }) => readChatSummary(runtime, input.chatId)),
       readSummaryRun: rpc
         .input(summariesReadSummaryRunInputSchema)
-        .output(procedureEnvelopeSchema(summariesReadSummaryRunOutputSchema))
+        .output(summariesReadSummaryRunOutputSchema)
         .query(({ input }) => readSummaryRun(runtime, input.runId)),
       requestSummary: observable
         .input(summariesRequestSummaryInputSchema)
-        .output(procedureEnvelopeSchema(summariesRequestSummaryOutputSchema))
+        .output(summariesRequestSummaryOutputSchema)
         .mutation(({ ctx, input }) => {
           ctx.progress({
             message: 'Creating chat summary',

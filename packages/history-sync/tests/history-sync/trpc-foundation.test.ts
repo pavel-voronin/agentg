@@ -10,16 +10,7 @@ import {
   RPC_CALL_STARTED_EVENT_SUFFIX,
   rpcCallEventType
 } from '@agentg/shared/rpc/call-events';
-import {
-  domainErrorEnvelope,
-  okEnvelope,
-  procedureEnvelopeSchema
-} from '@agentg/shared/rpc/envelope';
-import {
-  createExtensionRegistry,
-  extensionCallInputSchema,
-  type ExtensionCallInput
-} from '@agentg/shared/rpc/extensions';
+import { createExtensionRegistry, extensionCallInputSchema } from '@agentg/shared/rpc/extensions';
 import { createHTTPServer } from '@trpc/server/adapters/standalone';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
@@ -37,19 +28,12 @@ import {
 describe('History tRPC foundation', () => {
   it('performs a package-local tRPC client/server round trip', async () => {
     const testRouter = historyRpcRouter({
-      domainError: rpc.output(procedureEnvelopeSchema(z.object({ value: z.string() }))).query(() =>
-        domainErrorEnvelope({
-          code: 'history.not_found',
-          message: 'History value was not found'
-        })
-      ),
+      domainError: rpc.output(z.object({ value: z.string() })).query(() => {
+        throw new Error('History value was not found');
+      }),
       echo: rpc
         .input(z.object({ value: z.string() }))
-        .output(
-          procedureEnvelopeSchema(
-            z.object({ correlationId: z.string().optional(), value: z.string() })
-          )
-        )
+        .output(z.object({ correlationId: z.string().optional(), value: z.string() }))
         .query(({ ctx, input }) => ({
           ...(ctx.correlationId === undefined ? {} : { correlationId: ctx.correlationId }),
           value: input.value
@@ -73,21 +57,10 @@ describe('History tRPC foundation', () => {
 
     try {
       await expect(client.echo.query({ value: 'history' })).resolves.toEqual({
-        extensions: {},
-        ok: true,
-        result: {
-          correlationId: 'history-stage-1',
-          value: 'history'
-        }
+        correlationId: 'history-stage-1',
+        value: 'history'
       });
-      await expect(client.domainError.query()).resolves.toEqual({
-        error: {
-          code: 'history.not_found',
-          message: 'History value was not found'
-        },
-        extensions: {},
-        ok: false
-      });
+      await expect(client.domainError.query()).rejects.toThrow('History value was not found');
     } finally {
       await closeServer(server);
     }
@@ -98,16 +71,13 @@ describe('History tRPC foundation', () => {
     const caller = historyRpcRouter({
       domainError: observable
         .input(z.object({ value: z.string() }))
-        .output(procedureEnvelopeSchema(z.object({ value: z.string() })))
-        .query(() =>
-          domainErrorEnvelope({
-            code: 'history.denied',
-            message: 'History value was denied'
-          })
-        ),
+        .output(z.object({ value: z.string() }))
+        .query(() => {
+          throw new Error('History value was denied');
+        }),
       echo: observable
         .input(z.object({ value: z.string() }))
-        .output(procedureEnvelopeSchema(z.object({ callId: z.string(), value: z.string() })))
+        .output(z.object({ callId: z.string(), value: z.string() }))
         .query(({ ctx, input }) => {
           ctx.progress({
             step: 'loaded'
@@ -118,20 +88,15 @@ describe('History tRPC foundation', () => {
             value: input.value
           };
         }),
-      throwing: observable
-        .output(procedureEnvelopeSchema(z.object({ value: z.string() })))
-        .query(() => {
-          throw new Error('observable boom');
-        })
+      throwing: observable.output(z.object({ value: z.string() })).query(() => {
+        throw new Error('observable boom');
+      })
     }).createCaller({
       eventBus: createRecordingEventBus(publishedEvents)
     });
 
     await expect(caller.echo({ value: 'ok' })).resolves.toMatchObject({
-      ok: true,
-      result: {
-        value: 'ok'
-      }
+      value: 'ok'
     });
 
     expect(publishedEvents.map((event) => event.type)).toEqual([
@@ -163,10 +128,7 @@ describe('History tRPC foundation', () => {
         data: {
           callId: successCallId,
           output: {
-            ok: true,
-            result: {
-              value: 'ok'
-            }
+            value: 'ok'
           },
           target: 'history.echo'
         }
@@ -175,13 +137,9 @@ describe('History tRPC foundation', () => {
 
     publishedEvents.length = 0;
 
-    await expect(caller.domainError({ value: 'denied' })).resolves.toMatchObject({
-      error: {
-        code: 'history.denied',
-        message: 'History value was denied'
-      },
-      ok: false
-    });
+    await expect(caller.domainError({ value: 'denied' })).rejects.toThrow(
+      'History value was denied'
+    );
 
     expect(publishedEvents.map((event) => event.type)).toEqual([
       rpcCallEventType('history.domainError', RPC_CALL_STARTED_EVENT_SUFFIX),
@@ -192,11 +150,7 @@ describe('History tRPC foundation', () => {
       data: {
         callId: domainErrorCallId,
         error: {
-          code: 'history.denied',
           message: 'History value was denied'
-        },
-        output: {
-          ok: false
         },
         target: 'history.domainError'
       }
@@ -261,10 +215,10 @@ describe('History tRPC foundation', () => {
     expect(registry.list('history.enrichedEcho', new Date('2026-05-02T00:00:01.501Z'))).toEqual([]);
   });
 
-  it('attaches registered extension results to enriched envelopes', async () => {
+  it('leaves direct enriched results unchanged without extension calls', async () => {
     const publishedEvents: IntegrationEvent[] = [];
     const registry = createExtensionRegistry({ ttlMs: 60000 });
-    const extensionCalls: ExtensionCallInput[] = [];
+    const extensionCalls: unknown[] = [];
     registry.register({
       extension: 'bad.failure',
       target: 'history.enrichedEcho'
@@ -281,7 +235,7 @@ describe('History tRPC foundation', () => {
     const caller = historyRpcRouter({
       enrichedEcho: enriched
         .input(z.object({ value: z.string() }))
-        .output(procedureEnvelopeSchema(z.object({ value: z.string() })))
+        .output(z.object({ value: z.string() }))
         .query(({ input }) => ({
           value: input.value
         }))
@@ -293,11 +247,12 @@ describe('History tRPC foundation', () => {
         if (slug === 'summaries') {
           return (_extensionName, input) => {
             extensionCalls.push(input);
-            return Promise.resolve(
-              okEnvelope({
+            return Promise.resolve({
+              ok: true,
+              result: {
                 summary: `summary:${(input.output as { value: string }).value}`
-              })
-            );
+              }
+            });
           };
         }
 
@@ -316,45 +271,10 @@ describe('History tRPC foundation', () => {
     });
 
     await expect(caller.enrichedEcho({ value: 'chat-a' })).resolves.toMatchObject({
-      extensions: {
-        'bad.failure': {
-          error: {
-            code: 'extension_failed',
-            message: 'extension failed'
-          },
-          ok: false
-        },
-        'slow.timeout': {
-          error: {
-            code: 'extension_timeout'
-          },
-          ok: false
-        },
-        'summaries.chatSummary': {
-          ok: true,
-          result: {
-            summary: 'summary:chat-a'
-          }
-        }
-      },
-      ok: true,
-      result: {
-        value: 'chat-a'
-      }
+      value: 'chat-a'
     });
 
-    expect(extensionCalls).toEqual([
-      {
-        callId: expect.any(String) as string,
-        input: {
-          value: 'chat-a'
-        },
-        output: {
-          value: 'chat-a'
-        },
-        target: 'history.enrichedEcho'
-      }
-    ]);
+    expect(extensionCalls).toEqual([]);
     expect(publishedEvents.map((event) => event.type)).toEqual([
       rpcCallEventType('history.enrichedEcho', RPC_CALL_STARTED_EVENT_SUFFIX),
       rpcCallEventType('history.enrichedEcho', RPC_CALL_COMPLETED_EVENT_SUFFIX)
@@ -362,12 +282,7 @@ describe('History tRPC foundation', () => {
     expect(publishedEvents[1]).toMatchObject({
       data: {
         output: {
-          extensions: {
-            'summaries.chatSummary': {
-              ok: true
-            }
-          },
-          ok: true
+          value: 'chat-a'
         },
         target: 'history.enrichedEcho'
       }
@@ -378,7 +293,7 @@ describe('History tRPC foundation', () => {
     const caller = historyRpcRouter({
       chatSummary: extension
         .input(extensionCallInputSchema)
-        .output(procedureEnvelopeSchema(z.object({ summary: z.string() })))
+        .output(z.object({ summary: z.string() }))
         .query(({ input }) => ({
           summary: `${input.target}:${(input.output as { value: string }).value}`
         }))
@@ -393,11 +308,7 @@ describe('History tRPC foundation', () => {
         target: 'history.enrichedEcho'
       })
     ).resolves.toEqual({
-      extensions: {},
-      ok: true,
-      result: {
-        summary: 'history.enrichedEcho:chat-a'
-      }
+      summary: 'history.enrichedEcho:chat-a'
     });
   });
 });

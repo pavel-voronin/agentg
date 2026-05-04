@@ -1,6 +1,5 @@
 import type { TelegramDatabase as AppDatabase } from '../database.js';
 import { telegramChatFolders, telegramChats, telegramMessages, telegramUsers } from '../schema.js';
-import { procedureEnvelopeSchema } from '@agentg/shared/rpc/envelope';
 import {
   extensionListOutputSchema,
   extensionRegistrationInputSchema,
@@ -28,6 +27,7 @@ const nonNegativeIntegerSchema = z.number().int().nonnegative();
 const positiveIntegerSchema = z.number().int().positive();
 
 export const telegramHistoryChatSchema = z.object({
+  _model: z.literal('telegram.chat'),
   id: z.string(),
   title: z.string(),
   type: z.string()
@@ -70,6 +70,7 @@ export const telegramHistoryFetchPageResultSchema = z.discriminatedUnion('kind',
 ]);
 
 export const telegramReadChatSchema = z.object({
+  _model: z.literal('telegram.chat'),
   id: z.string(),
   title: z.string(),
   type: z.string(),
@@ -281,46 +282,44 @@ export function createTelegramHistoryRouter(runtime: TelegramHistoryRouterRuntim
   return telegramRpcRouter({
     countMessagesInIntervals: rpc
       .input(telegramCountMessagesInIntervalsInputSchema)
-      .output(procedureEnvelopeSchema(telegramCountMessagesInIntervalsOutputSchema))
+      .output(telegramCountMessagesInIntervalsOutputSchema)
       .query(({ input }) => handleCountMessagesInIntervals(runtime, input)),
     fetchPage: observable
       .input(telegramHistoryFetchPageInputSchema)
-      .output(procedureEnvelopeSchema(telegramHistoryFetchPageResultSchema))
+      .output(telegramHistoryFetchPageResultSchema)
       .mutation(({ input }) => handleFetchPage(runtime, input)),
     getChat: enriched
       .input(telegramGetChatInputSchema)
-      .output(procedureEnvelopeSchema(telegramGetChatOutputSchema))
+      .output(telegramGetChatOutputSchema)
       .query(({ input }) => handleGetChat(runtime, input)),
     getChatHistoryFacts: rpc
       .input(telegramGetChatHistoryFactsInputSchema)
-      .output(procedureEnvelopeSchema(telegramGetChatHistoryFactsOutputSchema))
+      .output(telegramGetChatHistoryFactsOutputSchema)
       .query(({ input }) => handleGetChatHistoryFacts(runtime, input)),
     getMessage: rpc
       .input(telegramGetMessageInputSchema)
-      .output(procedureEnvelopeSchema(telegramGetMessageOutputSchema))
+      .output(telegramGetMessageOutputSchema)
       .query(({ input }) => handleGetMessage(runtime, input)),
     listChatDirectory: rpc
       .input(telegramListChatDirectoryInputSchema)
-      .output(procedureEnvelopeSchema(telegramListChatDirectoryOutputSchema))
+      .output(telegramListChatDirectoryOutputSchema)
       .query(({ input }) => handleListChatDirectory(runtime, input)),
     listChats: rpc
       .input(telegramHistoryListChatsInputSchema)
-      .output(procedureEnvelopeSchema(z.array(telegramHistoryChatSchema)))
+      .output(z.array(telegramHistoryChatSchema))
       .query(({ input }) => handleListChats(runtime, input)),
     listRecentMessages: rpc
       .input(telegramListRecentMessagesInputSchema)
-      .output(procedureEnvelopeSchema(telegramListRecentMessagesOutputSchema))
+      .output(telegramListRecentMessagesOutputSchema)
       .query(({ input }) => handleListRecentMessages(runtime, input)),
-    listExtensions: rpc
-      .output(procedureEnvelopeSchema(extensionListOutputSchema))
-      .query(() => listExtensions(runtime)),
+    listExtensions: rpc.output(extensionListOutputSchema).query(() => listExtensions(runtime)),
     registerExtension: rpc
       .input(extensionRegistrationInputSchema)
-      .output(procedureEnvelopeSchema(extensionRegistrationOutputSchema))
+      .output(extensionRegistrationOutputSchema)
       .mutation(({ input }) => registerExtension(runtime, input)),
     searchMessages: rpc
       .input(telegramSearchMessagesInputSchema)
-      .output(procedureEnvelopeSchema(telegramSearchMessagesOutputSchema))
+      .output(telegramSearchMessagesOutputSchema)
       .query(({ input }) => handleSearchMessages(runtime, input))
   });
 }
@@ -375,6 +374,7 @@ async function handleGetChat(
       chat === undefined
         ? null
         : {
+            _model: 'telegram.chat',
             id: chat.telegramChatId,
             title: chat.title,
             type: chat.type,
@@ -719,6 +719,7 @@ async function discoverHistoryChats(
     await upsertChat(database, normalized);
     if (isHistorySyncChatType(normalized.type)) {
       chats.push({
+        _model: 'telegram.chat',
         id: normalized.id,
         title: normalized.title,
         type: normalized.type
@@ -743,6 +744,7 @@ async function listKnownHistoryChats(database: AppDatabase): Promise<TelegramHis
   return rows
     .filter((row) => isHistorySyncChatType(row.type))
     .map((row) => ({
+      _model: 'telegram.chat',
       id: row.id,
       title: row.title,
       type: row.type
@@ -995,6 +997,7 @@ function toDirectoryEntry(
   user: TelegramUserInfo | undefined
 ): TelegramChatDirectoryEntry {
   return {
+    _model: 'telegram.chat',
     id: chat.telegramChatId,
     isBot: user?.isBot === true,
     isSelf: user?.isSelf === true,

@@ -77,7 +77,7 @@ function unwrapCapabilityResponse(response: unknown): unknown {
     throw new ProcedureDomainError(response.error);
   }
 
-  throw new Error('Capability RPC response must use AgenTG response envelope');
+  return response;
 }
 
 async function withTimeout<T>(

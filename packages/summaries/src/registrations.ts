@@ -13,7 +13,6 @@ import type {
 } from '@agentg/shared/rpc/extensions';
 import { createTRPCClient, httpBatchLink } from '@trpc/client';
 import type { HistoryRouter } from '@agentg/history-sync/rpc';
-import { unwrapProcedureEnvelope } from '@agentg/shared/rpc/envelope';
 import { WebSocket, type RawData } from 'ws';
 
 type JsonRpcResponse = {
@@ -50,7 +49,7 @@ export async function registerSummariesExtensions(
 
   return registerModuleExtensions(config, {
     async registerExtension(input: ExtensionRegistrationInput) {
-      return unwrapProcedureEnvelope(await client.registerExtension.mutate(input));
+      return client.registerExtension.mutate(input);
     }
   });
 }

@@ -1,6 +1,5 @@
 import type { Server } from 'node:http';
 
-import { procedureEnvelopeSchema } from '@agentg/shared/rpc/envelope';
 import {
   telegramGetChatInputSchema,
   telegramGetChatOutputSchema,
@@ -38,11 +37,12 @@ describe('createTrpcGatewayTelegramClient', () => {
       router: telegramRpcRouter({
         getChat: rpc
           .input(telegramGetChatInputSchema)
-          .output(procedureEnvelopeSchema(telegramGetChatOutputSchema))
+          .output(telegramGetChatOutputSchema)
           .query(({ input }) => {
             calls.push({ method: 'getChat', params: input });
             return {
               chat: {
+                _model: 'telegram.chat',
                 id: input.chatId,
                 title: 'Saved Messages',
                 type: 'private',
@@ -52,7 +52,7 @@ describe('createTrpcGatewayTelegramClient', () => {
           }),
         getMessage: rpc
           .input(telegramGetMessageInputSchema)
-          .output(procedureEnvelopeSchema(telegramGetMessageOutputSchema))
+          .output(telegramGetMessageOutputSchema)
           .query(({ input }) => {
             calls.push({ method: 'getMessage', params: input });
             return {
@@ -61,7 +61,7 @@ describe('createTrpcGatewayTelegramClient', () => {
           }),
         listRecentMessages: rpc
           .input(telegramListRecentMessagesInputSchema)
-          .output(procedureEnvelopeSchema(telegramListRecentMessagesOutputSchema))
+          .output(telegramListRecentMessagesOutputSchema)
           .query(({ input }) => {
             calls.push({ method: 'listRecentMessages', params: input });
             return {
@@ -70,7 +70,7 @@ describe('createTrpcGatewayTelegramClient', () => {
           }),
         searchMessages: rpc
           .input(telegramSearchMessagesInputSchema)
-          .output(procedureEnvelopeSchema(telegramSearchMessagesOutputSchema))
+          .output(telegramSearchMessagesOutputSchema)
           .query(({ input }) => {
             calls.push({ method: 'searchMessages', params: input });
             return {
@@ -87,6 +87,7 @@ describe('createTrpcGatewayTelegramClient', () => {
     try {
       await expect(client.call('telegram.getChat', { chatId: 'chat-a' })).resolves.toEqual({
         chat: {
+          _model: 'telegram.chat',
           id: 'chat-a',
           title: 'Saved Messages',
           type: 'private',

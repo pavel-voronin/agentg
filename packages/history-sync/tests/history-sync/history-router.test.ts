@@ -51,22 +51,18 @@ describe('createHistoryRouter', () => {
     }).createCaller({});
 
     await expect(caller.getOverview(undefined)).resolves.toEqual({
-      extensions: {},
-      ok: true,
-      result: {
-        activeJob: {
-          chatId: 'chat-a',
-          endAt: '2026-04-30T02:00:00.000Z',
-          startAt: '2026-04-30T01:00:00.000Z',
-          status: 'running'
-        },
-        chats: 1,
-        coverageIntervals: 2,
-        pendingJobs: 0,
-        runningJobs: 1,
-        targets: 1,
-        templates: 1
-      }
+      activeJob: {
+        chatId: 'chat-a',
+        endAt: '2026-04-30T02:00:00.000Z',
+        startAt: '2026-04-30T01:00:00.000Z',
+        status: 'running'
+      },
+      chats: 1,
+      coverageIntervals: 2,
+      pendingJobs: 0,
+      runningJobs: 1,
+      targets: 1,
+      templates: 1
     });
 
     await expect(
@@ -75,20 +71,16 @@ describe('createHistoryRouter', () => {
         preset: 'last7d'
       })
     ).resolves.toEqual({
-      extensions: {},
-      ok: true,
-      result: {
-        deleted: false,
-        target: {
-          chatId: 'chat-a',
-          id: 'target-a',
-          range: {
-            end: { expression: 'now', kind: 'expression' },
-            start: { expression: 'now-7d', kind: 'expression' }
-          }
-        },
-        upserted: true
-      }
+      deleted: false,
+      target: {
+        chatId: 'chat-a',
+        id: 'target-a',
+        range: {
+          end: { expression: 'now', kind: 'expression' },
+          start: { expression: 'now-7d', kind: 'expression' }
+        }
+      },
+      upserted: true
     });
 
     expect(calls).toEqual([
@@ -112,13 +104,10 @@ describe('createHistoryRouter', () => {
         target: 'history.getChatHistoryState'
       })
     ).resolves.toMatchObject({
-      ok: true,
-      result: {
-        extension: 'summaries.chatSummary',
-        refreshed: false,
-        registered: true,
-        target: 'history.getChatHistoryState'
-      }
+      extension: 'summaries.chatSummary',
+      refreshed: false,
+      registered: true,
+      target: 'history.getChatHistoryState'
     });
 
     await expect(
@@ -127,28 +116,22 @@ describe('createHistoryRouter', () => {
         target: 'history.getChatHistoryState'
       })
     ).resolves.toMatchObject({
-      ok: true,
-      result: {
-        extension: 'summaries.chatSummary',
-        refreshed: true,
-        registered: false,
-        target: 'history.getChatHistoryState'
-      }
+      extension: 'summaries.chatSummary',
+      refreshed: true,
+      registered: false,
+      target: 'history.getChatHistoryState'
     });
 
     expect(extensionRegistry.list('history.getChatHistoryState')).toHaveLength(1);
 
     await expect(caller.listExtensions()).resolves.toMatchObject({
-      ok: true,
-      result: {
-        extensions: [
-          {
-            extension: 'summaries.chatSummary',
-            slug: 'summaries',
-            target: 'history.getChatHistoryState'
-          }
-        ]
-      }
+      extensions: [
+        {
+          extension: 'summaries.chatSummary',
+          slug: 'summaries',
+          target: 'history.getChatHistoryState'
+        }
+      ]
     });
   });
 });

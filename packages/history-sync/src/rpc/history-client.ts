@@ -1,5 +1,4 @@
 import { createTRPCClient, httpBatchLink, type TRPCClient } from '@trpc/client';
-import { unwrapProcedureEnvelope } from '@agentg/shared/rpc/envelope';
 
 import type { InternalTrpcClientConfig } from './config.js';
 import {
@@ -57,38 +56,23 @@ async function callHistoryJsonRpcMethod(
 ): Promise<unknown> {
   switch (method) {
     case 'history.deleteTarget':
-      return unwrapProcedureEnvelope(
-        await client.deleteTarget.mutate(historyDeleteTargetInputSchema.parse(params), { signal })
-      );
+      return client.deleteTarget.mutate(historyDeleteTargetInputSchema.parse(params), { signal });
     case 'history.getChatHistoryState':
-      return unwrapProcedureEnvelope(
-        await client.getChatHistoryState.query(
-          historyGetChatHistoryStateInputSchema.parse(params),
-          {
-            signal
-          }
-        )
-      );
+      return client.getChatHistoryState.query(historyGetChatHistoryStateInputSchema.parse(params), {
+        signal
+      });
     case 'history.getOverview':
-      return unwrapProcedureEnvelope(await client.getOverview.query(undefined, { signal }));
+      return client.getOverview.query(undefined, { signal });
     case 'history.listChats':
-      return unwrapProcedureEnvelope(
-        await client.listChats.query(historyListChatsInputSchema.parse(params ?? {}), { signal })
-      );
+      return client.listChats.query(historyListChatsInputSchema.parse(params ?? {}), { signal });
     case 'history.listJobs':
-      return unwrapProcedureEnvelope(
-        await client.listJobs.query(historyListJobsInputSchema.parse(params ?? {}), { signal })
-      );
+      return client.listJobs.query(historyListJobsInputSchema.parse(params ?? {}), { signal });
     case 'history.requestSync':
-      return unwrapProcedureEnvelope(
-        await client.requestSync.mutate(historyRequestSyncInputSchema.parse(params ?? {}), {
-          signal
-        })
-      );
+      return client.requestSync.mutate(historyRequestSyncInputSchema.parse(params ?? {}), {
+        signal
+      });
     case 'history.upsertTarget':
-      return unwrapProcedureEnvelope(
-        await client.upsertTarget.mutate(historyUpsertTargetInputSchema.parse(params), { signal })
-      );
+      return client.upsertTarget.mutate(historyUpsertTargetInputSchema.parse(params), { signal });
     default:
       return undefined;
   }

@@ -1,6 +1,5 @@
 import type { Server } from 'node:http';
 
-import { procedureEnvelopeSchema } from '@agentg/shared/rpc/envelope';
 import {
   telegramHistoryChatSchema,
   telegramHistoryFetchPageInputSchema,
@@ -20,7 +19,7 @@ describe('createTrpcTelegramHistoryClient', () => {
     const router = telegramRpcRouter({
       fetchPage: rpc
         .input(telegramHistoryFetchPageInputSchema)
-        .output(procedureEnvelopeSchema(telegramHistoryFetchPageResultSchema))
+        .output(telegramHistoryFetchPageResultSchema)
         .mutation(({ input }) => ({
           crossedStart: false,
           fetchedMessages: 2,
@@ -32,9 +31,10 @@ describe('createTrpcTelegramHistoryClient', () => {
         })),
       listChats: rpc
         .input(telegramHistoryListChatsInputSchema)
-        .output(procedureEnvelopeSchema(z.array(telegramHistoryChatSchema)))
+        .output(z.array(telegramHistoryChatSchema))
         .query(({ input }) => [
           {
+            _model: 'telegram.chat',
             id: input.discover === true ? 'chat-discovered' : 'chat-known',
             title: 'Saved Messages',
             type: 'private'
@@ -50,6 +50,7 @@ describe('createTrpcTelegramHistoryClient', () => {
     try {
       await expect(client.listChats({ discover: true })).resolves.toEqual([
         {
+          _model: 'telegram.chat',
           id: 'chat-discovered',
           title: 'Saved Messages',
           type: 'private'

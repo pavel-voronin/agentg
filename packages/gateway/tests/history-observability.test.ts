@@ -1,6 +1,5 @@
 import type { Server } from 'node:http';
 
-import { procedureEnvelopeSchema } from '@agentg/shared/rpc/envelope';
 import {
   historyChatHistoryStateOutputSchema,
   historyDeleteTargetInputSchema,
@@ -30,18 +29,19 @@ describe('createTrpcGatewayHistoryClient', () => {
       router: historyRpcRouter({
         deleteTarget: rpc
           .input(historyDeleteTargetInputSchema)
-          .output(procedureEnvelopeSchema(historyTargetMutationOutputSchema))
+          .output(historyTargetMutationOutputSchema)
           .mutation(({ input }) => {
             calls.push({ method: 'deleteTarget', params: input });
             return { deleted: true, target: undefined, upserted: false };
           }),
         getChatHistoryState: rpc
           .input(historyGetChatHistoryStateInputSchema)
-          .output(procedureEnvelopeSchema(historyChatHistoryStateOutputSchema))
+          .output(historyChatHistoryStateOutputSchema)
           .query(({ input }) => {
             calls.push({ method: 'getChatHistoryState', params: input });
             return {
               chat: {
+                _model: 'telegram.chat',
                 historyBeginningReached: false,
                 historyStartAt: null,
                 id: input.chatId,
@@ -60,7 +60,7 @@ describe('createTrpcGatewayHistoryClient', () => {
           }),
         getOverview: rpc
           .input(historyGetOverviewInputSchema)
-          .output(procedureEnvelopeSchema(historyOverviewOutputSchema))
+          .output(historyOverviewOutputSchema)
           .query(() => {
             calls.push({ method: 'getOverview', params: undefined });
             return {
@@ -75,12 +75,13 @@ describe('createTrpcGatewayHistoryClient', () => {
           }),
         listChats: rpc
           .input(historyListChatsInputSchema)
-          .output(procedureEnvelopeSchema(historyListChatsOutputSchema))
+          .output(historyListChatsOutputSchema)
           .query(({ input }) => {
             calls.push({ method: 'listChats', params: input });
             return {
               chats: [
                 {
+                  _model: 'telegram.chat',
                   coverageIntervals: 1,
                   coverageNewestAt: null,
                   coverageOldestAt: null,
@@ -104,21 +105,21 @@ describe('createTrpcGatewayHistoryClient', () => {
           }),
         listJobs: rpc
           .input(historyListJobsInputSchema)
-          .output(procedureEnvelopeSchema(historyListJobsOutputSchema))
+          .output(historyListJobsOutputSchema)
           .query(({ input }) => {
             calls.push({ method: 'listJobs', params: input });
             return { jobs: [] };
           }),
         requestSync: rpc
           .input(historyRequestSyncInputSchema)
-          .output(procedureEnvelopeSchema(historyRequestSyncOutputSchema))
+          .output(historyRequestSyncOutputSchema)
           .mutation(({ input }) => {
             calls.push({ method: 'requestSync', params: input });
             return { requested: true };
           }),
         upsertTarget: rpc
           .input(historyUpsertTargetInputSchema)
-          .output(procedureEnvelopeSchema(historyTargetMutationOutputSchema))
+          .output(historyTargetMutationOutputSchema)
           .mutation(({ input }) => {
             calls.push({ method: 'upsertTarget', params: input });
             return {

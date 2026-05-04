@@ -1,5 +1,4 @@
 import { createTRPCClient, httpBatchLink, type TRPCClient } from '@trpc/client';
-import { unwrapProcedureEnvelope } from '@agentg/shared/rpc/envelope';
 import {
   telegramGetChatInputSchema,
   telegramGetMessageInputSchema,
@@ -54,26 +53,18 @@ async function callTelegramJsonRpcMethod(
 ): Promise<unknown> {
   switch (method) {
     case 'telegram.getChat':
-      return unwrapProcedureEnvelope(
-        await client.getChat.query(telegramGetChatInputSchema.parse(params), { signal })
-      );
+      return client.getChat.query(telegramGetChatInputSchema.parse(params), { signal });
     case 'telegram.getMessage':
-      return unwrapProcedureEnvelope(
-        await client.getMessage.query(telegramGetMessageInputSchema.parse(params), { signal })
-      );
+      return client.getMessage.query(telegramGetMessageInputSchema.parse(params), { signal });
     case 'telegram.listRecentMessages':
-      return unwrapProcedureEnvelope(
-        await client.listRecentMessages.query(
-          telegramListRecentMessagesInputSchema.parse(params ?? {}),
-          { signal }
-        )
+      return client.listRecentMessages.query(
+        telegramListRecentMessagesInputSchema.parse(params ?? {}),
+        { signal }
       );
     case 'telegram.searchMessages':
-      return unwrapProcedureEnvelope(
-        await client.searchMessages.query(telegramSearchMessagesInputSchema.parse(params), {
-          signal
-        })
-      );
+      return client.searchMessages.query(telegramSearchMessagesInputSchema.parse(params), {
+        signal
+      });
     default:
       return undefined;
   }

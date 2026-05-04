@@ -30,11 +30,13 @@ At the end of this stage, commit all changes with a conventional commit message.
   models and already expose `id`.
 - Keep domain fields such as `type: 'supergroup'` unchanged.
 - Convert generic domain error envelopes to tRPC errors.
+- Stop relying on `enriched` for converted procedures because direct result
+  bodies have no extension envelope to fill.
 
 ## Explicit Non-Scope
 
-- Do not remove `enriched` execution in this stage unless it blocks direct
-  results; Stage 4 owns that cleanup.
+- Do not delete the old `enriched` helper implementation in this stage; Stage 4
+  owns full cleanup of unused extension execution code.
 - Do not move Summaries registration to the new registry yet.
 - Do not introduce envelope `meta`, nested `modelRef`, or registration `kind`.
 - Do not redesign Gateway or Control Plane public protocols beyond adapting to

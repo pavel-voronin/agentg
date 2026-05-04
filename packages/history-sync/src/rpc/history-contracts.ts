@@ -103,6 +103,7 @@ export const historyOverviewOutputSchema = z.object({
 });
 
 export const historyChatOutputSchema = z.object({
+  _model: z.literal('telegram.chat'),
   coverageIntervals: nonNegativeIntegerSchema,
   coverageNewestAt: z.string().nullable(),
   coverageOldestAt: z.string().nullable(),
@@ -142,6 +143,7 @@ export const historyListChatsOutputSchema = z.object({
 });
 
 export const historySelectedChatOutputSchema = z.object({
+  _model: z.literal('telegram.chat'),
   historyBeginningReached: z.boolean(),
   historyStartAt: z.string().nullable(),
   id: z.string(),

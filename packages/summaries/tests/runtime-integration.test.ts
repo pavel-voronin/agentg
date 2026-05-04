@@ -95,7 +95,7 @@ describe('summaries runtime integration', () => {
     }
   });
 
-  it('enriches a History target with summaries.chatSummary', async () => {
+  it('keeps History output direct when summaries.chatSummary is registered', async () => {
     const eventBus = createFakeEventBus();
     const runtime = createTestRuntime(eventBus);
     const summariesServer = await startSummariesHttp(runtime, eventBus);
@@ -128,6 +128,7 @@ describe('summaries runtime integration', () => {
           method === 'history.getChatHistoryState'
             ? {
                 chat: {
+                  _model: 'telegram.chat',
                   historyBeginningReached: false,
                   historyStartAt: null,
                   id: 'chat-a',
@@ -154,22 +155,9 @@ describe('summaries runtime integration', () => {
     });
 
     await expect(historyCaller.getChatHistoryState({ chatId: 'chat-a' })).resolves.toMatchObject({
-      ok: true,
-      extensions: {
-        'summaries.chatSummary': {
-          ok: true,
-          result: {
-            stale: false,
-            summary: {
-              chatId: 'chat-a'
-            }
-          }
-        }
-      },
-      result: {
-        chat: {
-          id: 'chat-a'
-        }
+      chat: {
+        _model: 'telegram.chat',
+        id: 'chat-a'
       }
     });
   });

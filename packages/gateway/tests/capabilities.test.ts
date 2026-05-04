@@ -2,7 +2,6 @@ import type { Server } from 'node:http';
 import { randomUUID } from 'node:crypto';
 
 import type { EventBus, EventSubscription } from '@agentg/shared/events/bus';
-import { procedureEnvelopeSchema } from '@agentg/shared/rpc/envelope';
 import { historyRpcRouter, rpc } from '@agentg/history-sync/rpc';
 import { createHTTPServer } from '@trpc/server/adapters/standalone';
 import { WebSocket, type RawData } from 'ws';
@@ -83,7 +82,7 @@ describe('Agent Gateway capabilities', () => {
       router: historyRpcRouter({
         summarizeChat: rpc
           .input(z.object({ chatId: z.string() }))
-          .output(procedureEnvelopeSchema(z.object({ summary: z.string() })))
+          .output(z.object({ summary: z.string() }))
           .query(({ input }) => {
             calls.push(input);
             return {

@@ -221,6 +221,7 @@ async function listHistoryChats(runtime: HistoryRuntime, params: unknown): Promi
       const jobCounts = countBy(chatJobs, (job) => job.status);
 
       return {
+        _model: 'telegram.chat',
         coverageIntervals: chatCoverage.length,
         coverageNewestAt: maxOptionalDate(chatCoverage.map((interval) => interval.endAt)),
         coverageOldestAt: minOptionalDate(chatCoverage.map((interval) => interval.startAt)),
@@ -312,6 +313,7 @@ async function getChatHistoryState(runtime: HistoryRuntime, params: unknown): Pr
 
   return {
     chat: {
+      _model: 'telegram.chat',
       historyBeginningReached,
       historyStartAt: historyStartAt?.toISOString() ?? null,
       id: chat.id,
