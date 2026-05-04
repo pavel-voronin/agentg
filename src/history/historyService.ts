@@ -198,6 +198,19 @@ export function createHistoryService(dependencies: HistoryServiceDependencies): 
         throw new Error(`Unknown history target: ${targetId}`);
       }
 
+      void dependencies.eventBus.publish(
+        createAppEvent({
+          data: {
+            target
+          },
+          meta: {
+            chatId: target.chatId,
+            targetId: target.id
+          },
+          source: 'history',
+          type: 'history.target.deleted'
+        })
+      );
       controller?.request('target-deleted');
       return {
         deleted: true,
@@ -348,6 +361,19 @@ export function createHistoryService(dependencies: HistoryServiceDependencies): 
         range
       });
 
+      void dependencies.eventBus.publish(
+        createAppEvent({
+          data: {
+            target
+          },
+          meta: {
+            chatId: target.chatId,
+            targetId: target.id
+          },
+          source: 'history',
+          type: 'history.target.upserted'
+        })
+      );
       controller?.request('target-updated');
       return {
         target,

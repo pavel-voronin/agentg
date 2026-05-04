@@ -5,6 +5,8 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { createApp } from '../src/app/createApp.js';
+import type { EventBus } from '../src/bus/eventBus.js';
+import type { AppEvent } from '../src/bus/events.js';
 
 describe('summaries plugin', () => {
   it('loads in-process and uses direct app services', async () => {
@@ -56,8 +58,41 @@ describe('summaries plugin', () => {
       ]);
       expect(result.summary.summary).toContain('1 source message');
       expect(app.plugins.summaries.readChatSummary('7').invalidation).toBeNull();
+
+      app.repositories.history.addCoverage({
+        chatId: '7',
+        endAt: new Date('2024-01-01T00:01:00.000Z'),
+        source: 'backfill',
+        startAt: new Date('2024-01-01T00:00:00.000Z')
+      });
+      const invalidatedByTarget = waitForEvent(app.eventBus, 'summaries.summary.invalidated');
+      app.services.history.upsertTarget({
+        chatId: '7',
+        end: '2024-01-01T00:01:00.000Z',
+        start: '2024-01-01T00:00:00.000Z'
+      });
+
+      await invalidatedByTarget;
+      expect(app.plugins.summaries.readChatSummary('7').invalidation).toMatchObject({
+        chatId: '7',
+        reason: 'history-state-changed'
+      });
     } finally {
       await app.stop();
     }
   });
 });
+
+function waitForEvent(eventBus: EventBus, type: string): Promise<AppEvent> {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      subscription.unsubscribe();
+      reject(new Error(`Timed out waiting for ${type}`));
+    }, 2000);
+    const subscription = eventBus.subscribe(type, (event) => {
+      clearTimeout(timeout);
+      subscription.unsubscribe();
+      resolve(event);
+    });
+  });
+}

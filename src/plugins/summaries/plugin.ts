@@ -87,6 +87,12 @@ export function createSummariesPlugin(options: SummariesPluginOptions): Summarie
         ),
         pluginContext.eventBus.subscribe('history.coverage.changed', (event) =>
           handleSummariesEvent(options.repository, pluginContext, event)
+        ),
+        pluginContext.eventBus.subscribe('history.target.deleted', (event) =>
+          handleSummariesEvent(options.repository, pluginContext, event)
+        ),
+        pluginContext.eventBus.subscribe('history.target.upserted', (event) =>
+          handleSummariesEvent(options.repository, pluginContext, event)
         )
       ];
     },
@@ -141,6 +147,8 @@ function invalidationReason(eventType: string): string | undefined {
     case 'telegram.message.deleted':
       return 'telegram-message-changed';
     case 'history.coverage.changed':
+    case 'history.target.deleted':
+    case 'history.target.upserted':
       return 'history-state-changed';
     default:
       return undefined;
@@ -160,6 +168,11 @@ function chatIdFromEvent(event: AppEvent): string | undefined {
   const deleted = readRecord(event.data.delete);
   if (typeof deleted?.chatId === 'string') {
     return deleted.chatId;
+  }
+
+  const target = readRecord(event.data.target);
+  if (typeof target?.chatId === 'string') {
+    return target.chatId;
   }
 
   return typeof event.data.chatId === 'string' ? event.data.chatId : undefined;
