@@ -1,6 +1,7 @@
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { CONTROL_PLANE_STORAGE_KEYS } from '../src/stores/controlPlaneStorage.js';
 import { useEventsStore } from '../src/stores/events.js';
 import type { ControlPlaneEvent } from '../src/stores/controlPlaneTypes.js';
 
@@ -111,6 +112,33 @@ describe('events store', () => {
     store.clearEventsOfType('telegram.status');
 
     expect(store.events.map((item) => item.type)).toEqual(['history.sync.started']);
+  });
+
+  it('persists positive event limits without an upper cap and trims current events', () => {
+    const store = useEventsStore();
+    const storage = localStorage as Storage & {
+      setItem: ReturnType<typeof vi.fn>;
+    };
+
+    store.setEvents([
+      event('history.sync.failed'),
+      event('history.sync.completed'),
+      event('history.sync.started')
+    ]);
+
+    store.setEventLimit(2);
+
+    expect(store.eventLimit).toBe(2);
+    expect(storage.setItem).toHaveBeenCalledWith(CONTROL_PLANE_STORAGE_KEYS.eventLimit, '2');
+    expect(store.events.map((item) => item.type)).toEqual([
+      'history.sync.failed',
+      'history.sync.completed'
+    ]);
+
+    store.setEventLimit(2501);
+
+    expect(store.eventLimit).toBe(2501);
+    expect(storage.setItem).toHaveBeenCalledWith(CONTROL_PLANE_STORAGE_KEYS.eventLimit, '2501');
   });
 });
 

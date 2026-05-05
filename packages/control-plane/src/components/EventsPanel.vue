@@ -1,20 +1,28 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 
-import type { AppEventItem, EventFiltersPanelView } from '../stores/controlPlaneTypes.js';
+import type {
+  AppEventItem,
+  EventFiltersPanelView,
+  EventsPanelMode
+} from '../stores/controlPlaneTypes.js';
 import UiButton from '../ui/UiButton.vue';
 import EventFilters from './EventFilters.vue';
+import EventSettings from './EventSettings.vue';
 import EventsList from './EventsList.vue';
 
 const props = defineProps<{
   clearButtonId?: string;
   eventFiltersId: string;
   eventListId: string;
+  eventLimit: number;
+  eventSettingsId: string;
   events: AppEventItem[];
   filtersToggleId?: string;
-  filtersVisible: boolean;
   hasEvents: boolean;
+  mode: EventsPanelMode;
   panelId: string;
+  settingsToggleId?: string;
   streamPaused: boolean;
   streamToggleId?: string;
   view: EventFiltersPanelView;
@@ -24,13 +32,20 @@ const emit = defineEmits<{
   clear: [];
   clearType: [type: string];
   closeFilters: [];
+  closeSettings: [];
+  eventLimitChange: [value: number];
   filtersToggle: [];
   muteChange: [type: string, muted: boolean];
+  settingsToggle: [];
   streamToggle: [];
   typeChange: [type: string, enabled: boolean];
 }>();
 
-const eventFilterToggleVariant = computed(() => (props.filtersVisible ? 'selected' : 'neutral'));
+const eventsVisible = computed(() => props.mode === 'events');
+const filtersVisible = computed(() => props.mode === 'filters');
+const settingsVisible = computed(() => props.mode === 'settings');
+const eventFilterToggleVariant = computed(() => (filtersVisible.value ? 'selected' : 'neutral'));
+const eventSettingsToggleVariant = computed(() => (settingsVisible.value ? 'selected' : 'neutral'));
 const eventStreamToggleLabel = computed(() =>
   props.streamPaused ? 'Resume event stream' : 'Pause event stream'
 );
@@ -110,11 +125,59 @@ const eventStreamDotClass = computed(() => (props.streamPaused ? 'bg-[#9CA3AF]' 
             {{ view.enabledCount }}
           </span>
         </UiButton>
-        <UiButton :id="clearButtonId" @click="emit('clear')"> Clear </UiButton>
+        <UiButton
+          :id="clearButtonId"
+          aria-label="Clear events"
+          size="icon-md"
+          title="Clear events"
+          @click="emit('clear')"
+        >
+          <svg
+            class="h-4 w-4"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="m15 4 5 5" />
+            <path d="m14 5 5 5" />
+            <path d="m7 12 5 5" />
+            <path d="m5 14 5 5" />
+            <path d="M4 20h11" />
+            <path d="m11 8-5 5 5 5 5-5" />
+          </svg>
+        </UiButton>
+        <UiButton
+          :id="settingsToggleId"
+          aria-label="Event settings"
+          size="icon-md"
+          title="Event settings"
+          :variant="eventSettingsToggleVariant"
+          @click="emit('settingsToggle')"
+        >
+          <svg
+            class="h-4 w-4"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path
+              d="M9.67 4.14a2.34 2.34 0 0 1 4.66 0 2.34 2.34 0 0 0 3.32 1.91 2.34 2.34 0 0 1 2.33 4.03 2.34 2.34 0 0 0 0 3.84 2.34 2.34 0 0 1-2.33 4.03 2.34 2.34 0 0 0-3.32 1.91 2.34 2.34 0 0 1-4.66 0 2.34 2.34 0 0 0-3.32-1.91 2.34 2.34 0 0 1-2.33-4.03 2.34 2.34 0 0 0 0-3.84 2.34 2.34 0 0 1 2.33-4.03 2.34 2.34 0 0 0 3.32-1.91"
+            />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+        </UiButton>
       </div>
     </div>
     <EventsList
-      v-show="!filtersVisible"
+      v-show="eventsVisible"
       :id="eventListId"
       :events="events"
       :has-events="hasEvents"
@@ -127,6 +190,13 @@ const eventStreamDotClass = computed(() => (props.streamPaused ? 'bg-[#9CA3AF]' 
       :view="view"
       @close="emit('closeFilters')"
       @type-change="(type, enabled) => emit('typeChange', type, enabled)"
+    />
+    <EventSettings
+      v-show="settingsVisible"
+      :id="eventSettingsId"
+      :event-limit="eventLimit"
+      @close="emit('closeSettings')"
+      @event-limit-change="(value) => emit('eventLimitChange', value)"
     />
   </aside>
 </template>

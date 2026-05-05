@@ -110,13 +110,13 @@ export const useEventsStore = defineStore('controlPlane.events', {
       this.eventsPaused = paused;
     },
     setEventsPanelMode(mode: EventsPanelMode) {
-      this.eventsPanelMode = mode === 'filters' ? 'filters' : 'events';
+      this.eventsPanelMode = mode;
     },
     toggleEventsPaused() {
       this.eventsPaused = !this.eventsPaused;
     },
-    toggleEventsPanelMode() {
-      this.eventsPanelMode = this.eventsPanelMode === 'filters' ? 'events' : 'filters';
+    toggleEventsPanelMode(mode: Exclude<EventsPanelMode, 'events'>) {
+      this.eventsPanelMode = this.eventsPanelMode === mode ? 'events' : mode;
     }
   },
   state: (): EventsState => ({

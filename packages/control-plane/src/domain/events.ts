@@ -1,7 +1,6 @@
 import {
   DEFAULT_EVENT_LIMIT,
   EVENT_GROUPS,
-  MAX_EVENT_LIMIT,
   MIN_EVENT_LIMIT,
   type ControlPlaneEvent,
   type EventFiltersState,
@@ -95,8 +94,8 @@ export function isEventTypeEnabledInState(
 
 export function normalizeEventLimit(value: number | string): number {
   const limit = Number(value);
-  if (!Number.isFinite(limit)) {
+  if (!Number.isFinite(limit) || limit <= 0) {
     return DEFAULT_EVENT_LIMIT;
   }
-  return Math.min(MAX_EVENT_LIMIT, Math.max(MIN_EVENT_LIMIT, Math.round(limit)));
+  return Math.max(MIN_EVENT_LIMIT, Math.round(limit));
 }

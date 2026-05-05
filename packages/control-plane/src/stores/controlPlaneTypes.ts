@@ -6,9 +6,7 @@ import {
 import type { RpcCallEventSuffix } from '@agentg/shared/rpc/call-event-types';
 
 export const DEFAULT_EVENT_LIMIT = 200;
-export const MAX_EVENT_LIMIT = 2000;
-export const MIN_EVENT_LIMIT = 20;
-export const EVENT_LIMIT_STEP = 20;
+export const MIN_EVENT_LIMIT = 1;
 export const DEFAULT_VIEWPORT_DAYS = 30;
 export const TIMELINE_SCALE_PRESETS = [
   { label: '7d', value: 7 },
@@ -387,7 +385,7 @@ export type EventFiltersPanelView = {
   groups: EventFilterGroupView[];
 };
 
-export type EventsPanelMode = 'events' | 'filters';
+export type EventsPanelMode = 'events' | 'filters' | 'settings';
 
 export { RPC_CALL_EVENT_LIFECYCLES, rpcCallEventTarget };
 

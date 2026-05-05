@@ -28,7 +28,8 @@ const appShell = computed(() => appShellView(appShellStore));
 const chatSidebar = computed(() => chatSidebarView(chatStore, selectedHistoryStore.selectedChatId));
 const dashboardMetrics = computed(() => dashboardMetricsFromOverview(overviewStore.overview));
 const eventFiltersPanel = computed(() => eventFiltersPanelView(eventsStore));
-const eventFiltersVisible = computed(() => eventsStore.eventsPanelMode === 'filters');
+const eventLimit = computed(() => eventsStore.eventLimit);
+const eventsPanelMode = computed(() => eventsStore.eventsPanelMode);
 const eventItems = computed(() =>
   eventListItems(eventsStore.events, (type) => eventsStore.isEventTypeMuted(type))
 );
@@ -79,7 +80,7 @@ const mainLayout = ref<ShellElement | null>(null);
 const mainLayoutClass = computed(() =>
   appShell.value.eventsPanelCollapsed
     ? 'grid min-h-0 flex-1 grid-cols-[380px_minmax(0,1fr)] gap-4 overflow-hidden bg-zinc-100 p-4 pt-0'
-    : 'grid min-h-0 flex-1 grid-cols-[380px_minmax(0,1fr)_400px] gap-4 overflow-hidden bg-zinc-100 p-4 pt-0'
+    : 'grid min-h-0 flex-1 grid-cols-[380px_minmax(0,1fr)_420px] gap-4 overflow-hidden bg-zinc-100 p-4 pt-0'
 );
 
 function clearEvents(): void {
@@ -116,7 +117,7 @@ function positionEventsPreview(): void {
     height: `${String(Math.max(160, rect.height - paddingTop - paddingBottom))}px`,
     right: `${String(browser.innerWidth - rect.right + paddingRight)}px`,
     top: `${String(rect.top + paddingTop)}px`,
-    width: '400px'
+    width: '420px'
   };
 }
 
@@ -162,7 +163,11 @@ function browserGlobal(): BrowserGlobal {
 }
 
 function toggleEventFilters(): void {
-  eventsStore.toggleEventsPanelMode();
+  eventsStore.toggleEventsPanelMode('filters');
+}
+
+function toggleEventSettings(): void {
+  eventsStore.toggleEventsPanelMode('settings');
 }
 
 function toggleEventStream(): void {
@@ -171,6 +176,14 @@ function toggleEventStream(): void {
 
 function closeEventFilters(): void {
   eventsStore.setEventsPanelMode('events');
+}
+
+function closeEventSettings(): void {
+  eventsStore.setEventsPanelMode('events');
+}
+
+function setEventLimit(value: number): void {
+  eventsStore.setEventLimit(value);
 }
 
 function setEventTypeEnabled(type: string, enabled: boolean): void {
@@ -278,19 +291,25 @@ onBeforeUnmount(() => {
         clear-button-id="clearEvents"
         event-filters-id="eventFilters"
         event-list-id="events"
+        :event-limit="eventLimit"
+        event-settings-id="eventSettings"
         filters-toggle-id="eventFiltersToggle"
         :events="eventItems"
-        :filters-visible="eventFiltersVisible"
         :has-events="hasEvents"
+        :mode="eventsPanelMode"
         panel-id="eventsPanel"
+        settings-toggle-id="eventSettingsToggle"
         :stream-paused="eventsPaused"
         stream-toggle-id="eventStreamToggle"
         :view="eventFiltersPanel"
         @clear="clearEvents"
         @clear-type="clearEventsOfType"
         @close-filters="closeEventFilters"
+        @close-settings="closeEventSettings"
+        @event-limit-change="setEventLimit"
         @filters-toggle="toggleEventFilters"
         @mute-change="setEventTypeMuted"
+        @settings-toggle="toggleEventSettings"
         @stream-toggle="toggleEventStream"
         @type-change="setEventTypeEnabled"
       />
@@ -309,9 +328,11 @@ onBeforeUnmount(() => {
     class="fixed z-40"
     event-filters-id="eventFiltersPreview"
     event-list-id="eventsPreview"
+    :event-limit="eventLimit"
+    event-settings-id="eventSettingsPreview"
     :events="eventItems"
-    :filters-visible="eventFiltersVisible"
     :has-events="hasEvents"
+    :mode="eventsPanelMode"
     panel-id="eventsPreviewPanel"
     :stream-paused="eventsPaused"
     :style="eventsPreviewStyle"
@@ -319,8 +340,11 @@ onBeforeUnmount(() => {
     @clear="clearEvents"
     @clear-type="clearEventsOfType"
     @close-filters="closeEventFilters"
+    @close-settings="closeEventSettings"
+    @event-limit-change="setEventLimit"
     @filters-toggle="toggleEventFilters"
     @mute-change="setEventTypeMuted"
+    @settings-toggle="toggleEventSettings"
     @stream-toggle="toggleEventStream"
     @type-change="setEventTypeEnabled"
   />
