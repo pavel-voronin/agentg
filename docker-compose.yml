@@ -1,6 +1,5 @@
 x-agentg-module-environment: &agentg-module-environment
   DATABASE_URL: postgres://agentg:agentg@postgres:5432/agentg
-  GATEWAY_RPC_URL: ws://gateway:8787
   MODULE_RPC_HOST: 0.0.0.0
   MODULE_RPC_PORT: 8080
   NATS_URL: nats://nats:4222
@@ -54,7 +53,6 @@ services:
       ]
     environment:
       <<: *agentg-module-environment
-      GATEWAY_RPC_URL: ws://gateway:8787
       HISTORY_RPC_URL: http://history-sync:8080
       MODULE_MIGRATION_FOLDER: packages/modulesmoke/drizzle
       MODULE_RPC_URL: http://modulesmoke:8080
@@ -70,8 +68,6 @@ services:
     depends_on:
       extension-registry:
         condition: service_started
-      gateway:
-        condition: service_started
       nats:
         condition: service_started
       postgres:
@@ -79,7 +75,6 @@ services:
     environment:
       <<: *agentg-module-environment
       EXTENSION_REGISTRY_RPC_URL: http://extension-registry:8080
-      GATEWAY_RPC_URL: ws://gateway:8787
       MODULE_MIGRATION_FOLDER: packages/summaries/drizzle
       MODULE_RPC_URL: http://summaries:8080
       MODULE_SLUG: summaries
@@ -110,18 +105,13 @@ services:
       target: runtime
     command: ['npm', '--workspace', '@agentg/gateway', 'run', 'start']
     depends_on:
-      extension-registry:
-        condition: service_started
       nats:
         condition: service_started
     environment:
       AGENT_GATEWAY_HOST: 0.0.0.0
       AGENT_GATEWAY_PORT: ${AGENT_GATEWAY_PORT:-8787}
       AGENT_GATEWAY_TOKEN: ${AGENT_GATEWAY_TOKEN:-}
-      EXTENSION_REGISTRY_RPC_URL: http://extension-registry:8080
-      HISTORY_RPC_URL: http://history-sync:8080
       NATS_URL: nats://nats:4222
-      SUMMARIES_RPC_URL: http://summaries:8080
       TELEGRAM_RPC_URL: http://telegram:8080
     ports:
       - '${AGENT_GATEWAY_PORT:-8787}:${AGENT_GATEWAY_PORT:-8787}'

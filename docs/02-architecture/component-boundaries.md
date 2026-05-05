@@ -62,16 +62,13 @@ Owns:
 - External agent-facing WebSocket API compatibility.
 - Authentication and edge policy for external clients.
 - Translating external agent calls into internal domain RPC calls where needed.
-- Aggregating active module capabilities through the in-memory capability
-  registry.
-- Proxying capability execution to the owning module tRPC method.
 
 Does not own:
 
 - Operator UI traffic.
 - Internal orchestration between domains.
 - History targets, coverage, or backfill job writes.
-- Module-owned capability implementation.
+- Module-owned tRPC implementation.
 
 ## Trusted Modules
 
@@ -81,7 +78,6 @@ Own:
 - Module-owned tables and Drizzle migrations.
 - Module-owned tRPC methods.
 - Module-owned NATS events with the slug prefix.
-- Gateway capability registration and refresh.
 - Extension getter registration and refresh in the standalone extension registry.
 
 Do not own:
@@ -97,7 +93,6 @@ Owns:
 - `summaries_*` tables for summary runs, results, source references, and
   invalidation state.
 - `summaries.*` tRPC methods.
-- `summaries.requestChatSummary` Gateway capability.
 - `summaries.chatSummary` getter for `telegram.chat` model objects.
 - `summaries.*` lifecycle events.
 

@@ -12,7 +12,6 @@
 - Postgres write latency
 - duplicate event count
 - attachment metadata count
-- active Gateway capability registrations
 - active Extension Registry registrations per target
 - RPC call lifecycle by `callId`
 - module-owned event counts by slug prefix
@@ -29,7 +28,6 @@ The system should support answering:
 - When was the last update received?
 - Was a specific Telegram message persisted?
 - Which raw event produced a specific current message record?
-- Which module capabilities are currently active in Gateway?
 - Which extension getters are active for a model target such as `telegram.chat`?
 - Did an RPC call start, report progress, complete, or fail for a given
   `callId`?
@@ -57,8 +55,7 @@ module work:
 - raw tRPC builder imports stay package-local
 - cross-domain storage schema imports stay out of runtime code
 - domain and module table prefixes match ownership
-- Gateway capability registration and proxy behavior remain covered
+- Gateway's external RPC and event surface remains covered
 - domain runtime code does not reintroduce `enriched`
 - History and Telegram do not expose local extension registries
 - Extension Registry does not import tRPC client code
-- Gateway extension composition remains covered

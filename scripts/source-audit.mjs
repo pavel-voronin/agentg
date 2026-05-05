@@ -11,7 +11,7 @@ const tsFiles = listFiles(root).filter((file) => file.endsWith('.ts') && !ignore
 auditRawTrpcBuilderImports(tsFiles);
 auditCrossDomainSchemaImports(tsFiles);
 auditTablePrefixes();
-auditGatewayCapabilities();
+auditGatewayExternalSurface();
 auditExtensionBoundaries(tsFiles);
 
 if (failures.length > 0) {
@@ -104,35 +104,46 @@ function auditTablePrefixes() {
   }
 }
 
-function auditGatewayCapabilities() {
+function auditGatewayExternalSurface() {
   const agentGateway = readFileSync(join(root, 'packages/gateway/src/agent-gateway.ts'), 'utf8');
-  const capabilities = readFileSync(join(root, 'packages/gateway/src/capabilities.ts'), 'utf8');
-  const tests = readFileSync(join(root, 'packages/gateway/tests/capabilities.test.ts'), 'utf8');
-  const requiredGatewayTokens = [
-    'createCapabilityRegistry',
-    "'capabilities.register'",
-    "'capabilities.list'",
-    "'capabilities.call'"
-  ];
-  const requiredCapabilityTokens = ['createTrpcGatewayCapabilityCaller', 'withTimeout'];
+  const telegramReads = readFileSync(join(root, 'packages/gateway/src/telegram-reads.ts'), 'utf8');
+  const tests = readFileSync(join(root, 'packages/gateway/tests/agent-gateway.test.ts'), 'utf8');
   const requiredTestTokens = [
-    'registers, refreshes, lists, and removes stale capabilities',
-    'proxies capability calls to the owning module tRPC method'
+    'exposes only telegram.getChat through WebSocket RPC',
+    'forwards only telegram.login.completed as an external event'
+  ];
+  const forbiddenSourceTokens = [
+    "'capabilities.",
+    '"capabilities.',
+    "'extensions.compose'",
+    '"extensions.compose"',
+    "'history.",
+    '"history.',
+    "'telegram.getMessage'",
+    '"telegram.getMessage"',
+    "'telegram.listRecentMessages'",
+    '"telegram.listRecentMessages"',
+    "'telegram.searchMessages'",
+    '"telegram.searchMessages"'
   ];
 
-  for (const token of requiredGatewayTokens) {
-    if (!agentGateway.includes(token)) {
-      failures.push(`Gateway capability registry behavior is missing token: ${token}`);
-    }
+  if (!agentGateway.includes("'telegram.getChat'")) {
+    failures.push("Gateway external RPC surface must include only 'telegram.getChat'");
   }
-  for (const token of requiredCapabilityTokens) {
-    if (!capabilities.includes(token)) {
-      failures.push(`Gateway capability proxy behavior is missing token: ${token}`);
+  if (!agentGateway.includes("'telegram.login.completed'")) {
+    failures.push("Gateway external event surface must include only 'telegram.login.completed'");
+  }
+  if (!telegramReads.includes("'telegram.getChat'")) {
+    failures.push("Gateway Telegram adapter must call only 'telegram.getChat'");
+  }
+  for (const token of forbiddenSourceTokens) {
+    if (agentGateway.includes(token) || telegramReads.includes(token)) {
+      failures.push(`Gateway source exposes forbidden external surface token: ${token}`);
     }
   }
   for (const token of requiredTestTokens) {
     if (!tests.includes(token)) {
-      failures.push(`Gateway capability behavior lacks regression test token: ${token}`);
+      failures.push(`Gateway external surface lacks regression test token: ${token}`);
     }
   }
 }
@@ -141,7 +152,6 @@ function auditExtensionBoundaries(files) {
   auditNoDomainEnrichedRuntime(files);
   auditNoDomainExtensionEndpoints(files);
   auditRegistryDoesNotCallRpc(files);
-  auditGatewayExtensionComposition();
 }
 
 function auditNoDomainEnrichedRuntime(files) {
@@ -219,35 +229,6 @@ function auditRegistryDoesNotCallRpc(files) {
       if (source.includes(token)) {
         failures.push(`extension registry must not call RPC methods: ${rel} -> ${token}`);
       }
-    }
-  }
-}
-
-function auditGatewayExtensionComposition() {
-  const agentGateway = readFileSync(join(root, 'packages/gateway/src/agent-gateway.ts'), 'utf8');
-  const extensions = readFileSync(join(root, 'packages/gateway/src/extensions.ts'), 'utf8');
-  const tests = readFileSync(join(root, 'packages/gateway/tests/capabilities.test.ts'), 'utf8');
-  const requiredGatewayTokens = ["'extensions.compose'", 'composeGatewayExtensions'];
-  const requiredExtensionTokens = [
-    'collectModelMarkers',
-    'createTrpcGatewayExtensionRegistryClient',
-    'createTrpcGatewayExtensionGetterCaller'
-  ];
-  const requiredTestTokens = ['composes model extensions from the standalone extension registry'];
-
-  for (const token of requiredGatewayTokens) {
-    if (!agentGateway.includes(token)) {
-      failures.push(`Gateway extension composition behavior is missing token: ${token}`);
-    }
-  }
-  for (const token of requiredExtensionTokens) {
-    if (!extensions.includes(token)) {
-      failures.push(`Gateway extension composer is missing token: ${token}`);
-    }
-  }
-  for (const token of requiredTestTokens) {
-    if (!tests.includes(token)) {
-      failures.push(`Gateway extension composition lacks regression test token: ${token}`);
     }
   }
 }

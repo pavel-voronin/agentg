@@ -82,9 +82,7 @@ function runNpm(args) {
 
 function smokeDriver(checkTelegram) {
   return `
-import { randomUUID } from 'node:crypto';
 import { createTRPCUntypedClient, httpBatchLink } from '@trpc/client';
-import { WebSocket } from 'ws';
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -121,82 +119,6 @@ async function waitForExtensionRegistration(client, target, extension, attempts 
   throw new Error(extension + ' is not registered for ' + target + ': ' + JSON.stringify(registrations));
 }
 
-async function withGateway(fn) {
-  const socket = new WebSocket('ws://gateway:8787');
-  const pending = new Map();
-  const timeout = setTimeout(() => {
-    socket.terminate();
-    for (const entry of pending.values()) {
-      entry.reject(new Error('gateway request timed out'));
-    }
-  }, 60_000);
-
-  socket.on('message', (payload) => {
-    const response = JSON.parse(payload.toString());
-    const entry = pending.get(response.id);
-    if (entry === undefined) {
-      return;
-    }
-    pending.delete(response.id);
-    if (response.error !== undefined) {
-      entry.reject(new Error(response.error.message));
-      return;
-    }
-    entry.resolve(response.result);
-  });
-
-  await new Promise((resolve, reject) => {
-    socket.once('open', resolve);
-    socket.once('error', reject);
-  });
-
-  async function request(method, params) {
-    const id = 'compose_smoke_' + randomUUID();
-    const promise = new Promise((resolve, reject) => {
-      pending.set(id, { resolve, reject });
-    });
-    socket.send(JSON.stringify({ id, method, params }));
-    return promise;
-  }
-
-  try {
-    return await fn(request);
-  } finally {
-    clearTimeout(timeout);
-    socket.close();
-  }
-}
-
-const gatewayResult = await withGateway(async (request) => {
-  let capabilities;
-  for (let attempt = 1; attempt <= 20; attempt += 1) {
-    capabilities = await request('capabilities.list');
-    if (capabilities.capabilities?.some((item) => item.name === 'summaries.requestChatSummary')) {
-      break;
-    }
-    await sleep(2_000);
-  }
-
-  if (!capabilities.capabilities?.some((item) => item.name === 'summaries.requestChatSummary')) {
-    throw new Error('summaries.requestChatSummary is not registered: ' + JSON.stringify(capabilities));
-  }
-
-  const now = new Date().toISOString();
-  const capabilityCall = await request('capabilities.call', {
-    name: 'summaries.requestChatSummary',
-    input: {
-      chatId: 'compose-smoke-chat',
-      reason: 'compose-smoke',
-      sourceMessages: [
-        { messageId: 'compose-smoke-1', messageDate: now, text: 'First message for compose smoke' },
-        { messageId: 'compose-smoke-2', messageDate: now, text: 'Second message for compose smoke' }
-      ]
-    }
-  });
-
-  return { capabilities, capabilityCall };
-});
-
 const extensionTarget = 'telegram.chat';
 const extensionMethod = 'summaries.chatSummary';
 const base = {
@@ -218,6 +140,15 @@ const extensionRegistry = await waitForExtensionRegistration(
 
 const summariesClient = createTRPCUntypedClient({
   links: [httpBatchLink({ url: 'http://summaries:8080' })]
+});
+const now = new Date().toISOString();
+const summaryRequest = await summariesClient.mutation('summaries.requestSummary', {
+  chatId: base.chat.id,
+  reason: 'compose-smoke',
+  sourceMessages: [
+    { messageId: 'compose-smoke-1', messageDate: now, text: 'First message for compose smoke' },
+    { messageId: 'compose-smoke-2', messageDate: now, text: 'Second message for compose smoke' }
+  ]
 });
 const summaryExtension = await summariesClient.query(extensionMethod, base.chat);
 if (summaryExtension.summary?.chatId !== base.chat.id || summaryExtension.stale !== false) {
@@ -245,13 +176,13 @@ if (${JSON.stringify(checkTelegram)}) {
 
 console.log(JSON.stringify({
   event: 'compose.smoke.ok',
-  capability: gatewayResult.capabilityCall,
   controlPlane: {
     contentType: controlPlaneResponse.headers.get('content-type'),
     status: controlPlaneResponse.status
   },
   composed,
-  extensionRegistry
+  extensionRegistry,
+  summaryRequest
 }, null, 2));
 `;
 }

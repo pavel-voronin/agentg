@@ -34,7 +34,7 @@ Do not pre-document higher-level assistant behavior. Add it only after the Teleg
 
 - `01-product`: why the system exists and what it must not become.
 - `02-architecture`: system-level structure and invariants.
-- `03-domains`: domain capabilities and ownership boundaries.
+- `03-domains`: domain ownership boundaries.
 - `04-data`: durable state, schemas, indexes, and retention.
 - `05-interfaces`: internal interfaces needed by the Telegram client foundation.
 - `06-operations`: running, securing, observing, and recovering the system.

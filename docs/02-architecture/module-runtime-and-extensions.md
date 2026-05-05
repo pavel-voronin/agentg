@@ -1,9 +1,9 @@
 # Module Runtime And Extensions
 
 Trusted modules are independent internal services that run inside the AgenTG
-runtime contour. A module owns its storage, tRPC surface, events, capabilities,
-and extension getter methods. Core domains own their own models, procedures,
-storage, and fact events; they do not know which modules extend them.
+runtime contour. A module owns its storage, tRPC surface, events, and extension
+getter methods. Core domains own their own models, procedures, storage, and fact
+events; they do not know which modules extend them.
 
 ## Runtime Contract
 
@@ -15,13 +15,11 @@ Every module has:
 - `databaseUrl`: Postgres URL
 - `tablePrefix`: owned table prefix, for example `summaries_`
 - `migrationFolder`: module-owned Drizzle migration folder
-- `capabilities`: agent-facing methods registered with Gateway
 - `extensionRegistrations`: `{ target, extension }` entries registered with the
   standalone extension registry
 
 The shared helpers live in `@agentg/shared/modules/runtime`. They load runtime
-config, register capabilities, register extensions, and refresh ephemeral
-registrations.
+config, register extensions, and refresh ephemeral registrations.
 
 ## Storage
 
@@ -83,25 +81,12 @@ Callers can pass call options through internal RPC context:
 
 There is no `observable` procedure builder. `observable` is only a call option.
 
-## Capabilities
+## Gateway RPC
 
-Gateway owns the external agent WebSocket boundary and keeps an in-memory
-capability registry. Modules register capabilities at startup and refresh them
-periodically:
-
-```json
-{
-  "moduleSlug": "summaries",
-  "name": "summaries.requestChatSummary",
-  "serviceUrl": "http://summaries:8080",
-  "rpcMethod": "summaries.requestSummary",
-  "rpcType": "mutation"
-}
-```
-
-External clients call `capabilities.list` to inspect active capabilities and
-`capabilities.call` to invoke one. Gateway proxies execution to the owning
-module tRPC method and returns the direct result.
+Gateway owns the external agent WebSocket boundary directly. Modules do not
+register capabilities with Gateway, and Gateway does not keep a capability
+registry. Every external Gateway RPC method is a deliberate Gateway-owned method
+implemented in Gateway code.
 
 ## Extensions
 
@@ -135,8 +120,8 @@ Caller code composes an extended view when it needs one:
 4. Call the extension getter RPC methods through known service URLs.
 5. Assemble the view locally.
 
-Gateway exposes this pattern through `extensions.compose`. Domains do not call
-extension RPC methods while serving base domain procedures.
+Gateway does not expose extension composition as an external RPC method. Callers
+that need composed views own that composition flow explicitly.
 
 ## Source Audits
 
@@ -146,26 +131,24 @@ extension RPC methods while serving base domain procedures.
   `src/rpc/trpc.ts` runtimes
 - cross-domain storage schema imports are rejected
 - domain and module table names must use their owner prefix
-- Gateway capability registry/proxy behavior stays covered by source and tests
+- Gateway's external RPC and event surface stays covered by source and tests
 - domain runtime code cannot reintroduce `enriched`
 - History and Telegram cannot expose local extension registries
 - the extension registry cannot import tRPC client code
-- Gateway extension composition stays covered by source and tests
 
 The audit is part of `npm run check`.
 
 ## Module Authoring Checklist
 
 - Pick a stable slug and use it for service name, table prefix, event subjects,
-  capability names, extension names, and logs.
+  extension names, and logs.
 - Create a package-owned `src/schema.ts`, `drizzle/` folder, migration command,
   and migration journal table.
 - Use only owned tables for writes. Call other domains through tRPC.
 - Expose public internal methods through package-local `rpc`.
 - Return public internal results directly.
 - Publish module events with the slug prefix.
-- Register Gateway capabilities at startup and refresh them periodically.
 - Register extension getters with the standalone extension registry at startup
   and refresh them periodically.
-- Add tests for storage behavior, direct RPC results, capability
-  registration/proxy, extension registration, and caller-side composition.
+- Add tests for storage behavior, direct RPC results, extension registration,
+  and caller-side composition.

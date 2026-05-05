@@ -5,7 +5,7 @@ import { startRegistrationRefresh } from '@agentg/shared/modules/runtime';
 
 import type { SummariesServiceConfig } from './config.js';
 import type { SummariesDatabase } from './database.js';
-import { registerSummariesCapabilities, registerSummariesExtensions } from './registrations.js';
+import { registerSummariesExtensions } from './registrations.js';
 import { startSummariesTrpcServer, stopSummariesTrpcServer } from './rpc/server.js';
 import { handleSummariesEvent, type SummariesRuntime } from './summary-service.js';
 import { createDrizzleSummaryRepository } from './store.js';
@@ -37,10 +37,6 @@ export async function runSummariesService(options: SummariesServiceOptions): Pro
       );
     },
     refresh: async () => {
-      await registerSummariesCapabilities(
-        options.config.module,
-        options.config.services.gateway.url
-      );
       await registerSummariesExtensions(
         options.config.module,
         options.config.services.extensionRegistry.url

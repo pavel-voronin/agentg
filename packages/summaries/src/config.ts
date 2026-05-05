@@ -18,9 +18,6 @@ export type SummariesServiceConfig = {
     extensionRegistry: {
       url: string;
     };
-    gateway: {
-      url: string;
-    };
   };
 };
 
@@ -39,7 +36,6 @@ export function loadSummariesServiceConfig(
   const serviceRpcUrl =
     env.MODULE_RPC_URL ??
     `http://${bind.host === '0.0.0.0' ? '127.0.0.1' : bind.host}:${String(bind.port)}`;
-  const gatewayUrl = parseGatewayUrl(env.GATEWAY_RPC_URL ?? 'ws://127.0.0.1:8787');
   const extensionRegistryUrl = parseHttpUrl(
     env.EXTENSION_REGISTRY_RPC_URL ?? 'http://127.0.0.1:18084',
     'EXTENSION_REGISTRY_RPC_URL'
@@ -49,16 +45,6 @@ export function loadSummariesServiceConfig(
     databaseUrl: databaseConfig.databaseUrl,
     internalRpc: bind,
     module: loadModuleRuntimeConfig(env, {
-      capabilities: [
-        {
-          description: 'Request or refresh a deterministic chat summary',
-          moduleSlug: 'summaries',
-          name: 'summaries.requestChatSummary',
-          rpcMethod: 'summaries.requestSummary',
-          rpcType: 'mutation',
-          serviceUrl: serviceRpcUrl
-        }
-      ],
       databaseUrl: databaseConfig.databaseUrl,
       extensionRegistrations: [
         {
@@ -66,7 +52,6 @@ export function loadSummariesServiceConfig(
           target: 'telegram.chat'
         }
       ],
-      gatewayRpcUrl: gatewayUrl,
       migrationFolder: env.MODULE_MIGRATION_FOLDER ?? 'packages/summaries/drizzle',
       natsUrl,
       serviceRpcUrl,
@@ -82,27 +67,9 @@ export function loadSummariesServiceConfig(
     services: {
       extensionRegistry: {
         url: extensionRegistryUrl
-      },
-      gateway: {
-        url: gatewayUrl
       }
     }
   };
-}
-
-function parseGatewayUrl(value: string): string {
-  let url: URL;
-  try {
-    url = new URL(value);
-  } catch (error) {
-    throw new Error('GATEWAY_RPC_URL must be a valid WebSocket URL', { cause: error });
-  }
-
-  if (url.protocol !== 'ws:' && url.protocol !== 'wss:') {
-    throw new Error('GATEWAY_RPC_URL must use ws or wss');
-  }
-
-  return url.toString();
 }
 
 function parseHttpUrl(value: string, name: string): string {

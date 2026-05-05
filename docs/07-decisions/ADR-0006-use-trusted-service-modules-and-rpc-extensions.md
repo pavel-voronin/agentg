@@ -25,16 +25,14 @@ extension behavior rather than hard isolation.
 Use trusted internal services as the module unit.
 
 Each module is an independent service with a stable slug. The slug is used for
-service addressing, NATS subjects, table prefixes, logs, capability names, and
-extension names.
+service addressing, NATS subjects, table prefixes, logs, and extension names.
 
 Each domain and module owns its storage schema and migrations. The shared
 database package provides database infrastructure, not one centralized domain
 schema. Domains and modules write only their owned tables by convention.
 
-Gateway aggregates agent-facing capabilities from core domains and additional
-modules. Capability registration is ephemeral and refreshed by the owning
-service.
+Gateway exposes agent-facing RPC methods directly. Modules do not register
+capabilities with Gateway, and Gateway does not keep a capability registry.
 
 Internal tRPC procedures return direct result bodies. Model objects that callers
 can extend mark themselves inline with `_model` and their existing `id`.
@@ -76,20 +74,15 @@ Caller code composes extended views by calling the base procedure, collecting
 model markers, reading Extension Registry registrations, calling registered
 getter RPC methods through known service URLs, and assembling the view locally.
 
-Infrastructure-level events, extension registrations, and capability
-registrations are ephemeral. A domain or module persists its own state when
-persistence is part of its own behavior.
+Infrastructure-level events and extension registrations are ephemeral. A domain
+or module persists its own state when persistence is part of its own behavior.
 
 ## Terms
 
 Module means a trusted internal service that can own storage, expose RPC
-methods, publish and consume NATS events, and register capabilities or
-extensions.
+methods, publish and consume NATS events, and register extensions.
 
 Slug means the short stable module identifier, for example `summaries`.
-
-Capability means an agent-facing operation exposed by a module or core domain
-and collected by Gateway.
 
 Extension means a module-owned getter RPC method registered against a target
 model or procedure name.
@@ -106,8 +99,7 @@ Benefits:
 
 - Modules can add product value without being loaded into existing domain
   processes.
-- Gateway can expose capabilities from core domains and extra modules through
-  one agent-facing edge.
+- Gateway keeps one explicit agent-facing edge without module-side registration.
 - Domains keep ownership of their base models and handlers.
 - Callers can compose extra views without changing domain response contracts.
 - RPC lifecycle events give modules and operators a common `callId` for live
@@ -118,9 +110,7 @@ Benefits:
 Costs:
 
 - Callers that need extension data must compose it explicitly.
-- Extension and capability registrations need refresh and stale-entry cleanup.
-- TypeScript inference does not make runtime module capabilities statically
-  known to every consumer.
+- Extension registrations need refresh and stale-entry cleanup.
 - Cross-module behavior depends on naming and registration conventions.
 - Service routing remains explicit config until a later discovery layer exists.
 
@@ -145,15 +135,14 @@ Compose network.
 Module tables should use the owning slug as a prefix, for example
 `summaries_runs` or `summaries_chat_summaries`.
 
-Extension and capability registrations are refreshed periodically by the owning
-module. Gateway and Extension Registry remove stale registrations from their
-local registries.
+Extension registrations are refreshed periodically by the owning module.
+Extension Registry removes stale registrations from its local registry.
 
 NATS event subjects for a module should use the module slug as their prefix.
 
 The accepted baseline is guarded by `npm run source:audit`, which checks raw
 tRPC builder imports, cross-domain schema imports, table-prefix ownership,
-Gateway capability behavior, extension boundary rules, and Extension Registry's
+Gateway external surface, extension boundary rules, and Extension Registry's
 non-execution boundary.
 
 ## Migration

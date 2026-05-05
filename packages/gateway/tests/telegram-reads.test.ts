@@ -11,38 +11,10 @@ const nonEmptyStringSchema = z.string().trim().min(1);
 const telegramGetChatInputSchema = z.object({
   chatId: nonEmptyStringSchema
 });
-const telegramGetMessageInputSchema = z.object({
-  chatId: nonEmptyStringSchema,
-  messageId: nonEmptyStringSchema
-});
-const telegramListRecentMessagesInputSchema = z
-  .object({
-    chatId: nonEmptyStringSchema.optional(),
-    limit: z.number().int().positive().optional()
-  })
-  .default({});
-const telegramSearchMessagesInputSchema = z.object({
-  chatId: nonEmptyStringSchema.optional(),
-  limit: z.number().int().positive().optional(),
-  query: nonEmptyStringSchema
-});
 
 describe('createTrpcGatewayTelegramClient', () => {
-  it('calls Telegram-owned read procedures for Gateway telegram RPC names', async () => {
+  it('calls only Telegram getChat for the Gateway telegram RPC surface', async () => {
     const calls: { method: string; params: unknown }[] = [];
-    const message = {
-      chatId: 'chat-a',
-      contentType: 'messageText',
-      deletedAt: null,
-      editDate: null,
-      isDeleted: false,
-      messageDate: '2026-05-01T00:00:00.000Z',
-      messageId: '42',
-      senderId: 'user-a',
-      senderType: 'messageSenderUser',
-      text: 'hello',
-      updatedAt: '2026-05-01T00:00:01.000Z'
-    };
     const server = createHTTPServer({
       router: testRpcRouter({
         getChat: testRpc.input(telegramGetChatInputSchema).query(({ input }) => {
@@ -55,26 +27,6 @@ describe('createTrpcGatewayTelegramClient', () => {
               type: 'private',
               updatedAt: '2026-05-01T00:00:00.000Z'
             }
-          };
-        }),
-        getMessage: testRpc.input(telegramGetMessageInputSchema).query(({ input }) => {
-          calls.push({ method: 'getMessage', params: input });
-          return {
-            message
-          };
-        }),
-        listRecentMessages: testRpc
-          .input(telegramListRecentMessagesInputSchema)
-          .query(({ input }) => {
-            calls.push({ method: 'listRecentMessages', params: input });
-            return {
-              messages: [message]
-            };
-          }),
-        searchMessages: testRpc.input(telegramSearchMessagesInputSchema).query(({ input }) => {
-          calls.push({ method: 'searchMessages', params: input });
-          return {
-            messages: [message]
           };
         })
       })
@@ -94,32 +46,8 @@ describe('createTrpcGatewayTelegramClient', () => {
           updatedAt: '2026-05-01T00:00:00.000Z'
         }
       });
-
-      await expect(
-        client.call('telegram.listRecentMessages', {
-          chatId: 'chat-a',
-          limit: 10
-        })
-      ).resolves.toEqual({
-        messages: [message]
-      });
-
-      expect(
-        JSON.stringify(
-          await client.call('telegram.getMessage', {
-            chatId: 'chat-a',
-            messageId: '42'
-          })
-        )
-      ).not.toContain('"raw"');
-
-      expect(calls).toEqual(
-        expect.arrayContaining([
-          { method: 'getChat', params: { chatId: 'chat-a' } },
-          { method: 'getMessage', params: { chatId: 'chat-a', messageId: '42' } },
-          { method: 'listRecentMessages', params: { chatId: 'chat-a', limit: 10 } }
-        ])
-      );
+      await expect(client.call('telegram.searchMessages', {})).resolves.toBeUndefined();
+      expect(calls).toEqual([{ method: 'getChat', params: { chatId: 'chat-a' } }]);
     } finally {
       client.close();
       await close(server);

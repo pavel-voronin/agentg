@@ -12,7 +12,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@agentg/history-sync": "file:../history-sync",
     "@agentg/shared": "file:../shared",
     "@agentg/telegram": "file:../telegram",
     "@trpc/client": "^11.17.0",

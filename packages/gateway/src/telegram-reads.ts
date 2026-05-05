@@ -38,12 +38,6 @@ function callTelegramMethod(
   switch (method) {
     case 'telegram.getChat':
       return telegram.getChat(params);
-    case 'telegram.getMessage':
-      return telegram.getMessage(params);
-    case 'telegram.listRecentMessages':
-      return telegram.listRecentMessages(params);
-    case 'telegram.searchMessages':
-      return telegram.searchMessages(params);
     default:
       return Promise.resolve(undefined);
   }

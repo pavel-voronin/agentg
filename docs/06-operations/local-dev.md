@@ -71,17 +71,12 @@ Local development defaults:
   `HISTORY_RPC_PORT=18082`
 - History to Telegram URL: `TELEGRAM_RPC_URL=http://127.0.0.1:18081`
 - Gateway to Telegram URL: `TELEGRAM_RPC_URL=http://127.0.0.1:18081`
-- Gateway to History URL: `HISTORY_RPC_URL=http://127.0.0.1:18082`
 - Extension Registry internal RPC bind:
   `EXTENSION_REGISTRY_RPC_HOST=127.0.0.1`,
   `EXTENSION_REGISTRY_RPC_PORT=18084`
-- Gateway to Extension Registry URL:
-  `EXTENSION_REGISTRY_RPC_URL=http://127.0.0.1:18084`
-- Gateway to Summaries URL: `SUMMARIES_RPC_URL=http://127.0.0.1:18083`
 - Summaries internal RPC bind: `SUMMARIES_RPC_HOST=127.0.0.1`,
   `SUMMARIES_RPC_PORT=18083`
 - Summaries module URL: `MODULE_RPC_URL=http://127.0.0.1:18083`
-- Summaries to Gateway URL: `GATEWAY_RPC_URL=ws://127.0.0.1:8787`
 - Summaries to Extension Registry URL:
   `EXTENSION_REGISTRY_RPC_URL=http://127.0.0.1:18084`
 - Control Plane server bind: `CONTROL_PLANE_HOST=127.0.0.1`,
@@ -115,8 +110,8 @@ npm run compose:telegram
 ## Trusted Module Runtime Conventions
 
 Trusted modules run as ordinary internal services. The service name should equal
-the module slug, and the slug should prefix tables, capability names, extension
-names, NATS subjects, and logs.
+the module slug, and the slug should prefix tables, extension names, NATS
+subjects, and logs.
 
 Module runtime environment:
 
@@ -128,15 +123,12 @@ Module runtime environment:
 - `MODULE_MIGRATION_FOLDER`: module-owned Drizzle migration folder
 - `DATABASE_URL`: shared Postgres connection string
 - `NATS_URL`: shared NATS connection string
-- `GATEWAY_RPC_URL`: Gateway WebSocket URL for capability registration
 - `EXTENSION_REGISTRY_RPC_URL`: registry URL for extension registration
 - needed domain URLs such as `TELEGRAM_RPC_URL` or `HISTORY_RPC_URL`
 
-Capability names are namespaced by slug, for example
-`summaries.requestChatSummary`. Extension RPC names follow the same convention
-and are registered directly with Extension Registry at startup, then refreshed
-periodically. Model extension getters target the model marker value, for example
-`telegram.chat`.
+Extension RPC names are namespaced by slug and are registered directly with
+Extension Registry at startup, then refreshed periodically. Model extension
+getters target the model marker value, for example `telegram.chat`.
 
 Docker Compose includes a `module-smoke` profile with the `modulesmoke` service.
 It is a packaging smoke service for the module environment shape, not a product
@@ -153,17 +145,6 @@ npm run compose:summaries
 ```
 
 ## Inspecting Registries
-
-Gateway capabilities are exposed through the external WebSocket API:
-
-```bash
-node --input-type=module -e "
-import { WebSocket } from 'ws';
-const ws = new WebSocket('ws://127.0.0.1:8787');
-ws.on('open', () => ws.send(JSON.stringify({ id: 'capabilities', method: 'capabilities.list' })));
-ws.on('message', (data) => { console.log(data.toString()); ws.close(); });
-"
-```
 
 Extension registrations are exposed through Extension Registry tRPC:
 

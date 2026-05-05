@@ -36,8 +36,8 @@ Every event published to NATS uses the integration event envelope:
 - Events are not a replay log.
 - Consumers must recover state through domain RPC or their own owned storage.
 - NATS request/reply is not part of the architecture.
-- Wildcard subscriptions are allowed for fan-out, for example `telegram.>` and
-  `history.>`.
+- Wildcard subscriptions are allowed for internal fan-out. External edge
+  services must explicitly choose which events cross their boundary.
 
 ## NATS API Usage
 
@@ -116,8 +116,9 @@ History Sync subscribes to Telegram events:
 - `telegram.message.created` updates live coverage for message-history updates.
 - `telegram.status` opens and closes the live coverage session.
 
-Gateway subscribes to `telegram.>` and `history.>` and forwards live events to
-external agent WebSocket clients.
+Gateway subscribes only to `telegram.login.completed` and forwards that event to
+external agent WebSocket clients. All other events remain internal unless a
+Gateway API change explicitly exposes them.
 
 Control Plane server subscribes to `>` and forwards live integration events to
 browser clients.
@@ -130,8 +131,8 @@ to invalidate private summary state. It recovers durable state through
 
 After reconnecting, consumers must rebuild state through these surfaces:
 
-- Gateway external clients: Gateway WebSocket RPC methods backed by Telegram and
-  History internal tRPC.
+- Gateway external clients: Gateway WebSocket RPC methods backed by Telegram
+  internal tRPC.
 - Control Plane browser clients: Control Plane WebSocket RPC methods backed by
   History tRPC.
 - History Sync: its own Postgres tables plus Telegram read and history-fetch
@@ -150,15 +151,14 @@ Internal RPC contracts are owned by the serving domain package:
   normalization, and TDLib plumbing remain package-internal.
 - History Sync owns `@agentg/history-sync/rpc`, whose only public export is
   `createHistoryRpcClient`. The helper returns the explicit History procedures
-  used by Gateway and Control Plane server. The History schemas, router, server
-  bind config, storage schema, commands, and domain types remain
-  package-internal.
+  used by Control Plane server. The History schemas, router, server bind config,
+  storage schema, commands, and domain types remain package-internal.
 - Modules own package-local RPC contracts. The pilot summaries module owns
   `@agentg/summaries/rpc`, whose only public export is
   `createSummariesRpcClient`. The helper returns the explicit summaries
-  procedures used by capability and extension callers. The summaries schemas,
-  router, server bind config, storage schema, registrations, and service runtime
-  remain package-internal.
+  procedures used by direct callers and extension getters. The summaries
+  schemas, router, server bind config, storage schema, registrations, and
+  service runtime remain package-internal.
 
 Gateway owns the external agent WebSocket protocol. Control Plane owns the
 browser-facing WebSocket protocol. Neither protocol is an internal domain RPC
@@ -167,8 +167,8 @@ directly.
 
 There is no shared internal domain RPC contracts package. `@agentg/shared` owns
 only cross-cutting helpers such as the event envelope, event bus abstraction,
-call lifecycle events, capability contracts, extension registry contracts, model
-markers, and module runtime helpers.
+call lifecycle events, extension registry contracts, model markers, and module
+runtime helpers.
 
 ## Removed Command Subjects
 

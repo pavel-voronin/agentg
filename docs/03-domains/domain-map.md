@@ -15,7 +15,7 @@
 - Backup and restore.
 - Secrets management.
 - Observability.
-- Module runtime and Gateway capability registration.
+- Module runtime and extension registration.
 
 ## Important Separation
 
