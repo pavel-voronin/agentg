@@ -51,7 +51,7 @@ export async function runHistorySync(
     discover: safeOptions.discoverChats === true,
     loadBatchSize: safeOptions.chatLoadBatchSize
   });
-  const targets = await materializeHistoryTargets(database, chats);
+  const targets = await materializeHistoryTargets(database, chats, safeOptions);
 
   await resetRunningBackfillJobs(database);
   const createdJobs = await reconcileHistoryTargets(database, targets, reconcileNow, safeOptions);
@@ -65,16 +65,46 @@ export async function runHistorySync(
 
 async function materializeHistoryTargets(
   database: AppDatabase,
-  chats: TelegramChatForHistory[]
+  chats: TelegramChatForHistory[],
+  options: HistorySyncOptions
 ): Promise<HistoryTarget[]> {
   const templates = await listHistoryTemplates(database);
-  let targets = await listHistoryTargets(database);
+  const chatIds = new Set(chats.map((chat) => chat.id));
+  let targets = await deleteTargetsForUnlistedChats(
+    database,
+    await listHistoryTargets(database),
+    chatIds,
+    options
+  );
   for (const chat of chats) {
     targets = materializeTemplatesForChat(templates, chat, targets);
   }
 
   await upsertHistoryTargets(database, targets);
   return targets;
+}
+
+async function deleteTargetsForUnlistedChats(
+  database: AppDatabase,
+  targets: HistoryTarget[],
+  chatIds: Set<string>,
+  options: HistorySyncOptions
+): Promise<HistoryTarget[]> {
+  const activeTargets: HistoryTarget[] = [];
+  for (const target of targets) {
+    if (chatIds.has(target.chatId)) {
+      activeTargets.push(target);
+      continue;
+    }
+    const deleted = await deleteHistoryTarget(database, target.id);
+    if (deleted !== undefined) {
+      emitHistoryEvent(options, 'history.target.auto_deleted', {
+        chatId: target.chatId,
+        targetId: target.id
+      });
+    }
+  }
+  return activeTargets;
 }
 
 async function reconcileHistoryTargets(
