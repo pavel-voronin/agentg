@@ -94,16 +94,16 @@ Summaries publishes:
 
 RPC calls publish lifecycle events by default:
 
-- `{target}.started`
-- `{target}.progress`
-- `{target}.completed`
-- `{target}.failed`
+- `rpc.{target}.started`
+- `rpc.{target}.progress`
+- `rpc.{target}.completed`
+- `rpc.{target}.failed`
 
 For example, `history.getChatHistoryState` publishes
-`history.getChatHistoryState.started`,
-`history.getChatHistoryState.progress`,
-`history.getChatHistoryState.completed`, and
-`history.getChatHistoryState.failed`.
+`rpc.history.getChatHistoryState.started`,
+`rpc.history.getChatHistoryState.progress`,
+`rpc.history.getChatHistoryState.completed`, and
+`rpc.history.getChatHistoryState.failed`.
 
 `history.sync.requested` is a notification that a sync wake-up was accepted at
 the History boundary. It is not consumed as a NATS command.

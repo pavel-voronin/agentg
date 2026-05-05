@@ -12,10 +12,10 @@ describe('event filters view', () => {
       eventFilters: {
         ...defaultEventFilters(),
         types: {
-          'telegram.listChats.completed': false,
-          'telegram.listChats.failed': false,
-          'telegram.listChats.progress': true,
-          'telegram.listChats.started': true
+          'rpc.telegram.listChats.completed': false,
+          'rpc.telegram.listChats.failed': false,
+          'rpc.telegram.listChats.progress': true,
+          'rpc.telegram.listChats.started': true
         }
       },
       events: []
@@ -35,7 +35,7 @@ describe('event filters view', () => {
       'summaries'
     ]);
     expect(telegramDomain).toMatchObject({
-      enabledCount: '44',
+      enabledCount: '12',
       eventsChecked: true,
       eventsIndeterminate: false
     });
@@ -78,23 +78,23 @@ describe('event filters view', () => {
       checked: false,
       indeterminate: true,
       lifecycles: [
-        { enabled: true, label: 'S', type: 'telegram.listChats.started' },
-        { enabled: false, label: 'C', type: 'telegram.listChats.completed' },
-        { enabled: false, label: 'F', type: 'telegram.listChats.failed' },
-        { enabled: true, label: 'P', type: 'telegram.listChats.progress' }
+        { enabled: true, label: 'S', type: 'rpc.telegram.listChats.started' },
+        { enabled: false, label: 'C', type: 'rpc.telegram.listChats.completed' },
+        { enabled: false, label: 'F', type: 'rpc.telegram.listChats.failed' },
+        { enabled: true, label: 'P', type: 'rpc.telegram.listChats.progress' }
       ],
       lifecycleTypes: [
-        'telegram.listChats.started',
-        'telegram.listChats.completed',
-        'telegram.listChats.failed',
-        'telegram.listChats.progress'
+        'rpc.telegram.listChats.started',
+        'rpc.telegram.listChats.completed',
+        'rpc.telegram.listChats.failed',
+        'rpc.telegram.listChats.progress'
       ]
     });
     expect(completedColumn).toMatchObject({
       checked: false,
-      indeterminate: true
+      indeterminate: false
     });
-    expect(completedColumn?.types).toContain('telegram.listChats.completed');
+    expect(completedColumn?.types).toContain('rpc.telegram.listChats.completed');
 
     const html = await renderToString(
       createSSRApp({
@@ -111,9 +111,9 @@ describe('event filters view', () => {
     expect(html).not.toContain('Telegram messages');
     expect(html).not.toContain('Telegram chats');
     expect(html).toContain('Toggle Completed RPC calls');
-    expect(html).toContain('aria-pressed="mixed"');
+    expect(html).toContain('aria-pressed="false"');
     expect(html).toContain('telegram.listChats');
-    expect(html).not.toContain('telegram.listChats.started');
+    expect(html).not.toContain('rpc.telegram.listChats.started');
     expect(html).not.toContain('Event limit');
   });
 });

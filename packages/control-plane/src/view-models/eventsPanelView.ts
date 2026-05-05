@@ -8,6 +8,8 @@ import {
 } from '../domain/events.js';
 import {
   RPC_CALL_EVENT_LIFECYCLES,
+  rpcCallEventTarget,
+  rpcCallLifecycleEventType,
   type AppEventBodyView,
   type AppEventYamlLine,
   type AppEventYamlToken,
@@ -239,7 +241,7 @@ function eventFilterRpcGroupView(
   const targets = rpcCallTargetsForGroup(source, group);
   const rpcCalls = targets.map((target) => {
     const lifecycles = RPC_CALL_EVENT_LIFECYCLES.map((lifecycle) => {
-      const type = `${target}.${lifecycle.suffix}`;
+      const type = rpcCallLifecycleEventType(target, lifecycle.suffix);
       return {
         ...lifecycle,
         enabled: isEventTypeEnabledInState(source, group, type),
@@ -283,18 +285,10 @@ function rpcCallTargetsForGroup(source: EventsPanelViewSource, group: EventGroup
   return [
     ...new Set(
       eventTypesForGroupInState(source, group)
-        .map((type) => rpcCallTarget(type))
+        .map((type) => rpcCallEventTarget(type))
         .filter((target): target is string => target !== null)
     )
   ];
-}
-
-function rpcCallTarget(type: string): string | null {
-  const lifecycle = RPC_CALL_EVENT_LIFECYCLES.find(({ suffix }) => type.endsWith(`.${suffix}`));
-  if (lifecycle === undefined) {
-    return null;
-  }
-  return type.slice(0, -(lifecycle.suffix.length + 1));
 }
 
 function rpcCallLifecycle(
@@ -307,16 +301,20 @@ function rpcCallLifecycle(
 } | null {
   const lifecycle = RPC_CALL_EVENT_LIFECYCLES.find(({ suffix }) => type.endsWith(`.${suffix}`));
   const callId = rpcCallId(event.data);
+  const target = rpcCallEventTarget(type);
   if (lifecycle === undefined) {
     return null;
   }
   if (callId === null) {
     return null;
   }
+  if (target === null) {
+    return null;
+  }
   return {
     callId,
     lifecycle,
-    target: type.slice(0, -(lifecycle.suffix.length + 1))
+    target
   };
 }
 

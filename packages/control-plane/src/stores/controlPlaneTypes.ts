@@ -1,3 +1,10 @@
+import {
+  RPC_CALL_EVENT_LIFECYCLES,
+  rpcCallEventTarget,
+  rpcCallEventType
+} from '@agentg/shared/rpc/call-event-types';
+import type { RpcCallEventSuffix } from '@agentg/shared/rpc/call-event-types';
+
 export const DEFAULT_EVENT_LIMIT = 200;
 export const MAX_EVENT_LIMIT = 2000;
 export const MIN_EVENT_LIMIT = 20;
@@ -382,30 +389,8 @@ export type EventFiltersPanelView = {
 
 export type EventsPanelMode = 'events' | 'filters';
 
-export const RPC_CALL_EVENT_LIFECYCLES = [
-  { label: 'S', suffix: 'started', title: 'Started' },
-  { label: 'C', suffix: 'completed', title: 'Completed' },
-  { label: 'F', suffix: 'failed', title: 'Failed' },
-  { label: 'P', suffix: 'progress', title: 'Progress' }
-] as const;
+export { RPC_CALL_EVENT_LIFECYCLES, rpcCallEventTarget };
 
-const RPC_CALL_EVENT_TARGETS = [
-  'history.getChatHistoryState',
-  'history.requestSync',
-  'summaries.summaries.requestSummary',
-  'telegram.countMessagesInIntervals',
-  'telegram.fetchPage',
-  'telegram.getChat',
-  'telegram.getChatHistoryFacts',
-  'telegram.getMessage',
-  'telegram.listChatDirectory',
-  'telegram.listChats',
-  'telegram.listRecentMessages',
-  'telegram.searchMessages'
-] as const;
-const RPC_CALL_EVENT_TYPES = RPC_CALL_EVENT_TARGETS.flatMap((target) =>
-  RPC_CALL_EVENT_LIFECYCLES.map((lifecycle) => `${target}.${lifecycle.suffix}`)
-);
 const TELEGRAM_OPERATION_EVENT_SUFFIXES = ['started', 'completed', 'failed'] as const;
 const TELEGRAM_OPERATION_EVENT_TARGETS = ['telegram.login'] as const;
 const TELEGRAM_OPERATION_EVENT_TYPES = TELEGRAM_OPERATION_EVENT_TARGETS.flatMap((target) =>
@@ -428,7 +413,7 @@ const TDLIB_CALL_EVENT_TYPES = TDLIB_CALL_EVENT_TARGETS.flatMap((target) =>
 export const EVENT_GROUPS: EventGroup[] = [
   {
     color: '#6366f1',
-    eventTypes: RPC_CALL_EVENT_TYPES,
+    eventTypes: [],
     id: 'rpc',
     label: 'RPC calls',
     match: isRpcCallEventType
@@ -531,5 +516,9 @@ export const EVENT_GROUPS: EventGroup[] = [
 ];
 
 function isRpcCallEventType(type: string): boolean {
-  return RPC_CALL_EVENT_TYPES.includes(type);
+  return rpcCallEventTarget(type) !== null;
+}
+
+export function rpcCallLifecycleEventType(target: string, suffix: RpcCallEventSuffix): string {
+  return rpcCallEventType(target, suffix);
 }

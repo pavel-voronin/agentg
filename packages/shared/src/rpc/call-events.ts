@@ -2,17 +2,26 @@ import type { EventBus } from '../events/bus.js';
 import { createIntegrationEvent, type IntegrationEvent } from '../events/envelope.js';
 import type { JsonObject, JsonValue } from '../json.js';
 import { toJsonValue } from '../json.js';
+import {
+  RPC_CALL_COMPLETED_EVENT_SUFFIX,
+  RPC_CALL_FAILED_EVENT_SUFFIX,
+  RPC_CALL_PROGRESS_EVENT_SUFFIX,
+  RPC_CALL_STARTED_EVENT_SUFFIX,
+  rpcCallEventType
+} from './call-event-types.js';
+import type { RpcCallEventSuffix } from './call-event-types.js';
 
-export const RPC_CALL_STARTED_EVENT_SUFFIX = 'started';
-export const RPC_CALL_PROGRESS_EVENT_SUFFIX = 'progress';
-export const RPC_CALL_COMPLETED_EVENT_SUFFIX = 'completed';
-export const RPC_CALL_FAILED_EVENT_SUFFIX = 'failed';
-
-export type RpcCallEventSuffix =
-  | typeof RPC_CALL_STARTED_EVENT_SUFFIX
-  | typeof RPC_CALL_PROGRESS_EVENT_SUFFIX
-  | typeof RPC_CALL_COMPLETED_EVENT_SUFFIX
-  | typeof RPC_CALL_FAILED_EVENT_SUFFIX;
+export {
+  RPC_CALL_COMPLETED_EVENT_SUFFIX,
+  RPC_CALL_EVENT_LIFECYCLES,
+  RPC_CALL_EVENT_PREFIX,
+  RPC_CALL_FAILED_EVENT_SUFFIX,
+  RPC_CALL_PROGRESS_EVENT_SUFFIX,
+  RPC_CALL_STARTED_EVENT_SUFFIX,
+  rpcCallEventTarget,
+  rpcCallEventType
+} from './call-event-types.js';
+export type { RpcCallEventSuffix } from './call-event-types.js';
 
 export type RpcProgressData = JsonObject;
 
@@ -114,10 +123,6 @@ export function createRpcCallFailedEvent(input: RpcCallFailedEventInput): Integr
     source: input.source,
     type: rpcCallEventType(input.target, RPC_CALL_FAILED_EVENT_SUFFIX)
   });
-}
-
-export function rpcCallEventType(target: string, suffix: RpcCallEventSuffix): string {
-  return `${target}.${suffix}`;
 }
 
 export function publishRpcCallEvent(eventBus: EventBus | undefined, event: IntegrationEvent): void {

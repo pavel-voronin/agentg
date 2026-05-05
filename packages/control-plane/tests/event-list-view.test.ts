@@ -18,7 +18,7 @@ describe('event list view', () => {
         event('telegram.status', '2026-05-05T00:00:01.500Z', { online: true }),
         rpcEvent('started', '2026-05-05T00:00:01.000Z', { stage: 'started' })
       ],
-      (type) => type === 'telegram.listChats.started'
+      (type) => type === 'rpc.telegram.listChats.started'
     );
 
     expect(items.map((item) => item.kind)).toEqual(['rpc', 'event']);
@@ -31,8 +31,8 @@ describe('event list view', () => {
       target: 'telegram.listChats'
     });
     expect(rpcItem.lifecycleTypes).toEqual([
-      'telegram.listChats.started',
-      'telegram.listChats.completed'
+      'rpc.telegram.listChats.started',
+      'rpc.telegram.listChats.completed'
     ]);
     expect(rpcItem.lifecycles.map((lifecycle) => lifecycle.suffix)).toEqual([
       'started',
@@ -43,8 +43,8 @@ describe('event list view', () => {
       '+1000 ms'
     ]);
     expect(rpcItem.lifecycles[1]?.body).toMatchObject({
-      raw: '{"callId":"call_1","stage":"completed"}',
-      yaml: 'callId: call_1\nstage: completed'
+      raw: '{"callId":"call_1","target":"telegram.listChats","stage":"completed"}',
+      yaml: 'callId: call_1\ntarget: telegram.listChats\nstage: completed'
     });
     expect(rpcItem.lifecycles.map((lifecycle) => lifecycle.muted)).toEqual([true, false]);
   });
@@ -156,7 +156,11 @@ function rpcEvent(
   data: Record<string, unknown>,
   callId = 'call_1'
 ): ControlPlaneEvent {
-  return event(`telegram.listChats.${suffix}`, occurredAt, { callId, ...data });
+  return event(`rpc.telegram.listChats.${suffix}`, occurredAt, {
+    callId,
+    target: 'telegram.listChats',
+    ...data
+  });
 }
 
 function event(type: string, occurredAt: string, data: unknown): ControlPlaneEvent {

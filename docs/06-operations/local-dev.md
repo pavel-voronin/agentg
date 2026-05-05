@@ -164,7 +164,7 @@ extensions from snapshots.
 
 ## Debugging `callId` Flows
 
-RPC methods publish `{target}.{lifecycle}` events with one `callId` per
+RPC methods publish `rpc.{target}.{lifecycle}` events with one `callId` per
 invocation by default. To inspect one procedure flow, subscribe to that target
 in NATS directly:
 
@@ -173,7 +173,7 @@ node --input-type=module -e "
 import { connect, StringCodec } from 'nats';
 const nc = await connect({ servers: process.env.NATS_URL ?? 'nats://127.0.0.1:4222' });
 const codec = StringCodec();
-for await (const msg of nc.subscribe('history.getChatHistoryState.>')) {
+for await (const msg of nc.subscribe('rpc.history.getChatHistoryState.>')) {
   console.log(codec.decode(msg.data));
 }
 "
@@ -182,10 +182,10 @@ for await (const msg of nc.subscribe('history.getChatHistoryState.>')) {
 Then:
 
 1. Invoke the subscribed RPC method, for example `history.getChatHistoryState`.
-   Use `history.requestSync.>` or `summaries.summaries.requestSummary.>` when
-   inspecting those targets.
-2. Correlate `{target}.started`, optional `{target}.progress`,
-   `{target}.completed`, and `{target}.failed` by `event.data.callId`.
+   Use `rpc.history.requestSync.>` or
+   `rpc.summaries.summaries.requestSummary.>` when inspecting those targets.
+2. Correlate `rpc.{target}.started`, optional `rpc.{target}.progress`,
+   `rpc.{target}.completed`, and `rpc.{target}.failed` by `event.data.callId`.
 
 These events are not durable. If a client disconnects, recover state through the
 owning domain or module RPC surface.

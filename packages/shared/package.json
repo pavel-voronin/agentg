@@ -14,6 +14,7 @@
     "./json": "./src/json.ts",
     "./modules/runtime": "./src/modules/runtime.ts",
     "./models/telegram": "./src/models/telegram.ts",
+    "./rpc/call-event-types": "./src/rpc/call-event-types.ts",
     "./rpc/call-options": "./src/rpc/call-options.ts",
     "./rpc/call-events": "./src/rpc/call-events.ts",
     "./rpc/model-refs": "./src/rpc/model-refs.ts"
