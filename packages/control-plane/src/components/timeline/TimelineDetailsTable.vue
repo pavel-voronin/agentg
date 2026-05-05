@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { TimelineDetail, TimelineDetailSection } from '../../timeline/timelineModel.js';
+import UiButton from '../../ui/UiButton.vue';
 
 const props = defineProps<{
   highlightedKeys: string[];
@@ -90,14 +91,15 @@ function isHighlighted(key: string): boolean {
                   <code class="break-all text-zinc-500">{{ detail.id }}</code>
                 </td>
                 <td class="px-3 py-1 text-right">
-                  <button
+                  <UiButton
                     v-if="detail.id"
-                    type="button"
-                    class="rounded-md border border-red-200 bg-red-50 px-2 py-0.5 text-xs font-medium leading-5 text-red-700 hover:bg-red-100"
+                    class="px-2 py-0.5"
+                    size="xs"
+                    variant="danger"
                     @click="deleteDetailTarget(detail)"
                   >
                     Delete
-                  </button>
+                  </UiButton>
                 </td>
               </template>
 

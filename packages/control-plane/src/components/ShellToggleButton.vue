@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 
+import UiButton from '../ui/UiButton.vue';
+
 const props = defineProps<{
   active: boolean;
   icon: 'dashboard' | 'events';
@@ -14,12 +16,6 @@ const emit = defineEmits<{
   previewLeave: [];
   toggle: [];
 }>();
-
-const buttonClass = computed(() =>
-  props.active
-    ? 'group inline-flex h-8 items-center gap-1.5 rounded-md border border-zinc-900 bg-zinc-900 px-2.5 text-xs font-medium text-white shadow-sm hover:bg-zinc-800'
-    : 'group inline-flex h-8 items-center gap-1.5 rounded-md border border-zinc-300 bg-white px-2.5 text-xs font-medium text-zinc-700 shadow-sm hover:bg-zinc-50'
-);
 
 const actionIconClass = computed(() =>
   props.active ? 'h-3.5 w-3.5' : 'h-3.5 w-3.5 group-hover:hidden'
@@ -39,11 +35,11 @@ function emitPreviewEnter(): void {
 </script>
 
 <template>
-  <button
-    type="button"
+  <UiButton
     :aria-pressed="active"
-    :class="buttonClass"
+    class="group gap-1.5 px-2.5 text-xs"
     :title="title"
+    :variant="active ? 'selected' : 'neutral'"
     @blur="emit('previewLeave')"
     @click="emit('toggle')"
     @mouseleave="emit('previewLeave')"
@@ -90,5 +86,5 @@ function emitPreviewEnter(): void {
       </svg>
     </span>
     <span>{{ label }}</span>
-  </button>
+  </UiButton>
 </template>

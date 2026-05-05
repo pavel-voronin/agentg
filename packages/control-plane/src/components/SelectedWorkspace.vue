@@ -5,6 +5,7 @@ import type {
   SelectedWorkspaceView,
   TimelineScaleButtonView
 } from '../stores/controlPlaneTypes.js';
+import UiButton from '../ui/UiButton.vue';
 import HistoryTimeline from './HistoryTimeline.vue';
 
 defineProps<{
@@ -27,11 +28,8 @@ function addCustomTarget(): void {
   emit('customTarget', customStart.value.trim(), customEnd.value.trim());
 }
 
-function scaleButtonClass(scale: TimelineScaleButtonView): string {
-  const borderClass = scale.active ? 'border-zinc-800' : 'border-zinc-300';
-  return scale.active
-    ? `relative h-7 rounded-lg border bg-zinc-800 px-2.5 text-xs font-medium text-white shadow-sm ${borderClass}`
-    : `relative h-7 rounded-lg border bg-white px-2.5 text-xs font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 ${borderClass}`;
+function scaleButtonVariant(scale: TimelineScaleButtonView): 'neutral' | 'selected' {
+  return scale.active ? 'selected' : 'neutral';
 }
 </script>
 
@@ -82,15 +80,15 @@ function scaleButtonClass(scale: TimelineScaleButtonView): string {
             </div>
           </div>
           <div class="flex shrink-0 items-center gap-2">
-            <button
-              type="button"
+            <UiButton
               aria-label="Close chat"
               title="Close chat"
-              class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-300 bg-white text-lg leading-none text-zinc-600 hover:bg-zinc-50"
+              class="text-lg leading-none text-zinc-600"
+              size="icon-md"
               @click="emit('close')"
             >
               ×
-            </button>
+            </UiButton>
           </div>
         </div>
       </div>
@@ -103,27 +101,9 @@ function scaleButtonClass(scale: TimelineScaleButtonView): string {
               <div class="text-xs text-zinc-500">Target history coverage for this chat</div>
             </div>
             <div class="flex flex-wrap gap-2">
-              <button
-                type="button"
-                class="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium hover:bg-zinc-50"
-                @click="emit('presetTarget', 'last7d')"
-              >
-                Last 7d
-              </button>
-              <button
-                type="button"
-                class="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium hover:bg-zinc-50"
-                @click="emit('presetTarget', 'last30d')"
-              >
-                Last 30d
-              </button>
-              <button
-                type="button"
-                class="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium hover:bg-zinc-50"
-                @click="emit('presetTarget', 'full')"
-              >
-                Past..now
-              </button>
+              <UiButton @click="emit('presetTarget', 'last7d')"> Last 7d </UiButton>
+              <UiButton @click="emit('presetTarget', 'last30d')"> Last 30d </UiButton>
+              <UiButton @click="emit('presetTarget', 'full')"> Past..now </UiButton>
             </div>
           </div>
           <div class="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-2">
@@ -137,13 +117,9 @@ function scaleButtonClass(scale: TimelineScaleButtonView): string {
               class="rounded-lg border border-zinc-300 bg-white px-3 py-2 outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100"
               placeholder="End: now, 2026-02-01"
             />
-            <button
-              type="button"
-              class="rounded-lg border border-zinc-800 bg-zinc-800 px-3 py-2 font-medium text-white hover:bg-zinc-950"
-              @click="addCustomTarget"
-            >
+            <UiButton class="h-auto py-2" variant="primary" @click="addCustomTarget">
               Add
-            </button>
+            </UiButton>
           </div>
         </section>
 
@@ -153,17 +129,18 @@ function scaleButtonClass(scale: TimelineScaleButtonView): string {
             <div class="flex flex-wrap items-center gap-2">
               <span class="text-xs text-zinc-500">Scale</span>
               <div class="flex flex-wrap gap-1.5">
-                <button
+                <UiButton
                   v-for="scale in view.scaleButtons"
                   :key="scale.value"
-                  type="button"
                   :aria-pressed="scale.active"
                   :data-default-scale="scale.isDefault"
-                  :class="scaleButtonClass(scale)"
+                  class="relative"
+                  size="sm"
+                  :variant="scaleButtonVariant(scale)"
                   @click="emit('scaleSelect', scale.value)"
                 >
                   {{ scale.label }}
-                </button>
+                </UiButton>
               </div>
             </div>
           </div>

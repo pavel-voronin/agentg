@@ -7,6 +7,7 @@ import type {
   EventFilterLifecycleColumnView,
   EventFiltersPanelView
 } from '../stores/controlPlaneTypes.js';
+import UiButton from '../ui/UiButton.vue';
 
 const props = defineProps<{
   view: EventFiltersPanelView;
@@ -56,6 +57,10 @@ function setAllFiltersEnabled(enabled: boolean): void {
   for (const type of allFilterTypes.value) {
     emit('typeChange', type, enabled);
   }
+}
+
+function domainButtonVariant(domain: EventFilterDomainView): 'neutral' | 'selected' {
+  return activeDomain.value?.id === domain.id ? 'selected' : 'neutral';
 }
 
 function onTypeChange(type: string, event: Event): void {
@@ -113,34 +118,21 @@ function inputTarget(event: Event): InputEventTarget | null {
   <div class="min-h-0 flex-1 overflow-auto bg-white">
     <div class="sticky top-0 z-10 border-b border-zinc-200 bg-white p-3">
       <div class="flex flex-wrap items-center gap-1.5">
-        <button
-          type="button"
-          class="inline-flex h-8 shrink-0 items-center rounded-md border border-zinc-300 bg-white px-2.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 hover:text-zinc-950"
-          @click="setAllFiltersEnabled(true)"
-        >
+        <UiButton class="shrink-0 px-2.5 text-xs" @click="setAllFiltersEnabled(true)">
           All
-        </button>
-        <button
-          type="button"
-          class="inline-flex h-8 shrink-0 items-center rounded-md border border-zinc-300 bg-white px-2.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 hover:text-zinc-950"
-          @click="setAllFiltersEnabled(false)"
-        >
+        </UiButton>
+        <UiButton class="shrink-0 px-2.5 text-xs" @click="setAllFiltersEnabled(false)">
           None
-        </button>
+        </UiButton>
         <span class="mx-0.5 h-6 w-px shrink-0 bg-zinc-200" aria-hidden="true"></span>
         <div class="contents" role="tablist" aria-label="Event filter domains">
-          <button
+          <UiButton
             v-for="domain in view.domains"
             :key="domain.id"
             :aria-selected="activeDomain?.id === domain.id"
-            :class="[
-              'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium',
-              activeDomain?.id === domain.id
-                ? 'border-zinc-900 bg-zinc-900 text-white'
-                : 'border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900'
-            ]"
+            class="shrink-0 gap-1.5 px-2.5 text-xs"
             role="tab"
-            type="button"
+            :variant="domainButtonVariant(domain)"
             @click="setActiveDomain(domain.id)"
           >
             <span>{{ domain.label }}</span>
@@ -154,7 +146,7 @@ function inputTarget(event: Event): InputEventTarget | null {
             >
               {{ domain.enabledCount }}
             </span>
-          </button>
+          </UiButton>
         </div>
       </div>
     </div>
@@ -257,13 +249,9 @@ function inputTarget(event: Event): InputEventTarget | null {
           </div>
         </section>
       </div>
-      <button
-        type="button"
-        class="mt-1 h-9 rounded-lg border border-zinc-800 bg-zinc-800 px-3 text-sm font-medium text-white hover:bg-zinc-950"
-        @click="emit('close')"
-      >
+      <UiButton class="mt-1 h-9 justify-center" variant="primary" @click="emit('close')">
         Close Filters
-      </button>
+      </UiButton>
     </div>
   </div>
 </template>

@@ -6,6 +6,7 @@ import type {
   ChatListItemView,
   ChatSidebarView
 } from '../stores/controlPlaneTypes.js';
+import UiButton from '../ui/UiButton.vue';
 
 defineProps<{
   view: ChatSidebarView;
@@ -132,13 +133,7 @@ function inputTarget(event: Event): InputEventTarget | null {
               <div class="truncate text-sm font-semibold">{{ view.header.title }}</div>
               <div class="text-xs text-zinc-500">{{ view.header.subtitle }}</div>
             </div>
-            <button
-              type="button"
-              class="shrink-0 rounded-lg border border-zinc-300 bg-white px-2.5 py-1.5 text-xs font-medium hover:bg-zinc-50"
-              @click="emit('mainOpen')"
-            >
-              Main
-            </button>
+            <UiButton class="shrink-0 px-2.5 text-xs" @click="emit('mainOpen')"> Main </UiButton>
           </div>
         </div>
 

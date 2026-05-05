@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 
 import type { AppEventItem, EventFiltersPanelView } from '../stores/controlPlaneTypes.js';
+import UiButton from '../ui/UiButton.vue';
 import EventFilters from './EventFilters.vue';
 import EventsList from './EventsList.vue';
 
@@ -29,23 +30,12 @@ const emit = defineEmits<{
   typeChange: [type: string, enabled: boolean];
 }>();
 
-const eventFilterToggleClass = computed(() =>
-  props.filtersVisible
-    ? 'inline-flex h-8 items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-800 px-2.5 text-sm font-medium text-white hover:bg-zinc-950'
-    : 'inline-flex h-8 items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50'
-);
-const eventStreamToggleClass = computed(() =>
-  props.streamPaused
-    ? 'inline-flex h-8 w-[5.75rem] items-center justify-center gap-1.5 rounded-lg border border-amber-400 bg-white px-2 text-sm font-medium text-amber-700 hover:bg-amber-50'
-    : 'inline-flex h-8 w-[5.75rem] items-center justify-center gap-1.5 rounded-lg border border-emerald-500 bg-white px-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50'
-);
+const eventFilterToggleVariant = computed(() => (props.filtersVisible ? 'selected' : 'neutral'));
 const eventStreamToggleLabel = computed(() =>
   props.streamPaused ? 'Resume event stream' : 'Pause event stream'
 );
 const eventStreamStateLabel = computed(() => (props.streamPaused ? 'Paused' : 'Live'));
-const eventStreamDotClass = computed(() =>
-  props.streamPaused ? 'bg-amber-500' : 'bg-emerald-500'
-);
+const eventStreamDotClass = computed(() => (props.streamPaused ? 'bg-[#9CA3AF]' : 'bg-[#16A34A]'));
 </script>
 
 <template>
@@ -58,20 +48,23 @@ const eventStreamDotClass = computed(() =>
         <div class="text-sm font-semibold">Events</div>
       </div>
       <div class="flex shrink-0 items-center gap-2">
-        <button
+        <UiButton
           :id="streamToggleId"
-          type="button"
           :aria-label="eventStreamToggleLabel"
           :aria-pressed="!streamPaused"
-          :class="eventStreamToggleClass"
+          class="w-[128px] justify-start pl-[14px] pr-[10px]"
           :title="eventStreamToggleLabel"
           @click="emit('streamToggle')"
         >
-          <span :class="['h-2 w-2 rounded-full', eventStreamDotClass]" aria-hidden="true"></span>
-          <span class="min-w-0">{{ eventStreamStateLabel }}</span>
+          <span
+            :class="['mr-[9px] h-[9px] w-[9px] rounded-full', eventStreamDotClass]"
+            aria-hidden="true"
+          ></span>
+          <span class="mr-[5px] w-[50px] min-w-0 text-left">{{ eventStreamStateLabel }}</span>
+          <span class="mr-[9px] h-[18px] w-px bg-[#E5E7EB]" aria-hidden="true"></span>
           <svg
             v-if="streamPaused"
-            class="h-3.5 w-3.5 shrink-0"
+            class="h-[18px] w-[18px] shrink-0 text-[#111827]"
             viewBox="0 0 20 20"
             fill="currentColor"
             aria-hidden="true"
@@ -82,7 +75,7 @@ const eventStreamDotClass = computed(() =>
           </svg>
           <svg
             v-else
-            class="h-3.5 w-3.5 shrink-0"
+            class="h-[18px] w-[18px] shrink-0 text-[#111827]"
             viewBox="0 0 20 20"
             fill="currentColor"
             aria-hidden="true"
@@ -91,11 +84,11 @@ const eventStreamDotClass = computed(() =>
               d="M6 4.5A1.5 1.5 0 0 1 7.5 3h.25a1.5 1.5 0 0 1 1.5 1.5v11a1.5 1.5 0 0 1-1.5 1.5H7.5A1.5 1.5 0 0 1 6 15.5v-11ZM10.75 4.5A1.5 1.5 0 0 1 12.25 3h.25A1.5 1.5 0 0 1 14 4.5v11a1.5 1.5 0 0 1-1.5 1.5h-.25a1.5 1.5 0 0 1-1.5-1.5v-11Z"
             />
           </svg>
-        </button>
-        <button
+        </UiButton>
+        <UiButton
           :id="filtersToggleId"
-          type="button"
-          :class="eventFilterToggleClass"
+          class="gap-1.5 px-2.5"
+          :variant="eventFilterToggleVariant"
           @click="emit('filtersToggle')"
         >
           <svg
@@ -116,15 +109,8 @@ const eventStreamDotClass = computed(() =>
           <span class="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] leading-none text-zinc-500">
             {{ view.enabledCount }}
           </span>
-        </button>
-        <button
-          :id="clearButtonId"
-          type="button"
-          class="h-8 rounded-lg border border-zinc-300 bg-white px-3 text-sm font-medium hover:bg-zinc-50"
-          @click="emit('clear')"
-        >
-          Clear
-        </button>
+        </UiButton>
+        <UiButton :id="clearButtonId" @click="emit('clear')"> Clear </UiButton>
       </div>
     </div>
     <EventsList
