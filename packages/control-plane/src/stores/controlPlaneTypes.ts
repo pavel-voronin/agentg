@@ -458,6 +458,13 @@ export const EVENT_GROUPS: EventGroup[] = [
     match: (type) => type.startsWith('telegram.chat.') || type.startsWith('telegram.chat_folders.')
   },
   {
+    color: '#0f766e',
+    eventTypes: ['telegram.user.updated'],
+    id: 'telegram_users',
+    label: 'Telegram users',
+    match: (type) => type.startsWith('telegram.user.')
+  },
+  {
     color: '#f59e0b',
     eventTypes: ['telegram.status'],
     id: 'telegram_status',

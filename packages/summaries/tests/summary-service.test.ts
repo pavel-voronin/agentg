@@ -48,8 +48,13 @@ describe('summaries service', () => {
       createIntegrationEvent({
         data: {
           message: {
-            chatId: 'chat-a',
-            messageId: '43'
+            _model: 'telegram.message',
+            id: 'chat-a:43',
+            chat: {
+              _model: 'telegram.chat',
+              id: 'chat-a'
+            },
+            telegramMessageId: '43'
           }
         },
         source: 'telegram',

@@ -59,15 +59,29 @@ export type TelegramReadChat = {
 };
 
 export type TelegramReadMessage = {
-  chatId: string;
+  _model: 'telegram.message';
+  id: string;
+  chat: {
+    _model: 'telegram.chat';
+    id: string;
+  };
   contentType: string;
   deletedAt: string | null;
   editDate: string | null;
   isDeleted: boolean;
   messageDate: string | null;
-  messageId: string;
-  senderId: string | null;
+  sender:
+    | {
+        _model: 'telegram.chat';
+        id: string;
+      }
+    | {
+        _model: 'telegram.user';
+        id: string;
+      }
+    | null;
   senderType: string | null;
+  telegramMessageId: string;
   text: string | null;
   updatedAt: string;
 };
@@ -95,8 +109,10 @@ export type TelegramChatDirectoryEntry = TelegramReadChat & {
 };
 
 export type TelegramChatFolder = {
+  _model: 'telegram.chatFolder';
+  folderId: number;
   iconName: string | null;
-  id: number;
+  id: string;
   position: number;
   title: string;
 };

@@ -53,7 +53,8 @@ const EVENT_GROUP_DOMAIN_IDS: Record<string, EventFilterDomainId> = {
   telegram_messages: 'telegram',
   telegram_operations: 'telegram',
   telegram_status: 'telegram',
-  telegram_tdlib: 'tdlib'
+  telegram_tdlib: 'tdlib',
+  telegram_users: 'telegram'
 };
 
 export function eventListItem(

@@ -35,7 +35,7 @@ describe('event filters view', () => {
       'summaries'
     ]);
     expect(telegramDomain).toMatchObject({
-      enabledCount: '43',
+      enabledCount: '44',
       eventsChecked: true,
       eventsIndeterminate: false
     });
@@ -46,6 +46,7 @@ describe('event filters view', () => {
       'telegram.message.updated',
       'telegram.chat.updated',
       'telegram.chat_folders.updated',
+      'telegram.user.updated',
       'telegram.status',
       'telegram.login.completed',
       'telegram.login.failed',

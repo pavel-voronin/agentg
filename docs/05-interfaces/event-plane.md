@@ -64,6 +64,7 @@ Telegram publishes:
 - `telegram.message.created`
 - `telegram.message.updated`
 - `telegram.message.deleted`
+- `telegram.user.updated`
 - `telegram.tdlib.{method}.started`
 - `telegram.tdlib.{method}.completed`
 - `telegram.tdlib.{method}.failed`
@@ -126,6 +127,13 @@ browser clients.
 Summaries subscribes to Telegram message events and History state-change events
 to invalidate private summary state. It recovers durable state through
 `summaries_*` tables and does not treat NATS as a replay log.
+
+Telegram event `data` embeds Telegram domain objects as inline ModelRefs.
+Stable Telegram chat references use `{ "_model": "telegram.chat", "id": "..." }`.
+Stable Telegram chat folder references use `{ "_model": "telegram.chatFolder",
+"id": "..." }`.
+Stable Telegram message references use `{ "_model": "telegram.message", "id":
+"{chatId}:{messageId}" }` because TDLib message ids are scoped to a chat.
 
 ## Recovery Surfaces
 

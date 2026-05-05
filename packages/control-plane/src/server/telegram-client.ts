@@ -29,8 +29,10 @@ export type TelegramChatDirectoryEntry = {
 };
 
 export type TelegramChatFolder = {
+  _model: 'telegram.chatFolder';
+  folderId: number;
   iconName: string | null;
-  id: number;
+  id: string;
   position: number;
   title: string;
 };

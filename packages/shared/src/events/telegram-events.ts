@@ -1,19 +1,41 @@
 import type { JsonObject } from '../json.js';
+import {
+  telegramChatFolderRef,
+  telegramChatRef,
+  telegramMessageRef,
+  telegramMessageSenderRef,
+  telegramUserRef,
+  type TelegramChatFolderModelRef,
+  type TelegramChatModelRef,
+  type TelegramMessageModelRef,
+  type TelegramSenderModelRef,
+  type TelegramUserModelRef
+} from '../models/telegram.js';
 import { createIntegrationEvent, type IntegrationEvent } from './envelope.js';
 
 export type TelegramEventPersistResult = {
   chat: boolean;
   chatFolders: boolean;
   message: boolean;
+  user: boolean;
 };
 
-export type TelegramEventChat = {
+export type TelegramEventSourceChat = {
   id: string;
   type: string;
   title: string;
 };
 
-export type TelegramEventMessage = {
+export type TelegramEventSourceUser = {
+  id: string;
+  firstName: string;
+  isBot: boolean;
+  isSelf?: boolean;
+  lastName: string;
+  username?: string;
+};
+
+export type TelegramEventSourceMessage = {
   chatId: string;
   messageId: string;
   senderId?: string;
@@ -24,7 +46,7 @@ export type TelegramEventMessage = {
   editDate?: Date;
 };
 
-export type TelegramEventMessageContentUpdate = {
+export type TelegramEventSourceMessageContentUpdate = {
   chatId: string;
   contentType: string;
   editDate?: Date;
@@ -32,13 +54,15 @@ export type TelegramEventMessageContentUpdate = {
   text?: string;
 };
 
-export type TelegramEventMessageDelete = {
+export type TelegramEventSourceMessageDelete = {
   chatId: string;
   deletedAt: Date;
+  fromCache: boolean;
+  isPermanent: boolean;
   messageIds: string[];
 };
 
-export type TelegramEventChatFolder = {
+export type TelegramEventSourceChatFolder = {
   iconName?: string;
   id: number;
   position: number;
@@ -46,13 +70,14 @@ export type TelegramEventChatFolder = {
 };
 
 export type TelegramEventSourceUpdate = {
-  chat?: TelegramEventChat;
+  chat?: TelegramEventSourceChat;
   chatFolders?: {
-    folders: TelegramEventChatFolder[];
+    folders: TelegramEventSourceChatFolder[];
   };
-  contentUpdate?: TelegramEventMessageContentUpdate;
-  delete?: TelegramEventMessageDelete;
-  message?: TelegramEventMessage;
+  contentUpdate?: TelegramEventSourceMessageContentUpdate;
+  delete?: TelegramEventSourceMessageDelete;
+  message?: TelegramEventSourceMessage;
+  user?: TelegramEventSourceUser;
 };
 
 export function createTelegramIntegrationEvents(
@@ -67,11 +92,7 @@ export function createTelegramIntegrationEvents(
         type: 'telegram.chat.updated',
         source: 'telegram',
         data: {
-          chat: {
-            id: update.chat.id,
-            title: update.chat.title,
-            type: update.chat.type
-          }
+          chat: eventChat(update.chat)
         },
         meta: {
           chatId: update.chat.id
@@ -86,12 +107,7 @@ export function createTelegramIntegrationEvents(
         type: 'telegram.chat_folders.updated',
         source: 'telegram',
         data: {
-          folders: update.chatFolders.folders.map((folder) => ({
-            iconName: folder.iconName ?? null,
-            id: folder.id,
-            position: folder.position,
-            title: folder.title
-          }))
+          folders: update.chatFolders.folders.map(eventChatFolder)
         }
       })
     );
@@ -109,10 +125,71 @@ export function createTelegramIntegrationEvents(
     events.push(deleteEvent(update.delete));
   }
 
+  if (result.user && update.user !== undefined) {
+    events.push(
+      createIntegrationEvent({
+        type: 'telegram.user.updated',
+        source: 'telegram',
+        data: {
+          user: eventUser(update.user)
+        },
+        meta: {
+          userId: update.user.id
+        }
+      })
+    );
+  }
+
   return events;
 }
 
-function messageEvent(type: string, message: TelegramEventMessage): IntegrationEvent {
+type TelegramEventChat = TelegramChatModelRef & {
+  title: string;
+  type: string;
+};
+
+type TelegramEventChatFolder = TelegramChatFolderModelRef & {
+  iconName: string | null;
+  position: number;
+  title: string;
+};
+
+type TelegramEventUser = TelegramUserModelRef & {
+  firstName: string;
+  isBot: boolean;
+  isSelf: boolean;
+  lastName: string;
+  username: string | null;
+};
+
+type TelegramEventMessage = TelegramMessageModelRef & {
+  chat: TelegramChatModelRef;
+  contentType: string;
+  editDate: string | null;
+  messageDate: string | null;
+  sender: TelegramSenderModelRef | null;
+  senderType: string | null;
+  telegramMessageId: string;
+  text: string | null;
+};
+
+type TelegramEventMessageUpdate = TelegramMessageModelRef & {
+  chat: TelegramChatModelRef;
+  contentType: string;
+  editDate: string | null;
+  telegramMessageId: string;
+  text: string | null;
+};
+
+type TelegramEventMessageDelete = {
+  chat: TelegramChatModelRef;
+  deletedAt: string;
+  fromCache: boolean;
+  isPermanent: boolean;
+  messages: TelegramMessageModelRef[];
+};
+
+function messageEvent(type: string, message: TelegramEventSourceMessage): IntegrationEvent {
   return createIntegrationEvent({
     type,
     source: 'telegram',
@@ -127,18 +204,12 @@ function messageEvent(type: string, message: TelegramEventMessage): IntegrationE
   });
 }
 
-function contentUpdateEvent(update: TelegramEventMessageContentUpdate): IntegrationEvent {
+function contentUpdateEvent(update: TelegramEventSourceMessageContentUpdate): IntegrationEvent {
   return createIntegrationEvent({
     type: 'telegram.message.updated',
     source: 'telegram',
     data: {
-      message: {
-        chatId: update.chatId,
-        contentType: update.contentType,
-        editDate: update.editDate?.toISOString() ?? null,
-        messageId: update.messageId,
-        text: update.text ?? null
-      }
+      message: eventMessageUpdate(update)
     },
     meta: {
       chatId: update.chatId,
@@ -148,16 +219,13 @@ function contentUpdateEvent(update: TelegramEventMessageContentUpdate): Integrat
   });
 }
 
-function deleteEvent(update: TelegramEventMessageDelete): IntegrationEvent {
+function deleteEvent(update: TelegramEventSourceMessageDelete): IntegrationEvent {
   return createIntegrationEvent({
     type: 'telegram.message.deleted',
     source: 'telegram',
     occurredAt: update.deletedAt,
     data: {
-      delete: {
-        chatId: update.chatId,
-        messageIds: update.messageIds
-      }
+      delete: eventMessageDelete(update)
     },
     meta: {
       chatId: update.chatId,
@@ -166,15 +234,73 @@ function deleteEvent(update: TelegramEventMessageDelete): IntegrationEvent {
   });
 }
 
-function compactMessage(message: TelegramEventMessage): JsonObject {
+function compactMessage(message: TelegramEventSourceMessage): JsonObject {
+  return eventMessage(message);
+}
+
+function eventChat(chat: TelegramEventSourceChat): TelegramEventChat {
   return {
-    chatId: message.chatId,
+    ...telegramChatRef(chat.id),
+    title: chat.title,
+    type: chat.type
+  };
+}
+
+function eventChatFolder(folder: TelegramEventSourceChatFolder): TelegramEventChatFolder {
+  return {
+    ...telegramChatFolderRef(folder.id),
+    iconName: folder.iconName ?? null,
+    position: folder.position,
+    title: folder.title
+  };
+}
+
+function eventUser(user: TelegramEventSourceUser): TelegramEventUser {
+  return {
+    ...telegramUserRef(user.id),
+    firstName: user.firstName,
+    isBot: user.isBot,
+    isSelf: user.isSelf === true,
+    lastName: user.lastName,
+    username: user.username ?? null
+  };
+}
+
+function eventMessage(message: TelegramEventSourceMessage): TelegramEventMessage {
+  return {
+    ...telegramMessageRef({ chatId: message.chatId, messageId: message.messageId }),
+    chat: telegramChatRef(message.chatId),
     contentType: message.contentType,
     editDate: message.editDate?.toISOString() ?? null,
     messageDate: message.messageDate?.toISOString() ?? null,
-    messageId: message.messageId,
-    senderId: message.senderId ?? null,
+    sender: telegramMessageSenderRef(message.senderType, message.senderId),
     senderType: message.senderType ?? null,
+    telegramMessageId: message.messageId,
     text: message.text ?? null
+  };
+}
+
+function eventMessageUpdate(
+  update: TelegramEventSourceMessageContentUpdate
+): TelegramEventMessageUpdate {
+  return {
+    ...telegramMessageRef({ chatId: update.chatId, messageId: update.messageId }),
+    chat: telegramChatRef(update.chatId),
+    contentType: update.contentType,
+    editDate: update.editDate?.toISOString() ?? null,
+    telegramMessageId: update.messageId,
+    text: update.text ?? null
+  };
+}
+
+function eventMessageDelete(update: TelegramEventSourceMessageDelete): TelegramEventMessageDelete {
+  return {
+    chat: telegramChatRef(update.chatId),
+    deletedAt: update.deletedAt.toISOString(),
+    fromCache: update.fromCache,
+    isPermanent: update.isPermanent,
+    messages: update.messageIds.map((messageId) =>
+      telegramMessageRef({ chatId: update.chatId, messageId })
+    )
   };
 }

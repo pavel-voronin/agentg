@@ -123,7 +123,9 @@ function subscribeHistorySyncService(options: {
     }),
     options.eventBus.subscribe('telegram.message.created', (event) => {
       const message = asRecord(asRecord(event.data)?.message);
-      const chatId = typeof message?.chatId === 'string' ? message.chatId : undefined;
+      const chat = asRecord(message?.chat);
+      const chatId =
+        chat?._model === 'telegram.chat' && typeof chat.id === 'string' ? chat.id : undefined;
       const messageDate =
         typeof message?.messageDate === 'string' ? new Date(message.messageDate) : undefined;
       if (

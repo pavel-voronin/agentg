@@ -231,7 +231,7 @@ function controlPlaneChatNavigation(
     }
   }
 
-  const knownFolderIds = new Set(folderRows.map((folder) => folder.id));
+  const knownFolderIds = new Set(folderRows.map((folder) => folder.folderId));
   const unknownFolderIds = [...folderCounts.keys()]
     .filter((id) => !knownFolderIds.has(id))
     .sort((left, right) => left - right);
@@ -240,9 +240,9 @@ function controlPlaneChatNavigation(
     archiveCount,
     folders: [
       ...folderRows.map((folder) => ({
-        count: folderCounts.get(folder.id) ?? 0,
+        count: folderCounts.get(folder.folderId) ?? 0,
         iconName: folder.iconName,
-        id: folder.id,
+        id: folder.folderId,
         position: folder.position,
         title: folder.title
       })),

@@ -13,6 +13,7 @@
     "./events/telegram-events": "./src/events/telegram-events.ts",
     "./json": "./src/json.ts",
     "./modules/runtime": "./src/modules/runtime.ts",
+    "./models/telegram": "./src/models/telegram.ts",
     "./rpc/call-options": "./src/rpc/call-options.ts",
     "./rpc/call-events": "./src/rpc/call-events.ts",
     "./rpc/extensions": "./src/rpc/extensions.ts",

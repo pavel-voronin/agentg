@@ -103,8 +103,9 @@ Telegram payloads.
   so History Sync keeps working during the stage.
 - Return compact Telegram read DTOs:
   - chat: `id`, `title`, `type`, `updatedAt`
-  - message: `chatId`, `messageId`, `senderId`, `senderType`, `contentType`,
-    `text`, `messageDate`, `editDate`, `isDeleted`, `deletedAt`, `updatedAt`
+  - message: `_model: "telegram.message"`, `id`, `chat`, `telegramMessageId`,
+    `sender`, `senderType`, `contentType`, `text`, `messageDate`, `editDate`,
+    `isDeleted`, `deletedAt`, `updatedAt`
 - Exclude `raw`, TDLib `_` fields, database primary key internals, and Drizzle
   row shapes from all Gateway-visible Telegram read results.
 - Add a Gateway-owned JSON-RPC adapter that maps existing `telegram.*` method

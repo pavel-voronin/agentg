@@ -1,6 +1,12 @@
 import type { TelegramDatabase as AppDatabase } from '../database.js';
 import { telegramChatFolders, telegramChats, telegramMessages, telegramUsers } from '../schema.js';
 import type { EventBus } from '@agentg/shared/events/bus';
+import {
+  telegramChatFolderRef,
+  telegramChatRef,
+  telegramMessageRef,
+  telegramMessageSenderRef
+} from '@agentg/shared/models/telegram';
 import { and, asc, desc, eq, gte, ilike, inArray, isNotNull, lt, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
@@ -70,16 +76,28 @@ export const telegramReadChatSchema = z.object({
   updatedAt: z.string()
 });
 
+export const telegramChatModelRefSchema = z.object({
+  _model: z.literal('telegram.chat'),
+  id: z.string()
+});
+
+export const telegramUserModelRefSchema = z.object({
+  _model: z.literal('telegram.user'),
+  id: z.string()
+});
+
 export const telegramReadMessageSchema = z.object({
-  chatId: z.string(),
+  _model: z.literal('telegram.message'),
+  id: z.string(),
+  chat: telegramChatModelRefSchema,
   contentType: z.string(),
   deletedAt: z.string().nullable(),
   editDate: z.string().nullable(),
   isDeleted: z.boolean(),
   messageDate: z.string().nullable(),
-  messageId: z.string(),
-  senderId: z.string().nullable(),
+  sender: z.union([telegramChatModelRefSchema, telegramUserModelRefSchema]).nullable(),
   senderType: z.string().nullable(),
+  telegramMessageId: z.string(),
   text: z.string().nullable(),
   updatedAt: z.string()
 });
@@ -146,8 +164,10 @@ export const telegramChatDirectoryEntrySchema = telegramReadChatSchema.extend({
 });
 
 export const telegramChatFolderSchema = z.object({
+  _model: z.literal('telegram.chatFolder'),
+  folderId: nonNegativeIntegerSchema,
   iconName: z.string().nullable(),
-  id: nonNegativeIntegerSchema,
+  id: z.string(),
   position: nonNegativeIntegerSchema,
   title: z.string()
 });
@@ -432,7 +452,7 @@ async function handleListChatDirectory(
   const where = andSql(queryWhere, type === undefined ? undefined : eq(telegramChats.type, type));
   const navigationWhere = type === undefined ? undefined : eq(telegramChats.type, type);
 
-  const [matchingChats, navigationChats, folders, types] = await Promise.all([
+  const [matchingChats, navigationChats, folders] = await Promise.all([
     runtime.database
       .select({
         raw: telegramChats.raw,
@@ -463,27 +483,26 @@ async function handleListChatDirectory(
         title: telegramChatFolders.title
       })
       .from(telegramChatFolders)
-      .orderBy(asc(telegramChatFolders.position), asc(telegramChatFolders.telegramChatFolderId)),
-    runtime.database
-      .select({
-        count: sql<number>`count(*)::int`,
-        type: telegramChats.type
-      })
-      .from(telegramChats)
-      .groupBy(telegramChats.type)
-      .orderBy(asc(telegramChats.type))
+      .orderBy(asc(telegramChatFolders.position), asc(telegramChatFolders.telegramChatFolderId))
   ]);
+  const chatEntries = listableDirectoryEntries(
+    await toDirectoryEntries(runtime.database, matchingChats)
+  );
+  const navigationEntries = listableDirectoryEntries(
+    await toDirectoryEntries(runtime.database, navigationChats)
+  );
 
   return {
-    chats: await toDirectoryEntries(runtime.database, matchingChats),
+    chats: chatEntries,
     folders: folders.map((folder) => ({
+      ...telegramChatFolderRef(folder.telegramChatFolderId),
+      folderId: folder.telegramChatFolderId,
       iconName: folder.iconName,
-      id: folder.telegramChatFolderId,
       position: folder.position,
       title: folder.title
     })),
-    navigationChats: await toDirectoryEntries(runtime.database, navigationChats),
-    types
+    navigationChats: navigationEntries,
+    types: chatTypeCounts(navigationEntries)
   };
 }
 
@@ -511,8 +530,16 @@ async function handleGetChatHistoryFacts(
     };
   }
 
-  const [entries, earliestMessages, messageCounts] = await Promise.all([
-    toDirectoryEntries(runtime.database, [chat]),
+  const [entry] = await toDirectoryEntries(runtime.database, [chat]);
+  if (entry === undefined || !isListableDirectoryEntry(entry)) {
+    return {
+      chat: null,
+      earliestMessageDate: null,
+      messageCount: 0
+    };
+  }
+
+  const [earliestMessages, messageCounts] = await Promise.all([
     runtime.database
       .select({
         messageDate: telegramMessages.messageDate
@@ -535,7 +562,7 @@ async function handleGetChatHistoryFacts(
   ]);
 
   return {
-    chat: entries[0] ?? null,
+    chat: entry,
     earliestMessageDate: earliestMessages[0]?.messageDate?.toISOString() ?? null,
     messageCount: messageCounts[0]?.count ?? 0
   };
@@ -687,6 +714,9 @@ async function discoverHistoryChats(
     if (normalized === undefined) {
       continue;
     }
+    if (!isListableChatRaw(normalized.raw)) {
+      continue;
+    }
 
     await upsertChat(database, normalized);
     if (isHistorySyncChatType(normalized.type)) {
@@ -713,14 +743,12 @@ async function listKnownHistoryChats(database: AppDatabase): Promise<TelegramHis
     .from(telegramChats)
     .orderBy(asc(telegramChats.telegramChatId));
 
-  return rows
-    .filter((row) => isHistorySyncChatType(row.type))
-    .map((row) => ({
-      _model: 'telegram.chat',
-      id: row.id,
-      title: row.title,
-      type: row.type
-    }));
+  return rows.filter(isStoredHistorySyncChat).map((row) => ({
+    _model: 'telegram.chat',
+    id: row.id,
+    title: row.title,
+    type: row.type
+  }));
 }
 
 async function listKnownFolderIds(database: AppDatabase): Promise<number[]> {
@@ -936,15 +964,19 @@ function readMessageSelection() {
 
 function toReadMessage(message: TelegramMessageStorageRow): TelegramReadMessage {
   return {
-    chatId: message.telegramChatId,
+    ...telegramMessageRef({
+      chatId: message.telegramChatId,
+      messageId: message.telegramMessageId
+    }),
+    chat: telegramChatRef(message.telegramChatId),
     contentType: message.contentType,
     deletedAt: toNullableIsoString(message.deletedAt),
     editDate: toNullableIsoString(message.editDate),
     isDeleted: message.isDeleted,
     messageDate: toNullableIsoString(message.messageDate),
-    messageId: message.telegramMessageId,
-    senderId: message.senderId,
+    sender: telegramMessageSenderRef(message.senderType, message.senderId),
     senderType: message.senderType,
+    telegramMessageId: message.telegramMessageId,
     text: message.text,
     updatedAt: message.updatedAt.toISOString()
   };
@@ -1100,8 +1132,40 @@ function isOptionalChatListNotFound(chatList: ChatListKind, error: unknown): boo
   return chatList.kind !== 'main' && isTdlibNotFound(error);
 }
 
+function listableDirectoryEntries(
+  entries: TelegramChatDirectoryEntry[]
+): TelegramChatDirectoryEntry[] {
+  return entries.filter(isListableDirectoryEntry);
+}
+
+function isListableDirectoryEntry(entry: TelegramChatDirectoryEntry): boolean {
+  return entry.placements.length > 0;
+}
+
+function chatTypeCounts(entries: TelegramChatDirectoryEntry[]): TelegramChatTypeCount[] {
+  const counts = new Map<string, number>();
+  for (const entry of entries) {
+    counts.set(entry.type, (counts.get(entry.type) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([type, count]) => ({ count, type }));
+}
+
+function isHistorySyncChat(chat: { raw: JsonObject; type: string }): boolean {
+  return isHistorySyncChatType(chat.type) && isListableChatRaw(chat.raw);
+}
+
+function isStoredHistorySyncChat(row: { raw: JsonObject; type: string }): boolean {
+  return isHistorySyncChat(row);
+}
+
 function isHistorySyncChatType(type: string): boolean {
   return type === 'private' || type === 'secret' || type === 'group' || type === 'channel';
+}
+
+function isListableChatRaw(raw: JsonObject): boolean {
+  return telegramChatPlacements(raw).length > 0;
 }
 
 function tdMessageId(message: TdObject | undefined): number | undefined {
