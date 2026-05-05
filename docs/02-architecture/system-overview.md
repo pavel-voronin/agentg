@@ -56,13 +56,15 @@ History Sync is a separate process from Telegram ingestion: it owns targets,
 coverage, and backfill jobs, while Telegram ingestion owns TDLib and
 Telegram-shaped persistence.
 Control Plane is a separate operator boundary: the browser UI calls Control
-Plane server, and Control Plane server calls internal domain RPC directly.
-Gateway remains the external agent edge.
-Trusted modules run as independent services inside the same internal contour.
-They own their storage and tRPC surface, and may register extension getter
-methods in the standalone extension registry. Gateway methods are managed
-directly in Gateway code. Callers that need extended views compose them outside
-the owning domain by reading registry entries and calling the registered getter
+Plane server, and Control Plane server resolves internal domain RPC through
+Service Directory before making tRPC calls. Gateway remains the external agent
+edge and also resolves its allowed internal RPC calls through Service Directory.
+Telegram ingestion, History Sync, and trusted modules run as independent
+services inside the same internal contour. They own their storage and tRPC
+surface, and join Service Directory with their procedures, events, and extension
+getter declarations. Gateway methods are managed directly in Gateway code.
+Callers that need extended views compose them outside the owning domain by
+reading the local Service Directory snapshot and calling the registered getter
 RPC methods.
 
 The preferred starting runtime is TypeScript/Node.js, provided TDLib can be integrated reliably through its JSON/C interface or a maintained wrapper. Go or Rust remain fallback choices if the Node.js integration becomes the risky part of the project.

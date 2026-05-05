@@ -18,11 +18,20 @@ try {
     await runChecked(command, args);
   }
 
+  startDevProcess('service-directory', 'npm', ['run', 'dev:service-directory']);
+  await waitForTcp('service-directory RPC', '127.0.0.1', 18084);
+
   startDevProcess('telegram', 'npm', ['run', 'dev:telegram']);
   await waitForTcp('telegram RPC', '127.0.0.1', 18081);
 
   startDevProcess('history-sync', 'npm', ['run', 'dev:history-sync']);
   await waitForTcp('history-sync RPC', '127.0.0.1', 18082);
+
+  startDevProcess('summaries', 'npm', ['run', 'dev:summaries']);
+  await waitForTcp('summaries RPC', '127.0.0.1', 18083);
+
+  startDevProcess('gateway', 'npm', ['run', 'dev:gateway']);
+  await waitForTcp('gateway', '127.0.0.1', 8787);
 
   startDevProcess('control-plane-server', 'npm', ['run', 'dev:control-plane-server']);
   await waitForTcp('control-plane server', '127.0.0.1', 8789);

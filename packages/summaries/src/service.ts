@@ -1,11 +1,11 @@
 import type { Server } from 'node:http';
 
+import { createServiceDirectoryClient } from '@agentg/service-directory/rpc';
 import type { EventBus, EventSubscription } from '@agentg/shared/events/bus';
-import { startRegistrationRefresh } from '@agentg/shared/modules/runtime';
 
 import type { SummariesServiceConfig } from './config.js';
 import type { SummariesDatabase } from './database.js';
-import { registerSummariesExtensions } from './registrations.js';
+import { createSummariesServiceManifest } from './registrations.js';
 import { startSummariesTrpcServer, stopSummariesTrpcServer } from './rpc/server.js';
 import { handleSummariesEvent, type SummariesRuntime } from './summary-service.js';
 import { createDrizzleSummaryRepository } from './store.js';
@@ -25,35 +25,30 @@ export async function runSummariesService(options: SummariesServiceOptions): Pro
     repository: createDrizzleSummaryRepository(options.database)
   };
   let summariesRpcServer: Server | undefined;
+  let closeServiceDirectory: (() => void) | undefined;
   const subscriptions = subscribeSummariesService(runtime, options.eventBus);
-  const refresh = startRegistrationRefresh({
-    intervalMs: options.config.registrationRefreshMs,
-    onError(error) {
-      console.error(
-        JSON.stringify({
-          error: error instanceof Error ? error.message : String(error),
-          event: 'summaries.registration_refresh_failed'
-        })
-      );
-    },
-    refresh: async () => {
-      await registerSummariesExtensions(
-        options.config.module,
-        options.config.services.extensionRegistry.url
-      );
-    }
-  });
 
   summariesRpcServer = await startSummariesTrpcServer({
     bind: options.config.internalRpc,
     eventBus: options.eventBus,
     runtime
   });
-  await refresh.refresh();
+  const serviceDirectory = createServiceDirectoryClient({
+    eventBus: options.eventBus,
+    onTopologyFailure: (error) => {
+      requestProcessShutdown('summaries.topology_failure', error);
+    },
+    url: options.config.services.serviceDirectory.url
+  });
+  await serviceDirectory.join(createSummariesServiceManifest(options.config.module));
+  closeServiceDirectory = () => {
+    serviceDirectory.close();
+  };
 
   console.log(JSON.stringify({ event: 'summaries.ready' }));
   await waitForShutdown(async () => {
-    refresh.stop();
+    closeServiceDirectory?.();
+    closeServiceDirectory = undefined;
     for (const subscription of subscriptions) {
       subscription.unsubscribe();
     }
@@ -73,6 +68,17 @@ export async function runSummariesService(options: SummariesServiceOptions): Pro
 
     return summariesRpcStopped && eventBusClosed;
   });
+}
+
+function requestProcessShutdown(event: string, error: Error): void {
+  console.error(
+    JSON.stringify({
+      error: error.message,
+      event
+    })
+  );
+  process.exitCode = 1;
+  process.kill(process.pid, 'SIGTERM');
 }
 
 function subscribeSummariesService(

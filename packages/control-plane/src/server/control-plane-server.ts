@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { extname, resolve, sep } from 'node:path';
 
 import { createHistoryRpcClient } from '@agentg/history-sync/rpc';
+import { createServiceDirectoryClient } from '@agentg/service-directory/rpc';
 import type { EventBus } from '@agentg/shared/events/bus';
 import type { IntegrationEvent } from '@agentg/shared/events/envelope';
 import { WebSocket, WebSocketServer, type RawData } from 'ws';
@@ -12,21 +13,20 @@ import {
   type ControlPlaneReadModelRuntime
 } from './control-plane-read-model.js';
 import {
-  createTrpcTelegramDirectoryClient,
+  createServiceDirectoryTelegramDirectoryClient,
   type TelegramDirectoryClient
 } from './telegram-client.js';
+import { createControlPlaneServiceManifest } from './registrations.js';
 
 type HistoryRpcClient = ReturnType<typeof createHistoryRpcClient>;
-type HistoryServiceConfig = {
-  url: string;
-};
-type TelegramServiceConfig = {
+type ServiceDirectoryConfig = {
   url: string;
 };
 
 export type ControlPlaneServerConfig = {
   host: string;
   port: number;
+  serviceUrl: string;
   staticDir: string;
 };
 
@@ -35,9 +35,8 @@ export type ControlPlaneServerOptions = {
   eventBus: EventBus;
   historyClient?: HistoryRpcClient;
   telegramClient?: TelegramDirectoryClient;
-  services: {
-    history: HistoryServiceConfig;
-    telegram: TelegramServiceConfig;
+  services?: {
+    serviceDirectory: ServiceDirectoryConfig;
   };
 };
 
@@ -69,11 +68,23 @@ const CONTROL_PLANE_TELEGRAM_REQUEST_TIMEOUT_MS = 15000;
 export async function startControlPlaneServer(
   options: ControlPlaneServerOptions
 ): Promise<ControlPlaneServerHandle> {
+  const serviceDirectory =
+    options.historyClient === undefined || options.telegramClient === undefined
+      ? createServiceDirectoryClient({
+          eventBus: options.eventBus,
+          onTopologyFailure: (error) => {
+            requestProcessShutdown('control_plane.topology_failure', error);
+          },
+          url: requireServiceDirectoryConfig(options).url
+        })
+      : undefined;
+  await serviceDirectory?.refresh();
   const historyClient =
-    options.historyClient ?? createHistoryRpcClient({ url: options.services.history.url });
+    options.historyClient ??
+    createServiceDirectoryHistoryClient(requireServiceDirectory(serviceDirectory));
   const telegramClient =
     options.telegramClient ??
-    createTrpcTelegramDirectoryClient(options.services.telegram, {
+    createServiceDirectoryTelegramDirectoryClient(requireServiceDirectory(serviceDirectory), {
       timeoutMs: CONTROL_PLANE_TELEGRAM_REQUEST_TIMEOUT_MS
     });
   const runtime: ControlPlaneRuntime = {
@@ -120,6 +131,9 @@ export async function startControlPlaneServer(
   ];
 
   await listen(server, options.config.host, options.config.port);
+  await serviceDirectory?.join(
+    createControlPlaneServiceManifest({ serviceUrl: options.config.serviceUrl })
+  );
 
   return {
     async close(): Promise<void> {
@@ -128,6 +142,7 @@ export async function startControlPlaneServer(
       }
       historyClient.close();
       telegramClient.close();
+      serviceDirectory?.close();
       closeWebSocketClients(clients);
       await closeWebSocketServer(webSocketServer);
       await closeHttpServer(server);
@@ -135,6 +150,17 @@ export async function startControlPlaneServer(
     host: options.config.host,
     port: serverPort(server)
   };
+}
+
+function requestProcessShutdown(event: string, error: Error): void {
+  console.error(
+    JSON.stringify({
+      error: error.message,
+      event
+    })
+  );
+  process.exitCode = 1;
+  process.kill(process.pid, 'SIGTERM');
 }
 
 export async function runControlPlaneServer(options: ControlPlaneServerOptions): Promise<void> {
@@ -250,6 +276,73 @@ function callHistoryMethod(
     default:
       return Promise.resolve(undefined);
   }
+}
+
+function createServiceDirectoryHistoryClient(
+  resolver: ReturnType<typeof createServiceDirectoryClient>
+): HistoryRpcClient {
+  const clients = new Map<string, HistoryRpcClient>();
+
+  return {
+    close() {
+      for (const client of clients.values()) {
+        client.close();
+      }
+      clients.clear();
+    },
+    deleteTarget(input) {
+      return clientFor('history.deleteTarget').deleteTarget(input);
+    },
+    getChatHistoryState(input) {
+      return clientFor('history.getChatHistoryState').getChatHistoryState(input);
+    },
+    getChatStats(input) {
+      return clientFor('history.getChatStats').getChatStats(input);
+    },
+    getOverview() {
+      return clientFor('history.getOverview').getOverview();
+    },
+    listJobs(input) {
+      return clientFor('history.listJobs').listJobs(input);
+    },
+    requestSync(input) {
+      return clientFor('history.requestSync').requestSync(input);
+    },
+    upsertTarget(input) {
+      return clientFor('history.upsertTarget').upsertTarget(input);
+    }
+  };
+
+  function clientFor(procedure: string): HistoryRpcClient {
+    const url = resolver.resolveProcedure(procedure);
+    const existing = clients.get(url);
+    if (existing !== undefined) {
+      return existing;
+    }
+
+    const client = createHistoryRpcClient({ url });
+    clients.set(url, client);
+    return client;
+  }
+}
+
+function requireServiceDirectoryConfig(options: ControlPlaneServerOptions): ServiceDirectoryConfig {
+  const config = options.services?.serviceDirectory;
+  if (config === undefined) {
+    throw new Error('Control Plane requires Service Directory config');
+  }
+
+  return config;
+}
+
+function requireServiceDirectory(
+  serviceDirectory: ReturnType<typeof createServiceDirectoryClient> | undefined
+): ReturnType<typeof createServiceDirectoryClient> {
+  if (serviceDirectory === undefined) {
+    throw new Error('Control Plane requires Service Directory client');
+  }
+
+  return serviceDirectory;
 }
 
 async function handleHttpRequest(

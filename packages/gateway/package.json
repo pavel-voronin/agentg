@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@agentg/service-directory": "file:../service-directory",
     "@agentg/shared": "file:../shared",
     "@agentg/telegram": "file:../telegram",
     "@trpc/client": "^11.17.0",

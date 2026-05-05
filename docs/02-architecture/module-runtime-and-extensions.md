@@ -15,11 +15,38 @@ Every module has:
 - `databaseUrl`: Postgres URL
 - `tablePrefix`: owned table prefix, for example `summaries_`
 - `migrationFolder`: module-owned Drizzle migration folder
-- `extensionRegistrations`: `{ target, extension }` entries registered with the
-  standalone extension registry
+- `extensions`: `{ target, extension }` entries declared in its Service
+  Directory manifest
 
 The shared helpers live in `@agentg/shared/modules/runtime`. They load runtime
-config, register extensions, and refresh ephemeral registrations.
+config only. Service registration is owned by the Service Directory client.
+
+## Service Directory
+
+Service Directory owns runtime topology and extension declarations. Every
+service joins it with one manifest:
+
+```json
+{
+  "slug": "summaries",
+  "rpcUrl": "http://summaries:8080",
+  "procedures": ["summaries.requestSummary", "summaries.chatSummary"],
+  "events": ["summaries.summary.completed"],
+  "extensions": [
+    {
+      "target": "telegram.chat",
+      "extension": "summaries.chatSummary"
+    }
+  ]
+}
+```
+
+Service Directory returns a lease and a versioned snapshot. Clients keep the
+snapshot locally, renew their lease, subscribe to `service_directory.changed`,
+and pull a fresh snapshot when the event carries a newer version. The event is
+an invalidation signal only; the durable truth is `getSnapshot`.
+
+Service Directory does not call domain or module RPC methods.
 
 ## Storage
 
@@ -90,8 +117,7 @@ implemented in Gateway code.
 
 ## Extensions
 
-Extension registration is direct and ephemeral. A module registers a getter RPC
-method with the standalone extension registry:
+Extension declaration is part of the service manifest:
 
 ```json
 {
@@ -100,8 +126,8 @@ method with the standalone extension registry:
 }
 ```
 
-The registry stores and lists active registrations only. It does not call RPC
-methods and does not own service discovery.
+The Service Directory snapshot lists active extension declarations with the
+owning service slug and RPC URL. It does not call extension RPC methods.
 
 An extension getter receives the marked model object directly:
 
@@ -116,7 +142,7 @@ Caller code composes an extended view when it needs one:
 
 1. Call the base procedure.
 2. Collect objects with `_model` and `id`.
-3. Ask the extension registry which getters target that `_model`.
+3. Read the local Service Directory snapshot for getters targeting that `_model`.
 4. Call the extension getter RPC methods through known service URLs.
 5. Assemble the view locally.
 
@@ -134,7 +160,7 @@ that need composed views own that composition flow explicitly.
 - Gateway's external RPC and event surface stays covered by source and tests
 - domain runtime code cannot reintroduce `enriched`
 - History and Telegram cannot expose local extension registries
-- the extension registry cannot import tRPC client code
+- Service Directory server code cannot call service RPC methods
 
 The audit is part of `npm run check`.
 
@@ -148,7 +174,7 @@ The audit is part of `npm run check`.
 - Expose public internal methods through package-local `rpc`.
 - Return public internal results directly.
 - Publish module events with the slug prefix.
-- Register extension getters with the standalone extension registry at startup
-  and refresh them periodically.
-- Add tests for storage behavior, direct RPC results, extension registration,
-  and caller-side composition.
+- Join Service Directory with procedures, events, and extension declarations at
+  startup.
+- Add tests for storage behavior, direct RPC results, Service Directory
+  manifest shape, and caller-side composition.

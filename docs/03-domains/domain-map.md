@@ -15,7 +15,7 @@
 - Backup and restore.
 - Secrets management.
 - Observability.
-- Module runtime and extension registration.
+- Service Directory and module runtime.
 
 ## Important Separation
 

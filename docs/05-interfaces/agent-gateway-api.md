@@ -21,6 +21,7 @@ Telegram ingestion
 Agent Gateway
   <- NATS Core subject telegram.login.completed
   -> WebSocket clients
+  <-> Service Directory for Telegram ingestion discovery
   <-> internal tRPC to Telegram ingestion for telegram.getChat
 ```
 
@@ -28,6 +29,7 @@ Start locally:
 
 ```sh
 docker compose up -d postgres nats
+npm run dev:service-directory
 npm run dev:telegram
 npm run dev:gateway
 ```
@@ -38,7 +40,7 @@ Configuration:
 - `AGENT_GATEWAY_HOST`, default `127.0.0.1`
 - `AGENT_GATEWAY_PORT`, default `8787`
 - `AGENT_GATEWAY_TOKEN`, optional query-string token
-- `TELEGRAM_RPC_URL`, default `http://127.0.0.1:18081`
+- `SERVICE_DIRECTORY_RPC_URL`, default `http://127.0.0.1:18084`
 
 When `AGENT_GATEWAY_TOKEN` is set, connect with:
 
@@ -104,6 +106,13 @@ Errors:
 }
 ```
 
+Gateway error codes:
+
+- `unknown_method`: the external method is not part of Gateway's public API.
+- `dependency_unavailable`: the method is allowed, but its downstream service is
+  absent from the current Service Directory snapshot.
+- `method_failed`: the downstream call failed after routing.
+
 ## Methods
 
 Gateway exposes exactly one external WebSocket RPC method.
@@ -116,9 +125,10 @@ Gateway exposes exactly one external WebSocket RPC method.
 }
 ```
 
-`telegram.getChat` calls Telegram ingestion through its internal tRPC client and
-returns Telegram's chat read model. Gateway does not read Telegram storage
-directly, does not call TDLib directly, and does not enrich the result.
+`telegram.getChat` resolves the owning service through Service Directory, calls
+Telegram ingestion through its internal tRPC client, and returns Telegram's chat
+read model. Gateway does not read Telegram storage directly, does not call TDLib
+directly, and does not enrich the result.
 
 Example result:
 

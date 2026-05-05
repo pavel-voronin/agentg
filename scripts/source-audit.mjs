@@ -12,6 +12,8 @@ auditRawTrpcBuilderImports(tsFiles);
 auditCrossDomainSchemaImports(tsFiles);
 auditTablePrefixes();
 auditGatewayExternalSurface();
+auditServiceDirectorySurface();
+auditServiceDirectoryBootstrap();
 auditExtensionBoundaries(tsFiles);
 
 if (failures.length > 0) {
@@ -216,10 +218,120 @@ function auditNoDomainExtensionEndpoints(files) {
   }
 }
 
+function auditServiceDirectorySurface() {
+  const packageJson = JSON.parse(
+    readFileSync(join(root, 'packages/service-directory/package.json'), 'utf8')
+  );
+  const exports = packageJson.exports ?? {};
+  if (JSON.stringify(exports) !== JSON.stringify({ './rpc': './src/rpc/index.ts' })) {
+    failures.push('Service Directory package must export only ./rpc');
+  }
+
+  const rpcIndex = readFileSync(
+    join(root, 'packages/service-directory/src/rpc/index.ts'),
+    'utf8'
+  );
+  const expectedRpcIndex =
+    "export { createServiceDirectoryClient } from './service-directory-client.js';";
+  if (rpcIndex.trim() !== expectedRpcIndex) {
+    failures.push('Service Directory public RPC surface must expose only createServiceDirectoryClient');
+  }
+
+  for (const file of listFiles(join(root, 'packages/service-directory/src'))) {
+    if (!file.endsWith('.ts')) {
+      continue;
+    }
+
+    const rel = toRel(file);
+    const source = readFileSync(file, 'utf8');
+    for (const token of ['registerExtension', 'listExtensions']) {
+      if (source.includes(token)) {
+        failures.push(`Service Directory must not expose old extension RPC method: ${rel}`);
+      }
+    }
+  }
+}
+
+function auditServiceDirectoryBootstrap() {
+  const requiredDependencies = [
+    'packages/telegram/package.json',
+    'packages/history-sync/package.json',
+    'packages/gateway/package.json',
+    'packages/control-plane/package.json'
+  ];
+
+  for (const file of requiredDependencies) {
+    const packageJson = JSON.parse(readFileSync(join(root, file), 'utf8'));
+    if (packageJson.dependencies?.['@agentg/service-directory'] === undefined) {
+      failures.push(`${file} must depend on @agentg/service-directory`);
+    }
+  }
+
+  const telegramIngestion = readFileSync(join(root, 'packages/telegram/src/ingestion.ts'), 'utf8');
+  if (!telegramIngestion.includes('createServiceDirectoryClient')) {
+    failures.push('Telegram must join Service Directory');
+  }
+  auditRequiredManifest('packages/telegram/src/registrations.ts', true);
+
+  const historyService = readFileSync(join(root, 'packages/history-sync/src/service.ts'), 'utf8');
+  if (!historyService.includes('createServiceDirectoryClient')) {
+    failures.push('History Sync must join Service Directory');
+  }
+  auditRequiredManifest('packages/history-sync/src/registrations.ts', true);
+
+  const gatewaySource = readFileSync(join(root, 'packages/gateway/src/agent-gateway.ts'), 'utf8');
+  if (!gatewaySource.includes('createGatewayServiceManifest')) {
+    failures.push('Gateway must join Service Directory');
+  }
+  auditRequiredManifest('packages/gateway/src/registrations.ts', true);
+
+  const controlPlaneSource = readFileSync(
+    join(root, 'packages/control-plane/src/server/control-plane-server.ts'),
+    'utf8'
+  );
+  if (!controlPlaneSource.includes('createControlPlaneServiceManifest')) {
+    failures.push('Control Plane must join Service Directory');
+  }
+  auditRequiredManifest('packages/control-plane/src/server/registrations.ts', true);
+
+  auditRequiredManifest('packages/summaries/src/registrations.ts', false);
+
+  const historyConfig = readFileSync(join(root, 'packages/history-sync/src/config.ts'), 'utf8');
+  if (historyConfig.includes('TELEGRAM_RPC_URL')) {
+    failures.push('History Sync config must resolve Telegram through Service Directory');
+  }
+
+  const gatewayConfig = readFileSync(join(root, 'packages/gateway/src/config.ts'), 'utf8');
+  if (gatewayConfig.includes('TELEGRAM_RPC_URL')) {
+    failures.push('Gateway config must resolve Telegram through Service Directory');
+  }
+
+  const controlPlaneConfig = readFileSync(
+    join(root, 'packages/control-plane/src/server/config.ts'),
+    'utf8'
+  );
+  for (const token of ['HISTORY_RPC_URL', 'TELEGRAM_RPC_URL']) {
+    if (controlPlaneConfig.includes(token)) {
+      failures.push(`Control Plane config must resolve ${token} through Service Directory`);
+    }
+  }
+}
+
+function auditRequiredManifest(file, required) {
+  const source = readFileSync(join(root, file), 'utf8');
+  const token = `required: ${String(required)}`;
+  if (!source.includes(token)) {
+    failures.push(`${file} must declare ${token}`);
+  }
+}
+
 function auditRegistryDoesNotCallRpc(files) {
   for (const file of files) {
     const rel = toRel(file);
-    if (!rel.startsWith('packages/extension-registry/src/')) {
+    if (
+      !rel.startsWith('packages/service-directory/src/') ||
+      rel === 'packages/service-directory/src/rpc/service-directory-client.ts'
+    ) {
       continue;
     }
 
@@ -227,7 +339,7 @@ function auditRegistryDoesNotCallRpc(files) {
     const forbiddenTokens = ['@trpc/client', 'createTRPCClient', 'createTRPCUntypedClient'];
     for (const token of forbiddenTokens) {
       if (source.includes(token)) {
-        failures.push(`extension registry must not call RPC methods: ${rel} -> ${token}`);
+        failures.push(`Service Directory server must not call RPC methods: ${rel} -> ${token}`);
       }
     }
   }

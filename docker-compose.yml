@@ -3,6 +3,7 @@ x-agentg-module-environment: &agentg-module-environment
   MODULE_RPC_HOST: 0.0.0.0
   MODULE_RPC_PORT: 8080
   NATS_URL: nats://nats:4222
+  SERVICE_DIRECTORY_RPC_URL: http://service-directory:8080
 
 x-agentg-module-service: &agentg-module-service
   build:
@@ -23,6 +24,8 @@ services:
       context: .
       target: runtime
     depends_on:
+      service-directory:
+        condition: service_started
       nats:
         condition: service_started
       postgres:
@@ -30,8 +33,10 @@ services:
     environment:
       DATABASE_URL: postgres://agentg:agentg@postgres:5432/agentg
       NATS_URL: nats://nats:4222
+      SERVICE_DIRECTORY_RPC_URL: http://service-directory:8080
       TELEGRAM_RPC_HOST: 0.0.0.0
       TELEGRAM_RPC_PORT: 8080
+      TELEGRAM_RPC_URL: http://telegram:8080
       TELEGRAM_API_ID: ${TELEGRAM_API_ID:-}
       TELEGRAM_API_HASH: ${TELEGRAM_API_HASH:-}
       TDLIB_DATABASE_DIR: /app/td-data/database
@@ -53,12 +58,10 @@ services:
       ]
     environment:
       <<: *agentg-module-environment
-      HISTORY_RPC_URL: http://history-sync:8080
       MODULE_MIGRATION_FOLDER: packages/modulesmoke/drizzle
       MODULE_RPC_URL: http://modulesmoke:8080
       MODULE_SLUG: modulesmoke
       MODULE_TABLE_PREFIX: modulesmoke_
-      TELEGRAM_RPC_URL: http://telegram:8080
 
   summaries:
     profiles:
@@ -66,7 +69,7 @@ services:
     <<: *agentg-module-service
     command: ['npm', '--workspace', '@agentg/summaries', 'run', 'start']
     depends_on:
-      extension-registry:
+      service-directory:
         condition: service_started
       nats:
         condition: service_started
@@ -74,27 +77,32 @@ services:
         condition: service_healthy
     environment:
       <<: *agentg-module-environment
-      EXTENSION_REGISTRY_RPC_URL: http://extension-registry:8080
       MODULE_MIGRATION_FOLDER: packages/summaries/drizzle
       MODULE_RPC_URL: http://summaries:8080
       MODULE_SLUG: summaries
       MODULE_TABLE_PREFIX: summaries_
       SUMMARIES_RPC_HOST: 0.0.0.0
       SUMMARIES_RPC_PORT: 8080
-      TELEGRAM_RPC_URL: http://telegram:8080
 
-  extension-registry:
+  service-directory:
     profiles:
-      - extension-registry
+      - service-directory
+      - container-client
+      - history-sync
       - summaries
       - gateway
+      - control-plane
     build:
       context: .
       target: runtime
-    command: ['npm', '--workspace', '@agentg/extension-registry', 'run', 'start']
+    command: ['npm', '--workspace', '@agentg/service-directory', 'run', 'start']
+    depends_on:
+      nats:
+        condition: service_started
     environment:
-      EXTENSION_REGISTRY_RPC_HOST: 0.0.0.0
-      EXTENSION_REGISTRY_RPC_PORT: 8080
+      NATS_URL: nats://nats:4222
+      SERVICE_DIRECTORY_RPC_HOST: 0.0.0.0
+      SERVICE_DIRECTORY_RPC_PORT: 8080
     restart: 'no'
 
   gateway:
@@ -105,14 +113,17 @@ services:
       target: runtime
     command: ['npm', '--workspace', '@agentg/gateway', 'run', 'start']
     depends_on:
+      service-directory:
+        condition: service_started
       nats:
         condition: service_started
     environment:
       AGENT_GATEWAY_HOST: 0.0.0.0
       AGENT_GATEWAY_PORT: ${AGENT_GATEWAY_PORT:-8787}
       AGENT_GATEWAY_TOKEN: ${AGENT_GATEWAY_TOKEN:-}
+      AGENT_GATEWAY_URL: http://gateway:${AGENT_GATEWAY_PORT:-8787}
       NATS_URL: nats://nats:4222
-      TELEGRAM_RPC_URL: http://telegram:8080
+      SERVICE_DIRECTORY_RPC_URL: http://service-directory:8080
     ports:
       - '${AGENT_GATEWAY_PORT:-8787}:${AGENT_GATEWAY_PORT:-8787}'
     restart: 'no'
@@ -125,6 +136,8 @@ services:
       target: runtime
     command: ['npm', '--workspace', '@agentg/control-plane', 'run', 'start']
     depends_on:
+      service-directory:
+        condition: service_started
       history-sync:
         condition: service_started
       nats:
@@ -132,9 +145,9 @@ services:
     environment:
       CONTROL_PLANE_HOST: 0.0.0.0
       CONTROL_PLANE_PORT: ${CONTROL_PLANE_PORT:-8788}
-      HISTORY_RPC_URL: http://history-sync:8080
+      CONTROL_PLANE_URL: http://control-plane:${CONTROL_PLANE_PORT:-8788}
       NATS_URL: nats://nats:4222
-      TELEGRAM_RPC_URL: http://telegram:8080
+      SERVICE_DIRECTORY_RPC_URL: http://service-directory:8080
     ports:
       - '${CONTROL_PLANE_PORT:-8788}:${CONTROL_PLANE_PORT:-8788}'
     restart: 'no'
@@ -147,6 +160,8 @@ services:
       target: runtime
     command: ['npm', '--workspace', '@agentg/history-sync', 'run', 'start']
     depends_on:
+      service-directory:
+        condition: service_started
       nats:
         condition: service_started
       postgres:
@@ -159,8 +174,9 @@ services:
       DATABASE_URL: postgres://agentg:agentg@postgres:5432/agentg
       HISTORY_RPC_HOST: 0.0.0.0
       HISTORY_RPC_PORT: 8080
+      HISTORY_RPC_URL: http://history-sync:8080
       NATS_URL: nats://nats:4222
-      TELEGRAM_RPC_URL: http://telegram:8080
+      SERVICE_DIRECTORY_RPC_URL: http://service-directory:8080
     restart: 'no'
 
   nats:

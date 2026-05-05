@@ -11,9 +11,10 @@ describe('loadHistorySyncServiceConfig', () => {
         host: '127.0.0.1',
         port: 18082
       },
+      serviceRpcUrl: 'http://127.0.0.1:18082',
       services: {
-        telegram: {
-          url: 'http://127.0.0.1:18081'
+        serviceDirectory: {
+          url: 'http://127.0.0.1:18084'
         }
       }
     });
@@ -23,13 +24,15 @@ describe('loadHistorySyncServiceConfig', () => {
     const config = loadHistorySyncServiceConfig({
       HISTORY_RPC_HOST: '0.0.0.0',
       HISTORY_RPC_PORT: '8080',
-      TELEGRAM_RPC_URL: 'http://telegram:8080'
+      HISTORY_RPC_URL: 'http://history-sync:8080',
+      SERVICE_DIRECTORY_RPC_URL: 'http://service-directory:8080'
     });
 
     expect(config.internalRpc).toEqual({
       host: '0.0.0.0',
       port: 8080
     });
-    expect(config.services.telegram.url).toBe('http://telegram:8080');
+    expect(config.serviceRpcUrl).toBe('http://history-sync:8080');
+    expect(config.services.serviceDirectory.url).toBe('http://service-directory:8080');
   });
 });

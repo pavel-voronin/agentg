@@ -27,6 +27,7 @@ try {
     database,
     eventBus,
     internalRpc: config.internalRpc,
+    serviceRpcUrl: config.serviceRpcUrl,
     services: config.services
   });
 } catch (error) {

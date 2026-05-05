@@ -1,25 +1,21 @@
-import { registerModuleExtensions, type ModuleRuntimeConfig } from '@agentg/shared/modules/runtime';
-import type {
-  ExtensionRegistrationInput,
-  ExtensionRegistrationOutput
-} from '@agentg/shared/rpc/extensions';
-import { createTRPCUntypedClient, httpBatchLink } from '@trpc/client';
+import type { ModuleRuntimeConfig } from '@agentg/shared/modules/runtime';
 
-export async function registerSummariesExtensions(
-  config: ModuleRuntimeConfig,
-  extensionRegistryUrl: string
-): Promise<ExtensionRegistrationOutput[]> {
-  const client = createTRPCUntypedClient({
-    links: [
-      httpBatchLink({
-        url: extensionRegistryUrl
-      })
-    ]
-  });
-
-  return registerModuleExtensions(config, {
-    async registerExtension(input: ExtensionRegistrationInput) {
-      return (await client.mutation('registerExtension', input)) as ExtensionRegistrationOutput;
-    }
-  });
+export function createSummariesServiceManifest(config: ModuleRuntimeConfig) {
+  return {
+    events: [
+      'summaries.summary.completed',
+      'summaries.summary.invalidated',
+      'summaries.summary.requested'
+    ],
+    extensions: config.extensions,
+    procedures: [
+      'summaries.chatSummary',
+      'summaries.readChatSummary',
+      'summaries.readSummaryRun',
+      'summaries.requestSummary'
+    ],
+    required: false,
+    rpcUrl: config.serviceRpcUrl,
+    slug: config.slug
+  };
 }

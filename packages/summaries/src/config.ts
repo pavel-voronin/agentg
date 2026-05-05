@@ -13,9 +13,8 @@ export type SummariesServiceConfig = {
   nats: {
     url: string;
   };
-  registrationRefreshMs: number;
   services: {
-    extensionRegistry: {
+    serviceDirectory: {
       url: string;
     };
   };
@@ -36,9 +35,9 @@ export function loadSummariesServiceConfig(
   const serviceRpcUrl =
     env.MODULE_RPC_URL ??
     `http://${bind.host === '0.0.0.0' ? '127.0.0.1' : bind.host}:${String(bind.port)}`;
-  const extensionRegistryUrl = parseHttpUrl(
-    env.EXTENSION_REGISTRY_RPC_URL ?? 'http://127.0.0.1:18084',
-    'EXTENSION_REGISTRY_RPC_URL'
+  const serviceDirectoryUrl = parseHttpUrl(
+    env.SERVICE_DIRECTORY_RPC_URL ?? 'http://127.0.0.1:18084',
+    'SERVICE_DIRECTORY_RPC_URL'
   );
 
   return {
@@ -46,7 +45,7 @@ export function loadSummariesServiceConfig(
     internalRpc: bind,
     module: loadModuleRuntimeConfig(env, {
       databaseUrl: databaseConfig.databaseUrl,
-      extensionRegistrations: [
+      extensions: [
         {
           extension: 'summaries.chatSummary',
           target: 'telegram.chat'
@@ -61,12 +60,9 @@ export function loadSummariesServiceConfig(
     nats: {
       url: natsUrl
     },
-    registrationRefreshMs:
-      parseOptionalInteger(env.MODULE_REGISTRATION_REFRESH_MS, 'MODULE_REGISTRATION_REFRESH_MS') ??
-      30_000,
     services: {
-      extensionRegistry: {
-        url: extensionRegistryUrl
+      serviceDirectory: {
+        url: serviceDirectoryUrl
       }
     }
   };

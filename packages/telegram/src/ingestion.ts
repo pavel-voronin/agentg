@@ -1,4 +1,5 @@
 import type { TelegramDatabase as AppDatabase } from './database.js';
+import { createServiceDirectoryClient } from '@agentg/service-directory/rpc';
 import type { EventBus } from '@agentg/shared/events/bus';
 import { createIntegrationEvent } from '@agentg/shared/events/envelope';
 import { createTelegramIntegrationEvents } from '@agentg/shared/events/telegram-events';
@@ -11,6 +12,7 @@ import {
   type TdObject
 } from './normalize.js';
 import type { InternalTrpcBindConfig } from './rpc/config.js';
+import { createTelegramServiceManifest } from './registrations.js';
 import {
   startTelegramHistoryTrpcServer,
   stopTelegramHistoryTrpcServer
@@ -31,6 +33,12 @@ export type TelegramIngestionOptions = {
   database: AppDatabase;
   eventBus: EventBus;
   internalRpc: InternalTrpcBindConfig;
+  serviceRpcUrl: string;
+  services: {
+    serviceDirectory: {
+      url: string;
+    };
+  };
   telegram: TelegramClientConfig;
 };
 
@@ -70,6 +78,7 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
   const persistenceStats = createPersistenceStats();
   const tdlibStatus = createTdlibStatusTracker(options.eventBus);
   let telegramHistoryServer: Awaited<ReturnType<typeof startTelegramHistoryTrpcServer>> | undefined;
+  let closeServiceDirectory: (() => void) | undefined;
   let tdlibStatusHeartbeat: ReturnType<typeof setInterval> | undefined;
 
   client.on('error', (error: unknown) => {
@@ -94,6 +103,17 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
     database: options.database,
     eventBus: options.eventBus
   });
+  const serviceDirectory = createServiceDirectoryClient({
+    eventBus: options.eventBus,
+    onTopologyFailure: (error) => {
+      requestProcessShutdown('telegram.topology_failure', error);
+    },
+    url: options.services.serviceDirectory.url
+  });
+  await serviceDirectory.join(createTelegramServiceManifest({ rpcUrl: options.serviceRpcUrl }));
+  closeServiceDirectory = () => {
+    serviceDirectory.close();
+  };
 
   console.log(JSON.stringify({ event: 'telegram.ingestion_ready' }));
   await waitForShutdown(async () => {
@@ -112,6 +132,8 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
     if (historyRpcClosed) {
       telegramHistoryServer = undefined;
     }
+    closeServiceDirectory?.();
+    closeServiceDirectory = undefined;
     const tdlibClosed = await runShutdownStep('telegram.tdlib.close', () =>
       publishTdlibOperationEvents(options.eventBus, 'close', {}, () => client.close())
     );
@@ -121,6 +143,17 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
 
     return historyRpcClosed && tdlibClosed && eventBusClosed;
   });
+}
+
+function requestProcessShutdown(event: string, error: Error): void {
+  console.error(
+    JSON.stringify({
+      error: error.message,
+      event
+    })
+  );
+  process.exitCode = 1;
+  process.kill(process.pid, 'SIGTERM');
 }
 
 function startTdlibStatusHeartbeat(status: TdlibStatusTracker): ReturnType<typeof setInterval> {

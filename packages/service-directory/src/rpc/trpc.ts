@@ -1,9 +1,9 @@
 import { initTRPC } from '@trpc/server';
 import { treeifyError, ZodError } from 'zod';
 
-export type ExtensionRegistryRpcContext = Record<string, never>;
+export type ServiceDirectoryRpcContext = Record<string, never>;
 
-const extensionRegistryRpc = initTRPC.context<ExtensionRegistryRpcContext>().create({
+const serviceDirectoryRpc = initTRPC.context<ServiceDirectoryRpcContext>().create({
   errorFormatter({ error, shape }) {
     return {
       ...shape,
@@ -15,5 +15,5 @@ const extensionRegistryRpc = initTRPC.context<ExtensionRegistryRpcContext>().cre
   }
 });
 
-export const extensionRegistryRpcRouter = extensionRegistryRpc.router;
-export const rpc = extensionRegistryRpc.procedure;
+export const serviceDirectoryRpcRouter = serviceDirectoryRpc.router;
+export const rpc = serviceDirectoryRpc.procedure;

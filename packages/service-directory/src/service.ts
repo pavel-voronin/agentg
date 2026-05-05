@@ -1,36 +1,44 @@
 import type { Server } from 'node:http';
 
-import type { ExtensionRegistryServiceConfig } from './config.js';
-import { startExtensionRegistryTrpcServer, stopExtensionRegistryTrpcServer } from './rpc/server.js';
+import type { EventBus } from '@agentg/shared/events/bus';
 
-const EXTENSION_REGISTRY_SHUTDOWN_FORCE_EXIT_MS = 4500;
-const EXTENSION_REGISTRY_SHUTDOWN_STEP_TIMEOUT_MS = 2000;
+import type { ServiceDirectoryServiceConfig } from './config.js';
+import { startServiceDirectoryTrpcServer, stopServiceDirectoryTrpcServer } from './rpc/server.js';
 
-export async function runExtensionRegistryService(
-  config: ExtensionRegistryServiceConfig
-): Promise<void> {
+const SERVICE_DIRECTORY_SHUTDOWN_FORCE_EXIT_MS = 4500;
+const SERVICE_DIRECTORY_SHUTDOWN_STEP_TIMEOUT_MS = 2000;
+
+export async function runServiceDirectoryService(options: {
+  config: ServiceDirectoryServiceConfig;
+  eventBus: EventBus;
+}): Promise<void> {
   let rpcServer: Server | undefined;
 
-  rpcServer = await startExtensionRegistryTrpcServer({
-    bind: config.internalRpc,
-    ttlMs: config.registrationTtlMs
+  rpcServer = await startServiceDirectoryTrpcServer({
+    bind: options.config.internalRpc,
+    eventBus: options.eventBus,
+    ttlMs: options.config.leaseTtlMs
   });
 
-  console.log(JSON.stringify({ event: 'extension_registry.ready' }));
+  console.log(JSON.stringify({ event: 'service_directory.ready' }));
   await waitForShutdown(async () => {
     const activeRpcServer = rpcServer;
     const stopped =
       activeRpcServer === undefined
         ? true
-        : await runShutdownStep('extension_registry.rpc_close', () =>
-            stopExtensionRegistryTrpcServer(activeRpcServer)
+        : await runShutdownStep('service_directory.rpc_close', () =>
+            stopServiceDirectoryTrpcServer(activeRpcServer)
           );
 
     if (stopped) {
       rpcServer = undefined;
     }
 
-    return stopped;
+    const eventBusClosed = await runShutdownStep('service_directory.event_bus_close', () =>
+      options.eventBus.close()
+    );
+
+    return stopped && eventBusClosed;
   });
 }
 
@@ -47,7 +55,7 @@ async function waitForShutdown(shutdown: () => Promise<boolean>): Promise<void> 
       forceExit = setTimeout(() => {
         process.exitCode = 1;
         finish();
-      }, EXTENSION_REGISTRY_SHUTDOWN_FORCE_EXIT_MS);
+      }, SERVICE_DIRECTORY_SHUTDOWN_FORCE_EXIT_MS);
       forceExit.unref();
 
       void shutdown().finally(finish);
@@ -60,7 +68,7 @@ async function waitForShutdown(shutdown: () => Promise<boolean>): Promise<void> 
 
 async function runShutdownStep(name: string, step: () => Promise<void>): Promise<boolean> {
   try {
-    await withTimeout(step(), EXTENSION_REGISTRY_SHUTDOWN_STEP_TIMEOUT_MS, name);
+    await withTimeout(step(), SERVICE_DIRECTORY_SHUTDOWN_STEP_TIMEOUT_MS, name);
     return true;
   } catch (error) {
     console.error(

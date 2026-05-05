@@ -13,7 +13,7 @@ const compose = ['docker', 'compose', ...profiles.flatMap((profile) => ['--profi
 const services = [
   'postgres',
   'nats',
-  'extension-registry',
+  'service-directory',
   'history-sync',
   'gateway',
   'summaries',
@@ -83,6 +83,7 @@ function runNpm(args) {
 function smokeDriver(checkTelegram) {
   return `
 import { createTRPCUntypedClient, httpBatchLink } from '@trpc/client';
+import { createServiceDirectoryClient } from '@agentg/service-directory/rpc';
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -107,16 +108,16 @@ async function fetchUntilReady(url, service, acceptedStatuses, attempts = 30) {
 }
 
 async function waitForExtensionRegistration(client, target, extension, attempts = 20) {
-  let registrations;
+  let snapshot;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    registrations = await client.query('listExtensions', { target });
-    if (registrations.extensions?.some((item) => item.target === target && item.extension === extension)) {
-      return registrations;
+    snapshot = await client.refresh();
+    if (snapshot.extensions.some((item) => item.target === target && item.extension === extension)) {
+      return snapshot;
     }
     await sleep(2_000);
   }
 
-  throw new Error(extension + ' is not registered for ' + target + ': ' + JSON.stringify(registrations));
+  throw new Error(extension + ' is not registered for ' + target + ': ' + JSON.stringify(snapshot));
 }
 
 const extensionTarget = 'telegram.chat';
@@ -129,17 +130,18 @@ const base = {
     type: 'private'
   }
 };
-const registryClient = createTRPCUntypedClient({
-  links: [httpBatchLink({ url: 'http://extension-registry:8080' })]
+const serviceDirectoryClient = createServiceDirectoryClient({
+  url: 'http://service-directory:8080'
 });
-const extensionRegistry = await waitForExtensionRegistration(
-  registryClient,
+const serviceDirectory = await waitForExtensionRegistration(
+  serviceDirectoryClient,
   extensionTarget,
   extensionMethod
 );
+const summariesRpcUrl = serviceDirectoryClient.resolveProcedure('summaries.requestSummary');
 
 const summariesClient = createTRPCUntypedClient({
-  links: [httpBatchLink({ url: 'http://summaries:8080' })]
+  links: [httpBatchLink({ url: summariesRpcUrl })]
 });
 const now = new Date().toISOString();
 const summaryRequest = await summariesClient.mutation('summaries.requestSummary', {
@@ -181,8 +183,9 @@ console.log(JSON.stringify({
     status: controlPlaneResponse.status
   },
   composed,
-  extensionRegistry,
+  serviceDirectory,
   summaryRequest
 }, null, 2));
+serviceDirectoryClient.close();
 `;
 }

@@ -19,6 +19,12 @@ describe('loadTelegramIngestionConfig', () => {
         host: '127.0.0.1',
         port: 18081
       },
+      serviceRpcUrl: 'http://127.0.0.1:18081',
+      services: {
+        serviceDirectory: {
+          url: 'http://127.0.0.1:18084'
+        }
+      },
       telegram: {
         databaseDirectory: resolve(repositoryRoot, 'td-data/database'),
         filesDirectory: resolve(repositoryRoot, 'td-data/files')
@@ -38,13 +44,17 @@ describe('loadTelegramIngestionConfig', () => {
 
   it('parses internal RPC bind config', () => {
     const config = loadTelegramIngestionConfig({
+      SERVICE_DIRECTORY_RPC_URL: 'http://service-directory:8080',
       TELEGRAM_RPC_HOST: '0.0.0.0',
-      TELEGRAM_RPC_PORT: '8080'
+      TELEGRAM_RPC_PORT: '8080',
+      TELEGRAM_RPC_URL: 'http://telegram:8080'
     });
 
     expect(config.internalRpc).toEqual({
       host: '0.0.0.0',
       port: 8080
     });
+    expect(config.serviceRpcUrl).toBe('http://telegram:8080');
+    expect(config.services.serviceDirectory.url).toBe('http://service-directory:8080');
   });
 });

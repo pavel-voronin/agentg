@@ -78,7 +78,9 @@ Own:
 - Module-owned tables and Drizzle migrations.
 - Module-owned tRPC methods.
 - Module-owned NATS events with the slug prefix.
-- Extension getter registration and refresh in the standalone extension registry.
+- Service Directory join and lease renewal for procedures, events, and extension
+  getter declarations.
+- Declaring whether the service is required for whole-runtime availability.
 
 Do not own:
 

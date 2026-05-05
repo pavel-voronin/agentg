@@ -1,13 +1,10 @@
 {
-  "name": "@agentg/extension-registry",
+  "name": "@agentg/service-directory",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "exports": {
-    "./config": "./src/config.ts",
-    "./registry": "./src/registry.ts",
-    "./rpc": "./src/rpc/index.ts",
-    "./service": "./src/service.ts"
+    "./rpc": "./src/rpc/index.ts"
   },
   "scripts": {
     "dev": "tsx watch --clear-screen=false src/main.ts",
@@ -19,6 +16,7 @@
   },
   "dependencies": {
     "@agentg/shared": "file:../shared",
+    "@trpc/client": "^11.17.0",
     "@trpc/server": "^11.17.0",
     "zod": "^4.4.1"
   },

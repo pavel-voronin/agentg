@@ -20,15 +20,23 @@ export type HistorySyncServiceConfig = {
   nats: {
     url: string;
   };
+  serviceRpcUrl: string;
   internalRpc: InternalTrpcBindConfig;
   services: {
-    telegram: InternalTrpcClientConfig;
+    serviceDirectory: InternalTrpcClientConfig;
   };
 };
 
 export function loadHistorySyncServiceConfig(
   env: NodeJS.ProcessEnv = process.env
 ): HistorySyncServiceConfig {
+  const internalRpc = readInternalTrpcBindConfig(env, {
+    hostEnv: 'HISTORY_RPC_HOST',
+    portEnv: 'HISTORY_RPC_PORT',
+    defaultHost: '127.0.0.1',
+    defaultPort: 18082
+  });
+
   return {
     backfill: {
       chatLoadBatchSize:
@@ -44,19 +52,23 @@ export function loadHistorySyncServiceConfig(
     nats: {
       url: env.NATS_URL ?? 'nats://localhost:4222'
     },
-    internalRpc: readInternalTrpcBindConfig(env, {
-      hostEnv: 'HISTORY_RPC_HOST',
-      portEnv: 'HISTORY_RPC_PORT',
-      defaultHost: '127.0.0.1',
-      defaultPort: 18082
-    }),
+    internalRpc,
+    serviceRpcUrl: readInternalTrpcClientConfig(env, {
+      defaultUrl: defaultRpcUrl(internalRpc),
+      urlEnv: 'HISTORY_RPC_URL'
+    }).url,
     services: {
-      telegram: readInternalTrpcClientConfig(env, {
-        urlEnv: 'TELEGRAM_RPC_URL',
-        defaultUrl: 'http://127.0.0.1:18081'
+      serviceDirectory: readInternalTrpcClientConfig(env, {
+        urlEnv: 'SERVICE_DIRECTORY_RPC_URL',
+        defaultUrl: 'http://127.0.0.1:18084'
       })
     }
   };
+}
+
+function defaultRpcUrl(config: InternalTrpcBindConfig): string {
+  const host = config.host === '0.0.0.0' ? '127.0.0.1' : config.host;
+  return `http://${host}:${String(config.port)}`;
 }
 
 function parseOptionalInteger(value: string | undefined, name: string): number | undefined {

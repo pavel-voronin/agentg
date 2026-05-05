@@ -12,7 +12,7 @@
 - Postgres write latency
 - duplicate event count
 - attachment metadata count
-- active Extension Registry registrations per target
+- active Service Directory services and extensions per target
 - RPC call lifecycle by `callId`
 - module-owned event counts by slug prefix
 
@@ -58,4 +58,4 @@ module work:
 - Gateway's external RPC and event surface remains covered
 - domain runtime code does not reintroduce `enriched`
 - History and Telegram do not expose local extension registries
-- Extension Registry does not import tRPC client code
+- Service Directory server code does not call service RPC methods

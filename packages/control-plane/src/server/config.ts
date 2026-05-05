@@ -6,47 +6,51 @@ type InternalServiceConfig = {
   url: string;
 };
 
-export type HistoryServiceConfig = InternalServiceConfig;
-export type TelegramServiceConfig = InternalServiceConfig;
-
 export type ControlPlaneConfig = {
   controlPlane: {
     host: string;
     port: number;
+    serviceUrl: string;
     staticDir: string;
   };
   nats: {
     url: string;
   };
   services: {
-    history: HistoryServiceConfig;
-    telegram: TelegramServiceConfig;
+    serviceDirectory: InternalServiceConfig;
   };
 };
 
 export function loadControlPlaneConfig(env: NodeJS.ProcessEnv = process.env): ControlPlaneConfig {
+  const host = env.CONTROL_PLANE_HOST ?? '127.0.0.1';
+  const port =
+    parseOptionalInteger(env.CONTROL_PLANE_PORT, 'CONTROL_PLANE_PORT') ??
+    defaultControlPlanePort(env);
+
   return {
     controlPlane: {
-      host: env.CONTROL_PLANE_HOST ?? '127.0.0.1',
-      port:
-        parseOptionalInteger(env.CONTROL_PLANE_PORT, 'CONTROL_PLANE_PORT') ??
-        defaultControlPlanePort(env),
+      host,
+      port,
+      serviceUrl: parseInternalServiceUrl(
+        env.CONTROL_PLANE_URL ?? defaultServiceUrl(host, port),
+        'CONTROL_PLANE_URL'
+      ),
       staticDir: resolve(env.CONTROL_PLANE_STATIC_DIR ?? 'dist')
     },
     nats: {
       url: env.NATS_URL ?? 'nats://localhost:4222'
     },
     services: {
-      history: readInternalServiceConfig(env, {
-        defaultUrl: 'http://127.0.0.1:18082',
-        urlEnv: 'HISTORY_RPC_URL'
-      }),
-      telegram: readInternalServiceConfig(env, {
-        defaultUrl: 'http://127.0.0.1:18081',
-        urlEnv: 'TELEGRAM_RPC_URL'
+      serviceDirectory: readInternalServiceConfig(env, {
+        defaultUrl: 'http://127.0.0.1:18084',
+        urlEnv: 'SERVICE_DIRECTORY_RPC_URL'
       })
     }
   };
+}
+
+function defaultServiceUrl(host: string, port: number): string {
+  return `http://${host === '0.0.0.0' ? '127.0.0.1' : host}:${String(port)}`;
 }
 
 function readInternalServiceConfig(

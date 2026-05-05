@@ -1,10 +1,15 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 
+import { createServiceDirectoryClient } from '@agentg/service-directory/rpc';
 import type { EventBus, EventSubscription } from '@agentg/shared/events/bus';
 import type { IntegrationEvent } from '@agentg/shared/events/envelope';
 import { WebSocket, WebSocketServer, type RawData } from 'ws';
 
-import { createTrpcGatewayTelegramClient, type GatewayTelegramClient } from './telegram-reads.js';
+import {
+  createServiceDirectoryGatewayTelegramClient,
+  type GatewayTelegramClient
+} from './telegram-reads.js';
+import { createGatewayServiceManifest } from './registrations.js';
 
 type InternalServiceConfig = {
   url: string;
@@ -15,15 +20,17 @@ const EXTERNAL_EVENT_SUBJECT = 'telegram.login.completed';
 export type AgentGatewayConfig = {
   host: string;
   port: number;
+  serviceUrl: string;
   token?: string;
 };
 
 export type AgentGatewayOptions = {
   config: AgentGatewayConfig;
   eventBus: EventBus;
-  services: {
-    telegram: InternalServiceConfig;
+  services?: {
+    serviceDirectory: InternalServiceConfig;
   };
+  telegramClient?: GatewayTelegramClient;
 };
 
 type AgentGatewayRuntime = AgentGatewayOptions & {
@@ -54,7 +61,20 @@ type RpcResponse = {
 export async function startAgentGatewayServer(
   options: AgentGatewayOptions
 ): Promise<AgentGatewayServerHandle> {
-  const telegramClient = createTrpcGatewayTelegramClient(options.services.telegram);
+  const serviceDirectory =
+    options.telegramClient === undefined
+      ? createServiceDirectoryClient({
+          eventBus: options.eventBus,
+          onTopologyFailure: (error) => {
+            requestProcessShutdown('agent_gateway.topology_failure', error);
+          },
+          url: requireServiceDirectoryConfig(options).url
+        })
+      : undefined;
+  await serviceDirectory?.refresh();
+  const telegramClient =
+    options.telegramClient ??
+    createServiceDirectoryGatewayTelegramClient(requireServiceDirectory(serviceDirectory));
   const runtime: AgentGatewayRuntime = {
     ...options,
     telegramClient
@@ -97,6 +117,7 @@ export async function startAgentGatewayServer(
   ];
 
   const port = await listen(server, options.config.host, options.config.port);
+  await serviceDirectory?.join(createGatewayServiceManifest({ serviceUrl: options.config.serviceUrl }));
   console.log(
     JSON.stringify({
       event: 'agent_gateway.ready',
@@ -113,12 +134,24 @@ export async function startAgentGatewayServer(
         clients,
         subscriptions,
         options.eventBus,
-        telegramClient
+        telegramClient,
+        serviceDirectory
       );
     },
     host: options.config.host,
     port
   };
+}
+
+function requestProcessShutdown(event: string, error: Error): void {
+  console.error(
+    JSON.stringify({
+      error: error.message,
+      event
+    })
+  );
+  process.exitCode = 1;
+  process.kill(process.pid, 'SIGTERM');
 }
 
 export async function runAgentGateway(options: AgentGatewayOptions): Promise<void> {
@@ -173,12 +206,10 @@ async function handleClientMessage(
       result
     });
   } catch (error) {
+    const responseError = rpcErrorFromUnknown(error);
     sendResponse(client, {
       id,
-      error: {
-        code: 'method_failed',
-        message: error instanceof Error ? error.message : String(error)
-      }
+      error: responseError
     });
   }
 }
@@ -192,7 +223,34 @@ async function callMethod(
     return options.telegramClient.call(method, params);
   }
 
-  throw new Error(`Unknown method: ${method}`);
+  throw new UnknownGatewayMethodError(method);
+}
+
+function rpcErrorFromUnknown(error: unknown): { code: string; message: string } {
+  const record = typeof error === 'object' && error !== null ? error as { code?: unknown } : {};
+  if (record.code === 'dependency_unavailable') {
+    return {
+      code: 'dependency_unavailable',
+      message: error instanceof Error ? error.message : String(error)
+    };
+  }
+  if (error instanceof UnknownGatewayMethodError) {
+    return {
+      code: 'unknown_method',
+      message: error.message
+    };
+  }
+
+  return {
+    code: 'method_failed',
+    message: error instanceof Error ? error.message : String(error)
+  };
+}
+
+class UnknownGatewayMethodError extends Error {
+  constructor(method: string) {
+    super(`Unknown method: ${method}`);
+  }
 }
 
 function handleHttpRequest(request: IncomingMessage, response: ServerResponse): void {
@@ -277,6 +335,25 @@ function sendJson(client: WebSocket, payload: unknown): void {
   client.send(JSON.stringify(payload));
 }
 
+function requireServiceDirectoryConfig(options: AgentGatewayOptions): InternalServiceConfig {
+  const config = options.services?.serviceDirectory;
+  if (config === undefined) {
+    throw new Error('Agent Gateway requires Service Directory config');
+  }
+
+  return config;
+}
+
+function requireServiceDirectory(
+  serviceDirectory: ReturnType<typeof createServiceDirectoryClient> | undefined
+): ReturnType<typeof createServiceDirectoryClient> {
+  if (serviceDirectory === undefined) {
+    throw new Error('Agent Gateway requires Service Directory client');
+  }
+
+  return serviceDirectory;
+}
+
 async function listen(server: Server, host: string, port: number): Promise<number> {
   return new Promise<number>((resolve) => {
     server.listen(port, host, () => {
@@ -297,7 +374,8 @@ async function closeAgentGateway(
   clients: Set<WebSocket>,
   subscriptions: EventSubscription[],
   eventBus: EventBus,
-  telegramClient: GatewayTelegramClient
+  telegramClient: GatewayTelegramClient,
+  serviceDirectory: ReturnType<typeof createServiceDirectoryClient> | undefined
 ): Promise<void> {
   for (const subscription of subscriptions) {
     subscription.unsubscribe();
@@ -306,6 +384,7 @@ async function closeAgentGateway(
     client.close();
   }
   telegramClient.close();
+  serviceDirectory?.close();
   await Promise.all([closeWebSocketServer(webSocketServer), closeHttpServer(server)]);
   await eventBus.close();
 }

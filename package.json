@@ -6,7 +6,7 @@
   "workspaces": [
     "packages/shared",
     "packages/database",
-    "packages/extension-registry",
+    "packages/service-directory",
     "packages/gateway",
     "packages/control-plane",
     "packages/telegram",
@@ -22,7 +22,7 @@
     "dev": "node scripts/dev.mjs",
     "dev:control-plane": "npm --workspace @agentg/control-plane run dev",
     "dev:control-plane-server": "npm --workspace @agentg/control-plane run dev:server",
-    "dev:extension-registry": "npm --workspace @agentg/extension-registry run dev",
+    "dev:service-directory": "npm --workspace @agentg/service-directory run dev",
     "dev:gateway": "npm --workspace @agentg/gateway run dev",
     "dev:history-sync": "npm --workspace @agentg/history-sync run dev",
     "dev:summaries": "npm --workspace @agentg/summaries run dev",

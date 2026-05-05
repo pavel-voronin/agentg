@@ -8,13 +8,14 @@ export type GatewayConfig = {
   gateway: {
     host: string;
     port: number;
+    serviceUrl: string;
     token?: string;
   };
   nats: {
     url: string;
   };
   services: {
-    telegram: InternalServiceConfig;
+    serviceDirectory: InternalServiceConfig;
   };
 };
 
@@ -23,18 +24,29 @@ export function loadGatewayConfig(env: NodeJS.ProcessEnv = process.env): Gateway
     gateway: {
       host: env.AGENT_GATEWAY_HOST ?? '127.0.0.1',
       port: parseOptionalInteger(env.AGENT_GATEWAY_PORT, 'AGENT_GATEWAY_PORT') ?? 8787,
+      serviceUrl: parseInternalServiceUrl(
+        env.AGENT_GATEWAY_URL ?? defaultServiceUrl(
+          env.AGENT_GATEWAY_HOST ?? '127.0.0.1',
+          parseOptionalInteger(env.AGENT_GATEWAY_PORT, 'AGENT_GATEWAY_PORT') ?? 8787
+        ),
+        'AGENT_GATEWAY_URL'
+      ),
       ...(env.AGENT_GATEWAY_TOKEN === undefined ? {} : { token: env.AGENT_GATEWAY_TOKEN })
     },
     nats: {
       url: env.NATS_URL ?? 'nats://localhost:4222'
     },
     services: {
-      telegram: readInternalServiceConfig(env, {
-        urlEnv: 'TELEGRAM_RPC_URL',
-        defaultUrl: 'http://127.0.0.1:18081'
+      serviceDirectory: readInternalServiceConfig(env, {
+        urlEnv: 'SERVICE_DIRECTORY_RPC_URL',
+        defaultUrl: 'http://127.0.0.1:18084'
       })
     }
   };
+}
+
+function defaultServiceUrl(host: string, port: number): string {
+  return `http://${host === '0.0.0.0' ? '127.0.0.1' : host}:${String(port)}`;
 }
 
 function readInternalServiceConfig(

@@ -32,19 +32,12 @@ describe('Control Plane server boundary', () => {
       config: {
         host: '127.0.0.1',
         port: 0,
+        serviceUrl: 'http://127.0.0.1:0',
         staticDir: '/tmp/agentg-control-plane-test-missing'
       },
       eventBus,
       historyClient,
-      telegramClient,
-      services: {
-        history: {
-          url: 'http://127.0.0.1:1'
-        },
-        telegram: {
-          url: 'http://127.0.0.1:2'
-        }
-      }
+      telegramClient
     });
     const socket = await openWebSocket(`ws://127.0.0.1:${String(server.port)}/ws`);
 
@@ -170,19 +163,12 @@ describe('Control Plane server boundary', () => {
       config: {
         host: '127.0.0.1',
         port: 0,
+        serviceUrl: 'http://127.0.0.1:0',
         staticDir: '/tmp/agentg-control-plane-test-missing'
       },
       eventBus,
       historyClient,
-      telegramClient,
-      services: {
-        history: {
-          url: 'http://127.0.0.1:1'
-        },
-        telegram: {
-          url: 'http://127.0.0.1:2'
-        }
-      }
+      telegramClient
     });
     const socket = await openWebSocket(`ws://127.0.0.1:${String(server.port)}/ws`);
 

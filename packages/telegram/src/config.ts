@@ -3,7 +3,12 @@ import { fileURLToPath } from 'node:url';
 
 import { loadNearestDotenv } from '@agentg/shared/dotenv';
 
-import { readInternalTrpcBindConfig, type InternalTrpcBindConfig } from './rpc/config.js';
+import {
+  readInternalTrpcBindConfig,
+  readInternalTrpcClientConfig,
+  type InternalTrpcBindConfig,
+  type InternalTrpcClientConfig
+} from './rpc/config.js';
 import type { TelegramClientConfig } from './tdlib.js';
 
 const dotenvDirectory = loadNearestDotenv();
@@ -16,6 +21,10 @@ export type TelegramIngestionConfig = {
     url: string;
   };
   internalRpc: InternalTrpcBindConfig;
+  serviceRpcUrl: string;
+  services: {
+    serviceDirectory: InternalTrpcClientConfig;
+  };
   telegram: TelegramClientConfig;
 };
 
@@ -23,18 +32,29 @@ export function loadTelegramIngestionConfig(
   env: NodeJS.ProcessEnv = process.env
 ): TelegramIngestionConfig {
   const apiId = parseOptionalInteger(env.TELEGRAM_API_ID, 'TELEGRAM_API_ID');
+  const internalRpc = readInternalTrpcBindConfig(env, {
+    hostEnv: 'TELEGRAM_RPC_HOST',
+    portEnv: 'TELEGRAM_RPC_PORT',
+    defaultHost: '127.0.0.1',
+    defaultPort: 18081
+  });
 
   return {
     databaseUrl: env.DATABASE_URL ?? 'postgres://agentg:agentg@localhost:5432/agentg',
     nats: {
       url: env.NATS_URL ?? 'nats://localhost:4222'
     },
-    internalRpc: readInternalTrpcBindConfig(env, {
-      hostEnv: 'TELEGRAM_RPC_HOST',
-      portEnv: 'TELEGRAM_RPC_PORT',
-      defaultHost: '127.0.0.1',
-      defaultPort: 18081
-    }),
+    internalRpc,
+    serviceRpcUrl: readInternalTrpcClientConfig(env, {
+      defaultUrl: defaultRpcUrl(internalRpc),
+      urlEnv: 'TELEGRAM_RPC_URL'
+    }).url,
+    services: {
+      serviceDirectory: readInternalTrpcClientConfig(env, {
+        defaultUrl: 'http://127.0.0.1:18084',
+        urlEnv: 'SERVICE_DIRECTORY_RPC_URL'
+      })
+    },
     telegram: {
       ...(apiId === undefined ? {} : { apiId }),
       ...(env.TELEGRAM_API_HASH === undefined ? {} : { apiHash: env.TELEGRAM_API_HASH }),
@@ -42,6 +62,11 @@ export function loadTelegramIngestionConfig(
       filesDirectory: resolveConfigPath(env.TDLIB_FILES_DIR ?? './td-data/files')
     }
   };
+}
+
+function defaultRpcUrl(config: InternalTrpcBindConfig): string {
+  const host = config.host === '0.0.0.0' ? '127.0.0.1' : config.host;
+  return `http://${host}:${String(config.port)}`;
 }
 
 function resolveConfigPath(path: string): string {

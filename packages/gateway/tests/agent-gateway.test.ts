@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { startAgentGatewayServer, type AgentGatewayServerHandle } from '../src/agent-gateway.js';
+import { createTrpcGatewayTelegramClient } from '../src/telegram-reads.js';
 import { testRpc, testRpcRouter } from './trpc-test.js';
 
 const gatewayHandles: AgentGatewayServerHandle[] = [];
@@ -101,6 +102,55 @@ describe('Agent Gateway external surface', () => {
       client.close();
     }
   });
+
+  it('returns dependency_unavailable for an allowed method when its service is absent', async () => {
+    const gateway = await startAgentGatewayServer({
+      config: {
+        host: '127.0.0.1',
+        port: 0,
+        serviceUrl: 'http://127.0.0.1:0'
+      },
+      eventBus: createFakeEventBus(),
+      telegramClient: {
+        call() {
+          const error = new Error('Dependency is unavailable: telegram.getChat') as Error & {
+            code: string;
+          };
+          error.code = 'dependency_unavailable';
+          throw error;
+        },
+        close() {
+          return;
+        }
+      }
+    });
+    gatewayHandles.push(gateway);
+    const client = await connectGateway(gateway);
+    const id = `req_${randomUUID()}`;
+    const responsePromise = nextResponse(client);
+
+    try {
+      client.send(
+        JSON.stringify({
+          id,
+          method: 'telegram.getChat',
+          params: {
+            chatId: 'chat-a'
+          }
+        })
+      );
+
+      await expect(responsePromise).resolves.toEqual({
+        error: {
+          code: 'dependency_unavailable',
+          message: 'Dependency is unavailable: telegram.getChat'
+        },
+        id
+      });
+    } finally {
+      client.close();
+    }
+  });
 });
 
 async function startGateway(options: {
@@ -110,14 +160,13 @@ async function startGateway(options: {
   const handle = await startAgentGatewayServer({
     config: {
       host: '127.0.0.1',
-      port: 0
+      port: 0,
+      serviceUrl: 'http://127.0.0.1:0'
     },
     eventBus: options.eventBus ?? createFakeEventBus(),
-    services: {
-      telegram: {
-        url: options.telegramUrl
-      }
-    }
+    telegramClient: createTrpcGatewayTelegramClient({
+      url: options.telegramUrl
+    })
   });
   gatewayHandles.push(handle);
   return handle;

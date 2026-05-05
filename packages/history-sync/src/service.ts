@@ -1,4 +1,5 @@
 import type { HistoryDatabase as AppDatabase } from './database.js';
+import { createServiceDirectoryClient } from '@agentg/service-directory/rpc';
 import type { EventBus, EventSubscription } from '@agentg/shared/events/bus';
 import { createIntegrationEvent } from '@agentg/shared/events/envelope';
 
@@ -8,18 +9,22 @@ import {
   type HistorySyncController
 } from './controller.js';
 import { createLiveCoverageObserver, type LiveCoverageObserver } from './live-coverage.js';
-import type { InternalTrpcBindConfig, InternalTrpcClientConfig } from './rpc/config.js';
+import type { InternalTrpcBindConfig } from './rpc/config.js';
 import { startHistoryTrpcServer, stopHistoryTrpcServer } from './rpc/history-server.js';
+import { createHistorySyncServiceManifest } from './registrations.js';
 import { addHistoryCoverageBatch } from './store.js';
-import { createTrpcTelegramHistoryClient } from './telegram-client.js';
+import { createServiceDirectoryTelegramHistoryClient } from './telegram-client.js';
 
 export type HistorySyncServiceOptions = {
   backfill: BackfillOptions;
   database: AppDatabase;
   eventBus: EventBus;
   internalRpc: InternalTrpcBindConfig;
+  serviceRpcUrl: string;
   services: {
-    telegram: InternalTrpcClientConfig;
+    serviceDirectory: {
+      url: string;
+    };
   };
 };
 
@@ -31,7 +36,15 @@ export async function runHistorySyncService(options: HistorySyncServiceOptions):
   let shuttingDown = false;
   let historyRpcServer: Awaited<ReturnType<typeof startHistoryTrpcServer>> | undefined;
   let liveCoverageTick: ReturnType<typeof setInterval> | undefined;
-  const telegram = createTrpcTelegramHistoryClient(options.services.telegram);
+  const serviceDirectory = createServiceDirectoryClient({
+    eventBus: options.eventBus,
+    onTopologyFailure: (error) => {
+      requestProcessShutdown('history_sync.topology_failure', error);
+    },
+    url: options.services.serviceDirectory.url
+  });
+  await serviceDirectory.refresh();
+  const telegram = createServiceDirectoryTelegramHistoryClient(serviceDirectory);
   const controller = createHistorySyncController(
     options.database,
     telegram,
@@ -75,6 +88,7 @@ export async function runHistorySyncService(options: HistorySyncServiceOptions):
     },
     telegram
   });
+  await serviceDirectory.join(createHistorySyncServiceManifest({ rpcUrl: options.serviceRpcUrl }));
   controller.request('startup');
 
   console.log(JSON.stringify({ event: 'history_sync.ready' }));
@@ -98,6 +112,7 @@ export async function runHistorySyncService(options: HistorySyncServiceOptions):
     if (historyRpcStopped) {
       historyRpcServer = undefined;
     }
+    serviceDirectory.close();
     telegram.close?.();
     controller.stop();
     const [historySyncStopped, liveCoverageStopped] = await Promise.all([
@@ -110,6 +125,17 @@ export async function runHistorySyncService(options: HistorySyncServiceOptions):
 
     return historyRpcStopped && historySyncStopped && liveCoverageStopped && eventBusClosed;
   });
+}
+
+function requestProcessShutdown(event: string, error: Error): void {
+  console.error(
+    JSON.stringify({
+      error: error.message,
+      event
+    })
+  );
+  process.exitCode = 1;
+  process.kill(process.pid, 'SIGTERM');
 }
 
 function subscribeHistorySyncService(options: {

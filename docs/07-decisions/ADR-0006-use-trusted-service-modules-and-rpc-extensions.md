@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. Updated by the direct extension-registry migration.
+Accepted. Updated by the Service Directory migration.
 
 ## Context
 
@@ -43,18 +43,34 @@ RPC lifecycle events are published by default. Callers can pass:
 - `silent: true` to suppress lifecycle events and synchronous fact events
   published by the current handler.
 
-Extension registration is handled by a standalone Extension Registry service.
-The registry stores and lists registrations only:
+Service Directory owns service discovery and extension declarations. Each
+service joins with a manifest:
 
 ```json
 {
-  "target": "telegram.chat",
-  "extension": "summaries.chatSummary"
+  "slug": "summaries",
+  "rpcUrl": "http://summaries:8080",
+  "required": false,
+  "procedures": ["summaries.requestSummary", "summaries.chatSummary"],
+  "events": ["summaries.summary.completed"],
+  "extensions": [
+    {
+      "target": "telegram.chat",
+      "extension": "summaries.chatSummary"
+    }
+  ]
 }
 ```
 
-The registry does not call extension RPC methods and does not own service
-discovery.
+Service Directory returns a lease and a versioned snapshot. Services renew
+leases, subscribe to `service_directory.changed`, and pull a fresh snapshot when
+their local version is stale. Service Directory does not call domain or module
+RPC methods.
+
+Manifest `required` is a runtime invariant flag. Loss of a previously seen
+`required: true` service is fatal for every Service Directory client. Loss of a
+`required: false` service only removes its procedures and extensions from the
+snapshot.
 
 Extension methods are module-owned getter RPC methods. The extension name is the
 RPC method name. For model extensions, the getter receives the marked model
@@ -71,10 +87,11 @@ object directly:
 
 Domains do not call extension RPC methods while serving base domain procedures.
 Caller code composes extended views by calling the base procedure, collecting
-model markers, reading Extension Registry registrations, calling registered
-getter RPC methods through known service URLs, and assembling the view locally.
+model markers, reading the local Service Directory snapshot, calling registered
+getter RPC methods through the owning service URL, and assembling the view
+locally.
 
-Infrastructure-level events and extension registrations are ephemeral. A domain
+Infrastructure-level events and Service Directory leases are ephemeral. A domain
 or module persists its own state when persistence is part of its own behavior.
 
 ## Terms
@@ -87,8 +104,8 @@ Slug means the short stable module identifier, for example `summaries`.
 Extension means a module-owned getter RPC method registered against a target
 model or procedure name.
 
-Target means the string looked up in Extension Registry. For model getters this
-is the model marker value, for example `telegram.chat`.
+Target means the string looked up in the Service Directory snapshot. For model
+getters this is the model marker value, for example `telegram.chat`.
 
 Model marker means `_model` plus the object's stable `id` on the model object
 itself.
@@ -110,9 +127,9 @@ Benefits:
 Costs:
 
 - Callers that need extension data must compose it explicitly.
-- Extension registrations need refresh and stale-entry cleanup.
+- Service Directory leases need renewal and stale-entry cleanup.
 - Cross-module behavior depends on naming and registration conventions.
-- Service routing remains explicit config until a later discovery layer exists.
+- Service routing depends on live Service Directory snapshots.
 
 Non-goals:
 
@@ -126,7 +143,13 @@ Non-goals:
 
 ## Operational Defaults
 
-Service URLs remain explicit configuration.
+Services know Service Directory URL, NATS URL, their own service URL, and their
+own manifest. Cross-service topology is read from the local Service Directory
+snapshot.
+
+Core services register as required: Telegram ingestion, History Sync, Gateway,
+and Control Plane. Trusted modules that add optional product views register as
+not required unless their absence must stop the whole runtime.
 
 Inside Docker Compose, a module service name should match its slug. A module
 with slug `summaries` is addressed as `http://summaries:<port>` inside the
@@ -135,17 +158,17 @@ Compose network.
 Module tables should use the owning slug as a prefix, for example
 `summaries_runs` or `summaries_chat_summaries`.
 
-Extension registrations are refreshed periodically by the owning module.
-Extension Registry removes stale registrations from its local registry.
+Services renew their Service Directory lease periodically. Service Directory
+removes stale services and their extension declarations from its snapshot.
 
 NATS event subjects for a module should use the module slug as their prefix.
 
 The accepted baseline is guarded by `npm run source:audit`, which checks raw
 tRPC builder imports, cross-domain schema imports, table-prefix ownership,
-Gateway external surface, extension boundary rules, and Extension Registry's
+Gateway external surface, extension boundary rules, and Service Directory's
 non-execution boundary.
 
 ## Migration
 
-The original module runtime plan was superseded by
-[Extension Registry And Direct RPC Migration](../09-roadmap/extension-registry-direct-rpc-migration.md).
+The current module/discovery architecture is described by
+[Module Runtime And Extensions](../02-architecture/module-runtime-and-extensions.md).

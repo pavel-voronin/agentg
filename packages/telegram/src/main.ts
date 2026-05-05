@@ -32,6 +32,8 @@ try {
     database,
     eventBus,
     internalRpc: config.internalRpc,
+    serviceRpcUrl: config.serviceRpcUrl,
+    services: config.services,
     telegram: config.telegram
   });
 } catch (error) {

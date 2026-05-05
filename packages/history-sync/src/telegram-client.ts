@@ -196,6 +196,10 @@ export type TelegramHistoryClient = {
   ): Promise<TelegramHistoryChat[]>;
 } & TelegramReadClient;
 
+type ServiceDirectoryProcedureResolver = {
+  resolveProcedure(procedure: string): string;
+};
+
 const TELEGRAM_HISTORY_REQUEST_TIMEOUT_MS = 30000;
 
 export function createTrpcTelegramHistoryClient(
@@ -251,4 +255,87 @@ export function createTrpcTelegramHistoryClient(
       }>;
     }
   };
+}
+
+export function createServiceDirectoryTelegramHistoryClient(
+  resolver: ServiceDirectoryProcedureResolver
+): TelegramHistoryClient {
+  const clients = new Map<string, ReturnType<typeof createTelegramRpcClient>>();
+
+  return {
+    close() {
+      for (const client of clients.values()) {
+        client.close();
+      }
+      clients.clear();
+    },
+    countMessagesInIntervals(request, callOptions) {
+      return clientFor('telegram.countMessagesInIntervals').countMessagesInIntervals(
+        request,
+        callOptions
+      ) as Promise<{ counts: number[] }>;
+    },
+    fetchPage(request, callOptions) {
+      return clientFor('telegram.fetchPage').fetchPage(
+        request,
+        callOptions
+      ) as Promise<TelegramHistoryFetchPageResult>;
+    },
+    getChat(request, callOptions) {
+      return clientFor('telegram.getChat').getChat(request, callOptions) as Promise<{
+        chat: TelegramReadChat | null;
+      }>;
+    },
+    getChatHistoryFacts(request, callOptions) {
+      return clientFor('telegram.getChatHistoryFacts').getChatHistoryFacts(
+        request,
+        callOptions
+      ) as Promise<TelegramChatHistoryFacts>;
+    },
+    getMessage(request, callOptions) {
+      return clientFor('telegram.getMessage').getMessage(request, callOptions) as Promise<{
+        message: TelegramReadMessage | null;
+      }>;
+    },
+    listChatDirectory(request, callOptions) {
+      return clientFor('telegram.listChatDirectory').listChatDirectory(
+        request,
+        callOptions
+      ) as Promise<TelegramChatDirectoryResult>;
+    },
+    listChats(request, callOptions) {
+      return clientFor('telegram.listChats').listChats(
+        request,
+        callOptions
+      ) as Promise<TelegramHistoryChat[]>;
+    },
+    listRecentMessages(request, callOptions) {
+      return clientFor('telegram.listRecentMessages').listRecentMessages(
+        request,
+        callOptions
+      ) as Promise<{ messages: TelegramReadMessage[] }>;
+    },
+    searchMessages(request, callOptions) {
+      return clientFor('telegram.searchMessages').searchMessages(request, callOptions) as Promise<{
+        messages: TelegramReadMessage[];
+      }>;
+    }
+  };
+
+  function clientFor(procedure: string): ReturnType<typeof createTelegramRpcClient> {
+    const url = resolver.resolveProcedure(procedure);
+    const existing = clients.get(url);
+    if (existing !== undefined) {
+      return existing;
+    }
+
+    const client = createTelegramRpcClient(
+      { url },
+      {
+        timeoutMs: TELEGRAM_HISTORY_REQUEST_TIMEOUT_MS
+      }
+    );
+    clients.set(url, client);
+    return client;
+  }
 }
