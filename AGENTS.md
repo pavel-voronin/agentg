@@ -26,3 +26,4 @@
   neutral prose.
 - If a response lists alternatives for context, it must still name the selected
   option and explain why that option wins.
+- Do not use the Russian word "почти" in assistant replies.
