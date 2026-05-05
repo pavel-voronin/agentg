@@ -42,6 +42,7 @@ const {
   closeSelectedChat,
   deleteTarget,
   openArchiveChats,
+  openChat,
   openFolderChats,
   openMainChats,
   searchChats,
@@ -254,6 +255,7 @@ onBeforeUnmount(() => {
       <ChatSidebar
         :view="chatSidebar"
         @archive-open="openArchiveChats"
+        @chat-open="openChat"
         @chat-toggle="toggleChat"
         @folder-open="openFolderChats"
         @main-open="openMainChats"

@@ -1,6 +1,7 @@
 import type {
   ChatListMode,
   ChatNavigation,
+  ChatPlacement,
   ControlPlaneChat,
   HistoryBoundary,
   HistoryChatTypeCount,
@@ -19,6 +20,7 @@ export type ControlPlaneRpcClient = {
 
 export type ControlPlaneChatListRequest = {
   folderId: number | null;
+  focusChatId?: string | null;
   limit?: number;
   listMode: ChatListMode;
   query: string;
@@ -82,9 +84,14 @@ export function createControlPlaneApi(client: ControlPlaneRpcClient): ControlPla
 
 function controlPlaneChatListParams(request: ControlPlaneChatListRequest): Record<string, unknown> {
   const query = request.query.trim();
+  const focusChatId = request.focusChatId?.trim();
   const params: Record<string, unknown> = {
     limit: request.limit ?? DEFAULT_CHAT_LIMIT
   };
+
+  if (focusChatId !== undefined && focusChatId.length > 0) {
+    params.focusChatId = focusChatId;
+  }
 
   if (query.length === 0) {
     params.list = request.listMode;
@@ -137,12 +144,29 @@ function normalizeControlPlaneChat(value: unknown): ControlPlaneChat {
     id: asString(input?.id) ?? '',
     isBot: input?.isBot === true,
     pendingJobs: asNonNegativeInteger(input?.pendingJobs),
+    placements: asArray(input?.placements).map(normalizeChatPlacement).filter(isDefined),
     runningJobs: asNonNegativeInteger(input?.runningJobs),
     targets: asNonNegativeInteger(input?.targets),
     title: asString(input?.title) ?? '',
     type: asString(input?.type) ?? '',
     updatedAt: asString(input?.updatedAt) ?? ''
   };
+}
+
+function normalizeChatPlacement(value: unknown): ChatPlacement | undefined {
+  const input = asRecord(value);
+  const kind = asString(input?.kind);
+  const order = asString(input?.order) ?? '0';
+  if (kind === 'main' || kind === 'archive') {
+    return { kind, order };
+  }
+  if (kind === 'folder') {
+    const folderId = input?.folderId;
+    if (typeof folderId === 'number' && Number.isSafeInteger(folderId) && folderId >= 0) {
+      return { folderId, kind, order };
+    }
+  }
+  return undefined;
 }
 
 function normalizeChatFolder(value: unknown): ChatNavigation['folders'][number] {
@@ -256,6 +280,10 @@ function normalizeHistoryBoundary(value: unknown): HistoryBoundary {
 
 function asArray(value: unknown): Record<string, unknown>[] {
   return Array.isArray(value) ? value.filter(isRecord) : [];
+}
+
+function isDefined<T>(value: T | undefined): value is T {
+  return value !== undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

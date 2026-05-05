@@ -5,7 +5,12 @@ import {
   type ControlPlaneEvent
 } from '../control-plane/controlPlaneClient.js';
 import { createControlPlaneApi } from '../control-plane/controlPlaneApi.js';
-import type { StatusBadgeKind } from '../stores/controlPlaneTypes.js';
+import type {
+  ChatListMode,
+  ChatPlacement,
+  ControlPlaneChat,
+  StatusBadgeKind
+} from '../stores/controlPlaneTypes.js';
 import { useAppShellStore } from '../stores/appShell.js';
 import { useChatStore } from '../stores/chat.js';
 import { useEventsStore } from '../stores/events.js';
@@ -19,10 +24,16 @@ export type ControlPlaneActions = {
   closeSelectedChat: () => void;
   deleteTarget: (targetId: string) => void;
   openArchiveChats: () => void;
+  openChat: (chatId: string) => void;
   openFolderChats: (folderId: number) => void;
   openMainChats: () => void;
   searchChats: (value: string) => void;
   toggleChat: (chatId: string) => void;
+};
+
+type ChatListSelection = {
+  folderId: number | null;
+  mode: ChatListMode;
 };
 
 export function useControlPlaneRuntime() {
@@ -69,13 +80,21 @@ export function useControlPlaneRuntime() {
     overviewStore.setOverview(await controlPlaneApi.getOverview());
   }
 
-  async function loadChats(): Promise<void> {
+  async function loadChats(options: { focusChatId?: string } = {}): Promise<void> {
     const query = chatStore.chatFilter.trim();
-    const result = await controlPlaneApi.listChats({
+    const request = {
       folderId: chatStore.chatFolderId,
       listMode: chatStore.chatListMode,
       query
-    });
+    };
+    const result = await controlPlaneApi.listChats(
+      options.focusChatId === undefined
+        ? request
+        : {
+            ...request,
+            focusChatId: options.focusChatId
+          }
+    );
     chatStore.setChatListData({
       chats: result.chats,
       navigation: result.navigation
@@ -179,6 +198,22 @@ export function useControlPlaneRuntime() {
     await loadChats();
   }
 
+  async function openChat(chatId: string): Promise<void> {
+    const normalizedChatId = chatId.trim();
+    if (normalizedChatId.length === 0) {
+      return;
+    }
+
+    const chat = await findChatById(normalizedChatId);
+    selectChatList(preferredChatListSelection(chat));
+    await loadChats({ focusChatId: normalizedChatId });
+    if (!chatStore.chats.some((item) => item.id === normalizedChatId)) {
+      throw new Error(`Chat ${normalizedChatId} is not visible in its Telegram list`);
+    }
+    selectedHistoryStore.selectChat(normalizedChatId);
+    await loadSelectedState();
+  }
+
   async function toggleChat(chatId: string): Promise<void> {
     if (selectedHistoryStore.selectedChatId === chatId) {
       clearSelectedChat();
@@ -186,6 +221,44 @@ export function useControlPlaneRuntime() {
     }
     selectedHistoryStore.selectChat(chatId);
     await loadSelectedState();
+  }
+
+  async function findChatById(chatId: string): Promise<ControlPlaneChat> {
+    const result = await controlPlaneApi.listChats({
+      folderId: null,
+      listMode: 'main',
+      query: chatId
+    });
+    const chat = result.chats.find((item) => item.id === chatId);
+    if (chat === undefined) {
+      throw new Error(`Chat ${chatId} is not available in the chat directory`);
+    }
+    return chat;
+  }
+
+  function preferredChatListSelection(chat: ControlPlaneChat): ChatListSelection {
+    const placement = [...chat.placements].sort(compareChatPlacements)[0];
+    if (placement === undefined) {
+      throw new Error(`Chat ${chat.id} has no Telegram list placement`);
+    }
+    if (placement.kind === 'folder') {
+      return { folderId: placement.folderId, mode: 'folder' };
+    }
+    return { folderId: null, mode: placement.kind };
+  }
+
+  function selectChatList(selection: ChatListSelection): void {
+    if (selection.mode === 'main') {
+      chatStore.selectMainChatList();
+      return;
+    }
+    if (selection.mode === 'archive') {
+      chatStore.selectArchiveChatList();
+      return;
+    }
+    if (selection.folderId !== null) {
+      chatStore.selectFolderChatList(selection.folderId);
+    }
   }
 
   function searchChats(value: string): void {
@@ -295,6 +368,9 @@ export function useControlPlaneRuntime() {
     openArchiveChats() {
       void openArchiveChats().catch(showError);
     },
+    openChat(chatId) {
+      void openChat(chatId).catch(showError);
+    },
     openFolderChats(folderId) {
       void openFolderChats(folderId).catch(showError);
     },
@@ -311,6 +387,47 @@ export function useControlPlaneRuntime() {
   onBeforeUnmount(stopRuntime);
 
   return actions;
+}
+
+function compareChatPlacements(left: ChatPlacement, right: ChatPlacement): number {
+  const leftRank = chatPlacementRank(left);
+  const rightRank = chatPlacementRank(right);
+  if (leftRank !== rightRank) {
+    return leftRank - rightRank;
+  }
+
+  const orderComparison = compareBigIntDescending(
+    parsePositiveBigInt(left.order),
+    parsePositiveBigInt(right.order)
+  );
+  if (orderComparison !== 0) {
+    return orderComparison;
+  }
+
+  const leftFolderId = left.kind === 'folder' ? left.folderId : 0;
+  const rightFolderId = right.kind === 'folder' ? right.folderId : 0;
+  return leftFolderId - rightFolderId;
+}
+
+function chatPlacementRank(placement: ChatPlacement): number {
+  if (placement.kind === 'main') {
+    return 0;
+  }
+  if (placement.kind === 'archive') {
+    return 1;
+  }
+  return 2;
+}
+
+function compareBigIntDescending(left: bigint, right: bigint): number {
+  if (left === right) {
+    return 0;
+  }
+  return left > right ? -1 : 1;
+}
+
+function parsePositiveBigInt(value: string): bigint {
+  return /^[0-9]+$/.test(value) ? BigInt(value) : 0n;
 }
 
 function isNotFoundLikeError(error: unknown): boolean {

@@ -140,6 +140,7 @@ describe('event list view', () => {
     );
 
     expect(html).toContain('telegram.chat');
+    expect(html).toContain('title="telegram.chat chat-a"');
     expect(html).toContain('chat-a');
     expect(html).toContain('title:');
     expect(html).toContain('Chat A');

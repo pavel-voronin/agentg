@@ -126,11 +126,27 @@ export type AppEventItem = AppStandardEventItem | AppRpcEventItem;
 
 export type ChatListMode = 'archive' | 'folder' | 'main';
 
+export type ChatPlacement =
+  | {
+      kind: 'archive';
+      order: string;
+    }
+  | {
+      kind: 'main';
+      order: string;
+    }
+  | {
+      folderId: number;
+      kind: 'folder';
+      order: string;
+    };
+
 export type ControlPlaneChat = {
   coverageIntervals: number;
   id: string;
   isBot: boolean;
   pendingJobs: number;
+  placements: ChatPlacement[];
   runningJobs: number;
   targets: number;
   title: string;

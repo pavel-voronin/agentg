@@ -48,6 +48,7 @@ type ControlPlaneChatListResult = {
     id: string;
     isBot: boolean;
     pendingJobs: number;
+    placements: TelegramChatDirectoryEntry['placements'];
     runningJobs: number;
     targets: number;
     title: string;
@@ -113,6 +114,9 @@ async function listControlPlaneChats(
 ): Promise<ControlPlaneChatListResult> {
   const input = asRecord(params);
   const query = asString(input?.query)?.trim();
+  const rawFocusChatId = asString(input?.focusChatId)?.trim();
+  const focusChatId =
+    rawFocusChatId === undefined || rawFocusChatId.length === 0 ? undefined : rawFocusChatId;
   const type = asString(input?.type)?.trim();
   const limit = parseLimit(input?.limit, 100, 500);
   const listFilter =
@@ -121,10 +125,10 @@ async function listControlPlaneChats(
     ...(query === undefined || query.length === 0 ? {} : { query }),
     ...(type === undefined || type.length === 0 ? {} : { type })
   });
-  const chats = directory.chats
+  const matchingChats = directory.chats
     .filter((chat) => (listFilter === undefined ? true : chatMatchesListFilter(chat, listFilter)))
-    .sort((left, right) => compareTelegramChatsByTdlibOrder(left, right, listFilter))
-    .slice(0, limit);
+    .sort((left, right) => compareTelegramChatsByTdlibOrder(left, right, listFilter));
+  const chats = limitChats(matchingChats, limit, focusChatId);
   const statsByChat = await loadStatsByChat(
     runtime.historyClient,
     chats.map((chat) => chat.id)
@@ -142,6 +146,7 @@ async function listControlPlaneChats(
         id: chat.id,
         isBot: chat.isBot,
         pendingJobs: stats.pendingJobs,
+        placements: chat.placements,
         runningJobs: stats.runningJobs,
         targets: stats.targets,
         title: chat.title,
@@ -266,6 +271,20 @@ function chatFolderIds(chat: TelegramChatDirectoryEntry): number[] {
   return chat.placements
     .filter((placement) => placement.kind === 'folder')
     .map((placement) => placement.folderId);
+}
+
+function limitChats(
+  chats: TelegramChatDirectoryEntry[],
+  limit: number,
+  focusChatId: string | undefined
+): TelegramChatDirectoryEntry[] {
+  const limited = chats.slice(0, limit);
+  if (focusChatId === undefined || limited.some((chat) => chat.id === focusChatId)) {
+    return limited;
+  }
+
+  const focusedChat = chats.find((chat) => chat.id === focusChatId);
+  return focusedChat === undefined ? limited : [...limited, focusedChat];
 }
 
 function compareTelegramChatsByTdlibOrder(

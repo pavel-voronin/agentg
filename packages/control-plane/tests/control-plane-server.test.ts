@@ -3,6 +3,10 @@ import { createIntegrationEvent, type IntegrationEvent } from '@agentg/shared/ev
 import { WebSocket, type RawData } from 'ws';
 import { describe, expect, it, vi } from 'vitest';
 
+import {
+  callControlPlaneReadMethod,
+  type ControlPlaneReadModelRuntime
+} from '../src/server/control-plane-read-model.js';
 import { startControlPlaneServer } from '../src/server/control-plane-server.js';
 
 describe('Control Plane server boundary', () => {
@@ -207,6 +211,51 @@ describe('Control Plane server boundary', () => {
       await server.close();
     }
   });
+
+  it('keeps the focused chat visible when a list limit would otherwise hide it', async () => {
+    const chats = [
+      directoryChat({
+        id: 'chat-a',
+        order: '300',
+        title: 'Alpha'
+      }),
+      directoryChat({
+        id: 'chat-b',
+        order: '200',
+        title: 'Beta'
+      })
+    ];
+    const historyClient = {
+      getChatStats: vi.fn(() => Promise.resolve({ stats: [] }))
+    };
+    const telegramClient = {
+      listChatDirectory: vi.fn(() =>
+        Promise.resolve({
+          chats,
+          folders: [],
+          navigationChats: chats,
+          types: []
+        })
+      )
+    };
+
+    const result = await callControlPlaneReadMethod(
+      { historyClient, telegramClient } as unknown as ControlPlaneReadModelRuntime,
+      'controlPlane.listChats',
+      {
+        focusChatId: 'chat-b',
+        limit: 1,
+        list: 'main'
+      }
+    );
+
+    expect(result).toMatchObject({
+      chats: [{ id: 'chat-a' }, { id: 'chat-b' }]
+    });
+    expect(historyClient.getChatStats).toHaveBeenCalledWith({
+      chatIds: ['chat-a', 'chat-b']
+    });
+  });
 });
 
 type FakeEventBus = EventBus & {
@@ -250,6 +299,20 @@ function createFakeEventBus(): FakeEventBus {
         }
       };
     }
+  };
+}
+
+function directoryChat(input: { id: string; order: string; title: string }) {
+  return {
+    _model: 'telegram.chat' as const,
+    id: input.id,
+    isBot: false,
+    isSelf: false,
+    lastMessageDate: Number(input.order),
+    placements: [{ kind: 'main' as const, order: input.order }],
+    title: input.title,
+    type: 'private',
+    updatedAt: '2026-05-01T00:00:00.000Z'
   };
 }
 

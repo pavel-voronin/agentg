@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { AppEventBodyView } from '../stores/controlPlaneTypes.js';
+import { dispatchModelRefSelected } from '../ui/modelRefEvents.js';
 
 defineProps<{
   body: AppEventBodyView;
@@ -12,6 +13,10 @@ function lineStyle(indent: number): Record<string, string> {
   return {
     paddingLeft: `${String(indent)}rem`
   };
+}
+
+function selectModelRef(model: string, id: string): void {
+  dispatchModelRefSelected({ id, model });
 }
 </script>
 
@@ -40,10 +45,13 @@ function lineStyle(indent: number): Record<string, string> {
     >
       <template v-for="(token, tokenIndex) in line.tokens" :key="tokenIndex">
         <span v-if="token.kind === 'text'">{{ token.text }}</span>
-        <span
+        <button
           v-else
-          class="inline-flex max-w-full overflow-hidden rounded border align-baseline leading-tight"
+          type="button"
+          class="inline-flex max-w-full overflow-hidden rounded border bg-transparent p-0 align-baseline font-mono leading-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
           :style="{ borderColor: token.color }"
+          :title="`${token.model} ${token.id}`"
+          @click="selectModelRef(token.model, token.id)"
         >
           <span
             class="max-w-[9rem] truncate px-1 text-white"
@@ -54,7 +62,7 @@ function lineStyle(indent: number): Record<string, string> {
           <span class="max-w-[12rem] truncate bg-white px-1" :style="{ color: token.color }">
             {{ token.id }}
           </span>
-        </span>
+        </button>
       </template>
     </div>
   </div>

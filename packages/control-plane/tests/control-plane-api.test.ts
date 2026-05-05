@@ -45,6 +45,57 @@ describe('createControlPlaneApi', () => {
     });
   });
 
+  it('sends focused chat list requests and normalizes chat placements', async () => {
+    const rpc = vi.fn().mockResolvedValue({
+      chats: [
+        {
+          coverageIntervals: 0,
+          id: 'chat-b',
+          isBot: false,
+          pendingJobs: 0,
+          placements: [
+            { kind: 'folder', folderId: 4, order: '200' },
+            { kind: 'main', order: '100' }
+          ],
+          runningJobs: 0,
+          targets: 0,
+          title: 'Beta',
+          type: 'private',
+          updatedAt: '2026-05-01T00:00:00.000Z'
+        }
+      ],
+      navigation: {}
+    });
+    const api = createControlPlaneApi({
+      rpc: rpc as Parameters<typeof createControlPlaneApi>[0]['rpc']
+    });
+
+    await expect(
+      api.listChats({
+        focusChatId: '  chat-b  ',
+        folderId: null,
+        listMode: 'main',
+        query: ''
+      })
+    ).resolves.toMatchObject({
+      chats: [
+        {
+          id: 'chat-b',
+          placements: [
+            { folderId: 4, kind: 'folder', order: '200' },
+            { kind: 'main', order: '100' }
+          ]
+        }
+      ]
+    });
+
+    expect(rpc).toHaveBeenCalledWith('controlPlane.listChats', {
+      focusChatId: 'chat-b',
+      limit: 500,
+      list: 'main'
+    });
+  });
+
   it('normalizes Control Plane and History RPC responses into UI models', async () => {
     const rpc = vi.fn(<T = unknown>(method: string): Promise<T> => {
       if (method === 'controlPlane.getOverview') {

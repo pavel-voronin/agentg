@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, ref } from 'vue';
+import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 
 import type {
   ChatFolderNavItem,
@@ -7,6 +7,7 @@ import type {
   ChatSidebarView
 } from '../stores/controlPlaneTypes.js';
 import UiButton from '../ui/UiButton.vue';
+import { onModelRefSelected } from '../ui/modelRefEvents.js';
 
 defineProps<{
   view: ChatSidebarView;
@@ -14,6 +15,7 @@ defineProps<{
 
 const emit = defineEmits<{
   archiveOpen: [];
+  chatOpen: [chatId: string];
   chatToggle: [chatId: string];
   folderOpen: [folderId: number];
   mainOpen: [];
@@ -30,6 +32,7 @@ type SearchInputRef = {
 };
 
 const searchInput = ref<SearchInputRef | null>(null);
+let stopModelRefListener: (() => void) | null = null;
 
 const baseChatButtonClass =
   'block w-full border-b border-zinc-100 px-3 py-3 text-left hover:bg-zinc-50';
@@ -44,6 +47,12 @@ function onSearchInput(event: Event): void {
 function clearSearch(): void {
   emit('searchClear');
   void nextTick(() => searchInput.value?.focus());
+}
+
+function handleModelRefSelected(selection: { id: string; model: string }): void {
+  if (selection.model === 'telegram.chat') {
+    emit('chatOpen', selection.id);
+  }
 }
 
 function openFolder(item: ChatFolderNavItem): void {
@@ -69,6 +78,15 @@ function folderButtonClass(active: boolean): string {
 function inputTarget(event: Event): InputEventTarget | null {
   return event.target === null ? null : (event.target as unknown as InputEventTarget);
 }
+
+onMounted(() => {
+  stopModelRefListener = onModelRefSelected(handleModelRefSelected);
+});
+
+onBeforeUnmount(() => {
+  stopModelRefListener?.();
+  stopModelRefListener = null;
+});
 </script>
 
 <template>
