@@ -184,7 +184,7 @@ function timelineDetail(detail: TimelineHistoryDetail): TimelineDetail {
   const displayStartAt = interval.originalStartAt ?? detail.startAt;
   const displayEndAt = interval.originalEndAt ?? detail.endAt;
   return {
-    count: formatInteger(interval.messageCount),
+    count: interval.messageCount === undefined ? 'unknown' : formatInteger(interval.messageCount),
     duration: formatDuration(displayEndAt.getTime() - displayStartAt.getTime()),
     endAt: detail.endAt,
     endValue: formatTimelineDate(displayEndAt),

@@ -17,7 +17,10 @@ export function coverageSegmentTooltip(
   const startAt = interval.originalStartAt ?? interval.startAt;
   const endAt = interval.originalEndAt ?? interval.endAt;
   return {
-    count: `${formatInteger(raw.messageCount ?? 0)} messages`,
+    count:
+      raw.messageCount === undefined
+        ? 'unknown messages'
+        : `${formatInteger(raw.messageCount)} messages`,
     duration: formatDuration(endAt.getTime() - startAt.getTime()),
     from: formatTimelineDate(startAt),
     kind: 'Coverage',

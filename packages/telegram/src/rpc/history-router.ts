@@ -675,10 +675,7 @@ async function handleFetchPage(
   }
 
   const nextCursorMessageId = oldestMessageIdOlderThan(concreteMessages, cursorMessageId);
-  const oldestFetchedMessageDate =
-    nextCursorMessageId === undefined
-      ? undefined
-      : messageDateForId(concreteMessages, nextCursorMessageId);
+  const oldestFetchedMessageDate = oldestMessageDate(concreteMessages);
 
   return {
     crossedStart: concreteMessages.some((message) => isBeforeInterval(message, startAt)),
@@ -1183,8 +1180,12 @@ function isBeforeInterval(message: TdObject, startAt: Date): boolean {
   return messageDate !== undefined && messageDate < startAt;
 }
 
-function messageDateForId(messages: TdObject[], messageId: number): Date | undefined {
-  return tdMessageDate(messages.find((message) => tdMessageId(message) === messageId));
+function oldestMessageDate(messages: TdObject[]): Date | undefined {
+  const dates = messages.map(tdMessageDate).filter((date): date is Date => date !== undefined);
+  const [first, ...rest] = dates;
+  return first === undefined
+    ? undefined
+    : rest.reduce((oldest, date) => (date < oldest ? date : oldest), first);
 }
 
 function oldestMessageIdOlderThan(

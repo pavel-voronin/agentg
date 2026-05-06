@@ -3,6 +3,7 @@ export function createHistorySyncServiceManifest(config: { rpcUrl: string }) {
     events: [
       'history.coverage.changed',
       'history.job.completed',
+      'history.job.created',
       'history.job.failed',
       'history.job.progress',
       'history.job.started',

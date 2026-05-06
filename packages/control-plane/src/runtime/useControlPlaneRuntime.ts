@@ -144,7 +144,6 @@ export function useControlPlaneRuntime() {
       return;
     }
     await controlPlaneApi.upsertPresetTarget(chatId, preset);
-    await Promise.all([loadOverview(), loadChats(), loadSelectedState()]);
   }
 
   async function upsertCustomTarget(start: string, end: string): Promise<void> {
@@ -153,7 +152,6 @@ export function useControlPlaneRuntime() {
       return;
     }
     await controlPlaneApi.upsertCustomTarget(chatId, start, end);
-    await Promise.all([loadOverview(), loadChats(), loadSelectedState()]);
   }
 
   async function deleteHistoryTarget(targetId: string): Promise<void> {
@@ -161,13 +159,13 @@ export function useControlPlaneRuntime() {
       return;
     }
     await controlPlaneApi.deleteTarget(targetId);
-    await Promise.all([loadOverview(), loadChats(), loadSelectedState()]);
   }
 
   function receiveEvent(event: ControlPlaneEvent): void {
     if (event.type === 'telegram.status') {
       receiveTdlibStatus(event);
     }
+    selectedHistoryStore.applyTimelineEvent(event);
     if (event.type) {
       eventsStore.pushEvent(event);
     }

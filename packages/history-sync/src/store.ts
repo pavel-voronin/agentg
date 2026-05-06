@@ -395,8 +395,8 @@ export async function extendHistoryCoverageFromMessage(
 export async function createBackfillJobs(
   database: AppDatabase,
   jobs: BackfillJobInput[]
-): Promise<number> {
-  let created = 0;
+): Promise<BackfillJob[]> {
+  const created: BackfillJob[] = [];
   for (const job of jobs) {
     const normalizedJob = normalizeTelegramHistoryInterval(job);
     if (normalizedJob.startAt >= normalizedJob.endAt) {
@@ -419,7 +419,15 @@ export async function createBackfillJobs(
       })
       .returning({ id: historyBackfillJobs.id });
 
-    created += inserted.length;
+    created.push(
+      ...inserted.map((row) => ({
+        chatId: normalizedJob.chatId,
+        endAt: normalizedJob.endAt,
+        id: String(row.id),
+        startAt: normalizedJob.startAt,
+        status: 'pending' as const
+      }))
+    );
   }
 
   return created;

@@ -77,6 +77,7 @@ History Sync publishes:
 - `history.sync.completed`
 - `history.sync.failed`
 - `history.reconcile.completed`
+- `history.job.created`
 - `history.job.started`
 - `history.job.progress`
 - `history.job.completed`

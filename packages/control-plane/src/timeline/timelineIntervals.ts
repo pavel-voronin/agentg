@@ -45,7 +45,7 @@ export function normalizeIntervals(intervals: TimelineRawInterval[]): TimelineIn
       if (!previous || interval.startAt > previous.endAt) {
         acc.push({
           endAt: interval.endAt,
-          messageCount: interval.messageCount ?? 0,
+          ...(interval.messageCount === undefined ? {} : { messageCount: interval.messageCount }),
           startAt: interval.startAt
         });
         return acc;
@@ -53,7 +53,7 @@ export function normalizeIntervals(intervals: TimelineRawInterval[]): TimelineIn
       if (interval.endAt > previous.endAt) {
         previous.endAt = interval.endAt;
       }
-      previous.messageCount = (previous.messageCount ?? 0) + (interval.messageCount ?? 0);
+      setMergedMessageCount(previous, interval.messageCount);
       return acc;
     }, []);
 }
@@ -91,11 +91,26 @@ export function visibleCoverageIntervals(
     .map((interval) => ({
       endAt: interval.endAt < max ? interval.endAt : max,
       key: coverageIntervalKey(interval),
-      messageCount: interval.messageCount ?? 0,
+      ...(interval.messageCount === undefined ? {} : { messageCount: interval.messageCount }),
       originalEndAt: interval.endAt,
       originalStartAt: interval.startAt,
       startAt: interval.startAt > min ? interval.startAt : min
     }));
+}
+
+function setMergedMessageCount(
+  interval: TimelineInterval,
+  nextMessageCount: number | undefined
+): void {
+  const count =
+    interval.messageCount === undefined && nextMessageCount === undefined
+      ? undefined
+      : (interval.messageCount ?? 0) + (nextMessageCount ?? 0);
+  if (count === undefined) {
+    delete interval.messageCount;
+    return;
+  }
+  interval.messageCount = count;
 }
 
 export function visibleJobDetails(

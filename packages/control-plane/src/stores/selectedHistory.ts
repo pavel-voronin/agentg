@@ -3,9 +3,11 @@ import { acceptHMRUpdate, defineStore } from 'pinia';
 import { CONTROL_PLANE_STORAGE_KEYS, readStorage, writeStorage } from './controlPlaneStorage.js';
 import {
   DEFAULT_VIEWPORT_DAYS,
+  type ControlPlaneEvent,
   type SelectedHistoryState,
   type SelectedHistoryStatus
 } from './controlPlaneTypes.js';
+import { applyHistoryTimelineEvent } from './selectedHistoryEvents.js';
 
 type SelectedHistoryStoreState = {
   defaultViewportDays: number;
@@ -61,6 +63,12 @@ export const useSelectedHistoryStore = defineStore('controlPlane.selectedHistory
     setSelectedHistoryUnavailable() {
       this.selectedHistoryState = null;
       this.selectedHistoryStatus = this.selectedChatId === null ? 'idle' : 'unavailable';
+    },
+    applyTimelineEvent(event: ControlPlaneEvent): boolean {
+      if (this.selectedHistoryState === null || this.selectedHistoryStatus !== 'ready') {
+        return false;
+      }
+      return applyHistoryTimelineEvent(this.selectedHistoryState, event);
     },
     setViewportDays(value: number | null) {
       this.viewportDays = value === null ? null : normalizeViewportDays(value);

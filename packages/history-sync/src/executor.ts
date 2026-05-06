@@ -3,6 +3,7 @@ import { createIntegrationEvent, type IntegrationEvent } from '@agentg/shared/ev
 import type { JsonObject } from '@agentg/shared/json';
 
 import { TELEGRAM_HISTORY_PAST_BOUNDARY } from './constants.js';
+import { historyCoverageChangedData, historyJobEventData } from './events.js';
 import { checkpointBackfillPage } from './jobs.js';
 import { materializeTemplatesForChat } from './materialization.js';
 import { completedOneShotTargets, reconcileChat } from './reconciler.js';
@@ -33,6 +34,7 @@ export type HistorySyncOptions = {
 
 type BackfillJobExecutionResult = {
   fetchedMessages: number;
+  historyStartAt?: string;
   reachedBeginning: boolean;
   storedMessages: number;
 };
@@ -150,7 +152,11 @@ async function reconcileHistoryTargets(
       targets: activeTargets
     });
 
-    createdJobs += await createBackfillJobs(database, jobs.slice(0, 1));
+    const newJobs = await createBackfillJobs(database, jobs.slice(0, 1));
+    for (const job of newJobs) {
+      emitHistoryEvent(options, 'history.job.created', historyJobEventData(job));
+    }
+    createdJobs += newJobs.length;
   }
 
   emitHistoryEvent(options, 'history.reconcile.completed', {
@@ -202,6 +208,7 @@ async function executePendingBackfillJobs(
       emitHistoryEvent(options, 'history.job.completed', {
         chatId: job.chatId,
         fetchedMessages: result.fetchedMessages,
+        ...(result.historyStartAt === undefined ? {} : { historyStartAt: result.historyStartAt }),
         jobEnd: job.endAt.toISOString(),
         jobId: job.id,
         jobStart: job.startAt.toISOString(),
@@ -243,6 +250,7 @@ async function executeBackfillJob(
   let remainingEndAt = job.endAt;
   let cursorMessageId = readCursorMessageId(job.cursor);
   let fetchedMessages = 0;
+  let historyStartAt: Date | undefined;
   let storedMessages = 0;
 
   for (;;) {
@@ -263,6 +271,7 @@ async function executeBackfillJob(
       });
       return {
         fetchedMessages,
+        ...(historyStartAt === undefined ? {} : { historyStartAt: historyStartAt.toISOString() }),
         reachedBeginning: true,
         storedMessages
       };
@@ -288,6 +297,9 @@ async function executeBackfillJob(
       page.oldestFetchedMessageDate === undefined
         ? undefined
         : new Date(page.oldestFetchedMessageDate);
+    if (oldestFetchedMessageDate !== undefined) {
+      historyStartAt = minDate(historyStartAt, oldestFetchedMessageDate);
+    }
     const checkpoint = checkpointBackfillPage(job, {
       crossedStart: page.crossedStart,
       ...(oldestFetchedMessageDate === undefined ? {} : { oldestFetchedMessageDate }),
@@ -312,6 +324,9 @@ async function executeBackfillJob(
     if (nextCursor === undefined) {
       return {
         fetchedMessages,
+        ...(page.reachedBeginning && historyStartAt !== undefined
+          ? { historyStartAt: historyStartAt.toISOString() }
+          : {}),
         reachedBeginning: page.reachedBeginning,
         storedMessages
       };
@@ -320,6 +335,9 @@ async function executeBackfillJob(
     if (checkpoint.complete) {
       return {
         fetchedMessages,
+        ...(page.reachedBeginning && historyStartAt !== undefined
+          ? { historyStartAt: historyStartAt.toISOString() }
+          : {}),
         reachedBeginning: page.reachedBeginning,
         storedMessages
       };
@@ -368,11 +386,7 @@ function emitCoverageChanged(
     startAt: Date;
   }
 ): void {
-  emitHistoryEvent(options, 'history.coverage.changed', {
-    chatId: interval.chatId,
-    endAt: interval.endAt.toISOString(),
-    startAt: interval.startAt.toISOString()
-  });
+  emitHistoryEvent(options, 'history.coverage.changed', historyCoverageChangedData([interval]));
 }
 
 function normalizeHistorySyncOptions(options: HistorySyncOptions): HistorySyncOptions {
@@ -402,6 +416,10 @@ function emitHistoryEvent(
 
 function truncateToTelegramSecond(date: Date): Date {
   return new Date(Math.floor(date.getTime() / 1000) * 1000);
+}
+
+function minDate(current: Date | undefined, next: Date): Date {
+  return current === undefined || next < current ? next : current;
 }
 
 function readCursorMessageId(cursor: unknown): number | undefined {

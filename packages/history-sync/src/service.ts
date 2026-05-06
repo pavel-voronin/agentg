@@ -12,6 +12,7 @@ import { createLiveCoverageObserver, type LiveCoverageObserver } from './live-co
 import type { InternalTrpcBindConfig } from './rpc/config.js';
 import { startHistoryTrpcServer, stopHistoryTrpcServer } from './rpc/history-server.js';
 import { createHistorySyncServiceManifest } from './registrations.js';
+import { historyCoverageChangedData } from './events.js';
 import { addHistoryCoverageBatch } from './store.js';
 import { createServiceDirectoryTelegramHistoryClient } from './telegram-client.js';
 
@@ -56,15 +57,9 @@ export async function runHistorySyncService(options: HistorySyncServiceOptions):
     addCoverageBatch: (intervals) => addHistoryCoverageBatch(options.database, intervals),
     listChatIds: async () => (await telegram.listChats({ discover: false })).map((chat) => chat.id),
     publishCoverageChanged: (intervals) => {
-      const startAt = minDateFromList(intervals.map((interval) => interval.startAt));
-      const endAt = maxDateFromList(intervals.map((interval) => interval.endAt));
       options.eventBus.publish(
         createIntegrationEvent({
-          data: {
-            chatCount: intervals.length,
-            endAt: endAt.toISOString(),
-            startAt: startAt.toISOString()
-          },
+          data: historyCoverageChangedData(intervals),
           source: 'history-sync.live',
           type: 'history.coverage.changed'
         })
@@ -272,38 +267,4 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null
     ? (value as Record<string, unknown>)
     : undefined;
-}
-
-function minDate(first: Date, ...rest: Date[]): Date;
-function minDate(...dates: Date[]): Date {
-  const [first, ...rest] = dates;
-  if (first === undefined) {
-    throw new Error('minDate requires at least one date');
-  }
-  return rest.reduce((minimum, date) => (date < minimum ? date : minimum), first);
-}
-
-function minDateFromList(dates: Date[]): Date {
-  const [first, ...rest] = dates;
-  if (first === undefined) {
-    throw new Error('minDateFromList requires at least one date');
-  }
-  return minDate(first, ...rest);
-}
-
-function maxDate(first: Date, ...rest: Date[]): Date;
-function maxDate(...dates: Date[]): Date {
-  const [first, ...rest] = dates;
-  if (first === undefined) {
-    throw new Error('maxDate requires at least one date');
-  }
-  return rest.reduce((maximum, date) => (date > maximum ? date : maximum), first);
-}
-
-function maxDateFromList(dates: Date[]): Date {
-  const [first, ...rest] = dates;
-  if (first === undefined) {
-    throw new Error('maxDateFromList requires at least one date');
-  }
-  return maxDate(first, ...rest);
 }

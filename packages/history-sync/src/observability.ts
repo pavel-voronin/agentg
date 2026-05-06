@@ -236,13 +236,7 @@ async function getChatHistoryState(runtime: HistoryRuntime, params: unknown): Pr
   ]);
 
   const targetModels = targetRows.map(toHistoryTarget);
-  const now = floorToTelegramSecond(new Date());
-  const projectionContext = {
-    literals: {
-      past: TELEGRAM_HISTORY_PAST_BOUNDARY
-    },
-    now
-  };
+  const projectionContext = currentHistoryProjectionContext();
   const targets = targetRows.map((row) => toTargetResponse(row, projectionContext));
   const desired = projectTargetsForChat(targetModels, chatId, projectionContext);
   const coverage: HistoryCoverageInterval[] = normalizeCoverageIntervals(
@@ -301,7 +295,7 @@ async function upsertHistoryTarget(runtime: HistoryRuntime, params: unknown): Pr
   runtime.eventBus.publish(
     createIntegrationEvent({
       data: {
-        target
+        target: historyTargetToResponse(target, currentHistoryProjectionContext())
       },
       source: 'history-sync',
       type: 'history.target.upserted'
@@ -407,14 +401,30 @@ function toTargetResponse(
   },
   projectionContext: HistoryRangeProjectionContext
 ): HistoryTargetResponse {
-  const range = canonicalizeHistoryRange(row.range as unknown as HistoryRange);
+  return historyTargetToResponse(toHistoryTarget(row), projectionContext);
+}
+
+function historyTargetToResponse(
+  target: HistoryTarget,
+  projectionContext: HistoryRangeProjectionContext
+): HistoryTargetResponse {
+  const range = canonicalizeHistoryRange(target.range);
   const projected = projectHistoryRange(range, projectionContext);
   return {
-    chatId: row.telegramChatId,
-    id: row.id,
+    chatId: target.chatId,
+    id: target.id,
     projected: intervalToResponse(projected),
     range,
-    templateId: row.templateId
+    templateId: target.templateId ?? null
+  };
+}
+
+function currentHistoryProjectionContext(): HistoryRangeProjectionContext {
+  return {
+    literals: {
+      past: TELEGRAM_HISTORY_PAST_BOUNDARY
+    },
+    now: floorToTelegramSecond(new Date())
   };
 }
 

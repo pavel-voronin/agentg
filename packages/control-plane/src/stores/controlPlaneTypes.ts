@@ -421,6 +421,7 @@ export const EVENT_GROUPS: EventGroup[] = [
     eventTypes: [
       'history.coverage.changed',
       'history.job.completed',
+      'history.job.created',
       'history.job.failed',
       'history.job.progress',
       'history.job.started',

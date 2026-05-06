@@ -118,7 +118,6 @@ export type TimelineInterval = {
 
 export type TimelineCoverageInterval = TimelineInterval & {
   key: string;
-  messageCount: number;
 };
 
 export type TimelineTarget = {
