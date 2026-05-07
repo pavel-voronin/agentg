@@ -183,7 +183,7 @@ Stage 5 must be re-planned before implementation.
 
 ## Global Acceptance
 
-- `rg -n "enriched" packages/shared/src packages/history-sync/src packages/telegram/src`
+- `rg -n "enriched" packages/events/src packages/rpc/src packages/infra/src packages/history/src packages/telegram/src`
   returns no runtime extension behavior.
 - `rg -n "observable =" packages` does not find an exported builder used by
   procedures.

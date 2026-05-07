@@ -20,7 +20,7 @@ introducing a shared contracts package or changing runtime behavior.
 - Use Zod for procedure input and output validation.
 - Keep tRPC setup local to each domain package that owns a router.
 - Add a Telegram-local tRPC setup under `packages/telegram/src/rpc`.
-- Add a History Sync-local tRPC setup under `packages/history-sync/src/rpc`.
+- Add a History-local tRPC setup under `packages/history/src/rpc`.
 - Keep service URL parsing as ordinary HTTP service-root URL parsing.
 - Preserve the existing `*_RPC_*` environment variable names during this stage.
 - Use tRPC's standalone HTTP adapter in tests and later service entrypoints.
@@ -36,14 +36,14 @@ introducing a shared contracts package or changing runtime behavior.
   - context creation;
   - error formatting;
   - HTTP service URL parsing.
-- Add one minimal test router in Telegram or History Sync tests to prove a tRPC
+- Add one minimal test router in Telegram or History tests to prove a tRPC
   client can call a package-local tRPC HTTP server.
 - Ensure the foundation does not import or depend on `@agentg/proto`.
 - Document any local conventions that implementation exposes in code names.
 
 ## Explicit Non-Scope
 
-- Do not migrate History Sync to call Telegram through tRPC yet.
+- Do not migrate History to call Telegram through tRPC yet.
 - Do not migrate Gateway to call History through tRPC yet.
 - Do not migrate Control Plane server to call History through tRPC yet.
 - Do not remove `@agentg/proto`.
@@ -58,7 +58,7 @@ introducing a shared contracts package or changing runtime behavior.
 
 - Telegram has package-local tRPC setup available for later Telegram-owned
   routers.
-- History Sync has package-local tRPC setup available for later History-owned
+- History has package-local tRPC setup available for later History-owned
   routers.
 - A Vitest test proves a package-local tRPC client can call a package-local tRPC
   HTTP server.

@@ -83,7 +83,7 @@ Purpose:
 - evidence lookup
 - later API reads
 
-## History Sync State
+## History State
 
 History sync state tracks desired coverage, factual coverage, and executable work.
 
@@ -96,8 +96,8 @@ Purpose:
 - avoid repeated historical fetches for already covered intervals
 - inspect target coverage and missing intervals per chat
 
-See [History Sync](../03-domains/history-sync.md).
-See [History Sync Schema](history-sync-schema.md) for the table shape.
+See [History](../03-domains/history.md).
+See [History Schema](history-schema.md) for the table shape.
 
 ## Module-Owned State
 

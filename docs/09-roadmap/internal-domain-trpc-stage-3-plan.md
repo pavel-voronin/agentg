@@ -11,12 +11,12 @@ Decision:
 
 ## Stage Goal
 
-Make Gateway and Control Plane server call History Sync through History Sync's
+Make Gateway and Control Plane server call History through History's
 domain-owned tRPC API for existing History commands and reads.
 
 ## Implementation Choices
 
-- Define the History router inside `@agentg/history-sync`.
+- Define the History router inside `@agentg/history`.
 - Keep History input and output schemas with the History router and public
   History RPC client entrypoint.
 - Treat read-only History procedures as queries.
@@ -26,7 +26,7 @@ domain-owned tRPC API for existing History commands and reads.
 - Keep the Gateway `history.*` JSON-RPC method names stable.
 - Keep the Control Plane browser-facing WebSocket request and response shape
   stable.
-- Expose a History-owned JSON-RPC adapter from `@agentg/history-sync` so Gateway
+- Expose a History-owned JSON-RPC adapter from `@agentg/history` so Gateway
   and Control Plane do not need to understand tRPC procedure names directly.
 - Leave old History gRPC files in place until the gRPC and Protobuf removal
   stage.
@@ -36,7 +36,7 @@ domain-owned tRPC API for existing History commands and reads.
 - Add History-owned request and response schemas for the current History command
   and read surface.
 - Add a History tRPC router and HTTP server entrypoint.
-- Start and stop the History tRPC server from the History Sync service.
+- Start and stop the History tRPC server from the History service.
 - Add a History-owned tRPC-backed JSON-RPC adapter for existing `history.*`
   method names.
 - Change Gateway to use the History-owned tRPC adapter behind its current
@@ -60,9 +60,9 @@ domain-owned tRPC API for existing History commands and reads.
 
 ## Definition of Done
 
-- History Sync owns the router, validators, and handlers for the History
+- History owns the router, validators, and handlers for the History
   internal API.
-- History Sync starts the History tRPC server.
+- History starts the History tRPC server.
 - Gateway no longer uses gRPC to call History commands or reads.
 - Control Plane server no longer uses gRPC to call History commands or reads.
 - Gateway and Control Plane import only the public History RPC entrypoint, not

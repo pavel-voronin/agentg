@@ -111,7 +111,7 @@ Purpose: make database ownership match domain and module ownership.
 - Move Telegram-owned table definitions and migrations into
   `@agentg/telegram`.
 - Move History-owned table definitions and migrations into
-  `@agentg/history-sync`.
+  `@agentg/history`.
 - Keep table names prefixed by the owning domain or module slug:
   - `telegram_*`
   - `history_*`
@@ -141,7 +141,7 @@ Purpose: make database ownership match domain and module ownership.
 - `@agentg/database` no longer owns Telegram or History domain table
   definitions.
 - Telegram owns the schema and migrations for Telegram storage tables.
-- History Sync owns the schema and migrations for History storage tables.
+- History owns the schema and migrations for History storage tables.
 - Existing database migrations can be applied from a fresh database through the
   aggregate migration command.
 - Existing domain services can create their Drizzle clients with their owned

@@ -14,12 +14,23 @@
   the change instead of implementing it.
 - Ordinary procedures must return fresh direct results only. They must not wrap
   results in compatibility envelopes or preserve old response shapes.
+- Vue component styling must be scoped to the component. Every Vue component
+  style block must use `<style scoped>`, and component templates may assign only
+  one semantic CSS class per element. Tailwind utilities belong inside the
+  component's scoped style block via `@apply`; Tailwind `@reference` directives
+  are allowed only to make `@apply` work inside scoped style blocks. Inline
+  Tailwind utility lists, unscoped component styles, ordinary CSS declarations,
+  and domain-level global CSS imports are forbidden.
 
 ## Communication Rules
 
-- When the user asks for an architectural decision, give one selected decision.
-  Do not replace the decision with a menu of options.
-- State hard boundaries as hard rules. Do not soften them with vague wording.
+- When the user asks about an architectural decision, present viable options and
+  mark one option as the preferred recommendation. The user makes the decision.
+- Do not present an assistant recommendation as a final decision unless the user
+  has explicitly selected it.
+- Once the user selects an option, treat that option as the current decision and
+  do not keep re-listing alternatives unless the user asks or new information
+  invalidates the selected direction.
 - Answer binary technical questions directly: yes or no, stays or does not stay,
   allowed or forbidden.
 - Treat user questions as requests for an answer only. Do not edit files, run
@@ -27,6 +38,6 @@
   explicitly asks for changes.
 - Call out architectural risks immediately and explicitly. Do not bury them in
   neutral prose.
-- If a response lists alternatives for context, it must still name the selected
-  option and explain why that option wins.
+- If a response lists alternatives for context, it must still name the preferred
+  recommendation and explain why it is preferred.
 - Do not use the Russian word "почти" in assistant replies.

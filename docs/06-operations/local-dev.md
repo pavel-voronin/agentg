@@ -1,7 +1,7 @@
 # Local Development
 
 Local development uses separate workspace packages for the long-running
-Telegram ingestion process, History Sync, Control Plane, and the Agent Gateway,
+Telegram ingestion process, History, Control Plane, and the Agent Gateway,
 with Docker Compose providing Postgres and NATS.
 
 ## Commands
@@ -12,7 +12,7 @@ npm run infra:up
 npm run db:migrate
 npm run dev:service-directory
 npm run dev:telegram
-npm run dev:history-sync
+npm run dev:history
 npm run dev:gateway
 npm run dev:summaries
 npm run dev:control-plane-server
@@ -22,15 +22,15 @@ npm run dev:control-plane
 `npm run infra:up` starts Postgres and NATS.
 
 `npm run db:migrate` applies versioned Drizzle migrations owned by Telegram,
-History Sync, and Summaries.
+History, and Summaries.
 
 `npm run dev:telegram` runs the `@agentg/telegram` ingestion package. It owns the
 TDLib session, receives live Telegram updates, writes Telegram-shaped records to
 Postgres, publishes live integration events to NATS, and serves the narrow
-Telegram history fetch RPC surface used by History Sync. It joins Service
+Telegram history fetch RPC surface used by History. It joins Service
 Directory with its advertised RPC URL, procedures, and events.
 
-`npm run dev:history-sync` runs the `@agentg/history-sync` package. It owns
+`npm run dev:history` runs the `@agentg/history` package. It owns
 history templates, concrete chat targets, coverage intervals, backfill jobs, and
 the history sync lifecycle. It joins Service Directory and resolves Telegram
 through the local Service Directory snapshot before internal tRPC calls.
@@ -46,7 +46,7 @@ the current topology snapshot.
 
 `npm run dev:control-plane-server` runs the server-side Control Plane boundary.
 It serves the browser-facing operator WebSocket on `127.0.0.1:8789`, subscribes
-to live NATS events, and resolves History Sync and Telegram through Service
+to live NATS events, and resolves History and Telegram through Service
 Directory before internal tRPC calls.
 
 `npm run dev:control-plane` runs the Vite browser UI on `127.0.0.1:8788`. Its
@@ -60,7 +60,7 @@ Gateway.
 
 ## Internal RPC Addresses
 
-Telegram and History Sync start package-owned internal tRPC HTTP servers.
+Telegram and History start package-owned internal tRPC HTTP servers.
 Service Directory is the only direct discovery URL. Services join it with their
 manifest; consumers resolve procedures from the local snapshot before making
 internal tRPC calls.
@@ -87,11 +87,11 @@ Local development defaults:
 Docker Compose uses internal service DNS names:
 
 - Telegram binds `0.0.0.0:8080` inside its container.
-- History Sync binds `0.0.0.0:8080` inside its container.
+- History binds `0.0.0.0:8080` inside its container.
 - Service Directory binds `0.0.0.0:8080` inside its container.
 - Summaries binds `0.0.0.0:8080` inside its container.
-- Telegram, History Sync, and Summaries join `http://service-directory:8080`.
-- History Sync, Gateway, Control Plane, and Summaries resolve service RPC URLs
+- Telegram, History, and Summaries join `http://service-directory:8080`.
+- History, Gateway, Control Plane, and Summaries resolve service RPC URLs
   from Service Directory snapshots.
 - Control Plane exposes the browser UI on `${CONTROL_PLANE_PORT:-8788}`.
 
@@ -156,7 +156,7 @@ client.close();
 Service Directory stores active service manifests only. It does not call domain
 or module RPC methods.
 
-Core services register with `required: true`: Telegram ingestion, History Sync,
+Core services register with `required: true`: Telegram ingestion, History,
 Gateway, and Control Plane. Summaries registers with `required: false`.
 Disappearing required services trigger graceful shutdown in Service Directory
 clients. Disappearing optional services only removes their procedures and
@@ -195,7 +195,7 @@ owning domain or module RPC surface.
 Initial local stack includes:
 
 - Telegram ingestion process backed by TDLib
-- History Sync process
+- History process
 - Service Directory process
 - Summaries pilot module
 - Control Plane server and browser UI for operator views
@@ -213,7 +213,7 @@ Expected flow:
 1. Start Postgres and NATS with `npm run infra:up`.
 2. Apply migrations with `npm run db:migrate`.
 3. Start Telegram ingestion with `npm run dev:telegram`.
-4. Start History Sync with `npm run dev:history-sync`.
+4. Start History with `npm run dev:history`.
 5. Authenticate as the Telegram user if no session exists.
 6. Confirm that chats, messages, history targets, and coverage appear in Postgres.
 7. Send a text message to Saved Messages from the normal Telegram client.

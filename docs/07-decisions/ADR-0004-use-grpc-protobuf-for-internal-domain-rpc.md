@@ -14,7 +14,7 @@ The system has several internal domains:
 
 - Telegram Client owns TDLib, Telegram session state, Telegram-shaped storage, and
   Telegram API access.
-- History Sync owns history templates, targets, coverage, and backfill lifecycle.
+- History owns history templates, targets, coverage, and backfill lifecycle.
 - Gateway is the external edge for agents and other external systems.
 - Control Plane should have a server-side internal participant when it needs to
   call domain APIs.
@@ -94,7 +94,7 @@ Non-goals:
 Service discovery is static.
 
 Inside Docker or a future orchestrator, services address each other through
-service DNS names such as `telegram` and `history-sync`.
+service DNS names such as `telegram` and `history`.
 
 In local development, services receive explicit URLs through environment
 variables such as:

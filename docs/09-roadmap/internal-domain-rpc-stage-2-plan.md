@@ -1,6 +1,6 @@
 # Internal Domain RPC Stage 2 Plan
 
-Stage 2 migrates only the History Sync to Telegram history-fetch path from NATS
+Stage 2 migrates only the History to Telegram history-fetch path from NATS
 request/reply to gRPC.
 
 Parent plan:
@@ -14,7 +14,7 @@ Decision:
 
 ## Stage Goal
 
-History Sync should call Telegram through Telegram's domain-owned gRPC API when
+History should call Telegram through Telegram's domain-owned gRPC API when
 it needs chat discovery or historical message page fetches.
 
 ## Concrete Scope
@@ -24,8 +24,8 @@ it needs chat discovery or historical message page fetches.
 - Start a Telegram-owned gRPC server inside the Telegram ingestion process.
 - Implement Telegram History gRPC methods using the existing TDLib-backed
   history logic.
-- Change History Sync to create a generated gRPC Telegram History client.
-- Keep History Sync jobs, targets, coverage, and lifecycle private to History
+- Change History to create a generated gRPC Telegram History client.
+- Keep History jobs, targets, coverage, and lifecycle private to History
   Sync.
 - Remove the Telegram history NATS request/reply command surface.
 
@@ -33,7 +33,7 @@ it needs chat discovery or historical message page fetches.
 
 - Do not migrate Gateway to History RPC.
 - Do not migrate Control Plane.
-- Do not change History Sync's own NATS command surface.
+- Do not change History's own NATS command surface.
 - Do not change Telegram live events.
 - Do not move media blobs through gRPC.
 - Do not introduce retries, deduplication tables, or cancellation mechanics.
@@ -53,16 +53,16 @@ The API returns domain-shaped Telegram history DTOs:
 - fetch result kind;
 - page counters and cursor metadata.
 
-It must not expose raw TDLib objects. It must not accept or return History Sync
+It must not expose raw TDLib objects. It must not accept or return History
 job identifiers.
 
 ## Definition of Done
 
-- History Sync no longer calls Telegram through NATS request/reply.
+- History no longer calls Telegram through NATS request/reply.
 - Telegram no longer registers Telegram history NATS responders.
 - Telegram starts and stops a gRPC server around the existing ingestion process.
-- History Sync uses generated gRPC client code for Telegram history calls.
-- Tests cover the History Sync Telegram gRPC client boundary.
+- History uses generated gRPC client code for Telegram history calls.
+- Tests cover the History Telegram gRPC client boundary.
 - Existing NATS events remain unchanged.
 - `npm run proto:generate` passes.
 - `npm run check` passes.

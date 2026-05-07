@@ -18,7 +18,7 @@ Every module has:
 - `extensions`: `{ target, extension }` entries declared in its Service
   Directory manifest
 
-The shared helpers live in `@agentg/shared/modules/runtime`. They load runtime
+The shared helpers live in `@agentg/infra/modules/runtime`. They load runtime
 config only. Service registration is owned by the Service Directory client.
 
 ## Service Directory
@@ -30,7 +30,10 @@ service joins it with one manifest:
 {
   "slug": "summaries",
   "rpcUrl": "http://summaries:8080",
-  "procedures": ["summaries.requestSummary", "summaries.chatSummary"],
+  "procedures": [
+    { "name": "summaries.requestSummary", "kind": "mutation" },
+    { "name": "summaries.chatSummary", "kind": "query" }
+  ],
   "events": ["summaries.summary.completed"],
   "extensions": [
     {
@@ -54,7 +57,7 @@ The database package provides Postgres and Drizzle infrastructure only. Domains
 and modules own schemas and migrations in their own packages:
 
 - `@agentg/telegram`: `telegram_*`, journal `__drizzle_migrations_telegram`
-- `@agentg/history-sync`: `history_*`, journal `__drizzle_migrations_history`
+- `@agentg/history`: `history_*`, journal `__drizzle_migrations_history`
 - `@agentg/summaries`: `summaries_*`, journal
   `__drizzle_migrations_summaries`
 

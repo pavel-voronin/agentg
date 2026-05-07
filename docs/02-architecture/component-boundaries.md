@@ -21,7 +21,7 @@ Does not own:
 - Bulk attachment processing.
 - Long-running data analysis.
 
-## History Sync
+## History
 
 Owns:
 
@@ -45,15 +45,31 @@ Does not own:
 
 Owns:
 
-- Browser-facing operator UI and WebSocket API.
-- Translating operator UI calls into internal domain RPC calls.
-- Subscribing to live integration events needed by operator views.
+- Browser-facing operator shell, slot layout, and WebSocket API.
+- Proxying browser RPC calls to domain-owned internal RPC procedures.
+- Subscribing to live integration events and forwarding them to the browser.
+- Generic operator event stream UI.
 
 Does not own:
 
 - Agent-facing API compatibility.
+- Domain Control Plane content components, view models, or UI state.
 - History targets, coverage, or backfill job writes.
 - Telegram login, sessions, TDLib state, or Telegram-shaped persistence.
+
+## Control Plane SDK
+
+Owns:
+
+- Mechanical slot contracts, resolution, runtime state, and debug inspection.
+- Browser host bridge for Control Plane content components.
+- Shared UI primitives with no domain behavior.
+
+Does not own:
+
+- Control Plane shell layout.
+- Domain content components, view models, or UI state.
+- Domain RPC methods, procedure routing, or service topology.
 
 ## Agent Gateway
 

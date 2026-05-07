@@ -81,7 +81,7 @@ Scope:
 
 - Add tRPC and validator dependencies to the packages that will own or call
   internal tRPC APIs.
-- Add package-local tRPC setup for Telegram and History Sync.
+- Add package-local tRPC setup for Telegram and History.
 - Define local conventions for context, errors, input validation, output
   validation, timeouts, and correlation ids.
 - Keep service address configuration explicit for local development and Docker.
@@ -89,7 +89,7 @@ Scope:
 
 Out of scope:
 
-- No History Sync to Telegram migration yet.
+- No History to Telegram migration yet.
 - No Gateway to History migration yet.
 - No Control Plane server to History migration yet.
 - No external Gateway WebSocket protocol change.
@@ -98,7 +98,7 @@ Out of scope:
 
 Definition of Done:
 
-- Telegram and History Sync can host package-local tRPC routers in tests.
+- Telegram and History can host package-local tRPC routers in tests.
 - A minimal tRPC client/server round trip is covered by tests.
 - The foundation does not require a shared contracts package.
 - Existing behavior is unchanged.
@@ -119,9 +119,9 @@ Scope:
 - Define the Telegram History tRPC router inside `@agentg/telegram`.
 - Move Telegram History input and output validation into the Telegram package.
 - Expose procedures for chat discovery and history page fetch.
-- Make History Sync call Telegram through a typed tRPC client.
+- Make History call Telegram through a typed tRPC client.
 - Keep Telegram responses domain-shaped and avoid exposing raw TDLib objects.
-- Keep History job identifiers private to History Sync.
+- Keep History job identifiers private to History.
 
 Out of scope:
 
@@ -133,13 +133,13 @@ Out of scope:
 
 Definition of Done:
 
-- History Sync no longer uses gRPC to ask Telegram for history.
+- History no longer uses gRPC to ask Telegram for history.
 - Telegram still publishes events to NATS.
 - Telegram owns the router, validators, and handlers for the Telegram History
   internal API.
-- History Sync imports only the public Telegram History router type or public
+- History imports only the public Telegram History router type or public
   client entrypoint, not Telegram private implementation code.
-- History Sync tests cover the tRPC Telegram client boundary.
+- History tests cover the tRPC Telegram client boundary.
 - Existing history backfill behavior still works.
 - Existing `npm run check` passes.
 
@@ -147,7 +147,7 @@ Stage 2 must be re-planned before implementation.
 
 ## Stage 3: History Domain tRPC
 
-Purpose: make History Sync expose its command and read surface through a
+Purpose: make History expose its command and read surface through a
 domain-owned tRPC API.
 
 Stage re-plan:
@@ -155,14 +155,14 @@ Stage re-plan:
 
 Scope:
 
-- Define the History tRPC router inside `@agentg/history-sync`.
-- Move History input and output validation into the History Sync package.
+- Define the History tRPC router inside `@agentg/history`.
+- Move History input and output validation into the History package.
 - Expose procedures for the current History command/read behavior.
 - Make Gateway call History through a typed tRPC client behind the existing
   Gateway WebSocket method names.
 - Make Control Plane server call History through a typed tRPC client behind the
   existing browser-facing WebSocket protocol.
-- Keep History Sync the only writer of history targets, coverage, and backfill
+- Keep History the only writer of history targets, coverage, and backfill
   job state.
 
 Out of scope:
@@ -179,7 +179,7 @@ Definition of Done:
 - Control Plane server no longer uses gRPC for History commands or reads.
 - Gateway and Control Plane browser-facing protocols remain compatible with the
   current clients.
-- History Sync owns the router, validators, and handlers for the History internal
+- History owns the router, validators, and handlers for the History internal
   API.
 - Gateway and Control Plane import only the public History router type or public
   client entrypoint, not History private implementation code.
@@ -213,7 +213,7 @@ Scope:
 
 Out of scope:
 
-- No behavioral changes to Telegram, History Sync, Gateway, or Control Plane.
+- No behavioral changes to Telegram, History, Gateway, or Control Plane.
 - No event-plane redesign.
 - No external protocol redesign.
 - No package renaming unless explicitly accepted during the stage re-plan.

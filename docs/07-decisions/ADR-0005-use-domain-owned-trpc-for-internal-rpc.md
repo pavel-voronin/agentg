@@ -14,7 +14,7 @@ transport and schema tooling are heavier than the project currently needs.
 
 The current system is TypeScript-first:
 
-- Telegram ingestion, History Sync, Gateway, and Control Plane server are all
+- Telegram ingestion, History, Gateway, and Control Plane server are all
   TypeScript packages.
 - Existing external Gateway and Control Plane browser protocols already use JSON
   over WebSocket.
@@ -104,7 +104,7 @@ Non-goals:
 Service discovery remains static.
 
 Inside Docker or a future orchestrator, services address each other through
-service DNS names such as `telegram` and `history-sync`.
+service DNS names such as `telegram` and `history`.
 
 In local development, services receive explicit URLs through environment
 variables. Existing `*_RPC_*` variable names may remain during the migration

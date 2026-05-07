@@ -18,7 +18,7 @@ removed Protobuf workspace.
 
 ## Implementation Choices
 
-- Treat `@agentg/shared/events/bus` as the only supported NATS abstraction.
+- Treat `@agentg/events/bus` as the only supported NATS abstraction.
 - Keep that abstraction limited to publish and subscribe.
 - Treat `docs/05-interfaces/event-plane.md` as the active event-plane inventory.
 - Audit source code for NATS request/reply APIs and shared contract imports.
@@ -33,12 +33,12 @@ removed Protobuf workspace.
   reads.
 - Confirm Gateway and Control Plane recover state through WebSocket RPC methods
   backed by Postgres and History tRPC.
-- Confirm History Sync recovers through its own Postgres tables and Telegram
+- Confirm History recovers through its own Postgres tables and Telegram
   tRPC.
 - Confirm Telegram ingestion recovers through TDLib and Telegram-shaped Postgres
   storage.
 - Confirm internal RPC contracts are owned by `@agentg/telegram` and
-  `@agentg/history-sync`.
+  `@agentg/history`.
 - Confirm no shared internal contracts package exists.
 - Update current event-plane documentation with the audit result.
 - Run the full repository check.

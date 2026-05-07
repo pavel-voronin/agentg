@@ -17,7 +17,7 @@ Every event published to NATS uses the integration event envelope:
 {
   "id": "evt_...",
   "type": "history.coverage.changed",
-  "source": "history-sync",
+  "source": "history",
   "occurredAt": "2026-05-01T00:00:00.000Z",
   "data": {},
   "meta": {}
@@ -41,7 +41,7 @@ Every event published to NATS uses the integration event envelope:
 
 ## NATS API Usage
 
-Runtime code uses `@agentg/shared/events/bus` as the NATS boundary. That boundary
+Runtime code uses `@agentg/events/bus` as the NATS boundary. That boundary
 exposes only:
 
 - `publish(event)`: publish an integration event on `event.type`.
@@ -49,7 +49,8 @@ exposes only:
 
 It does not expose request/reply, responder, inbox, or service APIs. Source audit
 after the tRPC migration found no runtime use of NATS request/reply APIs in
-Telegram, History Sync, Gateway, Control Plane, or Shared.
+Telegram, History, Gateway, Control Plane, `@agentg/events`, `@agentg/rpc`,
+or `@agentg/infra`.
 
 ## Current Subjects
 
@@ -69,7 +70,7 @@ Telegram publishes:
 - `telegram.tdlib.{method}.completed`
 - `telegram.tdlib.{method}.failed`
 
-History Sync publishes:
+History publishes:
 
 - `history.sync.requested`
 - `history.sync.accepted`
@@ -121,7 +122,7 @@ client treats it as a fatal topology failure and starts graceful shutdown.
 
 ## Consumers
 
-History Sync subscribes to Telegram events:
+History subscribes to Telegram events:
 
 - `telegram.chat.updated` wakes reconciliation because the known chat set may
   have changed.
@@ -152,9 +153,9 @@ After reconnecting, consumers must rebuild state through these surfaces:
 
 - Gateway external clients: Gateway WebSocket RPC methods backed by Telegram
   internal tRPC.
-- Control Plane browser clients: Control Plane WebSocket RPC methods backed by
-  History tRPC.
-- History Sync: its own Postgres tables plus Telegram read and history-fetch
+- Control Plane browser clients: Control Plane WebSocket RPC methods resolved
+  through Service Directory and forwarded to the owning internal tRPC service.
+- History: its own Postgres tables plus Telegram read and history-fetch
   tRPC.
 - Telegram ingestion: TDLib session state and Telegram-shaped Postgres storage.
 - Modules: their owned tables plus domain tRPC reads.
@@ -167,12 +168,12 @@ Internal RPC contracts are owned by the serving domain package:
 
 - Telegram owns `@agentg/telegram/rpc`, whose only public export is
   `createTelegramRpcClient`. The helper returns the explicit Telegram
-  procedures used by History Sync, Gateway, and Control Plane server. The
+  procedures used by typed internal callers. The
   Telegram schemas, router, server bind config, storage schema, ingestion,
   normalization, and TDLib plumbing remain package-internal.
-- History Sync owns `@agentg/history-sync/rpc`, whose only public export is
+- History owns `@agentg/history/rpc`, whose only public export is
   `createHistoryRpcClient`. The helper returns the explicit History procedures
-  used by Control Plane server. The History schemas, router, server bind config,
+  used by typed internal callers. The History schemas, router, server bind config,
   storage schema, commands, and domain types remain package-internal.
 - Modules own package-local RPC contracts. The pilot summaries module owns
   `@agentg/summaries/rpc`, whose only public export is
@@ -186,9 +187,10 @@ browser-facing WebSocket protocol. Neither protocol is an internal domain RPC
 contract, and neither browser nor external agent clients call internal tRPC
 directly.
 
-There is no shared internal domain RPC contracts package. `@agentg/shared` owns
-only cross-cutting helpers such as the event envelope, event bus abstraction,
-call lifecycle events, model markers, and module runtime helpers.
+There is no shared internal domain RPC contracts package. Cross-cutting helpers
+are split by owner: `@agentg/events` owns the event bus, event envelope, and
+JSON value helpers; `@agentg/rpc` owns RPC call lifecycle helpers and model
+markers; `@agentg/infra` owns runtime config helpers.
 
 ## Removed Command Subjects
 
@@ -197,5 +199,5 @@ These subjects are intentionally removed:
 - `history.target.upsert.requested`
 - `history.target.delete.requested`
 
-Target changes now go through History Sync's domain-owned tRPC API. History Sync
+Target changes now go through History's domain-owned tRPC API. History
 publishes `history.target.upserted` and `history.target.deleted` after the write.

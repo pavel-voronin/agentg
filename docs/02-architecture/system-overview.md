@@ -41,8 +41,8 @@ The agent-facing integration adds a separate live boundary:
 TDLib sidecar
   -> Postgres
   -> NATS Core live integration events
-  <- tRPC history fetch calls from History Sync
-  -> History Sync service
+  <- tRPC history fetch calls from History
+  -> History service
   <- tRPC operator calls from Control Plane server
   -> Control Plane browser UI
   -> Agent Gateway WebSocket API
@@ -52,20 +52,28 @@ TDLib sidecar
 NATS Core is used as an internal, non-durable event bus. Addressed internal
 domain reads and commands use tRPC. Postgres remains the source of recovery
 and replayable Telegram facts.
-History Sync is a separate process from Telegram ingestion: it owns targets,
+History is a separate process from Telegram ingestion: it owns targets,
 coverage, and backfill jobs, while Telegram ingestion owns TDLib and
 Telegram-shaped persistence.
 Control Plane is a separate operator boundary: the browser UI calls Control
 Plane server, and Control Plane server resolves internal domain RPC through
-Service Directory before making tRPC calls. Gateway remains the external agent
-edge and also resolves its allowed internal RPC calls through Service Directory.
-Telegram ingestion, History Sync, and trusted modules run as independent
+Service Directory before making tRPC calls. The browser UI is composed from
+slots: Control Plane owns the shell, layout, browser WebSocket, and event fanout;
+domains provide the concrete Control Plane content components and own their view
+state. Control Plane SDK owns the mechanical slot runtime, host bridge, debug
+overlay, and shared UI primitives used by those content components. Gateway
+remains the external agent edge and also resolves its allowed internal RPC calls
+through Service Directory.
+Default operator layout is derived from domain-declared Control Plane content
+placements. The shell does not hard-code domain content IDs into its own layout.
+Telegram ingestion, History, and trusted modules run as independent
 services inside the same internal contour. They own their storage and tRPC
 surface, and join Service Directory with their procedures, events, and extension
 getter declarations. Gateway methods are managed directly in Gateway code.
 Callers that need extended views compose them outside the owning domain by
 reading the local Service Directory snapshot and calling the registered getter
-RPC methods.
+RPC methods. Operator UI composition uses domain-provided Control Plane slot
+content rather than shell-owned domain view models.
 
 The preferred starting runtime is TypeScript/Node.js, provided TDLib can be integrated reliably through its JSON/C interface or a maintained wrapper. Go or Rust remain fallback choices if the Node.js integration becomes the risky part of the project.
 

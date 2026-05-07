@@ -11,7 +11,7 @@ Decision:
 
 ## Stage Goal
 
-Make History Sync call Telegram ingestion through Telegram's domain-owned tRPC
+Make History call Telegram ingestion through Telegram's domain-owned tRPC
 router for chat discovery and history page fetches.
 
 ## Implementation Choices
@@ -24,9 +24,9 @@ router for chat discovery and history page fetches.
 - Keep request and response payloads JSON-shaped.
 - Preserve the existing `TELEGRAM_RPC_URL`, `TELEGRAM_RPC_HOST`, and
   `TELEGRAM_RPC_PORT` environment variable names during this stage.
-- Keep History Sync's `TelegramHistoryClient` interface stable for the executor
+- Keep History's `TelegramHistoryClient` interface stable for the executor
   and controller.
-- Leave History Sync's own History gRPC server in place until the History domain
+- Leave History's own History gRPC server in place until the History domain
   tRPC stage.
 
 ## Concrete Scope
@@ -35,10 +35,10 @@ router for chat discovery and history page fetches.
   surface.
 - Add a Telegram History tRPC router and HTTP server entrypoint.
 - Start and stop the Telegram History tRPC server from Telegram ingestion.
-- Change History Sync's Telegram client implementation to use a typed tRPC
+- Change History's Telegram client implementation to use a typed tRPC
   client.
-- Update History Sync service wiring to instantiate the tRPC Telegram client.
-- Replace the History Sync Telegram client boundary test with a tRPC boundary
+- Update History service wiring to instantiate the tRPC Telegram client.
+- Replace the History Telegram client boundary test with a tRPC boundary
   test.
 - Keep existing backfill behavior unchanged.
 
@@ -46,7 +46,7 @@ router for chat discovery and history page fetches.
 
 - Do not migrate Gateway to tRPC.
 - Do not migrate Control Plane server to tRPC.
-- Do not migrate History Sync's public History API to tRPC.
+- Do not migrate History's public History API to tRPC.
 - Do not remove `@agentg/proto`.
 - Do not remove History gRPC server/client code.
 - Do not change Gateway's external WebSocket protocol.
@@ -60,10 +60,10 @@ router for chat discovery and history page fetches.
 - Telegram owns the router, validators, and handlers for the Telegram History
   internal API.
 - Telegram ingestion starts the Telegram History tRPC server.
-- History Sync no longer uses gRPC to call Telegram.
-- History Sync imports only Telegram's public RPC type or public client
+- History no longer uses gRPC to call Telegram.
+- History imports only Telegram's public RPC type or public client
   entrypoint, not Telegram private implementation code.
-- History Sync tests cover the tRPC Telegram client boundary.
+- History tests cover the tRPC Telegram client boundary.
 - Telegram still publishes events to NATS.
 - Existing history backfill behavior still works.
 - Existing `npm run check` passes.

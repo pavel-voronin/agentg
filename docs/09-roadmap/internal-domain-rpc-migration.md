@@ -94,9 +94,9 @@ Scope:
 
 - Define Telegram History Protobuf service.
 - Telegram service exposes gRPC methods for chat discovery and history page fetch.
-- History Sync calls Telegram through generated gRPC client.
+- History calls Telegram through generated gRPC client.
 - Telegram returns domain-shaped responses, not raw TDLib objects.
-- History job identifiers remain private to History Sync.
+- History job identifiers remain private to History.
 
 Out of scope:
 
@@ -107,11 +107,11 @@ Out of scope:
 
 Definition of Done:
 
-- History Sync no longer uses NATS request/reply to ask Telegram for history.
+- History no longer uses NATS request/reply to ask Telegram for history.
 - Telegram history NATS command subjects are removed or left as temporary
   compatibility only if the stage re-plan explicitly accepts that debt.
 - Telegram still publishes events to NATS.
-- History Sync tests cover the gRPC Telegram client boundary.
+- History tests cover the gRPC Telegram client boundary.
 - Existing history backfill behavior still works.
 - Existing `npm run check` passes.
 
@@ -119,7 +119,7 @@ Stage 2 must be re-planned before implementation.
 
 ## Stage 3: History Domain RPC
 
-Purpose: make History Sync expose its command and read surface through domain RPC.
+Purpose: make History expose its command and read surface through domain RPC.
 
 Stage re-plan:
 [Internal Domain RPC Stage 3 Plan](internal-domain-rpc-stage-3-plan.md).
@@ -127,7 +127,7 @@ Stage re-plan:
 Scope:
 
 - Define History Protobuf service.
-- History Sync exposes gRPC methods for current `history.*` command/read
+- History exposes gRPC methods for current `history.*` command/read
   behavior.
 - Gateway calls History through generated gRPC client for external API handling.
 - History remains the only writer of history targets, coverage, and backfill job

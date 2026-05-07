@@ -54,7 +54,7 @@ The first convincing success signal is database-visible Telegram parity:
 
 If Telegram shows a new message notification but AgenTG does not persist the corresponding message, Phase 1 is not working yet.
 
-## History Sync Target
+## History Target
 
 The ideal target is requested visible text history coverage: every text message, post caption, and text-bearing item covered by an active history target should eventually be represented in AgenTG storage.
 

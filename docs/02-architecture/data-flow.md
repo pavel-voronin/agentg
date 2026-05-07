@@ -13,4 +13,4 @@ The first implementation proves that the system can authenticate, receive Telegr
 
 History sync is a desired-state loop. Templates materialize concrete chat targets, coverage records which intervals are already covered, and the reconciler derives backfill jobs for missing intervals.
 
-See [History Sync](../03-domains/history-sync.md).
+See [History](../03-domains/history.md).

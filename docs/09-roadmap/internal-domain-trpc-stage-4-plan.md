@@ -1,7 +1,7 @@
 # Internal Domain tRPC Stage 4 Plan
 
 Stage 4 removes the old gRPC and Protobuf implementation after Telegram,
-History Sync, Gateway, and Control Plane server have moved to domain-owned tRPC
+History, Gateway, and Control Plane server have moved to domain-owned tRPC
 for internal RPC.
 
 Parent plan:
@@ -20,7 +20,7 @@ documentation references.
 
 - Remove `packages/proto` completely from the active workspace.
 - Remove `npm run proto:generate`.
-- Remove the old History gRPC server adapter from History Sync.
+- Remove the old History gRPC server adapter from History.
 - Remove gRPC and Protobuf dependencies from package manifests and lockfiles.
 - Keep environment variable names such as `HISTORY_RPC_URL` and
   `TELEGRAM_RPC_URL` during this stage because they now point to HTTP tRPC
@@ -34,8 +34,8 @@ documentation references.
 
 - Delete the `@agentg/proto` workspace package and all Protobuf source/generated
   files.
-- Delete History Sync's old `history-api.ts` gRPC adapter.
-- Remove `@agentg/proto` from History Sync dependencies.
+- Delete History's old `history-api.ts` gRPC adapter.
+- Remove `@agentg/proto` from History dependencies.
 - Remove Protobuf and gRPC package-lock entries that are no longer used.
 - Remove `packages/proto` from root workspaces.
 - Remove `proto:generate` from root scripts.

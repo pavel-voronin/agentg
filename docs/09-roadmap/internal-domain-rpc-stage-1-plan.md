@@ -40,10 +40,10 @@ re-deciding tooling, package layout, or local service addressing.
 
 ## Explicit Non-Scope
 
-- Do not migrate History Sync to call Telegram over gRPC.
+- Do not migrate History to call Telegram over gRPC.
 - Do not migrate Gateway to call History over gRPC.
 - Do not remove any NATS request/reply subjects.
-- Do not start gRPC servers in Telegram, History Sync, Gateway, or Control Plane.
+- Do not start gRPC servers in Telegram, History, Gateway, or Control Plane.
 - Do not add dynamic service discovery.
 - Do not add retry orchestration, deduplication tables, or cancellation logic.
 

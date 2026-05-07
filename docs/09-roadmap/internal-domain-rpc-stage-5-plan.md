@@ -26,9 +26,9 @@ storage to recover state after reconnects.
 - Remove the old History target NATS request/reply subjects:
   - `history.target.upsert.requested`
   - `history.target.delete.requested`
-- Stop using `history.sync.requested` as a command transport. History Sync may
+- Stop using `history.sync.requested` as a command transport. History may
   still publish it as a notification event, but its controller must be woken
-  directly inside the History Sync process.
+  directly inside the History process.
 - Keep live event fan-out subjects used by Gateway and Control Plane server:
   - `telegram.>`
   - `history.>`
@@ -59,8 +59,8 @@ storage to recover state after reconnects.
 
 - No production code calls `EventBus.request` or `EventBus.respond`.
 - Shared `EventBus` no longer exposes request/reply helpers.
-- History Sync no longer registers target command responders on NATS.
-- History Sync no longer subscribes to `history.sync.requested` to wake its own
+- History no longer registers target command responders on NATS.
+- History no longer subscribes to `history.sync.requested` to wake its own
   controller.
 - Gateway and Control Plane server still receive live `telegram.>` and
   `history.>` notifications.
