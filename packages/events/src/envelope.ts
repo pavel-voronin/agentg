@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import type { JsonObject, JsonValue } from '../json.js';
+import type { JsonObject, JsonValue } from './json.js';
 
 export type IntegrationEvent = {
   id: string;

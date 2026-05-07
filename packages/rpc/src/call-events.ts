@@ -1,7 +1,7 @@
-import type { EventBus } from '../events/bus.js';
-import { createIntegrationEvent, type IntegrationEvent } from '../events/envelope.js';
-import type { JsonObject, JsonValue } from '../json.js';
-import { toJsonValue } from '../json.js';
+import type { EventBus } from '@agentg/events/bus';
+import { createIntegrationEvent, type IntegrationEvent } from '@agentg/events/envelope';
+import type { JsonObject, JsonValue } from '@agentg/events/json';
+import { toJsonValue } from '@agentg/events/json';
 import {
   RPC_CALL_COMPLETED_EVENT_SUFFIX,
   RPC_CALL_FAILED_EVENT_SUFFIX,
@@ -9,7 +9,6 @@ import {
   RPC_CALL_STARTED_EVENT_SUFFIX,
   rpcCallEventType
 } from './call-event-types.js';
-import type { RpcCallEventSuffix } from './call-event-types.js';
 
 export {
   RPC_CALL_COMPLETED_EVENT_SUFFIX,

@@ -1,4 +1,4 @@
-import type { EventBus } from '../events/bus.js';
+import type { EventBus } from '@agentg/events/bus';
 
 export const INTERNAL_RPC_CALL_OPTIONS_HEADER = 'x-agentg-call-options';
 
