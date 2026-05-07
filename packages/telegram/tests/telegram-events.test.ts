@@ -1,4 +1,4 @@
-import { createTelegramIntegrationEvents } from '@agentg/shared/events/telegram-events';
+import { createTelegramIntegrationEvents } from '@agentg/telegram/integration-events';
 import { describe, expect, it } from 'vitest';
 
 describe('Telegram integration events', () => {

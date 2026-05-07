@@ -1,7 +1,7 @@
 import type { Server } from 'node:http';
 
 import type { TelegramDatabase as AppDatabase } from '../database.js';
-import type { EventBus } from '@agentg/shared/events/bus';
+import type { EventBus } from '@agentg/events/bus';
 import { createHTTPServer } from '@trpc/server/adapters/standalone';
 
 import { createTelegramHistoryRouter } from './history-router.js';

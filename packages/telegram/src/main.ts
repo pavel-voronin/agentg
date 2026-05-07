@@ -1,5 +1,5 @@
 import { checkDatabase, createDatabasePool } from '@agentg/database/database';
-import { createNatsEventBus } from '@agentg/shared/events/bus';
+import { createNatsEventBus } from '@agentg/events/bus';
 
 import { loadTelegramIngestionConfig } from './config.js';
 import { createTelegramDatabase } from './database.js';

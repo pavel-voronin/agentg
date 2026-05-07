@@ -5,6 +5,8 @@
   "type": "module",
   "exports": {
     "./control-plane": "./src/control-plane/index.ts",
+    "./integration-events": "./src/integration-events.ts",
+    "./model-refs": "./src/model-refs.ts",
     "./rpc": "./src/rpc/index.ts"
   },
   "scripts": {
@@ -18,10 +20,12 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@agentg/control-plane-extension": "file:../control-plane-extension",
+    "@agentg/control-plane-sdk": "file:../control-plane-sdk",
     "@agentg/database": "file:../database",
+    "@agentg/events": "file:../events",
+    "@agentg/infra": "file:../infra",
+    "@agentg/rpc": "file:../rpc",
     "@agentg/service-directory": "file:../service-directory",
-    "@agentg/shared": "file:../shared",
     "@trpc/client": "^11.17.0",
     "@trpc/server": "^11.17.0",
     "dotenv": "17.4.2",

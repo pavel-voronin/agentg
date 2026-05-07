@@ -1,7 +1,7 @@
 import { isAbsolute, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { loadNearestDotenv } from '@agentg/shared/dotenv';
+import { loadNearestDotenv } from '@agentg/infra/dotenv';
 
 import {
   readInternalTrpcBindConfig,

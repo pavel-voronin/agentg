@@ -85,7 +85,6 @@ describe('Telegram history router chat listing', () => {
     });
     expect(database.selectCalls()).toBe(1);
   });
-
 });
 
 function createCaller(database: ReturnType<typeof createFakeDatabase>) {

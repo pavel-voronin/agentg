@@ -2,14 +2,14 @@ import { randomUUID } from 'node:crypto';
 
 import { initTRPC } from '@trpc/server';
 import type { CreateHTTPContextOptions } from '@trpc/server/adapters/standalone';
-import type { EventBus } from '@agentg/shared/events/bus';
+import type { EventBus } from '@agentg/events/bus';
 import {
   createInternalRpcCallOptionsResolver,
   eventBusForInternalRpcCall,
   INTERNAL_RPC_CALL_OPTIONS_HEADER,
   shouldPublishInternalRpcLifecycle,
   type InternalRpcCallOptions
-} from '@agentg/shared/rpc/call-options';
+} from '@agentg/rpc/call-options';
 import {
   createRpcCallCompletedEvent,
   createRpcCallFailedEvent,
@@ -18,7 +18,7 @@ import {
   errorFromUnknown,
   publishRpcCallEvent,
   type RpcProgressData
-} from '@agentg/shared/rpc/call-events';
+} from '@agentg/rpc/call-events';
 import { treeifyError, ZodError } from 'zod';
 
 export const INTERNAL_RPC_CORRELATION_ID_HEADER = 'x-agentg-correlation-id';

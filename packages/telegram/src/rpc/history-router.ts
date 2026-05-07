@@ -1,12 +1,12 @@
 import type { TelegramDatabase as AppDatabase } from '../database.js';
 import { telegramChatFolders, telegramChats, telegramMessages, telegramUsers } from '../schema.js';
-import type { EventBus } from '@agentg/shared/events/bus';
+import type { EventBus } from '@agentg/events/bus';
 import {
   telegramChatFolderRef,
   telegramChatRef,
   telegramMessageRef,
   telegramMessageSenderRef
-} from '@agentg/shared/models/telegram';
+} from '@agentg/telegram/model-refs';
 import { and, asc, desc, eq, gte, ilike, inArray, isNotNull, lt, sql } from 'drizzle-orm';
 import { z } from 'zod';
 

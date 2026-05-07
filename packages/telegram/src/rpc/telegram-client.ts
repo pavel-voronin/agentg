@@ -3,7 +3,7 @@ import {
   createInternalRpcCallOptionsHeaders,
   internalRpcProcedureOptions,
   type InternalRpcCallOptions
-} from '@agentg/shared/rpc/call-options';
+} from '@agentg/rpc/call-options';
 
 import {
   telegramCountMessagesInIntervalsInputSchema,

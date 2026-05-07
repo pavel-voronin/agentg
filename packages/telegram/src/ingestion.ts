@@ -1,8 +1,8 @@
 import type { TelegramDatabase as AppDatabase } from './database.js';
 import { createServiceDirectoryClient } from '@agentg/service-directory/rpc';
-import type { EventBus } from '@agentg/shared/events/bus';
-import { createIntegrationEvent } from '@agentg/shared/events/envelope';
-import { createTelegramIntegrationEvents } from '@agentg/shared/events/telegram-events';
+import type { EventBus } from '@agentg/events/bus';
+import { createIntegrationEvent } from '@agentg/events/envelope';
+import { createTelegramIntegrationEvents } from '@agentg/telegram/integration-events';
 
 import {
   asTdObject,
@@ -70,79 +70,131 @@ const TELEGRAM_SHUTDOWN_FORCE_EXIT_MS = 4500;
 const TELEGRAM_SHUTDOWN_STEP_TIMEOUT_MS = 2000;
 
 export async function runTelegramIngestion(options: TelegramIngestionOptions): Promise<void> {
-  if (!hasTelegramCredentials(options.telegram)) {
-    throw new Error('Telegram ingestion requires TELEGRAM_API_ID and TELEGRAM_API_HASH');
+  let telegramHistoryServer: Awaited<ReturnType<typeof startTelegramHistoryTrpcServer>> | undefined;
+  let serviceDirectory: ReturnType<typeof createServiceDirectoryClient> | undefined;
+  let tdlibStatusHeartbeat: ReturnType<typeof setInterval> | undefined;
+  let client: TelegramClient | undefined;
+  let tdlibStatus: TdlibStatusTracker | undefined;
+  let startupComplete = false;
+
+  try {
+    if (!hasTelegramCredentials(options.telegram)) {
+      throw new Error('Telegram ingestion requires TELEGRAM_API_ID and TELEGRAM_API_HASH');
+    }
+
+    client = await createTelegramClient(options.telegram);
+    const activeClient = client;
+    const persistenceStats = createPersistenceStats();
+    tdlibStatus = createTdlibStatusTracker(options.eventBus);
+    const activeTdlibStatus = tdlibStatus;
+
+    activeClient.on('error', (error: unknown) => {
+      console.error(JSON.stringify({ event: 'telegram.error', error: String(error) }));
+    });
+    activeClient.on('update', (update: unknown) => {
+      logSafeTelegramUpdate(update);
+      handleTdlibConnectionUpdate(update, activeTdlibStatus);
+      void persistLiveUpdate(options.database, update, persistenceStats, options.eventBus);
+    });
+
+    await publishTelegramOperationEvents(options.eventBus, 'login', {}, () => activeClient.login());
+    await persistAndLogAuthenticatedClient(options.database, activeClient, options.eventBus);
+    activeTdlibStatus.markAuthenticated(true);
+    activeTdlibStatus.markConnectionState('connectionStateReady');
+    tdlibStatusHeartbeat = startTdlibStatusHeartbeat(activeTdlibStatus);
+    await syncInitialChats(options.database, activeClient, options.eventBus);
+
+    telegramHistoryServer = await startTelegramHistoryTrpcServer({
+      bind: options.internalRpc,
+      client: activeClient,
+      database: options.database,
+      eventBus: options.eventBus
+    });
+    serviceDirectory = createServiceDirectoryClient({
+      eventBus: options.eventBus,
+      onTopologyFailure: (error) => {
+        requestProcessShutdown('telegram.topology_failure', error);
+      },
+      url: options.services.serviceDirectory.url
+    });
+    await serviceDirectory.join(createTelegramServiceManifest({ rpcUrl: options.serviceRpcUrl }));
+    startupComplete = true;
+
+    console.log(JSON.stringify({ event: 'telegram.ingestion_ready' }));
+    await waitForShutdown(async () => {
+      if (tdlibStatusHeartbeat !== undefined) {
+        clearInterval(tdlibStatusHeartbeat);
+        tdlibStatusHeartbeat = undefined;
+      }
+      activeTdlibStatus.markDisconnected();
+      const historyRpcServer = telegramHistoryServer;
+      const historyRpcClosed =
+        historyRpcServer === undefined
+          ? true
+          : await runShutdownStep('telegram.history_trpc_close', () =>
+              stopTelegramHistoryTrpcServer(historyRpcServer)
+            );
+      if (historyRpcClosed) {
+        telegramHistoryServer = undefined;
+      }
+      serviceDirectory?.close();
+      serviceDirectory = undefined;
+      const tdlibClosed = await runShutdownStep('telegram.tdlib.close', () =>
+        publishTdlibOperationEvents(options.eventBus, 'close', {}, () => activeClient.close())
+      );
+      const eventBusClosed = await runShutdownStep('telegram.event_bus_close', () =>
+        options.eventBus.close()
+      );
+
+      return historyRpcClosed && tdlibClosed && eventBusClosed;
+    });
+  } catch (error) {
+    if (!startupComplete) {
+      await cleanupTelegramStartupFailure({
+        client,
+        eventBus: options.eventBus,
+        serviceDirectory,
+        tdlibStatus,
+        tdlibStatusHeartbeat,
+        telegramHistoryServer
+      });
+    }
+    throw error;
+  }
+}
+
+async function cleanupTelegramStartupFailure(options: {
+  client: TelegramClient | undefined;
+  eventBus: EventBus;
+  serviceDirectory: ReturnType<typeof createServiceDirectoryClient> | undefined;
+  tdlibStatus: TdlibStatusTracker | undefined;
+  tdlibStatusHeartbeat: ReturnType<typeof setInterval> | undefined;
+  telegramHistoryServer: Awaited<ReturnType<typeof startTelegramHistoryTrpcServer>> | undefined;
+}): Promise<void> {
+  if (options.tdlibStatusHeartbeat !== undefined) {
+    clearInterval(options.tdlibStatusHeartbeat);
+  }
+  await runShutdownStep('telegram.tdlib_status_startup_disconnect', () =>
+    Promise.resolve(options.tdlibStatus?.markDisconnected())
+  );
+
+  const telegramHistoryServer = options.telegramHistoryServer;
+  if (telegramHistoryServer !== undefined) {
+    await runShutdownStep('telegram.history_trpc_startup_close', () =>
+      stopTelegramHistoryTrpcServer(telegramHistoryServer)
+    );
   }
 
-  const client = await createTelegramClient(options.telegram);
-  const persistenceStats = createPersistenceStats();
-  const tdlibStatus = createTdlibStatusTracker(options.eventBus);
-  let telegramHistoryServer: Awaited<ReturnType<typeof startTelegramHistoryTrpcServer>> | undefined;
-  let closeServiceDirectory: (() => void) | undefined;
-  let tdlibStatusHeartbeat: ReturnType<typeof setInterval> | undefined;
-
-  client.on('error', (error: unknown) => {
-    console.error(JSON.stringify({ event: 'telegram.error', error: String(error) }));
-  });
-  client.on('update', (update: unknown) => {
-    logSafeTelegramUpdate(update);
-    handleTdlibConnectionUpdate(update, tdlibStatus);
-    void persistLiveUpdate(options.database, update, persistenceStats, options.eventBus);
-  });
-
-  await publishTelegramOperationEvents(options.eventBus, 'login', {}, () => client.login());
-  await persistAndLogAuthenticatedClient(options.database, client, options.eventBus);
-  tdlibStatus.markAuthenticated(true);
-  tdlibStatus.markConnectionState('connectionStateReady');
-  tdlibStatusHeartbeat = startTdlibStatusHeartbeat(tdlibStatus);
-  await syncInitialChats(options.database, client, options.eventBus);
-
-  telegramHistoryServer = await startTelegramHistoryTrpcServer({
-    bind: options.internalRpc,
-    client,
-    database: options.database,
-    eventBus: options.eventBus
-  });
-  const serviceDirectory = createServiceDirectoryClient({
-    eventBus: options.eventBus,
-    onTopologyFailure: (error) => {
-      requestProcessShutdown('telegram.topology_failure', error);
-    },
-    url: options.services.serviceDirectory.url
-  });
-  await serviceDirectory.join(createTelegramServiceManifest({ rpcUrl: options.serviceRpcUrl }));
-  closeServiceDirectory = () => {
-    serviceDirectory.close();
-  };
-
-  console.log(JSON.stringify({ event: 'telegram.ingestion_ready' }));
-  await waitForShutdown(async () => {
-    if (tdlibStatusHeartbeat !== undefined) {
-      clearInterval(tdlibStatusHeartbeat);
-      tdlibStatusHeartbeat = undefined;
-    }
-    tdlibStatus.markDisconnected();
-    const historyRpcServer = telegramHistoryServer;
-    const historyRpcClosed =
-      historyRpcServer === undefined
-        ? true
-        : await runShutdownStep('telegram.history_trpc_close', () =>
-            stopTelegramHistoryTrpcServer(historyRpcServer)
-          );
-    if (historyRpcClosed) {
-      telegramHistoryServer = undefined;
-    }
-    closeServiceDirectory?.();
-    closeServiceDirectory = undefined;
-    const tdlibClosed = await runShutdownStep('telegram.tdlib.close', () =>
+  await runShutdownStep('telegram.service_directory_startup_close', () =>
+    Promise.resolve(options.serviceDirectory?.close())
+  );
+  const client = options.client;
+  if (client !== undefined) {
+    await runShutdownStep('telegram.tdlib_startup_close', () =>
       publishTdlibOperationEvents(options.eventBus, 'close', {}, () => client.close())
     );
-    const eventBusClosed = await runShutdownStep('telegram.event_bus_close', () =>
-      options.eventBus.close()
-    );
-
-    return historyRpcClosed && tdlibClosed && eventBusClosed;
-  });
+  }
+  await runShutdownStep('telegram.event_bus_startup_close', () => options.eventBus.close());
 }
 
 function requestProcessShutdown(event: string, error: Error): void {

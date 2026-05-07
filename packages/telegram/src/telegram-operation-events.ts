@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
 
-import type { EventBus } from '@agentg/shared/events/bus';
-import { createIntegrationEvent } from '@agentg/shared/events/envelope';
-import { toJsonValue } from '@agentg/shared/json';
+import type { EventBus } from '@agentg/events/bus';
+import { createIntegrationEvent } from '@agentg/events/envelope';
+import { toJsonValue } from '@agentg/events/json';
 
 export type TdlibInvoker = {
   invoke(request: Record<string, unknown>): Promise<unknown>;

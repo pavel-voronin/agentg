@@ -10,7 +10,7 @@ import {
   timestamp
 } from 'drizzle-orm/pg-core';
 
-import type { JsonObject } from '@agentg/shared/json';
+import type { JsonObject } from '@agentg/events/json';
 
 export const telegramEvents = pgTable(
   'telegram_events',

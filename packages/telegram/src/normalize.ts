@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto';
 
-import type { JsonObject, JsonValue } from '@agentg/shared/json';
+import type { JsonObject, JsonValue } from '@agentg/events/json';
 
-export type { JsonObject, JsonValue } from '@agentg/shared/json';
+export type { JsonObject, JsonValue } from '@agentg/events/json';
 
 export type TdObject = {
   _: string;
