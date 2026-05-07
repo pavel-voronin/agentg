@@ -3,11 +3,7 @@ import type { EventBus, EventSubscription } from '@agentg/events/bus';
 import { describe, expect, it } from 'vitest';
 
 import { createInMemorySummaryRepository } from '../src/memory-store.js';
-import {
-  getChatSummaryExtension,
-  handleSummariesEvent,
-  requestChatSummary
-} from '../src/summary-service.js';
+import { handleSummariesEvent } from '../src/summary-service.js';
 
 describe('summaries service', () => {
   it('stores private summary state and invalidates it from Telegram events', async () => {
@@ -18,16 +14,19 @@ describe('summaries service', () => {
       repository: createInMemorySummaryRepository()
     };
 
-    const requested = await requestChatSummary(runtime, {
-      chatId: 'chat-a',
-      reason: 'manual',
-      sourceMessages: [
-        {
-          messageDate: '2026-05-01T00:00:00.000Z',
-          messageId: '42'
-        }
-      ]
-    });
+    const requested = await runtime.repository.requestSummary(
+      {
+        chatId: 'chat-a',
+        reason: 'manual',
+        sourceMessages: [
+          {
+            messageDate: '2026-05-01T00:00:00.000Z',
+            messageId: '42'
+          }
+        ]
+      },
+      runtime.now()
+    );
 
     expect(requested.summary).toMatchObject({
       chatId: 'chat-a',
@@ -38,10 +37,6 @@ describe('summaries service', () => {
         }
       ]
     });
-    expect(events.map((event) => event.type)).toEqual([
-      'summaries.summary.requested',
-      'summaries.summary.completed'
-    ]);
 
     await handleSummariesEvent(
       runtime,
@@ -62,8 +57,7 @@ describe('summaries service', () => {
       })
     );
 
-    await expect(getChatSummaryExtension(runtime, 'chat-a')).resolves.toMatchObject({
-      stale: true,
+    await expect(runtime.repository.readChatSummary('chat-a')).resolves.toMatchObject({
       summary: {
         chatId: 'chat-a'
       },

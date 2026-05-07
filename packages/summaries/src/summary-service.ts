@@ -1,71 +1,8 @@
-import type { EventBus } from '@agentg/events/bus';
 import type { IntegrationEvent } from '@agentg/events/envelope';
 
-import {
-  createSummaryCompletedEvent,
-  createSummaryInvalidatedEvent,
-  createSummaryRequestedEvent
-} from './events.js';
-import type { SummaryRepository } from './store.js';
-import type {
-  SummaryExtensionResult,
-  SummaryInvalidation,
-  SummaryReadResult,
-  SummaryRequest,
-  SummaryRequestResult,
-  SummaryRunReadResult
-} from './types.js';
-
-export type SummariesRuntime = {
-  eventBus: EventBus;
-  now?: (() => Date) | undefined;
-  repository: SummaryRepository;
-};
-
-export async function requestChatSummary(
-  runtime: SummariesRuntime,
-  input: SummaryRequest
-): Promise<SummaryRequestResult> {
-  const now = runtime.now?.() ?? new Date();
-  const result = await runtime.repository.requestSummary(input, now);
-
-  runtime.eventBus.publish(createSummaryRequestedEvent(result.run));
-  runtime.eventBus.publish(
-    createSummaryCompletedEvent({
-      result: result.summary,
-      run: result.run
-    })
-  );
-
-  return result;
-}
-
-export async function readChatSummary(
-  runtime: Pick<SummariesRuntime, 'repository'>,
-  chatId: string
-): Promise<SummaryReadResult> {
-  return runtime.repository.readChatSummary(chatId);
-}
-
-export async function readSummaryRun(
-  runtime: Pick<SummariesRuntime, 'repository'>,
-  runId: string
-): Promise<SummaryRunReadResult> {
-  return runtime.repository.readRun(runId);
-}
-
-export async function getChatSummaryExtension(
-  runtime: Pick<SummariesRuntime, 'repository'>,
-  chatId: string
-): Promise<SummaryExtensionResult> {
-  const result = await runtime.repository.readChatSummary(chatId);
-
-  return {
-    invalidation: result.invalidation,
-    stale: result.invalidation !== null,
-    summary: result.summary
-  };
-}
+import { createSummaryInvalidatedEvent } from './events.js';
+import type { SummariesRuntime } from './runtime.js';
+import type { SummaryInvalidation } from './types.js';
 
 export async function handleSummariesEvent(
   runtime: SummariesRuntime,

@@ -1,12 +1,13 @@
 import type { Server } from 'node:http';
 
 import type { EventBus, EventSubscription } from '@agentg/events/bus';
+import type { IntegrationEvent } from '@agentg/events/envelope';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { createInMemorySummaryRepository } from '../src/memory-store.js';
 import { createSummariesRpcClient } from '../src/rpc/index.js';
 import { startSummariesTrpcServer, type SummariesRpcBindConfig } from '../src/rpc/server.js';
-import { requestChatSummary, type SummariesRuntime } from '../src/summary-service.js';
+import type { SummariesRuntime } from '../src/runtime.js';
 
 const httpServers: Server[] = [];
 
@@ -16,22 +17,32 @@ describe('summaries runtime integration', () => {
   });
 
   it('serves summaries.chatSummary as a telegram.chat getter', async () => {
-    const eventBus = createFakeEventBus();
+    const events: IntegrationEvent[] = [];
+    const eventBus = createRecordingEventBus(events);
     const runtime = createTestRuntime(eventBus);
     const summariesServer = await startSummariesHttp(runtime, eventBus);
     const summariesUrl = serverUrl(summariesServer);
-
-    await requestChatSummary(runtime, {
-      chatId: 'chat-a',
-      reason: 'test',
-      sourceMessages: []
-    });
 
     const client = createSummariesRpcClient({
       url: summariesUrl
     });
 
     try {
+      await expect(
+        client.requestSummary({
+          chatId: 'chat-a',
+          reason: 'test',
+          sourceMessages: []
+        })
+      ).resolves.toMatchObject({
+        summary: {
+          chatId: 'chat-a'
+        }
+      });
+      expect(
+        events.map((event) => event.type).filter((type) => type.startsWith('summaries.'))
+      ).toEqual(['summaries.summary.requested', 'summaries.summary.completed']);
+
       await expect(
         client.chatSummary({
           _model: 'telegram.chat',
@@ -82,13 +93,13 @@ function serverUrl(server: Server): string {
   throw new Error('Expected TCP server address');
 }
 
-function createFakeEventBus(): EventBus {
+function createRecordingEventBus(events: IntegrationEvent[]): EventBus {
   return {
     close(): Promise<void> {
       return Promise.resolve();
     },
-    publish(): void {
-      return;
+    publish(event): void {
+      events.push(event);
     },
     subscribe(): EventSubscription {
       return {

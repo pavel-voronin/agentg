@@ -1,5 +1,7 @@
 import type { ModuleRuntimeConfig } from '@agentg/infra/modules/runtime';
 
+import { summariesRpcSurface } from './rpc/surface.js';
+
 export function createSummariesServiceManifest(config: ModuleRuntimeConfig) {
   return {
     events: [
@@ -8,12 +10,7 @@ export function createSummariesServiceManifest(config: ModuleRuntimeConfig) {
       'summaries.summary.requested'
     ],
     extensions: config.extensions,
-    procedures: [
-      { kind: 'query' as const, name: 'summaries.chatSummary' },
-      { kind: 'query' as const, name: 'summaries.readChatSummary' },
-      { kind: 'query' as const, name: 'summaries.readSummaryRun' },
-      { kind: 'mutation' as const, name: 'summaries.requestSummary' }
-    ],
+    procedures: summariesRpcSurface.procedures(),
     required: false,
     rpcUrl: config.serviceRpcUrl,
     slug: config.slug

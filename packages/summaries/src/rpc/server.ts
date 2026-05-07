@@ -5,7 +5,7 @@ import { createHTTPServer } from '@trpc/server/adapters/standalone';
 
 import { createSummariesRouter } from './router.js';
 import { createSummariesRpcContext } from './trpc.js';
-import type { SummariesRuntime } from '../summary-service.js';
+import type { SummariesRuntime } from '../runtime.js';
 
 export type SummariesRpcBindConfig = {
   host: string;

@@ -7,7 +7,8 @@ import type { SummariesServiceConfig } from './config.js';
 import type { SummariesDatabase } from './database.js';
 import { createSummariesServiceManifest } from './registrations.js';
 import { startSummariesTrpcServer, stopSummariesTrpcServer } from './rpc/server.js';
-import { handleSummariesEvent, type SummariesRuntime } from './summary-service.js';
+import type { SummariesRuntime } from './runtime.js';
+import { handleSummariesEvent } from './summary-service.js';
 import { createDrizzleSummaryRepository } from './store.js';
 
 const SUMMARIES_SHUTDOWN_FORCE_EXIT_MS = 4500;
