@@ -1,4 +1,4 @@
-import type { ModuleRuntimeConfig } from '@agentg/shared/modules/runtime';
+import type { ModuleRuntimeConfig } from '@agentg/infra/modules/runtime';
 
 export function createSummariesServiceManifest(config: ModuleRuntimeConfig) {
   return {
@@ -9,10 +9,10 @@ export function createSummariesServiceManifest(config: ModuleRuntimeConfig) {
     ],
     extensions: config.extensions,
     procedures: [
-      'summaries.chatSummary',
-      'summaries.readChatSummary',
-      'summaries.readSummaryRun',
-      'summaries.requestSummary'
+      { kind: 'query' as const, name: 'summaries.chatSummary' },
+      { kind: 'query' as const, name: 'summaries.readChatSummary' },
+      { kind: 'query' as const, name: 'summaries.readSummaryRun' },
+      { kind: 'mutation' as const, name: 'summaries.requestSummary' }
     ],
     required: false,
     rpcUrl: config.serviceRpcUrl,

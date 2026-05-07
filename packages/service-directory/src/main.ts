@@ -1,4 +1,4 @@
-import { createNatsEventBus } from '@agentg/shared/events/bus';
+import { createNatsEventBus } from '@agentg/events/bus';
 
 import { loadServiceDirectoryServiceConfig } from './config.js';
 import { runServiceDirectoryService } from './service.js';

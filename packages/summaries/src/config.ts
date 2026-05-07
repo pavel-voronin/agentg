@@ -1,6 +1,6 @@
 import { loadDatabaseCliConfig } from '@agentg/database/config';
-import { loadNearestDotenv } from '@agentg/shared/dotenv';
-import { loadModuleRuntimeConfig, type ModuleRuntimeConfig } from '@agentg/shared/modules/runtime';
+import { loadNearestDotenv } from '@agentg/infra/dotenv';
+import { loadModuleRuntimeConfig, type ModuleRuntimeConfig } from '@agentg/infra/modules/runtime';
 
 import type { SummariesRpcBindConfig } from './rpc/server.js';
 

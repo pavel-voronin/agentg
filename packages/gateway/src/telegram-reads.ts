@@ -11,7 +11,7 @@ type TelegramServiceConfig = {
 
 type TelegramRpcClient = ReturnType<typeof createTelegramRpcClient>;
 type ServiceDirectoryProcedureResolver = {
-  resolveProcedure(procedure: string): string;
+  resolveProcedure(procedure: string): { rpcUrl: string };
 };
 
 const DEFAULT_TELEGRAM_REQUEST_TIMEOUT_MS = 15000;
@@ -51,7 +51,7 @@ export function createServiceDirectoryGatewayTelegramClient(
   };
 
   function clientFor(procedure: string): TelegramRpcClient {
-    const url = resolver.resolveProcedure(procedure);
+    const { rpcUrl: url } = resolver.resolveProcedure(procedure);
     const existing = clients.get(url);
     if (existing !== undefined) {
       return existing;

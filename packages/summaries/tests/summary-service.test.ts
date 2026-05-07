@@ -1,5 +1,5 @@
-import { createIntegrationEvent, type IntegrationEvent } from '@agentg/shared/events/envelope';
-import type { EventBus, EventSubscription } from '@agentg/shared/events/bus';
+import { createIntegrationEvent, type IntegrationEvent } from '@agentg/events/envelope';
+import type { EventBus, EventSubscription } from '@agentg/events/bus';
 import { describe, expect, it } from 'vitest';
 
 import { createInMemorySummaryRepository } from '../src/memory-store.js';

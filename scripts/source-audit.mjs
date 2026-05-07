@@ -1,12 +1,14 @@
 /* global console, process */
 
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
 const root = process.cwd();
 const failures = [];
 
-const tsFiles = listFiles(root).filter((file) => file.endsWith('.ts') && !ignored(file));
+const sourceFiles = listFiles(root).filter((file) => !ignored(file));
+const tsFiles = sourceFiles.filter((file) => file.endsWith('.ts'));
+const vueFiles = sourceFiles.filter((file) => file.endsWith('.vue'));
 
 auditRawTrpcBuilderImports(tsFiles);
 auditCrossDomainSchemaImports(tsFiles);
@@ -15,6 +17,10 @@ auditGatewayExternalSurface();
 auditServiceDirectorySurface();
 auditServiceDirectoryBootstrap();
 auditExtensionBoundaries(tsFiles);
+auditNoSharedWorkspacePackage();
+auditDockerfileWorkspacePackageCopies();
+auditControlPlaneCompositionBoundaries(tsFiles);
+auditScopedVueComponentStyles(vueFiles, sourceFiles);
 
 if (failures.length > 0) {
   for (const failure of failures) {
@@ -46,7 +52,7 @@ function auditRawTrpcBuilderImports(files) {
 
 function auditCrossDomainSchemaImports(files) {
   const schemaImports = [
-    '@agentg/history-sync/schema',
+    '@agentg/history/schema',
     '@agentg/summaries/schema',
     '@agentg/telegram/schema'
   ];
@@ -72,7 +78,7 @@ function auditCrossDomainSchemaImports(files) {
 function auditTablePrefixes() {
   const schemas = [
     {
-      file: join(root, 'packages/history-sync/src/schema.ts'),
+      file: join(root, 'packages/history/src/schema.ts'),
       prefix: 'history_'
     },
     {
@@ -154,12 +160,15 @@ function auditExtensionBoundaries(files) {
   auditNoDomainEnrichedRuntime(files);
   auditNoDomainExtensionEndpoints(files);
   auditRegistryDoesNotCallRpc(files);
+  auditControlPlaneSdkHasNoDomainKnowledge(files);
 }
 
 function auditNoDomainEnrichedRuntime(files) {
   const auditedPrefixes = [
-    'packages/shared/src/',
-    'packages/history-sync/src/',
+    'packages/events/src/',
+    'packages/rpc/src/',
+    'packages/infra/src/',
+    'packages/history/src/',
     'packages/telegram/src/',
     'packages/summaries/src/',
     'packages/gateway/src/'
@@ -169,7 +178,7 @@ function auditNoDomainEnrichedRuntime(files) {
     'createTrpcExtensionCallerResolver',
     'ExtensionCallerResolver',
     'extensionCallInputSchema',
-    '@agentg/shared/rpc/envelope',
+    '@agentg/rpc/envelope',
     'ProcedureErrorEnvelope',
     'ProcedureDomainError',
     'ProcedureExtensionEnvelope',
@@ -200,7 +209,7 @@ function auditNoDomainEnrichedRuntime(files) {
 }
 
 function auditNoDomainExtensionEndpoints(files) {
-  const domainRpcPrefixes = ['packages/history-sync/src/rpc/', 'packages/telegram/src/rpc/'];
+  const domainRpcPrefixes = ['packages/history/src/rpc/', 'packages/telegram/src/rpc/'];
   const forbiddenTokens = ['registerExtension', 'listExtensions'];
 
   for (const file of files) {
@@ -227,14 +236,13 @@ function auditServiceDirectorySurface() {
     failures.push('Service Directory package must export only ./rpc');
   }
 
-  const rpcIndex = readFileSync(
-    join(root, 'packages/service-directory/src/rpc/index.ts'),
-    'utf8'
-  );
+  const rpcIndex = readFileSync(join(root, 'packages/service-directory/src/rpc/index.ts'), 'utf8');
   const expectedRpcIndex =
-    "export { createServiceDirectoryClient } from './service-directory-client.js';";
+    "export {\n  createServiceDirectoryClient,\n  type ServiceDirectoryClient,\n  type ServiceDirectoryProcedureCall\n} from './service-directory-client.js';";
   if (rpcIndex.trim() !== expectedRpcIndex) {
-    failures.push('Service Directory public RPC surface must expose only createServiceDirectoryClient');
+    failures.push(
+      'Service Directory public RPC surface must expose only the client and procedure-call types'
+    );
   }
 
   for (const file of listFiles(join(root, 'packages/service-directory/src'))) {
@@ -255,7 +263,7 @@ function auditServiceDirectorySurface() {
 function auditServiceDirectoryBootstrap() {
   const requiredDependencies = [
     'packages/telegram/package.json',
-    'packages/history-sync/package.json',
+    'packages/history/package.json',
     'packages/gateway/package.json',
     'packages/control-plane/package.json'
   ];
@@ -273,11 +281,11 @@ function auditServiceDirectoryBootstrap() {
   }
   auditRequiredManifest('packages/telegram/src/registrations.ts', true);
 
-  const historyService = readFileSync(join(root, 'packages/history-sync/src/service.ts'), 'utf8');
+  const historyService = readFileSync(join(root, 'packages/history/src/service.ts'), 'utf8');
   if (!historyService.includes('createServiceDirectoryClient')) {
-    failures.push('History Sync must join Service Directory');
+    failures.push('History must join Service Directory');
   }
-  auditRequiredManifest('packages/history-sync/src/registrations.ts', true);
+  auditRequiredManifest('packages/history/src/registrations.ts', true);
 
   const gatewaySource = readFileSync(join(root, 'packages/gateway/src/agent-gateway.ts'), 'utf8');
   if (!gatewaySource.includes('createGatewayServiceManifest')) {
@@ -296,9 +304,9 @@ function auditServiceDirectoryBootstrap() {
 
   auditRequiredManifest('packages/summaries/src/registrations.ts', false);
 
-  const historyConfig = readFileSync(join(root, 'packages/history-sync/src/config.ts'), 'utf8');
+  const historyConfig = readFileSync(join(root, 'packages/history/src/config.ts'), 'utf8');
   if (historyConfig.includes('TELEGRAM_RPC_URL')) {
-    failures.push('History Sync config must resolve Telegram through Service Directory');
+    failures.push('History config must resolve Telegram through Service Directory');
   }
 
   const gatewayConfig = readFileSync(join(root, 'packages/gateway/src/config.ts'), 'utf8');
@@ -343,6 +351,244 @@ function auditRegistryDoesNotCallRpc(files) {
       }
     }
   }
+}
+
+function auditNoSharedWorkspacePackage() {
+  const removedSharedWorkspace = `packages/${'shared'}`;
+  const removedSharedPackage = `@agentg/${'shared'}`;
+  const workspacePackage = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+  const workspaces = workspacePackage.workspaces ?? [];
+  if (workspaces.includes(removedSharedWorkspace)) {
+    failures.push(`root workspaces must not include ${removedSharedWorkspace}`);
+  }
+  if (existsSync(join(root, removedSharedWorkspace))) {
+    failures.push(`removed workspace directory must not exist: ${removedSharedWorkspace}`);
+  }
+
+  for (const file of listFiles(root)) {
+    const rel = toRel(file);
+    if (ignored(file) || rel === 'package-lock.json') {
+      continue;
+    }
+    if (!/\.(json|md|mjs|ts|vue)$/.test(rel) && rel !== 'Dockerfile') {
+      continue;
+    }
+    const source = readFileSync(file, 'utf8');
+    if (source.includes(removedSharedPackage) || source.includes(removedSharedWorkspace)) {
+      failures.push(`shared package reference is not allowed: ${rel}`);
+    }
+  }
+}
+
+function auditDockerfileWorkspacePackageCopies() {
+  const dockerfile = readFileSync(join(root, 'Dockerfile'), 'utf8');
+  const workspacePackage = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+  const workspaces = new Set(workspacePackage.workspaces ?? []);
+  const copiedPackages = [
+    ...dockerfile.matchAll(/COPY packages\/([^/]+)\/package\.json packages\/\1\/package\.json/g)
+  ].map((match) => `packages/${match[1]}`);
+
+  for (const workspace of workspaces) {
+    if (!copiedPackages.includes(workspace)) {
+      failures.push(`Dockerfile must copy workspace package manifest: ${workspace}`);
+    }
+  }
+
+  for (const copiedPackage of copiedPackages) {
+    if (!workspaces.has(copiedPackage)) {
+      failures.push(`Dockerfile copies non-workspace package manifest: ${copiedPackage}`);
+    }
+    if (!existsSync(join(root, copiedPackage, 'package.json'))) {
+      failures.push(`Dockerfile copies missing package manifest: ${copiedPackage}`);
+    }
+  }
+}
+
+function auditControlPlaneCompositionBoundaries(files) {
+  const packageJson = JSON.parse(
+    readFileSync(join(root, 'packages/control-plane/package.json'), 'utf8')
+  );
+  if (packageJson.dependencies?.['@trpc/client'] !== undefined) {
+    failures.push('Control Plane must use @agentg/rpc/trpc-proxy instead of owning @trpc/client');
+  }
+
+  const forbiddenControlPlaneFiles = [
+    'packages/control-plane/src/control-plane/controlPlaneApi.ts',
+    'packages/control-plane/src/domain/chatNavigation.ts',
+    'packages/control-plane/src/server/control-plane-read-model.ts',
+    'packages/control-plane/src/stores/chat.ts',
+    'packages/control-plane/src/stores/overview.ts',
+    'packages/control-plane/src/stores/selectedHistory.ts',
+    'packages/control-plane/src/stores/selectedHistoryEvents.ts',
+    'packages/control-plane/src/view-models/chatSidebarView.ts',
+    'packages/control-plane/src/view-models/dashboardView.ts',
+    'packages/control-plane/src/view-models/selectedWorkspaceView.ts'
+  ];
+  const relFiles = new Set(files.map(toRel));
+  for (const file of forbiddenControlPlaneFiles) {
+    if (relFiles.has(file)) {
+      failures.push(`Control Plane must not own domain view state: ${file}`);
+    }
+  }
+
+  const layoutSource = readFileSync(
+    join(root, 'packages/control-plane/src/composition/slots/layout.ts'),
+    'utf8'
+  );
+  for (const token of ['telegram.', 'history.', 'summaries.']) {
+    if (layoutSource.includes(token)) {
+      failures.push(`Control Plane default layout must be derived from providers: ${token}`);
+    }
+  }
+
+  const forbiddenTokens = [
+    'Telegram',
+    'telegram',
+    'History',
+    'history',
+    '@agentg/telegram',
+    '@agentg/history'
+  ];
+  for (const file of listFiles(join(root, 'packages/control-plane'))) {
+    const rel = toRel(file);
+    if (ignored(file) || !/\.(css|json|ts|vue)$/.test(rel)) {
+      continue;
+    }
+    const source = readFileSync(file, 'utf8');
+    for (const token of forbiddenTokens) {
+      if (source.includes(token)) {
+        failures.push(`Control Plane package must not contain domain token: ${rel} -> ${token}`);
+      }
+    }
+  }
+
+  for (const file of listFiles(join(root, 'packages/control-plane/src/server'))) {
+    const rel = toRel(file);
+    if (ignored(file) || !file.endsWith('.ts')) {
+      continue;
+    }
+    const source = readFileSync(file, 'utf8');
+    for (const token of [
+      '@trpc/client',
+      'createTRPCClient',
+      'createTRPCUntypedClient',
+      'httpBatchLink'
+    ]) {
+      if (source.includes(token)) {
+        failures.push(`Control Plane server must not own tRPC proxy code: ${rel} -> ${token}`);
+      }
+    }
+  }
+}
+
+function auditControlPlaneSdkHasNoDomainKnowledge(files) {
+  const forbiddenTokens = [
+    'telegram.',
+    'history.',
+    'summaries.',
+    'controlPlane.',
+    '@agentg/telegram',
+    '@agentg/history',
+    '@agentg/summaries',
+    '@agentg/control-plane'
+  ];
+
+  for (const file of files) {
+    const rel = toRel(file);
+    if (!rel.startsWith('packages/control-plane-sdk/src/')) {
+      continue;
+    }
+    const source = readFileSync(file, 'utf8');
+    for (const token of forbiddenTokens) {
+      if (source.includes(token)) {
+        failures.push(`Control Plane SDK must stay mechanical: ${rel} -> ${token}`);
+      }
+    }
+  }
+}
+
+function auditScopedVueComponentStyles(vueFiles, sourceFiles) {
+  const auditedPrefixes = [
+    'packages/control-plane/src/',
+    'packages/control-plane-sdk/src/',
+    'packages/history/src/control-plane/',
+    'packages/telegram/src/control-plane/'
+  ];
+
+  for (const file of sourceFiles) {
+    const rel = toRel(file);
+    if (!auditedPrefixes.some((prefix) => rel.startsWith(prefix))) {
+      continue;
+    }
+    if (!/\.(css|ts|vue)$/.test(rel)) {
+      continue;
+    }
+    if (rel === 'packages/control-plane/src/main.ts') {
+      continue;
+    }
+
+    const source = readFileSync(file, 'utf8');
+    if (/import\s+['"][^'"]+\.css['"]/.test(source)) {
+      failures.push(`control-plane composition must not import global CSS: ${rel}`);
+    }
+  }
+
+  for (const file of vueFiles) {
+    const rel = toRel(file);
+    if (!auditedPrefixes.some((prefix) => rel.startsWith(prefix))) {
+      continue;
+    }
+
+    const source = readFileSync(file, 'utf8');
+    for (const match of source.matchAll(/<style\b([^>]*)>([\s\S]*?)<\/style>/g)) {
+      const attrs = match[1];
+      if (!/\bscoped\b/.test(attrs)) {
+        failures.push(`Vue component styles must be scoped: ${rel}`);
+      }
+      if (match[2].includes('@apply') && !match[2].includes('@reference "tailwindcss";')) {
+        failures.push(`Vue component @apply blocks must reference Tailwind: ${rel}`);
+      }
+      auditStyleBlockContainsOnlyApply(rel, source, match);
+    }
+
+    if (/\B(?::class|v-bind:class)\s*=/.test(source)) {
+      failures.push(`Vue component templates must not use dynamic class bindings: ${rel}`);
+    }
+
+    for (const match of source.matchAll(/\bclass\s*=\s*(["'])(.*?)\1/g)) {
+      const className = match[2].trim();
+      if (className.length === 0) {
+        failures.push(`Vue component class must be a single semantic name: ${rel}`);
+        continue;
+      }
+      if (/\s/.test(className)) {
+        failures.push(`Vue component class must contain one semantic name: ${rel} -> ${className}`);
+      }
+    }
+  }
+}
+
+function auditStyleBlockContainsOnlyApply(rel, source, match) {
+  const startLine = source.slice(0, match.index).split('\n').length;
+  const lines = match[2].split('\n');
+  lines.forEach((line, index) => {
+    const trimmed = line.trim();
+    if (
+      trimmed.length === 0 ||
+      trimmed.startsWith('@apply ') ||
+      trimmed.startsWith('@reference ') ||
+      trimmed.startsWith('.') ||
+      trimmed.startsWith('}') ||
+      trimmed.endsWith('{') ||
+      trimmed.startsWith('/*') ||
+      trimmed.startsWith('*')
+    ) {
+      return;
+    }
+    failures.push(
+      `Vue component style blocks may contain selectors and @apply only: ${rel}:${String(startLine + index + 1)}`
+    );
+  });
 }
 
 function listFiles(directory) {

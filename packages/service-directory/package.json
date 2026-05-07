@@ -15,7 +15,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@agentg/shared": "file:../shared",
+    "@agentg/events": "file:../events",
+    "@agentg/infra": "file:../infra",
+    "@agentg/rpc": "file:../rpc",
     "@trpc/client": "^11.17.0",
     "@trpc/server": "^11.17.0",
     "zod": "^4.4.1"

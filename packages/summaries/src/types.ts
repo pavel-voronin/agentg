@@ -1,4 +1,4 @@
-import type { JsonObject } from '@agentg/shared/json';
+import type { JsonObject } from '@agentg/events/json';
 
 export type SummaryRunStatus = 'completed' | 'failed' | 'pending' | 'running';
 

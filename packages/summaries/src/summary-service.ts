@@ -1,5 +1,5 @@
-import type { EventBus } from '@agentg/shared/events/bus';
-import type { IntegrationEvent } from '@agentg/shared/events/envelope';
+import type { EventBus } from '@agentg/events/bus';
+import type { IntegrationEvent } from '@agentg/events/envelope';
 
 import {
   createSummaryCompletedEvent,

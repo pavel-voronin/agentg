@@ -1,4 +1,4 @@
-import { loadNearestDotenv } from '@agentg/shared/dotenv';
+import { loadNearestDotenv } from '@agentg/infra/dotenv';
 
 loadNearestDotenv();
 

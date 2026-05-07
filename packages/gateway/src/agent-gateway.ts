@@ -1,8 +1,8 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 
 import { createServiceDirectoryClient } from '@agentg/service-directory/rpc';
-import type { EventBus, EventSubscription } from '@agentg/shared/events/bus';
-import type { IntegrationEvent } from '@agentg/shared/events/envelope';
+import type { EventBus, EventSubscription } from '@agentg/events/bus';
+import type { IntegrationEvent } from '@agentg/events/envelope';
 import { WebSocket, WebSocketServer, type RawData } from 'ws';
 
 import {
@@ -61,86 +61,126 @@ type RpcResponse = {
 export async function startAgentGatewayServer(
   options: AgentGatewayOptions
 ): Promise<AgentGatewayServerHandle> {
-  const serviceDirectory =
-    options.telegramClient === undefined
-      ? createServiceDirectoryClient({
-          eventBus: options.eventBus,
-          onTopologyFailure: (error) => {
-            requestProcessShutdown('agent_gateway.topology_failure', error);
-          },
-          url: requireServiceDirectoryConfig(options).url
-        })
-      : undefined;
-  await serviceDirectory?.refresh();
-  const telegramClient =
-    options.telegramClient ??
-    createServiceDirectoryGatewayTelegramClient(requireServiceDirectory(serviceDirectory));
-  const runtime: AgentGatewayRuntime = {
-    ...options,
-    telegramClient
-  };
-  const server = createServer((request, response) => {
-    handleHttpRequest(request, response);
-  });
-  const webSocketServer = new WebSocketServer({ noServer: true });
+  let serviceDirectory: ReturnType<typeof createServiceDirectoryClient> | undefined;
+  let telegramClient: GatewayTelegramClient | undefined;
+  let server: Server | undefined;
+  let webSocketServer: WebSocketServer | undefined;
   const clients = new Set<WebSocket>();
+  let subscriptions: EventSubscription[] = [];
+  const ownsTelegramClient = options.telegramClient === undefined;
 
-  server.on('upgrade', (request, socket, head) => {
-    if (!isAuthorized(request.url, options.config.token)) {
-      socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
-      socket.destroy();
-      return;
-    }
-
-    webSocketServer.handleUpgrade(request, socket, head, (client) => {
-      webSocketServer.emit('connection', client, request);
+  try {
+    serviceDirectory =
+      options.telegramClient === undefined
+        ? createServiceDirectoryClient({
+            eventBus: options.eventBus,
+            onTopologyFailure: (error) => {
+              requestProcessShutdown('agent_gateway.topology_failure', error);
+            },
+            url: requireServiceDirectoryConfig(options).url
+          })
+        : undefined;
+    await serviceDirectory?.refresh();
+    telegramClient =
+      options.telegramClient ??
+      createServiceDirectoryGatewayTelegramClient(requireServiceDirectory(serviceDirectory));
+    const runtime: AgentGatewayRuntime = {
+      ...options,
+      telegramClient
+    };
+    server = createServer((request, response) => {
+      handleHttpRequest(request, response);
     });
-  });
+    const createdWebSocketServer = new WebSocketServer({ noServer: true });
+    webSocketServer = createdWebSocketServer;
 
-  webSocketServer.on('connection', (client) => {
-    clients.add(client);
+    server.on('upgrade', (request, socket, head) => {
+      if (!isAuthorized(request.url, options.config.token)) {
+        socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+        socket.destroy();
+        return;
+      }
 
-    client.on('message', (payload) => {
-      void handleClientMessage(runtime, client, rawDataToString(payload));
-    });
-    client.on('close', () => {
-      clients.delete(client);
-    });
-  });
-
-  const subscriptions = [
-    options.eventBus.subscribe(EXTERNAL_EVENT_SUBJECT, (event) => {
-      broadcast(clients, {
-        event
+      createdWebSocketServer.handleUpgrade(request, socket, head, (client) => {
+        createdWebSocketServer.emit('connection', client, request);
       });
-    })
-  ];
+    });
 
-  const port = await listen(server, options.config.host, options.config.port);
-  await serviceDirectory?.join(createGatewayServiceManifest({ serviceUrl: options.config.serviceUrl }));
-  console.log(
-    JSON.stringify({
-      event: 'agent_gateway.ready',
+    createdWebSocketServer.on('connection', (client) => {
+      clients.add(client);
+
+      client.on('message', (payload) => {
+        void handleClientMessage(runtime, client, rawDataToString(payload));
+      });
+      client.on('close', () => {
+        clients.delete(client);
+      });
+    });
+
+    subscriptions = [
+      options.eventBus.subscribe(EXTERNAL_EVENT_SUBJECT, (event) => {
+        broadcast(clients, {
+          event
+        });
+      })
+    ];
+
+    const port = await listen(server, options.config.host, options.config.port);
+    await serviceDirectory?.join(
+      createGatewayServiceManifest({ serviceUrl: options.config.serviceUrl })
+    );
+    const activeTelegramClient = requireStartedResource(
+      telegramClient,
+      'Agent Gateway telegram client'
+    );
+    const activeServer = requireStartedResource(server, 'Agent Gateway HTTP server');
+    const activeWebSocketServer = requireStartedResource(
+      webSocketServer,
+      'Agent Gateway WebSocket server'
+    );
+    console.log(
+      JSON.stringify({
+        event: 'agent_gateway.ready',
+        host: options.config.host,
+        port
+      })
+    );
+
+    return {
+      async close(): Promise<void> {
+        await closeAgentGateway(
+          activeServer,
+          activeWebSocketServer,
+          clients,
+          subscriptions,
+          options.eventBus,
+          activeTelegramClient,
+          serviceDirectory
+        );
+      },
       host: options.config.host,
       port
-    })
-  );
+    };
+  } catch (error) {
+    await cleanupAgentGatewayStartupFailure({
+      clients,
+      ownsTelegramClient,
+      server,
+      serviceDirectory,
+      subscriptions,
+      telegramClient,
+      webSocketServer
+    });
+    throw error;
+  }
+}
 
-  return {
-    async close(): Promise<void> {
-      await closeAgentGateway(
-        server,
-        webSocketServer,
-        clients,
-        subscriptions,
-        options.eventBus,
-        telegramClient,
-        serviceDirectory
-      );
-    },
-    host: options.config.host,
-    port
-  };
+function requireStartedResource<T>(value: T | undefined, name: string): T {
+  if (value === undefined) {
+    throw new Error(`${name} did not start`);
+  }
+
+  return value;
 }
 
 function requestProcessShutdown(event: string, error: Error): void {
@@ -155,8 +195,16 @@ function requestProcessShutdown(event: string, error: Error): void {
 }
 
 export async function runAgentGateway(options: AgentGatewayOptions): Promise<void> {
-  const handle = await startAgentGatewayServer(options);
-  await waitForShutdown(handle);
+  let handle: AgentGatewayServerHandle | undefined;
+  try {
+    handle = await startAgentGatewayServer(options);
+    await waitForShutdown(handle);
+  } catch (error) {
+    if (handle === undefined) {
+      await cleanupAgentGatewayEventBusStartupFailure(options.eventBus);
+    }
+    throw error;
+  }
 }
 
 async function handleClientMessage(
@@ -227,7 +275,7 @@ async function callMethod(
 }
 
 function rpcErrorFromUnknown(error: unknown): { code: string; message: string } {
-  const record = typeof error === 'object' && error !== null ? error as { code?: unknown } : {};
+  const record = typeof error === 'object' && error !== null ? (error as { code?: unknown }) : {};
   if (record.code === 'dependency_unavailable') {
     return {
       code: 'dependency_unavailable',
@@ -355,8 +403,15 @@ function requireServiceDirectory(
 }
 
 async function listen(server: Server, host: string, port: number): Promise<number> {
-  return new Promise<number>((resolve) => {
+  return new Promise<number>((resolve, reject) => {
+    const onError = (error: Error): void => {
+      server.off('error', onError);
+      reject(error);
+    };
+
+    server.once('error', onError);
     server.listen(port, host, () => {
+      server.off('error', onError);
       const address = server.address();
       if (typeof address === 'object' && address !== null) {
         resolve(address.port);
@@ -366,6 +421,77 @@ async function listen(server: Server, host: string, port: number): Promise<numbe
       resolve(port);
     });
   });
+}
+
+async function cleanupAgentGatewayStartupFailure(resources: {
+  clients: Set<WebSocket>;
+  ownsTelegramClient: boolean;
+  server: Server | undefined;
+  serviceDirectory: ReturnType<typeof createServiceDirectoryClient> | undefined;
+  subscriptions: EventSubscription[];
+  telegramClient: GatewayTelegramClient | undefined;
+  webSocketServer: WebSocketServer | undefined;
+}): Promise<void> {
+  for (const subscription of resources.subscriptions) {
+    try {
+      subscription.unsubscribe();
+    } catch (error) {
+      logStartupCleanupFailure('agent_gateway.subscription_unsubscribe', error);
+    }
+  }
+
+  for (const client of resources.clients) {
+    client.close();
+  }
+  resources.clients.clear();
+
+  if (resources.ownsTelegramClient) {
+    try {
+      resources.telegramClient?.close();
+    } catch (error) {
+      logStartupCleanupFailure('agent_gateway.telegram_client_close', error);
+    }
+  }
+
+  try {
+    resources.serviceDirectory?.close();
+  } catch (error) {
+    logStartupCleanupFailure('agent_gateway.service_directory_close', error);
+  }
+
+  const webSocketServer = resources.webSocketServer;
+  if (webSocketServer !== undefined) {
+    await runStartupCleanupStep('agent_gateway.websocket_server_close', () =>
+      closeWebSocketServer(webSocketServer)
+    );
+  }
+
+  const server = resources.server;
+  if (server !== undefined) {
+    await runStartupCleanupStep('agent_gateway.http_server_close', () => closeHttpServer(server));
+  }
+}
+
+async function cleanupAgentGatewayEventBusStartupFailure(eventBus: EventBus): Promise<void> {
+  await runStartupCleanupStep('agent_gateway.event_bus_close', () => eventBus.close());
+}
+
+async function runStartupCleanupStep(name: string, step: () => Promise<void>): Promise<void> {
+  try {
+    await step();
+  } catch (error) {
+    logStartupCleanupFailure(name, error);
+  }
+}
+
+function logStartupCleanupFailure(step: string, error: unknown): void {
+  console.warn(
+    JSON.stringify({
+      error: error instanceof Error ? error.message : String(error),
+      event: 'agent_gateway.startup_cleanup_failed',
+      step
+    })
+  );
 }
 
 async function closeAgentGateway(

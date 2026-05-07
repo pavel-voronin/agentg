@@ -1,6 +1,6 @@
 import { bigserial, bigint, index, jsonb, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 
-import type { JsonObject } from '@agentg/shared/json';
+import type { JsonObject } from '@agentg/events/json';
 
 export const summariesRuns = pgTable(
   'summaries_runs',

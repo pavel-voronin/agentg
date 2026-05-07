@@ -20,30 +20,28 @@ import type { SummariesRpcContext } from './trpc.js';
 
 export function createSummariesRouter(runtime: SummariesRuntime) {
   return summariesRpcRouter({
-    summaries: summariesRpcRouter({
-      chatSummary: rpc
-        .input(summariesChatSummaryInputSchema)
-        .output(summariesChatSummaryOutputSchema)
-        .query(({ input }) => getChatSummaryExtension(runtime, input.id)),
-      readChatSummary: rpc
-        .input(summariesReadChatSummaryInputSchema)
-        .output(summariesReadChatSummaryOutputSchema)
-        .query(({ input }) => readChatSummary(runtime, input.chatId)),
-      readSummaryRun: rpc
-        .input(summariesReadSummaryRunInputSchema)
-        .output(summariesReadSummaryRunOutputSchema)
-        .query(({ input }) => readSummaryRun(runtime, input.runId)),
-      requestSummary: rpc
-        .input(summariesRequestSummaryInputSchema)
-        .output(summariesRequestSummaryOutputSchema)
-        .mutation(({ ctx, input }) => {
-          ctx.progress?.({
-            message: 'Creating chat summary',
-            stage: 'summaries.requested'
-          });
-          return requestChatSummary(runtimeForCall(runtime, ctx), input);
-        })
-    })
+    chatSummary: rpc
+      .input(summariesChatSummaryInputSchema)
+      .output(summariesChatSummaryOutputSchema)
+      .query(({ input }) => getChatSummaryExtension(runtime, input.id)),
+    readChatSummary: rpc
+      .input(summariesReadChatSummaryInputSchema)
+      .output(summariesReadChatSummaryOutputSchema)
+      .query(({ input }) => readChatSummary(runtime, input.chatId)),
+    readSummaryRun: rpc
+      .input(summariesReadSummaryRunInputSchema)
+      .output(summariesReadSummaryRunOutputSchema)
+      .query(({ input }) => readSummaryRun(runtime, input.runId)),
+    requestSummary: rpc
+      .input(summariesRequestSummaryInputSchema)
+      .output(summariesRequestSummaryOutputSchema)
+      .mutation(({ ctx, input }) => {
+        ctx.progress?.({
+          message: 'Creating chat summary',
+          stage: 'summaries.requested'
+        });
+        return requestChatSummary(runtimeForCall(runtime, ctx), input);
+      })
   });
 }
 

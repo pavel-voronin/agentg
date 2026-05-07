@@ -1,8 +1,8 @@
 import type { Server } from 'node:http';
 import { randomUUID } from 'node:crypto';
 
-import type { EventBus, EventSubscription } from '@agentg/shared/events/bus';
-import type { IntegrationEvent } from '@agentg/shared/events/envelope';
+import type { EventBus, EventSubscription } from '@agentg/events/bus';
+import type { IntegrationEvent } from '@agentg/events/envelope';
 import { createHTTPServer } from '@trpc/server/adapters/standalone';
 import { WebSocket, type RawData } from 'ws';
 import { z } from 'zod';

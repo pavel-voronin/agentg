@@ -88,7 +88,7 @@ services:
     profiles:
       - service-directory
       - container-client
-      - history-sync
+      - history
       - summaries
       - gateway
       - control-plane
@@ -138,7 +138,7 @@ services:
     depends_on:
       service-directory:
         condition: service_started
-      history-sync:
+      history:
         condition: service_started
       nats:
         condition: service_started
@@ -152,13 +152,13 @@ services:
       - '${CONTROL_PLANE_PORT:-8788}:${CONTROL_PLANE_PORT:-8788}'
     restart: 'no'
 
-  history-sync:
+  history:
     profiles:
-      - history-sync
+      - history
     build:
       context: .
       target: runtime
-    command: ['npm', '--workspace', '@agentg/history-sync', 'run', 'start']
+    command: ['npm', '--workspace', '@agentg/history', 'run', 'start']
     depends_on:
       service-directory:
         condition: service_started
@@ -174,7 +174,7 @@ services:
       DATABASE_URL: postgres://agentg:agentg@postgres:5432/agentg
       HISTORY_RPC_HOST: 0.0.0.0
       HISTORY_RPC_PORT: 8080
-      HISTORY_RPC_URL: http://history-sync:8080
+      HISTORY_RPC_URL: http://history:8080
       NATS_URL: nats://nats:4222
       SERVICE_DIRECTORY_RPC_URL: http://service-directory:8080
     restart: 'no'

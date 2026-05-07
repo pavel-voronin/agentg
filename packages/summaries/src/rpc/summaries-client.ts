@@ -3,7 +3,7 @@ import {
   createInternalRpcCallOptionsHeaders,
   internalRpcProcedureOptions,
   type InternalRpcCallOptions
-} from '@agentg/shared/rpc/call-options';
+} from '@agentg/rpc/call-options';
 
 import {
   summariesChatSummaryInputSchema,
@@ -49,7 +49,7 @@ export function createSummariesRpcClient(
     chatSummary(input, callOptions) {
       return callSummariesProcedure(
         (signal) =>
-          client.summaries.chatSummary.query(
+          client.chatSummary.query(
             summariesChatSummaryInputSchema.parse(input),
             internalRpcProcedureOptions(callOptions, signal)
           ),
@@ -62,7 +62,7 @@ export function createSummariesRpcClient(
     readChatSummary(input, callOptions) {
       return callSummariesProcedure(
         (signal) =>
-          client.summaries.readChatSummary.query(
+          client.readChatSummary.query(
             summariesReadChatSummaryInputSchema.parse(input),
             internalRpcProcedureOptions(callOptions, signal)
           ),
@@ -72,7 +72,7 @@ export function createSummariesRpcClient(
     readSummaryRun(input, callOptions) {
       return callSummariesProcedure(
         (signal) =>
-          client.summaries.readSummaryRun.query(
+          client.readSummaryRun.query(
             summariesReadSummaryRunInputSchema.parse(input),
             internalRpcProcedureOptions(callOptions, signal)
           ),
@@ -82,7 +82,7 @@ export function createSummariesRpcClient(
     requestSummary(input, callOptions) {
       return callSummariesProcedure(
         (signal) =>
-          client.summaries.requestSummary.mutate(
+          client.requestSummary.mutate(
             summariesRequestSummaryInputSchema.parse(input),
             internalRpcProcedureOptions(callOptions, signal)
           ),

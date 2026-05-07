@@ -1,4 +1,4 @@
-import { loadNearestDotenv } from '@agentg/shared/dotenv';
+import { loadNearestDotenv } from '@agentg/infra/dotenv';
 
 import { DEFAULT_SERVICE_DIRECTORY_LEASE_TTL_MS } from './rpc/contracts.js';
 

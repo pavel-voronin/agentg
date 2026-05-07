@@ -1,7 +1,7 @@
 import type { Server } from 'node:http';
 
 import { createServiceDirectoryClient } from '@agentg/service-directory/rpc';
-import type { EventBus, EventSubscription } from '@agentg/shared/events/bus';
+import type { EventBus, EventSubscription } from '@agentg/events/bus';
 
 import type { SummariesServiceConfig } from './config.js';
 import type { SummariesDatabase } from './database.js';
@@ -25,30 +25,38 @@ export async function runSummariesService(options: SummariesServiceOptions): Pro
     repository: createDrizzleSummaryRepository(options.database)
   };
   let summariesRpcServer: Server | undefined;
-  let closeServiceDirectory: (() => void) | undefined;
-  const subscriptions = subscribeSummariesService(runtime, options.eventBus);
+  let serviceDirectory: ReturnType<typeof createServiceDirectoryClient> | undefined;
+  let subscriptions: EventSubscription[] = [];
 
-  summariesRpcServer = await startSummariesTrpcServer({
-    bind: options.config.internalRpc,
-    eventBus: options.eventBus,
-    runtime
-  });
-  const serviceDirectory = createServiceDirectoryClient({
-    eventBus: options.eventBus,
-    onTopologyFailure: (error) => {
-      requestProcessShutdown('summaries.topology_failure', error);
-    },
-    url: options.config.services.serviceDirectory.url
-  });
-  await serviceDirectory.join(createSummariesServiceManifest(options.config.module));
-  closeServiceDirectory = () => {
-    serviceDirectory.close();
-  };
+  try {
+    subscriptions = subscribeSummariesService(runtime, options.eventBus);
+    summariesRpcServer = await startSummariesTrpcServer({
+      bind: options.config.internalRpc,
+      eventBus: options.eventBus,
+      runtime
+    });
+    serviceDirectory = createServiceDirectoryClient({
+      eventBus: options.eventBus,
+      onTopologyFailure: (error) => {
+        requestProcessShutdown('summaries.topology_failure', error);
+      },
+      url: options.config.services.serviceDirectory.url
+    });
+    await serviceDirectory.join(createSummariesServiceManifest(options.config.module));
+  } catch (error) {
+    await cleanupSummariesStartupFailure({
+      eventBus: options.eventBus,
+      serviceDirectory,
+      subscriptions,
+      summariesRpcServer
+    });
+    throw error;
+  }
 
   console.log(JSON.stringify({ event: 'summaries.ready' }));
   await waitForShutdown(async () => {
-    closeServiceDirectory?.();
-    closeServiceDirectory = undefined;
+    serviceDirectory?.close();
+    serviceDirectory = undefined;
     for (const subscription of subscriptions) {
       subscription.unsubscribe();
     }
@@ -68,6 +76,40 @@ export async function runSummariesService(options: SummariesServiceOptions): Pro
 
     return summariesRpcStopped && eventBusClosed;
   });
+}
+
+async function cleanupSummariesStartupFailure(resources: {
+  eventBus: EventBus;
+  serviceDirectory: ReturnType<typeof createServiceDirectoryClient> | undefined;
+  subscriptions: EventSubscription[];
+  summariesRpcServer: Server | undefined;
+}): Promise<void> {
+  await runShutdownStep('summaries.service_directory_startup_close', () =>
+    Promise.resolve(resources.serviceDirectory?.close())
+  );
+
+  for (const subscription of resources.subscriptions) {
+    try {
+      subscription.unsubscribe();
+    } catch (error) {
+      console.warn(
+        JSON.stringify({
+          error: error instanceof Error ? error.message : String(error),
+          event: 'summaries.startup_cleanup_failed',
+          step: 'summaries.subscription_unsubscribe'
+        })
+      );
+    }
+  }
+
+  const summariesRpcServer = resources.summariesRpcServer;
+  if (summariesRpcServer !== undefined) {
+    await runShutdownStep('summaries.rpc_startup_close', () =>
+      stopSummariesTrpcServer(summariesRpcServer)
+    );
+  }
+
+  await runShutdownStep('summaries.event_bus_startup_close', () => resources.eventBus.close());
 }
 
 function requestProcessShutdown(event: string, error: Error): void {

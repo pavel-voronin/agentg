@@ -1,14 +1,11 @@
 import type { Server } from 'node:http';
 
-import type { EventBus } from '@agentg/shared/events/bus';
+import type { EventBus } from '@agentg/events/bus';
 import { createHTTPServer } from '@trpc/server/adapters/standalone';
 
 import type { ServiceDirectoryBindConfig } from '../config.js';
 import { createServiceDirectory, type ServiceDirectory } from '../registry.js';
-import {
-  createServiceDirectoryRouter,
-  publishServiceDirectoryChanged
-} from './router.js';
+import { createServiceDirectoryRouter, publishServiceDirectoryChanged } from './router.js';
 
 export async function startServiceDirectoryTrpcServer(options: {
   bind: ServiceDirectoryBindConfig;
@@ -18,8 +15,7 @@ export async function startServiceDirectoryTrpcServer(options: {
 }): Promise<Server> {
   const ttlMs = options.ttlMs;
   const directory =
-    options.directory ??
-    createServiceDirectory(ttlMs === undefined ? {} : { ttlMs });
+    options.directory ?? createServiceDirectory(ttlMs === undefined ? {} : { ttlMs });
   const server = createHTTPServer({
     createContext: () => ({}),
     router: createServiceDirectoryRouter(directory, options.eventBus)

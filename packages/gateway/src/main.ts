@@ -1,4 +1,4 @@
-import { createNatsEventBus } from '@agentg/shared/events/bus';
+import { createNatsEventBus } from '@agentg/events/bus';
 
 import { runAgentGateway } from './agent-gateway.js';
 import { loadGatewayConfig } from './config.js';

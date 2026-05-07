@@ -7,6 +7,13 @@ export const SERVICE_DIRECTORY_CHANGED_EVENT = 'service_directory.changed';
 const nonEmptyStringSchema = z.string().trim().min(1);
 const nonEmptyStringArraySchema = z.array(nonEmptyStringSchema).default([]);
 
+export const serviceDirectoryProcedureKindSchema = z.enum(['mutation', 'query']);
+
+export const serviceDirectoryProcedureInputSchema = z.object({
+  kind: serviceDirectoryProcedureKindSchema,
+  name: nonEmptyStringSchema
+});
+
 export const serviceDirectoryExtensionInputSchema = z.object({
   extension: nonEmptyStringSchema,
   target: nonEmptyStringSchema
@@ -15,7 +22,7 @@ export const serviceDirectoryExtensionInputSchema = z.object({
 export const serviceDirectoryManifestInputSchema = z.object({
   events: nonEmptyStringArraySchema,
   extensions: z.array(serviceDirectoryExtensionInputSchema).default([]),
-  procedures: nonEmptyStringArraySchema,
+  procedures: z.array(serviceDirectoryProcedureInputSchema).default([]),
   required: z.boolean(),
   rpcUrl: nonEmptyStringSchema,
   slug: nonEmptyStringSchema
@@ -36,7 +43,7 @@ export const serviceDirectoryServiceRecordSchema = z.object({
   events: z.array(nonEmptyStringSchema),
   expiresAt: z.iso.datetime(),
   extensions: z.array(serviceDirectoryExtensionInputSchema),
-  procedures: z.array(nonEmptyStringSchema),
+  procedures: z.array(serviceDirectoryProcedureInputSchema),
   registeredAt: z.iso.datetime(),
   required: z.boolean(),
   rpcUrl: nonEmptyStringSchema,
@@ -67,9 +74,10 @@ export const serviceDirectoryRenewOutputSchema = serviceDirectoryJoinOutputSchem
 
 export type ServiceDirectoryExtensionInput = z.input<typeof serviceDirectoryExtensionInputSchema>;
 export type ServiceDirectoryManifestInput = z.input<typeof serviceDirectoryManifestInputSchema>;
-export type ServiceDirectoryLeaseRenewInput = z.input<
-  typeof serviceDirectoryLeaseRenewInputSchema
->;
+export type ServiceDirectoryProcedureKind = z.output<typeof serviceDirectoryProcedureKindSchema>;
+export type ServiceDirectoryProcedureInput = z.input<typeof serviceDirectoryProcedureInputSchema>;
+export type ServiceDirectoryProcedureRecord = z.output<typeof serviceDirectoryProcedureInputSchema>;
+export type ServiceDirectoryLeaseRenewInput = z.input<typeof serviceDirectoryLeaseRenewInputSchema>;
 export type ServiceDirectoryLease = z.output<typeof serviceDirectoryLeaseSchema>;
 export type ServiceDirectoryServiceRecord = z.output<typeof serviceDirectoryServiceRecordSchema>;
 export type ServiceDirectoryExtensionRecord = z.output<

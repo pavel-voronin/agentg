@@ -24,8 +24,8 @@ try {
   startDevProcess('telegram', 'npm', ['run', 'dev:telegram']);
   await waitForTcp('telegram RPC', '127.0.0.1', 18081);
 
-  startDevProcess('history-sync', 'npm', ['run', 'dev:history-sync']);
-  await waitForTcp('history-sync RPC', '127.0.0.1', 18082);
+  startDevProcess('history', 'npm', ['run', 'dev:history']);
+  await waitForTcp('history RPC', '127.0.0.1', 18082);
 
   startDevProcess('summaries', 'npm', ['run', 'dev:summaries']);
   await waitForTcp('summaries RPC', '127.0.0.1', 18083);

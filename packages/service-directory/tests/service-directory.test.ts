@@ -1,8 +1,8 @@
 import type { Server } from 'node:http';
 
-import type { EventBus, EventSubscription } from '@agentg/shared/events/bus';
-import type { IntegrationEvent } from '@agentg/shared/events/envelope';
-import { collectModelRefs } from '@agentg/shared/rpc/model-refs';
+import type { EventBus, EventSubscription } from '@agentg/events/bus';
+import type { IntegrationEvent } from '@agentg/events/envelope';
+import { collectModelRefs } from '@agentg/rpc/model-refs';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { createServiceDirectory } from '../src/registry.js';
@@ -30,7 +30,7 @@ describe('service directory', () => {
             target: 'telegram.chat'
           }
         ],
-        procedures: ['summaries.chatSummary'],
+        procedures: [{ kind: 'query', name: 'summaries.chatSummary' }],
         required: false,
         rpcUrl: 'http://summaries:8080',
         slug: 'summaries'
@@ -51,7 +51,7 @@ describe('service directory', () => {
       services: [
         {
           events: ['summaries.summary.completed'],
-          procedures: ['summaries.chatSummary'],
+          procedures: [{ kind: 'query', name: 'summaries.chatSummary' }],
           rpcUrl: 'http://summaries:8080',
           slug: 'summaries'
         }
@@ -69,9 +69,7 @@ describe('service directory', () => {
 
     expect(renewed.changed).toBe(false);
     expect(renewed.output.snapshot.version).toBe(1);
-    expect(
-      directory.getSnapshot(new Date('2026-05-04T00:00:01.501Z')).output.services
-    ).toEqual([]);
+    expect(directory.getSnapshot(new Date('2026-05-04T00:00:01.501Z')).output.services).toEqual([]);
     expect(directory.getSnapshot(new Date('2026-05-04T00:00:01.501Z')).output.version).toBe(2);
   });
 
@@ -101,7 +99,7 @@ describe('service directory', () => {
               target: 'telegram.chat'
             }
           ],
-          procedures: ['summaries.chatSummary'],
+          procedures: [{ kind: 'query', name: 'summaries.chatSummary' }],
           required: false,
           rpcUrl: 'http://summaries:8080',
           slug: 'summaries'
@@ -116,8 +114,10 @@ describe('service directory', () => {
       });
 
       expect(eventBus.publishedTypes()).toEqual(['service_directory.changed']);
-      expect(client.resolveService('summaries')).toBe('http://summaries:8080');
-      expect(client.resolveProcedure('summaries.chatSummary')).toBe('http://summaries:8080');
+      expect(client.resolveProcedure('summaries.chatSummary')).toEqual({
+        kind: 'query',
+        rpcUrl: 'http://summaries:8080'
+      });
       expect(client.extensionsForTarget('telegram.chat')).toEqual([
         expect.objectContaining({
           extension: 'summaries.chatSummary',
@@ -134,13 +134,47 @@ describe('service directory', () => {
     }
   });
 
+  it('resolves procedures only through their service prefix owner', async () => {
+    const eventBus = createFakeEventBus();
+    const server = await startServiceDirectoryTrpcServer({
+      bind: {
+        host: '127.0.0.1',
+        port: 0
+      },
+      directory: createServiceDirectory({ ttlMs: 60_000 }),
+      eventBus
+    });
+    servers.push(server);
+    const client = createServiceDirectoryClient({
+      eventBus,
+      url: serverUrl(server)
+    });
+
+    try {
+      await client.join({
+        events: [],
+        extensions: [],
+        procedures: [{ kind: 'query', name: 'telegram.getChat' }],
+        required: false,
+        rpcUrl: 'http://summaries:8080',
+        slug: 'summaries'
+      });
+
+      expect(() => client.resolveProcedure('telegram.getChat')).toThrow(
+        'Dependency is unavailable: telegram.getChat'
+      );
+    } finally {
+      client.close();
+    }
+  });
+
   it('sweeps expired leases and publishes invalidations without client requests', async () => {
     const eventBus = createFakeEventBus();
     const directory = createServiceDirectory({ ttlMs: 20 });
     directory.join({
       events: ['telegram.status'],
       extensions: [],
-      procedures: ['telegram.getChat'],
+      procedures: [{ kind: 'query', name: 'telegram.getChat' }],
       required: true,
       rpcUrl: 'http://telegram:8080',
       slug: 'telegram'
@@ -171,7 +205,7 @@ describe('service directory', () => {
     directory.join({
       events: ['telegram.status'],
       extensions: [],
-      procedures: ['telegram.getChat'],
+      procedures: [{ kind: 'query', name: 'telegram.getChat' }],
       required: true,
       rpcUrl: 'http://telegram:8080',
       slug: 'telegram'

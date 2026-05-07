@@ -7,6 +7,7 @@ import {
   type ServiceDirectoryJoinOutput,
   type ServiceDirectoryLeaseRenewInput,
   type ServiceDirectoryManifestInput,
+  type ServiceDirectoryProcedureRecord,
   type ServiceDirectoryRenewOutput,
   type ServiceDirectoryServiceRecord,
   type ServiceDirectorySnapshot
@@ -57,7 +58,7 @@ export function createServiceDirectory(options: { ttlMs?: number } = {}): Servic
       const parsed = serviceDirectoryManifestInputSchema.parse(input);
       const existing = services.get(parsed.slug);
       const manifestKey = stableManifestKey(parsed);
-      const manifestChanged = existing === undefined || existing.manifestKey !== manifestKey;
+      const manifestChanged = existing?.manifestKey !== manifestKey;
       const leaseToken = `lease_${randomUUID()}`;
       const expiresAt = new Date(now.getTime() + ttlMs);
 
@@ -67,7 +68,7 @@ export function createServiceDirectory(options: { ttlMs?: number } = {}): Servic
         extensions: uniqueExtensions(parsed.extensions),
         leaseToken,
         manifestKey,
-        procedures: uniqueSorted(parsed.procedures),
+        procedures: uniqueProcedures(parsed.procedures),
         registeredAt: existing?.registeredAt ?? now.toISOString(),
         required: parsed.required,
         rpcUrl: parsed.rpcUrl,
@@ -96,7 +97,7 @@ export function createServiceDirectory(options: { ttlMs?: number } = {}): Servic
       });
       const parsed = serviceDirectoryLeaseRenewInputSchema.parse(input);
       const existing = services.get(parsed.slug);
-      if (existing === undefined || existing.leaseToken !== parsed.leaseToken) {
+      if (existing?.leaseToken !== parsed.leaseToken) {
         throw new Error(`Service lease is not active: ${parsed.slug}`);
       }
 
@@ -177,7 +178,7 @@ function stableManifestKey(input: ServiceDirectoryManifestInput): string {
   return JSON.stringify({
     events: uniqueSorted(input.events ?? []),
     extensions: uniqueExtensions(input.extensions ?? []),
-    procedures: uniqueSorted(input.procedures ?? []),
+    procedures: uniqueProcedures(input.procedures ?? []),
     required: input.required,
     rpcUrl: input.rpcUrl,
     slug: input.slug
@@ -204,8 +205,34 @@ function uniqueExtensions(
   ];
 }
 
-function compareServices(left: ServiceDirectoryServiceRecord, right: ServiceDirectoryServiceRecord) {
+function uniqueProcedures(
+  values: NonNullable<ServiceDirectoryManifestInput['procedures']>
+): ServiceDirectoryProcedureRecord[] {
+  return [
+    ...new Map(
+      values
+        .map((procedure) => ({
+          kind: procedure.kind,
+          name: procedure.name
+        }))
+        .sort(compareProcedures)
+        .map((procedure) => [procedure.name, procedure])
+    ).values()
+  ];
+}
+
+function compareServices(
+  left: ServiceDirectoryServiceRecord,
+  right: ServiceDirectoryServiceRecord
+) {
   return left.slug.localeCompare(right.slug);
+}
+
+function compareProcedures(
+  left: ServiceDirectoryProcedureRecord,
+  right: ServiceDirectoryProcedureRecord
+): number {
+  return left.name.localeCompare(right.name);
 }
 
 function compareExtensions(

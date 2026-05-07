@@ -1,6 +1,6 @@
 import type { Server } from 'node:http';
 
-import type { EventBus } from '@agentg/shared/events/bus';
+import type { EventBus } from '@agentg/events/bus';
 import { createHTTPServer } from '@trpc/server/adapters/standalone';
 
 import { createSummariesRouter } from './router.js';

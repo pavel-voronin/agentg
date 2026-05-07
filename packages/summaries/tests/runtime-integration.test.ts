@@ -1,6 +1,6 @@
 import type { Server } from 'node:http';
 
-import type { EventBus, EventSubscription } from '@agentg/shared/events/bus';
+import type { EventBus, EventSubscription } from '@agentg/events/bus';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { createInMemorySummaryRepository } from '../src/memory-store.js';

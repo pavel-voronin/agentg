@@ -1,5 +1,5 @@
-import type { EventBus, EventSubscription } from '@agentg/shared/events/bus';
-import type { IntegrationEvent } from '@agentg/shared/events/envelope';
+import type { EventBus, EventSubscription } from '@agentg/events/bus';
+import type { IntegrationEvent } from '@agentg/events/envelope';
 import { createTRPCClient, httpBatchLink } from '@trpc/client';
 
 import {
@@ -12,6 +12,7 @@ import {
   type ServiceDirectoryLease,
   type ServiceDirectoryLeaseRenewInput,
   type ServiceDirectoryManifestInput,
+  type ServiceDirectoryProcedureKind,
   type ServiceDirectorySnapshot
 } from './contracts.js';
 import type { ServiceDirectoryRouter } from './router.js';
@@ -29,8 +30,12 @@ export type ServiceDirectoryClient = {
   extensionsForTarget(target: string): ServiceDirectoryExtensionRecord[];
   refresh(): Promise<ServiceDirectorySnapshot>;
   renew(input?: ServiceDirectoryLeaseRenewInput): Promise<ServiceDirectorySnapshot>;
-  resolveProcedure(procedure: string): string;
-  resolveService(slug: string): string;
+  resolveProcedure(procedure: string): ServiceDirectoryProcedureCall;
+};
+
+export type ServiceDirectoryProcedureCall = {
+  kind: ServiceDirectoryProcedureKind;
+  rpcUrl: string;
 };
 
 const SERVICE_DIRECTORY_REQUEST_TIMEOUT_MS = 15000;
@@ -92,9 +97,7 @@ export function createServiceDirectoryClient(
         );
         return currentSnapshot();
       } catch (error) {
-        reportTopologyFailure(
-          error instanceof Error ? error : new Error(String(error))
-        );
+        reportTopologyFailure(error instanceof Error ? error : new Error(String(error)));
         throw error;
       }
     },
@@ -116,20 +119,11 @@ export function createServiceDirectoryClient(
       }
     },
     resolveProcedure(procedure) {
-      const service = currentSnapshot().services.find((item) => item.procedures.includes(procedure));
-      if (service === undefined) {
-        throw new ServiceDirectoryProcedureUnavailableError(procedure);
-      }
-
-      return service.rpcUrl;
-    },
-    resolveService(slug) {
-      const service = currentSnapshot().services.find((item) => item.slug === slug);
-      if (service === undefined) {
-        throw new Error(`Service Directory service is not registered: ${slug}`);
-      }
-
-      return service.rpcUrl;
+      const { procedure: procedureRecord, service } = resolveProcedureRecord(procedure);
+      return {
+        kind: procedureRecord.kind,
+        rpcUrl: service.rpcUrl
+      };
     }
   };
 
@@ -218,6 +212,27 @@ export function createServiceDirectoryClient(
 
     return snapshot;
   }
+
+  function resolveProcedureRecord(procedure: string): {
+    procedure: ServiceDirectorySnapshot['services'][number]['procedures'][number];
+    service: ServiceDirectorySnapshot['services'][number];
+  } {
+    const serviceSlug = serviceSlugFromProcedure(procedure);
+    const service = currentSnapshot().services.find((item) => item.slug === serviceSlug);
+    if (service === undefined) {
+      throw new ServiceDirectoryProcedureUnavailableError(procedure);
+    }
+
+    const procedureRecord = service.procedures.find((item) => item.name === procedure);
+    if (procedureRecord !== undefined) {
+      return {
+        procedure: procedureRecord,
+        service
+      };
+    }
+
+    throw new ServiceDirectoryProcedureUnavailableError(procedure);
+  }
 }
 
 class ServiceDirectoryProcedureUnavailableError extends Error {
@@ -232,8 +247,19 @@ class ServiceDirectoryTopologyError extends Error {
   readonly code = 'service_directory_topology_failure';
 
   constructor(readonly lostRequiredServices: string[]) {
-    super(`Required services disappeared from Service Directory: ${lostRequiredServices.join(', ')}`);
+    super(
+      `Required services disappeared from Service Directory: ${lostRequiredServices.join(', ')}`
+    );
   }
+}
+
+function serviceSlugFromProcedure(procedure: string): string {
+  const separatorIndex = procedure.indexOf('.');
+  if (separatorIndex <= 0 || separatorIndex === procedure.length - 1) {
+    throw new ServiceDirectoryProcedureUnavailableError(procedure);
+  }
+
+  return procedure.slice(0, separatorIndex);
 }
 
 function leaseRenewInputFromCurrentLease(

@@ -1,5 +1,5 @@
-import type { EventBus } from '@agentg/shared/events/bus';
-import { createIntegrationEvent } from '@agentg/shared/events/envelope';
+import type { EventBus } from '@agentg/events/bus';
+import { createIntegrationEvent } from '@agentg/events/envelope';
 
 import { type ServiceDirectory } from '../registry.js';
 import {

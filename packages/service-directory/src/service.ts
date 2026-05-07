@@ -1,6 +1,6 @@
 import type { Server } from 'node:http';
 
-import type { EventBus } from '@agentg/shared/events/bus';
+import type { EventBus } from '@agentg/events/bus';
 
 import type { ServiceDirectoryServiceConfig } from './config.js';
 import { startServiceDirectoryTrpcServer, stopServiceDirectoryTrpcServer } from './rpc/server.js';

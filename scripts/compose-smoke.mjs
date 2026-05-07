@@ -4,7 +4,7 @@
 import { spawnSync } from 'node:child_process';
 
 const includeTelegram = process.env.COMPOSE_SMOKE_TELEGRAM === '1';
-const profiles = ['history-sync', 'gateway', 'summaries', 'control-plane'];
+const profiles = ['history', 'gateway', 'summaries', 'control-plane'];
 if (includeTelegram) {
   profiles.push('container-client');
 }
@@ -14,7 +14,7 @@ const services = [
   'postgres',
   'nats',
   'service-directory',
-  'history-sync',
+  'history',
   'gateway',
   'summaries',
   'control-plane',
@@ -138,13 +138,13 @@ const serviceDirectory = await waitForExtensionRegistration(
   extensionTarget,
   extensionMethod
 );
-const summariesRpcUrl = serviceDirectoryClient.resolveProcedure('summaries.requestSummary');
+const summariesRpcUrl = serviceDirectoryClient.resolveProcedure('summaries.requestSummary').rpcUrl;
 
 const summariesClient = createTRPCUntypedClient({
   links: [httpBatchLink({ url: summariesRpcUrl })]
 });
 const now = new Date().toISOString();
-const summaryRequest = await summariesClient.mutation('summaries.requestSummary', {
+const summaryRequest = await summariesClient.mutation('requestSummary', {
   chatId: base.chat.id,
   reason: 'compose-smoke',
   sourceMessages: [
@@ -152,7 +152,7 @@ const summaryRequest = await summariesClient.mutation('summaries.requestSummary'
     { messageId: 'compose-smoke-2', messageDate: now, text: 'Second message for compose smoke' }
   ]
 });
-const summaryExtension = await summariesClient.query(extensionMethod, base.chat);
+const summaryExtension = await summariesClient.query('chatSummary', base.chat);
 if (summaryExtension.summary?.chatId !== base.chat.id || summaryExtension.stale !== false) {
   throw new Error(extensionMethod + ' did not return a fresh summary: ' + JSON.stringify(summaryExtension));
 }

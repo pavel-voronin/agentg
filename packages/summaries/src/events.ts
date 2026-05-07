@@ -1,4 +1,4 @@
-import { createIntegrationEvent, type IntegrationEvent } from '@agentg/shared/events/envelope';
+import { createIntegrationEvent, type IntegrationEvent } from '@agentg/events/envelope';
 
 import type { SummaryInvalidation, SummaryResult, SummaryRun } from './types.js';
 

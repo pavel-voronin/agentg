@@ -25,10 +25,11 @@ export function loadGatewayConfig(env: NodeJS.ProcessEnv = process.env): Gateway
       host: env.AGENT_GATEWAY_HOST ?? '127.0.0.1',
       port: parseOptionalInteger(env.AGENT_GATEWAY_PORT, 'AGENT_GATEWAY_PORT') ?? 8787,
       serviceUrl: parseInternalServiceUrl(
-        env.AGENT_GATEWAY_URL ?? defaultServiceUrl(
-          env.AGENT_GATEWAY_HOST ?? '127.0.0.1',
-          parseOptionalInteger(env.AGENT_GATEWAY_PORT, 'AGENT_GATEWAY_PORT') ?? 8787
-        ),
+        env.AGENT_GATEWAY_URL ??
+          defaultServiceUrl(
+            env.AGENT_GATEWAY_HOST ?? '127.0.0.1',
+            parseOptionalInteger(env.AGENT_GATEWAY_PORT, 'AGENT_GATEWAY_PORT') ?? 8787
+          ),
         'AGENT_GATEWAY_URL'
       ),
       ...(env.AGENT_GATEWAY_TOKEN === undefined ? {} : { token: env.AGENT_GATEWAY_TOKEN })
