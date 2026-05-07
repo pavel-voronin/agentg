@@ -59,20 +59,15 @@ const visibleEntries = computed<SlotDebugRectEntry[]>(() => {
     if (target === null) {
       return [];
     }
-    const rect = target.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) {
+    const rect = debugRectForTarget(target);
+    if (rect === null) {
       return [];
     }
     return [
       {
         ...entry,
         area: rect.width * rect.height,
-        rect: {
-          height: rect.height,
-          left: rect.left,
-          top: rect.top,
-          width: rect.width
-        }
+        rect
       }
     ];
   });
@@ -196,10 +191,6 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleKeydown);
 });
 
-function frameClass(entry: SlotDebugRectEntry): string[] {
-  return ['slot-debug-frame', entry.id === activeId.value ? 'slot-debug-frame--active' : ''];
-}
-
 function frameStyle(entry: SlotDebugRectEntry): CSSProperties {
   return {
     height: `${String(entry.rect.height)}px`,
@@ -207,14 +198,6 @@ function frameStyle(entry: SlotDebugRectEntry): CSSProperties {
     top: `${String(entry.rect.top)}px`,
     width: `${String(entry.rect.width)}px`
   };
-}
-
-function iconClass(icon: SlotDebugIcon): string[] {
-  return [
-    'slot-debug-icon',
-    icon.id === activeId.value ? 'slot-debug-icon--active' : '',
-    icon.groupSize > 1 ? 'slot-debug-icon--stacked' : ''
-  ];
 }
 
 function iconLabel(icon: SlotDebugIcon): string {
@@ -292,7 +275,9 @@ function bindObservedTargets(): void {
   for (const entry of runtime.debugEntries.value) {
     const target = htmlElementFromTarget(entry.target);
     if (target !== null) {
-      resizeObserver.observe(target);
+      for (const observedElement of observedDebugElements(target)) {
+        resizeObserver.observe(observedElement);
+      }
     }
   }
   scheduleGeometryRefresh();
@@ -352,6 +337,44 @@ function htmlElementFromTarget(target: unknown): HTMLElement | null {
   return target instanceof HTMLElement ? target : null;
 }
 
+function debugRectForTarget(target: HTMLElement): SlotDebugRect | null {
+  const selfRect = target.getBoundingClientRect();
+  if (selfRect.width > 0 && selfRect.height > 0) {
+    return slotDebugRectFromDomRect(selfRect);
+  }
+
+  const childRects = [...target.querySelectorAll<HTMLElement>('*')]
+    .map((element) => element.getBoundingClientRect())
+    .filter((rect) => rect.width > 0 && rect.height > 0);
+  if (childRects.length === 0) {
+    return null;
+  }
+
+  const left = Math.min(...childRects.map((rect) => rect.left));
+  const top = Math.min(...childRects.map((rect) => rect.top));
+  const right = Math.max(...childRects.map((rect) => rect.right));
+  const bottom = Math.max(...childRects.map((rect) => rect.bottom));
+  return {
+    height: bottom - top,
+    left,
+    top,
+    width: right - left
+  };
+}
+
+function slotDebugRectFromDomRect(rect: DOMRect): SlotDebugRect {
+  return {
+    height: rect.height,
+    left: rect.left,
+    top: rect.top,
+    width: rect.width
+  };
+}
+
+function observedDebugElements(target: HTMLElement): HTMLElement[] {
+  return [target, ...target.querySelectorAll<HTMLElement>('*')];
+}
+
 function clamp(value: number, min: number, max: number): number {
   if (max < min) {
     return min;
@@ -366,7 +389,8 @@ function clamp(value: number, min: number, max: number): number {
       <div
         v-for="entry in visibleEntries"
         :key="`frame-${entry.id}`"
-        :class="frameClass(entry)"
+        class="slot-debug-frame"
+        :data-active="entry.id === activeId ? 'true' : undefined"
         :style="frameStyle(entry)"
       ></div>
 
@@ -376,7 +400,9 @@ function clamp(value: number, min: number, max: number): number {
         type="button"
         :aria-label="iconLabel(icon)"
         :aria-pressed="pinnedId === icon.id"
-        :class="iconClass(icon)"
+        class="slot-debug-icon"
+        :data-active="icon.id === activeId ? 'true' : undefined"
+        :data-stacked="icon.groupSize > 1 ? 'true' : undefined"
         :style="iconStyle(icon)"
         @click.stop="togglePinnedSlot(icon.id)"
         @focusin="showHoverSlot(icon.id)"
@@ -429,98 +455,52 @@ function clamp(value: number, min: number, max: number): number {
 </template>
 
 <style scoped>
+@reference "tailwindcss";
 .slot-debug-layer {
-  inset: 0;
-  pointer-events: none;
-  position: fixed;
-  z-index: 2147483000;
+  @apply pointer-events-none fixed inset-0 z-[2147483000];
 }
 
 .slot-debug-frame {
-  border-radius: 2px;
-  box-shadow: inset 0 0 0 1px rgba(220, 38, 38, 0.95);
-  pointer-events: none;
-  position: absolute;
+  @apply pointer-events-none absolute rounded-[2px] shadow-[inset_0_0_0_1px_rgba(220,38,38,0.95)];
 }
 
-.slot-debug-frame--active {
-  box-shadow:
-    inset 0 0 0 2px rgba(220, 38, 38, 1),
-    0 0 0 2px rgba(254, 202, 202, 0.85);
+.slot-debug-frame[data-active='true'] {
+  @apply shadow-[inset_0_0_0_2px_rgb(220,38,38),0_0_0_2px_rgba(254,202,202,0.85)];
 }
 
 .slot-debug-icon {
-  align-items: center;
-  background: #ffffff;
-  border: 1px solid rgba(220, 38, 38, 0.95);
-  border-radius: 999px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
-  color: #dc2626;
-  cursor: help;
-  display: inline-flex;
-  height: 16px;
-  justify-content: center;
-  padding: 1px;
-  pointer-events: auto;
-  position: absolute;
-  width: 16px;
+  @apply pointer-events-auto absolute inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-red-600 bg-white p-px text-red-600 shadow-[0_1px_4px_rgba(0,0,0,0.18)];
 }
 
-.slot-debug-icon--stacked {
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.22);
+.slot-debug-icon[data-stacked='true'] {
+  @apply shadow-[0_1px_4px_rgba(0,0,0,0.22)];
 }
 
-.slot-debug-icon--active {
-  background: #dc2626;
-  color: #ffffff;
+.slot-debug-icon[data-active='true'] {
+  @apply bg-red-600 text-white;
 }
 
 .slot-debug-icon svg {
-  height: 12px;
-  width: 12px;
+  @apply h-3 w-3;
 }
 
 .slot-debug-popover {
-  background: rgba(127, 29, 29, 0.96);
-  border: 1px solid rgba(254, 202, 202, 0.7);
-  border-radius: 6px;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.26);
-  color: #ffffff;
-  font:
-    11px/1.35 ui-monospace,
-    SFMono-Regular,
-    Menlo,
-    Monaco,
-    Consolas,
-    monospace;
-  max-height: calc(100vh - 32px);
-  max-width: min(360px, calc(100vw - 32px));
-  overflow: auto;
-  padding: 8px;
-  pointer-events: auto;
-  position: absolute;
-  width: max-content;
+  @apply pointer-events-auto absolute max-h-[calc(100vh-32px)] w-max max-w-[min(360px,calc(100vw-32px))] overflow-auto rounded-md border border-red-200/70 bg-red-900/95 p-2 font-mono text-[11px] leading-[1.35] text-white shadow-[0_12px_30px_rgba(0,0,0,0.26)];
 }
 
 .slot-debug-popover dl {
-  display: grid;
-  gap: 6px;
-  margin: 0;
+  @apply m-0 grid gap-1.5;
 }
 
 .slot-debug-popover div {
-  display: grid;
-  gap: 2px;
+  @apply grid gap-0.5;
 }
 
 .slot-debug-popover dt {
-  color: #fecaca;
-  font-weight: 600;
+  @apply font-semibold text-red-200;
 }
 
 .slot-debug-popover dd {
-  margin: 0;
-  max-width: 320px;
-  overflow-wrap: anywhere;
+  @apply m-0 max-w-xs break-words;
 }
 </style>

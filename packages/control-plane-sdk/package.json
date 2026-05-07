@@ -1,19 +1,20 @@
 {
-  "name": "@agentg/control-plane-extension",
+  "name": "@agentg/control-plane-sdk",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "exports": {
-    "./actions": "./src/actions.ts",
+    "./host": "./src/host.ts",
     "./model-ref-events": "./src/modelRefEvents.ts",
     "./slots": "./src/slots/index.ts",
-    "./ui": "./src/ui/UiButton.vue"
+    "./ui": "./src/ui/UiButton.vue",
+    "./ui/metric-tile": "./src/ui/UiMetricTile.vue",
+    "./ui/status-badge": "./src/ui/UiStatusBadge.vue"
   },
   "scripts": {
     "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {
-    "@agentg/shared": "file:../shared",
     "vue": "^3.5.33"
   },
   "devDependencies": {

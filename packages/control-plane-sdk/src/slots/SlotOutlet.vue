@@ -59,6 +59,10 @@ const resolution = computed(() =>
 const resolvedContent = computed<ContentDefinition | null>(() =>
   resolution.value.kind === 'content' ? resolution.value.content : null
 );
+const contentAttrs = computed(() => ({
+  ...(resolvedContent.value?.props ?? {}),
+  ...attrs
+}));
 const slotElement = computed(() => htmlElementFromRef(slotRoot.value));
 let debugRegistration: SlotDebugRegistration | null = null;
 
@@ -174,29 +178,44 @@ function isComponentInstance(value: unknown): value is ComponentPublicInstance {
 </script>
 
 <template>
-  <slot v-if="resolution.kind === 'empty'"></slot>
-  <div
-    v-else-if="errorTitle"
-    ref="slotRoot"
-    class="min-h-32 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-900"
-    v-bind="attrs"
-  >
-    <div class="font-semibold">{{ errorTitle }}</div>
-    <div v-if="errorDetail" class="mt-1 text-xs text-red-700">{{ errorDetail }}</div>
+  <div v-if="resolution.kind === 'empty'" ref="slotRoot" class="slot-outlet-default" v-bind="attrs">
+    <slot></slot>
+  </div>
+  <div v-else-if="errorTitle" ref="slotRoot" class="slot-outlet-error" v-bind="attrs">
+    <div class="slot-outlet-error__title">{{ errorTitle }}</div>
+    <div v-if="errorDetail" class="slot-outlet-error__detail">{{ errorDetail }}</div>
   </div>
   <component
     v-else-if="contentComponent"
     :is="contentComponent"
     ref="slotRoot"
     :slot-context="props.context"
-    v-bind="attrs"
+    v-bind="contentAttrs"
   />
-  <div
-    v-else
-    ref="slotRoot"
-    class="min-h-32 rounded-lg border border-dashed border-zinc-300 bg-white p-4 text-sm text-zinc-500"
-    v-bind="attrs"
-  >
+  <div v-else ref="slotRoot" class="slot-outlet-loading" v-bind="attrs">
     Loading {{ loadingContentId }}.
   </div>
 </template>
+
+<style scoped>
+@reference "tailwindcss";
+.slot-outlet-default {
+  @apply contents;
+}
+
+.slot-outlet-error {
+  @apply min-h-32 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-900;
+}
+
+.slot-outlet-error__title {
+  @apply font-semibold;
+}
+
+.slot-outlet-error__detail {
+  @apply mt-1 text-xs text-red-700;
+}
+
+.slot-outlet-loading {
+  @apply min-h-32 rounded-lg border border-dashed border-zinc-300 bg-white p-4 text-sm text-zinc-500;
+}
+</style>

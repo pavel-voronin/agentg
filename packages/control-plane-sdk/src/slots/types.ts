@@ -1,7 +1,3 @@
-import type {
-  ControlPlaneContentDefinition,
-  ControlPlaneContentProvider
-} from '@agentg/shared/control-plane/slot-content';
 import type { Component } from 'vue';
 
 export type SlotContext = Record<string, unknown>;
@@ -10,11 +6,20 @@ export type ContentModule = {
   default: Component;
 };
 
-export type ContentDefinition = ControlPlaneContentDefinition & {
+export type ContentDefinition = {
+  contentId: string;
+  defaultSlotIds?: readonly string[];
   domainId?: string;
+  load: () => Promise<ContentModule>;
+  props?: Record<string, unknown>;
+  tags: readonly string[];
 };
 
-export type ContentProvider = ControlPlaneContentProvider;
+export type ContentProvider = {
+  contents: readonly Omit<ContentDefinition, 'domainId'>[];
+  defaultPlacements?: readonly SlotLayoutPlacement[];
+  domainId: string;
+};
 
 export type ContentCatalog = readonly ContentDefinition[];
 
@@ -28,6 +33,11 @@ export type SlotLayoutEntry = {
 };
 
 export type SlotLayout = Record<string, SlotLayoutEntry>;
+
+export type SlotLayoutPlacement = {
+  contentId: string;
+  slotId: string;
+};
 
 export type SlotResolution =
   | {
@@ -53,7 +63,7 @@ export type SlotDebugEntry = {
   resolution: SlotResolution;
   slotId: string;
   tags: readonly string[];
-  target: unknown | null;
+  target: object | null;
 };
 
 export type SlotDebugEntryInput = Omit<SlotDebugEntry, 'id' | 'order'>;
