@@ -7,6 +7,7 @@
     "./call-event-types": "./src/call-event-types.ts",
     "./call-events": "./src/call-events.ts",
     "./call-options": "./src/call-options.ts",
+    "./surface": "./src/surface.ts",
     "./trpc-proxy": "./src/trpc-proxy.ts",
     "./model-refs": "./src/model-refs.ts"
   },
