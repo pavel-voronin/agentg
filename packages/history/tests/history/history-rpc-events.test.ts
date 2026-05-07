@@ -3,25 +3,26 @@ import type { EventBus, EventSubscription } from '@agentg/events/bus';
 import type { IntegrationEvent } from '@agentg/events/envelope';
 import { describe, expect, it } from 'vitest';
 
-import { callHistoryMethod, type HistoryRuntime } from '../../src/observability.js';
+import { createHistoryRouter } from '../../src/rpc/router.js';
 
 describe('History RPC event behavior', () => {
   it('wakes History directly and publishes a notification event for manual sync', async () => {
     const publishedEvents: IntegrationEvent[] = [];
     const syncRequests: { chatId?: string; reason: string }[] = [];
-    const runtime: HistoryRuntime = {
+    const eventBus = createRecordingEventBus(publishedEvents);
+    const router = createHistoryRouter({
       database: {} as AppDatabase,
-      eventBus: createRecordingEventBus(publishedEvents),
+      eventBus,
       requestSync(reason, chatId) {
         syncRequests.push({
           ...(chatId === undefined ? {} : { chatId }),
           reason
         });
       }
-    };
+    });
 
     await expect(
-      callHistoryMethod(runtime, 'history.requestSync', {
+      router.createCaller({ eventBus }).requestSync({
         chatId: 'chat-a'
       })
     ).resolves.toEqual({
@@ -34,7 +35,9 @@ describe('History RPC event behavior', () => {
         reason: 'manual'
       }
     ]);
-    expect(publishedEvents).toMatchObject([
+    expect(
+      publishedEvents.filter((event) => event.type === 'history.sync.requested')
+    ).toMatchObject([
       {
         data: {
           chatId: 'chat-a',

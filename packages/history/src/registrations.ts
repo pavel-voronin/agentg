@@ -1,3 +1,5 @@
+import { historyRpcSurface } from './rpc/surface.js';
+
 export function createHistoryServiceManifest(config: { rpcUrl: string }) {
   return {
     events: [
@@ -18,15 +20,7 @@ export function createHistoryServiceManifest(config: { rpcUrl: string }) {
       'history.target.upserted'
     ],
     extensions: [],
-    procedures: [
-      { kind: 'mutation' as const, name: 'history.deleteTarget' },
-      { kind: 'query' as const, name: 'history.getChatHistoryState' },
-      { kind: 'query' as const, name: 'history.getChatStats' },
-      { kind: 'query' as const, name: 'history.getOverview' },
-      { kind: 'query' as const, name: 'history.listJobs' },
-      { kind: 'mutation' as const, name: 'history.requestSync' },
-      { kind: 'mutation' as const, name: 'history.upsertTarget' }
-    ],
+    procedures: historyRpcSurface.procedures(),
     required: true,
     rpcUrl: config.rpcUrl,
     slug: 'history'

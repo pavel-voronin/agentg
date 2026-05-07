@@ -5,7 +5,7 @@ import type { EventBus } from '@agentg/events/bus';
 import { createHTTPServer } from '@trpc/server/adapters/standalone';
 
 import { formatInternalTrpcBindAddress, type InternalTrpcBindConfig } from './config.js';
-import { createHistoryRouter } from './history-router.js';
+import { createHistoryRouter } from './router.js';
 import { createHistoryRpcContext } from './trpc.js';
 import type { TelegramReadClient } from '../telegram-client.js';
 

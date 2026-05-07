@@ -12,7 +12,7 @@ import {
   historyRequestSyncInputSchema,
   historyUpsertTargetInputSchema
 } from './history-contracts.js';
-import type { HistoryRouter } from './history-router.js';
+import type { HistoryRouter } from './router.js';
 
 type HistoryRpcClientConfig = {
   url: string;
