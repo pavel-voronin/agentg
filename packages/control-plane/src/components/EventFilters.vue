@@ -7,7 +7,7 @@ import type {
   EventFilterLifecycleColumnView,
   EventFiltersPanelView
 } from '../stores/controlPlaneTypes.js';
-import UiButton from '@agentg/control-plane-extension/ui';
+import UiButton from '@agentg/control-plane-sdk/ui';
 
 const props = defineProps<{
   view: EventFiltersPanelView;
@@ -115,34 +115,30 @@ function inputTarget(event: Event): InputEventTarget | null {
 </script>
 
 <template>
-  <div class="min-h-0 flex-1 overflow-auto bg-white">
-    <div class="sticky top-0 z-10 border-b border-zinc-200 bg-white p-3">
-      <div class="flex flex-wrap items-center gap-1.5">
-        <UiButton class="shrink-0 px-2.5 text-xs" @click="setAllFiltersEnabled(true)">
+  <div class="event-filters">
+    <div class="event-filters__toolbar">
+      <div class="event-filters__toolbar-layout">
+        <UiButton class="event-filters__toolbar-button" @click="setAllFiltersEnabled(true)">
           All
         </UiButton>
-        <UiButton class="shrink-0 px-2.5 text-xs" @click="setAllFiltersEnabled(false)">
+        <UiButton class="event-filters__toolbar-button" @click="setAllFiltersEnabled(false)">
           None
         </UiButton>
-        <span class="mx-0.5 h-6 w-px shrink-0 bg-zinc-200" aria-hidden="true"></span>
-        <div class="contents" role="tablist" aria-label="Event filter domains">
+        <span class="event-filters__toolbar-separator" aria-hidden="true"></span>
+        <div class="event-filters__domain-tabs" role="tablist" aria-label="Event filter domains">
           <UiButton
             v-for="domain in view.domains"
             :key="domain.id"
             :aria-selected="activeDomain?.id === domain.id"
-            class="shrink-0 gap-1.5 px-2.5 text-xs"
+            class="event-filters__domain-button"
             role="tab"
             :variant="domainButtonVariant(domain)"
             @click="setActiveDomain(domain.id)"
           >
             <span>{{ domain.label }}</span>
             <span
-              :class="[
-                'rounded px-1.5 py-0.5 text-[10px] leading-none',
-                activeDomain?.id === domain.id
-                  ? 'bg-white/15 text-white'
-                  : 'bg-zinc-100 text-zinc-500'
-              ]"
+              class="event-filters__domain-count"
+              :data-active="activeDomain?.id === domain.id ? 'true' : undefined"
             >
               {{ domain.enabledCount }}
             </span>
@@ -150,55 +146,49 @@ function inputTarget(event: Event): InputEventTarget | null {
         </div>
       </div>
     </div>
-    <div v-if="activeDomain !== null" class="grid gap-3 p-3">
-      <div v-if="activeDomain.events.length > 0" class="grid gap-2">
-        <section class="rounded-lg border border-zinc-200 bg-white p-3">
-          <label class="flex min-w-0 cursor-pointer items-center gap-2">
+    <div v-if="activeDomain !== null" class="event-filters__body">
+      <div v-if="activeDomain.events.length > 0" class="event-filters__group-list">
+        <section class="event-filters__group">
+          <label class="event-filters__group-label">
             <input
               :checked="activeDomain.eventsChecked"
               :indeterminate.prop="activeDomain.eventsIndeterminate"
               type="checkbox"
-              class="h-4 w-4 rounded border-zinc-300"
+              class="event-filters__group-checkbox"
               @change="onEventGroupChange(activeDomain, $event)"
             />
-            <span class="min-w-0 flex-1 truncate whitespace-nowrap text-sm font-semibold">
-              Events
-            </span>
+            <span class="event-filters__group-title"> Events </span>
           </label>
-          <div class="mt-2 grid gap-1 pl-6">
+          <div class="event-filters__type-list">
             <label
               v-for="type in activeDomain.events"
               :key="type.type"
-              class="flex min-w-0 cursor-pointer items-center gap-1.5 rounded border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 font-mono text-[10px] text-zinc-600"
+              class="event-filters__type-row"
             >
               <input
                 :checked="type.enabled"
                 type="checkbox"
-                class="h-3 w-3 shrink-0 rounded border-zinc-300"
+                class="event-filters__type-checkbox"
                 @change="onTypeChange(type.type, $event)"
               />
-              <span class="min-w-0 truncate whitespace-nowrap">{{ type.type }}</span>
+              <span class="event-filters__type-label">{{ type.type }}</span>
             </label>
           </div>
         </section>
       </div>
-      <div v-if="activeDomain.rpc.length > 0" class="grid gap-2">
-        <section
-          v-for="group in activeDomain.rpc"
-          :key="group.id"
-          class="rounded-lg border border-zinc-200 bg-white p-3"
-        >
-          <div class="grid grid-cols-[minmax(0,1fr)_repeat(4,1rem)] items-center gap-x-2 pr-px">
-            <label class="flex min-w-0 cursor-pointer items-center gap-2">
+      <div v-if="activeDomain.rpc.length > 0" class="event-filters__group-list">
+        <section v-for="group in activeDomain.rpc" :key="group.id" class="event-filters__group">
+          <div class="event-filters__rpc-group-header">
+            <label class="event-filters__group-label">
               <input
                 :checked="group.checked"
                 :indeterminate.prop="group.indeterminate"
                 type="checkbox"
-                class="h-4 w-4 rounded border-zinc-300"
+                class="event-filters__group-checkbox"
                 @change="onRpcGroupChange(group, $event)"
               />
-              <span class="h-3 w-3 shrink-0 rounded-sm" :style="{ background: group.color }"></span>
-              <span class="min-w-0 flex-1 truncate whitespace-nowrap text-sm font-semibold">
+              <span class="event-filters__group-color" :style="{ background: group.color }"></span>
+              <span class="event-filters__group-title">
                 {{ group.label }}
               </span>
             </label>
@@ -209,29 +199,27 @@ function inputTarget(event: Event): InputEventTarget | null {
               :aria-pressed="lifecycle.indeterminate ? 'mixed' : lifecycle.checked"
               :title="lifecycle.title"
               type="button"
-              class="h-4 w-4 justify-self-center rounded-sm font-mono text-[10px] font-semibold text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200"
+              class="event-filters__lifecycle-toggle"
               @click="onRpcLifecycleChange(lifecycle)"
             >
               {{ lifecycle.label }}
             </button>
           </div>
-          <div class="mt-2 grid gap-1 pl-6">
+          <div class="event-filters__type-list">
             <div
               v-for="call in group.rpcCalls"
               :key="call.target"
-              class="grid grid-cols-[minmax(0,1fr)_repeat(4,1rem)] items-center gap-x-2 rounded border border-zinc-200 bg-zinc-50 py-0.5"
+              class="event-filters__rpc-call-row"
             >
-              <label class="flex min-w-0 cursor-pointer items-center gap-1.5 pl-1.5">
+              <label class="event-filters__rpc-call-label">
                 <input
                   :checked="call.checked"
                   :indeterminate.prop="call.indeterminate"
                   type="checkbox"
-                  class="h-3 w-3 shrink-0 rounded border-zinc-300"
+                  class="event-filters__type-checkbox"
                   @change="onRpcCallChange(call.lifecycleTypes, $event)"
                 />
-                <span
-                  class="min-w-0 truncate whitespace-nowrap font-mono text-[10px] text-zinc-600"
-                >
+                <span class="event-filters__rpc-call-title">
                   {{ call.target }}
                 </span>
               </label>
@@ -242,16 +230,127 @@ function inputTarget(event: Event): InputEventTarget | null {
                 :checked="lifecycle.enabled"
                 :title="`${call.target} ${lifecycle.title}`"
                 type="checkbox"
-                class="h-3 w-3 justify-self-center rounded border-zinc-300"
+                class="event-filters__lifecycle-checkbox"
                 @change="onTypeChange(lifecycle.type, $event)"
               />
             </div>
           </div>
         </section>
       </div>
-      <UiButton class="mt-1 h-9 justify-center" variant="primary" @click="emit('close')">
+      <UiButton class="event-filters__close-button" variant="primary" @click="emit('close')">
         Close Filters
       </UiButton>
     </div>
   </div>
 </template>
+
+<style scoped>
+@reference "tailwindcss";
+.event-filters {
+  @apply min-h-0 flex-1 overflow-auto bg-white;
+}
+
+.event-filters__toolbar {
+  @apply sticky top-0 z-10 border-b border-zinc-200 bg-white p-3;
+}
+
+.event-filters__toolbar-layout {
+  @apply flex flex-wrap items-center gap-1.5;
+}
+
+.event-filters__toolbar-button {
+  @apply shrink-0 px-2.5 text-xs;
+}
+
+.event-filters__toolbar-separator {
+  @apply mx-0.5 h-6 w-px shrink-0 bg-zinc-200;
+}
+
+.event-filters__domain-tabs {
+  @apply contents;
+}
+
+.event-filters__domain-button {
+  @apply shrink-0 gap-1.5 px-2.5 text-xs;
+}
+
+.event-filters__domain-count {
+  @apply rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] leading-none text-zinc-500;
+}
+
+.event-filters__domain-count[data-active='true'] {
+  @apply bg-white/15 text-white;
+}
+
+.event-filters__body {
+  @apply grid gap-3 p-3;
+}
+
+.event-filters__group-list {
+  @apply grid gap-2;
+}
+
+.event-filters__group {
+  @apply rounded-lg border border-zinc-200 bg-white p-3;
+}
+
+.event-filters__group-label {
+  @apply flex min-w-0 cursor-pointer items-center gap-2;
+}
+
+.event-filters__group-checkbox {
+  @apply h-4 w-4 rounded border-zinc-300;
+}
+
+.event-filters__group-title {
+  @apply min-w-0 flex-1 truncate whitespace-nowrap text-sm font-semibold;
+}
+
+.event-filters__type-list {
+  @apply mt-2 grid gap-1 pl-6;
+}
+
+.event-filters__type-row {
+  @apply flex min-w-0 cursor-pointer items-center gap-1.5 rounded border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 font-mono text-[10px] text-zinc-600;
+}
+
+.event-filters__type-checkbox {
+  @apply h-3 w-3 shrink-0 rounded border-zinc-300;
+}
+
+.event-filters__type-label {
+  @apply min-w-0 truncate whitespace-nowrap;
+}
+
+.event-filters__rpc-group-header {
+  @apply grid grid-cols-[minmax(0,1fr)_repeat(4,1rem)] items-center gap-x-2 pr-px;
+}
+
+.event-filters__group-color {
+  @apply h-3 w-3 shrink-0 rounded-sm;
+}
+
+.event-filters__lifecycle-toggle {
+  @apply h-4 w-4 justify-self-center rounded-sm font-mono text-[10px] font-semibold text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-200;
+}
+
+.event-filters__rpc-call-row {
+  @apply grid grid-cols-[minmax(0,1fr)_repeat(4,1rem)] items-center gap-x-2 rounded border border-zinc-200 bg-zinc-50 py-0.5;
+}
+
+.event-filters__rpc-call-label {
+  @apply flex min-w-0 cursor-pointer items-center gap-1.5 pl-1.5;
+}
+
+.event-filters__rpc-call-title {
+  @apply min-w-0 truncate whitespace-nowrap font-mono text-[10px] text-zinc-600;
+}
+
+.event-filters__lifecycle-checkbox {
+  @apply h-3 w-3 justify-self-center rounded border-zinc-300;
+}
+
+.event-filters__close-button {
+  @apply mt-1 h-9 justify-center;
+}
+</style>

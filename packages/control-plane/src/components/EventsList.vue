@@ -105,8 +105,8 @@ function pruneRpcMuteSnapshots(): void {
 </script>
 
 <template>
-  <div ref="container" class="min-h-0 flex-1 overflow-auto bg-white">
-    <div v-if="!hasEvents" class="p-6 text-center text-sm text-zinc-500">No events yet.</div>
+  <div ref="container" class="events-list">
+    <div v-if="!hasEvents" class="events-list__empty">No events yet.</div>
     <template v-for="event in events" :key="event.key">
       <StandardEventListItem
         v-if="event.kind === 'event'"
@@ -124,3 +124,14 @@ function pruneRpcMuteSnapshots(): void {
     </template>
   </div>
 </template>
+
+<style scoped>
+@reference "tailwindcss";
+.events-list {
+  @apply min-h-0 flex-1 overflow-auto bg-white;
+}
+
+.events-list__empty {
+  @apply p-6 text-center text-sm text-zinc-500;
+}
+</style>

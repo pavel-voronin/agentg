@@ -87,14 +87,14 @@ export class ControlPlaneClient {
     this.socket = null;
   }
 
-  rpc<T = unknown>(method: string, params: Record<string, unknown> = {}): Promise<T> {
+  rpc<T = unknown>(method: string, params?: unknown): Promise<T> {
     const socket = this.socket;
     if (socket?.readyState !== WEBSOCKET_OPEN) {
       return Promise.reject(new Error('Control Plane WebSocket is not connected'));
     }
     const id = this.nextId;
     this.nextId += 1;
-    socket.send(JSON.stringify({ id, method, params }));
+    socket.send(JSON.stringify(params === undefined ? { id, method } : { id, method, params }));
 
     return new Promise<T>((resolve, reject) => {
       const timeoutId = setTimeout(() => {

@@ -6,7 +6,7 @@ import {
   eventGroupForEvent,
   eventGroupForType,
   eventTypesForGroupInState,
-  filterableEventGroups,
+  filterableEventGroupsInState,
   isEventEnabledInState,
   isEventTypeEnabledInState,
   normalizeEventLimit
@@ -19,7 +19,6 @@ import {
 } from './controlPlaneStorage.js';
 import {
   DEFAULT_EVENT_LIMIT,
-  EVENT_GROUPS,
   type ControlPlaneEvent,
   type EventFiltersState,
   type EventsPanelMode
@@ -56,7 +55,7 @@ export const useEventsStore = defineStore('controlPlane.events', {
       return true;
     },
     setEventGroupEnabled(groupId: string, enabled: boolean) {
-      const group = EVENT_GROUPS.find((item) => item.id === groupId);
+      const group = filterableEventGroupsInState(this).find((item) => item.id === groupId);
       if (!group || group.filterable === false) {
         return;
       }
@@ -140,10 +139,9 @@ function readStoredEventFilters(): EventFiltersState {
       return filters;
     }
     if (isPlainRecord(parsed.groups)) {
-      for (const group of filterableEventGroups()) {
-        const enabled = parsed.groups[group.id];
+      for (const [groupId, enabled] of Object.entries(parsed.groups)) {
         if (typeof enabled === 'boolean') {
-          filters.groups[group.id] = enabled;
+          filters.groups[groupId] = enabled;
         }
       }
     }
@@ -171,7 +169,7 @@ function writeStoredEventFilters(filters: EventFiltersState): void {
     CONTROL_PLANE_STORAGE_KEYS.eventFilters,
     JSON.stringify({
       groups: Object.fromEntries(
-        filterableEventGroups().map((group) => [group.id, filters.groups[group.id] !== false])
+        Object.entries(filters.groups).filter(([, enabled]) => typeof enabled === 'boolean')
       ),
       types: Object.fromEntries(
         Object.entries(filters.types).filter(

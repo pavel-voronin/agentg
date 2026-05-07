@@ -3,19 +3,19 @@ import {
   createContentCatalogIndex,
   resolveSlotContent,
   tagsCompatible
-} from '@agentg/control-plane-extension/slots';
-import type { ContentCatalog, SlotLayout } from '@agentg/control-plane-extension/slots';
+} from '@agentg/control-plane-sdk/slots';
+import type { ContentCatalog, SlotLayout } from '@agentg/control-plane-sdk/slots';
 
 const catalog = [
   {
-    contentId: 'telegram.workspace',
+    contentId: 'alpha.workspace',
     load: () => Promise.resolve({ default: {} }),
-    tags: ['control-plane.workspace', 'telegram.workspace']
+    tags: ['control-plane.workspace', 'alpha.workspace']
   },
   {
     contentId: 'events.stream.panel',
     load: () => Promise.resolve({ default: {} }),
-    tags: ['control-plane.workspace', 'telegram.workspace.content']
+    tags: ['control-plane.workspace', 'alpha.workspace.content']
   }
 ] satisfies ContentCatalog;
 
@@ -42,7 +42,7 @@ describe('slot resolver', () => {
   it('resolves the layout content for a compatible slot', () => {
     const layout: SlotLayout = {
       'control-plane.workspace': {
-        contentId: 'telegram.workspace'
+        contentId: 'alpha.workspace'
       }
     };
 

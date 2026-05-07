@@ -2,23 +2,17 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { readFile } from 'node:fs/promises';
 import { extname, resolve, sep } from 'node:path';
 
-import { createHistoryRpcClient } from '@agentg/history-sync/rpc';
-import { createServiceDirectoryClient } from '@agentg/service-directory/rpc';
-import type { EventBus } from '@agentg/shared/events/bus';
-import type { IntegrationEvent } from '@agentg/shared/events/envelope';
+import { createInternalTrpcProcedureProxy } from '@agentg/rpc/trpc-proxy';
+import {
+  createServiceDirectoryClient,
+  type ServiceDirectoryClient
+} from '@agentg/service-directory/rpc';
+import type { EventBus, EventSubscription } from '@agentg/events/bus';
+import type { IntegrationEvent } from '@agentg/events/envelope';
 import { WebSocket, WebSocketServer, type RawData } from 'ws';
 
-import {
-  callControlPlaneReadMethod,
-  type ControlPlaneReadModelRuntime
-} from './control-plane-read-model.js';
-import {
-  createServiceDirectoryTelegramDirectoryClient,
-  type TelegramDirectoryClient
-} from './telegram-client.js';
 import { createControlPlaneServiceManifest } from './registrations.js';
 
-type HistoryRpcClient = ReturnType<typeof createHistoryRpcClient>;
 type ServiceDirectoryConfig = {
   url: string;
 };
@@ -33,8 +27,7 @@ export type ControlPlaneServerConfig = {
 export type ControlPlaneServerOptions = {
   config: ControlPlaneServerConfig;
   eventBus: EventBus;
-  historyClient?: HistoryRpcClient;
-  telegramClient?: TelegramDirectoryClient;
+  procedureProxy?: ControlPlaneProcedureProxy;
   services?: {
     serviceDirectory: ServiceDirectoryConfig;
   };
@@ -46,7 +39,14 @@ export type ControlPlaneServerHandle = {
   port: number;
 };
 
-type ControlPlaneRuntime = ControlPlaneReadModelRuntime;
+export type ControlPlaneProcedureProxy = {
+  call(method: string, params: unknown): Promise<unknown>;
+  close(): void;
+};
+
+type ControlPlaneRuntime = {
+  procedureProxy: ControlPlaneProcedureProxy;
+};
 
 type RpcRequest = {
   id?: unknown;
@@ -63,13 +63,19 @@ type RpcResponse = {
   result?: unknown;
 };
 
-const CONTROL_PLANE_TELEGRAM_REQUEST_TIMEOUT_MS = 15000;
+const CONTROL_PLANE_RPC_REQUEST_TIMEOUT_MS = 15000;
 
 export async function startControlPlaneServer(
   options: ControlPlaneServerOptions
 ): Promise<ControlPlaneServerHandle> {
+  let procedureProxy: ControlPlaneProcedureProxy | undefined;
+  let server: Server | undefined;
+  let serverListening = false;
+  let webSocketServer: WebSocketServer | undefined;
+  const clients = new Set<WebSocket>();
+  let subscriptions: EventSubscription[] = [];
   const serviceDirectory =
-    options.historyClient === undefined || options.telegramClient === undefined
+    options.procedureProxy === undefined
       ? createServiceDirectoryClient({
           eventBus: options.eventBus,
           onTopologyFailure: (error) => {
@@ -78,78 +84,105 @@ export async function startControlPlaneServer(
           url: requireServiceDirectoryConfig(options).url
         })
       : undefined;
-  await serviceDirectory?.refresh();
-  const historyClient =
-    options.historyClient ??
-    createServiceDirectoryHistoryClient(requireServiceDirectory(serviceDirectory));
-  const telegramClient =
-    options.telegramClient ??
-    createServiceDirectoryTelegramDirectoryClient(requireServiceDirectory(serviceDirectory), {
-      timeoutMs: CONTROL_PLANE_TELEGRAM_REQUEST_TIMEOUT_MS
-    });
-  const runtime: ControlPlaneRuntime = {
-    historyClient,
-    telegramClient
-  };
-  const staticRoot = resolve(options.config.staticDir);
-  const server = createServer((request, response) => {
-    void handleHttpRequest(staticRoot, request, response);
-  });
-  const webSocketServer = new WebSocketServer({ noServer: true });
-  const clients = new Set<WebSocket>();
 
-  server.on('upgrade', (request, socket, head) => {
-    const path = requestPath(request);
-    if (path !== '/ws') {
-      socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
-      socket.destroy();
-      return;
-    }
-
-    webSocketServer.handleUpgrade(request, socket, head, (client) => {
-      webSocketServer.emit('connection', client, request);
-    });
-  });
-
-  webSocketServer.on('connection', (client) => {
-    clients.add(client);
-
-    client.on('message', (payload) => {
-      void handleClientMessage(runtime, client, rawDataToString(payload));
-    });
-    client.on('close', () => {
-      clients.delete(client);
-    });
-  });
-
-  const subscriptions = [
-    options.eventBus.subscribe('>', (event) => {
-      broadcast(clients, {
-        event
+  try {
+    await serviceDirectory?.refresh();
+    procedureProxy =
+      options.procedureProxy ??
+      createInternalTrpcProcedureProxy(requireServiceDirectory(serviceDirectory), {
+        timeoutMs: CONTROL_PLANE_RPC_REQUEST_TIMEOUT_MS
       });
-    })
-  ];
+    const runtime: ControlPlaneRuntime = {
+      procedureProxy
+    };
+    const staticRoot = resolve(options.config.staticDir);
+    server = createServer((request, response) => {
+      void handleHttpRequest(staticRoot, request, response);
+    });
+    const createdWebSocketServer = new WebSocketServer({ noServer: true });
+    webSocketServer = createdWebSocketServer;
 
-  await listen(server, options.config.host, options.config.port);
-  await serviceDirectory?.join(
-    createControlPlaneServiceManifest({ serviceUrl: options.config.serviceUrl })
-  );
-
-  return {
-    async close(): Promise<void> {
-      for (const subscription of subscriptions) {
-        subscription.unsubscribe();
+    server.on('upgrade', (request, socket, head) => {
+      const path = requestPath(request);
+      if (path !== '/ws') {
+        socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
+        socket.destroy();
+        return;
       }
-      historyClient.close();
-      telegramClient.close();
-      serviceDirectory?.close();
-      closeWebSocketClients(clients);
-      await closeWebSocketServer(webSocketServer);
-      await closeHttpServer(server);
-    },
-    host: options.config.host,
-    port: serverPort(server)
-  };
+
+      createdWebSocketServer.handleUpgrade(request, socket, head, (client) => {
+        createdWebSocketServer.emit('connection', client, request);
+      });
+    });
+
+    createdWebSocketServer.on('connection', (client) => {
+      clients.add(client);
+
+      client.on('message', (payload) => {
+        void handleClientMessage(runtime, client, rawDataToString(payload));
+      });
+      client.on('close', () => {
+        clients.delete(client);
+      });
+    });
+
+    subscriptions = [
+      options.eventBus.subscribe('>', (event) => {
+        broadcast(clients, {
+          event
+        });
+      })
+    ];
+
+    await listen(server, options.config.host, options.config.port);
+    serverListening = true;
+    await serviceDirectory?.join(
+      createControlPlaneServiceManifest({ serviceUrl: options.config.serviceUrl })
+    );
+    const activeProcedureProxy = requireStartedResource(
+      procedureProxy,
+      'Control Plane procedure proxy'
+    );
+    const activeServer = requireStartedResource(server, 'Control Plane HTTP server');
+    const activeWebSocketServer = requireStartedResource(
+      webSocketServer,
+      'Control Plane WebSocket server'
+    );
+
+    return {
+      async close(): Promise<void> {
+        for (const subscription of subscriptions) {
+          subscription.unsubscribe();
+        }
+        activeProcedureProxy.close();
+        serviceDirectory?.close();
+        closeWebSocketClients(clients);
+        await closeWebSocketServer(activeWebSocketServer);
+        await closeHttpServer(activeServer);
+      },
+      host: options.config.host,
+      port: serverPort(activeServer)
+    };
+  } catch (error) {
+    await cleanupControlPlaneStartupFailure({
+      clients,
+      procedureProxy,
+      server,
+      serverListening,
+      serviceDirectory,
+      subscriptions,
+      webSocketServer
+    });
+    throw error;
+  }
+}
+
+function requireStartedResource<T>(value: T | undefined, name: string): T {
+  if (value === undefined) {
+    throw new Error(`${name} did not start`);
+  }
+
+  return value;
 }
 
 function requestProcessShutdown(event: string, error: Error): void {
@@ -164,16 +197,24 @@ function requestProcessShutdown(event: string, error: Error): void {
 }
 
 export async function runControlPlaneServer(options: ControlPlaneServerOptions): Promise<void> {
-  const handle = await startControlPlaneServer(options);
-  console.log(
-    JSON.stringify({
-      event: 'control_plane.ready',
-      host: handle.host,
-      port: handle.port
-    })
-  );
+  let handle: ControlPlaneServerHandle | undefined;
+  try {
+    handle = await startControlPlaneServer(options);
+    console.log(
+      JSON.stringify({
+        event: 'control_plane.ready',
+        host: handle.host,
+        port: handle.port
+      })
+    );
 
-  await waitForShutdown(handle, options.eventBus);
+    await waitForShutdown(handle, options.eventBus);
+  } catch (error) {
+    if (handle === undefined) {
+      await cleanupControlPlaneEventBusStartupFailure(options.eventBus);
+    }
+    throw error;
+  }
 }
 
 async function handleClientMessage(
@@ -217,7 +258,7 @@ async function handleClientMessage(
   }
 
   try {
-    const result = await callMethod(runtime, request.method, request.params);
+    const result = await runtime.procedureProxy.call(request.method, request.params);
     sendResponse(client, {
       id,
       result
@@ -233,99 +274,6 @@ async function handleClientMessage(
   }
 }
 
-async function callMethod(
-  runtime: ControlPlaneRuntime,
-  method: string,
-  params: unknown
-): Promise<unknown> {
-  const controlPlaneResult = await callControlPlaneReadMethod(runtime, method, params);
-  if (controlPlaneResult !== undefined) {
-    return controlPlaneResult;
-  }
-
-  if (method.startsWith('history.')) {
-    const result = await callHistoryMethod(runtime.historyClient, method, params);
-    if (result !== undefined) {
-      return result;
-    }
-  }
-
-  throw new Error(`Unknown method: ${method}`);
-}
-
-function callHistoryMethod(
-  historyClient: HistoryRpcClient,
-  method: string,
-  params: unknown
-): Promise<unknown> {
-  switch (method) {
-    case 'history.deleteTarget':
-      return historyClient.deleteTarget(params);
-    case 'history.getChatHistoryState':
-      return historyClient.getChatHistoryState(params);
-    case 'history.getChatStats':
-      return historyClient.getChatStats(params);
-    case 'history.getOverview':
-      return historyClient.getOverview();
-    case 'history.listJobs':
-      return historyClient.listJobs(params);
-    case 'history.requestSync':
-      return historyClient.requestSync(params);
-    case 'history.upsertTarget':
-      return historyClient.upsertTarget(params);
-    default:
-      return Promise.resolve(undefined);
-  }
-}
-
-function createServiceDirectoryHistoryClient(
-  resolver: ReturnType<typeof createServiceDirectoryClient>
-): HistoryRpcClient {
-  const clients = new Map<string, HistoryRpcClient>();
-
-  return {
-    close() {
-      for (const client of clients.values()) {
-        client.close();
-      }
-      clients.clear();
-    },
-    deleteTarget(input) {
-      return clientFor('history.deleteTarget').deleteTarget(input);
-    },
-    getChatHistoryState(input) {
-      return clientFor('history.getChatHistoryState').getChatHistoryState(input);
-    },
-    getChatStats(input) {
-      return clientFor('history.getChatStats').getChatStats(input);
-    },
-    getOverview() {
-      return clientFor('history.getOverview').getOverview();
-    },
-    listJobs(input) {
-      return clientFor('history.listJobs').listJobs(input);
-    },
-    requestSync(input) {
-      return clientFor('history.requestSync').requestSync(input);
-    },
-    upsertTarget(input) {
-      return clientFor('history.upsertTarget').upsertTarget(input);
-    }
-  };
-
-  function clientFor(procedure: string): HistoryRpcClient {
-    const url = resolver.resolveProcedure(procedure);
-    const existing = clients.get(url);
-    if (existing !== undefined) {
-      return existing;
-    }
-
-    const client = createHistoryRpcClient({ url });
-    clients.set(url, client);
-    return client;
-  }
-}
-
 function requireServiceDirectoryConfig(options: ControlPlaneServerOptions): ServiceDirectoryConfig {
   const config = options.services?.serviceDirectory;
   if (config === undefined) {
@@ -336,8 +284,8 @@ function requireServiceDirectoryConfig(options: ControlPlaneServerOptions): Serv
 }
 
 function requireServiceDirectory(
-  serviceDirectory: ReturnType<typeof createServiceDirectoryClient> | undefined
-): ReturnType<typeof createServiceDirectoryClient> {
+  serviceDirectory: ServiceDirectoryClient | undefined
+): ServiceDirectoryClient {
   if (serviceDirectory === undefined) {
     throw new Error('Control Plane requires Service Directory client');
   }
@@ -506,9 +454,84 @@ function sendJson(client: WebSocket, payload: unknown): void {
 }
 
 function listen(server: Server, host: string, port: number): Promise<void> {
-  return new Promise((resolve) => {
-    server.listen(port, host, resolve);
+  return new Promise((resolve, reject) => {
+    const onError = (error: Error): void => {
+      server.off('error', onError);
+      reject(error);
+    };
+
+    server.once('error', onError);
+    server.listen(port, host, () => {
+      server.off('error', onError);
+      resolve();
+    });
   });
+}
+
+async function cleanupControlPlaneStartupFailure(resources: {
+  clients: Set<WebSocket>;
+  procedureProxy: ControlPlaneProcedureProxy | undefined;
+  server: Server | undefined;
+  serverListening: boolean;
+  serviceDirectory: ServiceDirectoryClient | undefined;
+  subscriptions: EventSubscription[];
+  webSocketServer: WebSocketServer | undefined;
+}): Promise<void> {
+  for (const subscription of resources.subscriptions) {
+    try {
+      subscription.unsubscribe();
+    } catch (error) {
+      logStartupCleanupFailure('control_plane.subscription_unsubscribe', error);
+    }
+  }
+
+  try {
+    resources.procedureProxy?.close();
+  } catch (error) {
+    logStartupCleanupFailure('control_plane.procedure_proxy_close', error);
+  }
+
+  try {
+    resources.serviceDirectory?.close();
+  } catch (error) {
+    logStartupCleanupFailure('control_plane.service_directory_close', error);
+  }
+
+  closeWebSocketClients(resources.clients);
+
+  const webSocketServer = resources.webSocketServer;
+  if (webSocketServer !== undefined) {
+    await runStartupCleanupStep('control_plane.websocket_server_close', () =>
+      closeWebSocketServer(webSocketServer)
+    );
+  }
+
+  const server = resources.server;
+  if (server !== undefined && resources.serverListening) {
+    await runStartupCleanupStep('control_plane.http_server_close', () => closeHttpServer(server));
+  }
+}
+
+async function cleanupControlPlaneEventBusStartupFailure(eventBus: EventBus): Promise<void> {
+  await runStartupCleanupStep('control_plane.event_bus_close', () => eventBus.close());
+}
+
+async function runStartupCleanupStep(name: string, step: () => Promise<void>): Promise<void> {
+  try {
+    await step();
+  } catch (error) {
+    logStartupCleanupFailure(name, error);
+  }
+}
+
+function logStartupCleanupFailure(step: string, error: unknown): void {
+  console.warn(
+    JSON.stringify({
+      error: error instanceof Error ? error.message : String(error),
+      event: 'control_plane.startup_cleanup_failed',
+      step
+    })
+  );
 }
 
 function serverPort(server: Server): number {

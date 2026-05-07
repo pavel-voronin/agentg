@@ -1,27 +1,24 @@
-import type { SlotLayout } from '@agentg/control-plane-extension/slots';
-
-export const defaultControlPlaneLayout = {
-  'control-plane.dashboard': {
-    contentId: 'control-plane.dashboard.metrics'
-  },
-  'control-plane.dashboard.preview': {
-    contentId: 'control-plane.dashboard.metrics'
-  },
-  'control-plane.events.preview': {
-    contentId: 'events.stream.panel'
-  },
-  'control-plane.workspace': {
-    contentId: 'telegram.workspace'
-  },
-  'telegram.workspace.primary': {
-    contentId: 'history.workspace'
-  },
-  'telegram.workspace.sidecar': {
-    contentId: 'events.stream.panel'
-  }
-} satisfies SlotLayout;
+import type { ContentProvider, SlotLayout } from '@agentg/control-plane-sdk/slots';
 
 const controlPlaneLayoutStorageKey = 'agentg.controlPlane.layout';
+
+export function defaultLayoutFromProviders(providers: readonly ContentProvider[]): SlotLayout {
+  const layout: SlotLayout = {};
+  for (const provider of providers) {
+    for (const content of provider.contents) {
+      for (const slotId of content.defaultSlotIds ?? []) {
+        addDefaultPlacement(layout, {
+          contentId: content.contentId,
+          slotId
+        });
+      }
+    }
+    for (const placement of provider.defaultPlacements ?? []) {
+      addDefaultPlacement(layout, placement);
+    }
+  }
+  return layout;
+}
 
 export function readControlPlaneLayout(fallback: SlotLayout): SlotLayout {
   try {
@@ -60,5 +57,20 @@ function normalizeSlotLayout(value: unknown, fallback: SlotLayout): SlotLayout {
       };
     }
   }
-  return layout;
+  return {
+    ...fallback,
+    ...layout
+  };
+}
+
+function addDefaultPlacement(
+  layout: SlotLayout,
+  placement: { contentId: string; slotId: string }
+): void {
+  if (layout[placement.slotId] !== undefined) {
+    throw new Error(`Duplicate default content for slot: ${placement.slotId}`);
+  }
+  layout[placement.slotId] = {
+    contentId: placement.contentId
+  };
 }

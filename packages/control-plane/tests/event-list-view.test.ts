@@ -15,10 +15,10 @@ describe('event list view', () => {
     const items = eventListItems(
       [
         rpcEvent('completed', '2026-05-05T00:00:02.000Z', { stage: 'completed' }),
-        event('telegram.status', '2026-05-05T00:00:01.500Z', { online: true }),
+        event('alpha.status', '2026-05-05T00:00:01.500Z', { online: true }),
         rpcEvent('started', '2026-05-05T00:00:01.000Z', { stage: 'started' })
       ],
-      (type) => type === 'rpc.telegram.listChats.started'
+      (type) => type === 'rpc.alpha.listItems.started'
     );
 
     expect(items.map((item) => item.kind)).toEqual(['rpc', 'event']);
@@ -28,11 +28,11 @@ describe('event list view', () => {
       callId: 'call_1',
       kind: 'rpc',
       muted: false,
-      target: 'telegram.listChats'
+      target: 'alpha.listItems'
     });
     expect(rpcItem.lifecycleTypes).toEqual([
-      'rpc.telegram.listChats.started',
-      'rpc.telegram.listChats.completed'
+      'rpc.alpha.listItems.started',
+      'rpc.alpha.listItems.completed'
     ]);
     expect(rpcItem.lifecycles.map((lifecycle) => lifecycle.suffix)).toEqual([
       'started',
@@ -43,8 +43,8 @@ describe('event list view', () => {
       '+1000 ms'
     ]);
     expect(rpcItem.lifecycles[1]?.body).toMatchObject({
-      raw: '{"callId":"call_1","target":"telegram.listChats","stage":"completed"}',
-      yaml: 'callId: call_1\ntarget: telegram.listChats\nstage: completed'
+      raw: '{"callId":"call_1","target":"alpha.listItems","stage":"completed"}',
+      yaml: 'callId: call_1\ntarget: alpha.listItems\nstage: completed'
     });
     expect(rpcItem.lifecycles.map((lifecycle) => lifecycle.muted)).toEqual([true, false]);
   });
@@ -87,7 +87,7 @@ describe('event list view', () => {
     );
 
     expect(html).toContain('RPC call');
-    expect(html).toContain('telegram.listChats');
+    expect(html).toContain('alpha.listItems');
     expect(html).toContain('Started');
     expect(html).toContain('Completed');
     expect(html).toContain('2026-05-05 00:00:01.000');
@@ -103,9 +103,9 @@ describe('event list view', () => {
   it('renders ModelRef values as YAML badges without changing RAW payload text', async () => {
     const items = eventListItems(
       [
-        event('history.sync.requested', '2026-05-05T00:00:01.000Z', {
+        event('beta.sync.requested', '2026-05-05T00:00:01.000Z', {
           chat: {
-            _model: 'telegram.chat',
+            _model: 'alpha.record',
             id: 'chat-a',
             title: 'Chat A',
             type: 'private'
@@ -119,15 +119,15 @@ describe('event list view', () => {
     const eventItem = items[0] as AppStandardEventItem;
     const modelRefToken = eventItem.body.yamlLines[0]?.tokens[1];
 
-    expect(eventItem.body.raw).toContain('"_model":"telegram.chat"');
+    expect(eventItem.body.raw).toContain('"_model":"alpha.record"');
     expect(eventItem.body.yaml).toBe(
-      'chat: telegram.chat chat-a\n  title: "Chat A"\n  type: private\nreason: manual'
+      'chat: alpha.record chat-a\n  title: "Chat A"\n  type: private\nreason: manual'
     );
     expect(eventItem.body.yamlLines[0]?.tokens[0]).toEqual({ kind: 'text', text: 'chat: ' });
     expect(modelRefToken).toMatchObject({
       id: 'chat-a',
       kind: 'modelRef',
-      model: 'telegram.chat'
+      model: 'alpha.record'
     });
     expect(modelRefToken?.kind === 'modelRef' ? modelRefToken.color : '').toMatch(/^#/);
 
@@ -139,8 +139,8 @@ describe('event list view', () => {
       })
     );
 
-    expect(html).toContain('telegram.chat');
-    expect(html).toContain('title="telegram.chat chat-a"');
+    expect(html).toContain('alpha.record');
+    expect(html).toContain('title="alpha.record chat-a"');
     expect(html).toContain('chat-a');
     expect(html).toContain('title:');
     expect(html).toContain('Chat A');
@@ -156,9 +156,9 @@ function rpcEvent(
   data: Record<string, unknown>,
   callId = 'call_1'
 ): ControlPlaneEvent {
-  return event(`rpc.telegram.listChats.${suffix}`, occurredAt, {
+  return event(`rpc.alpha.listItems.${suffix}`, occurredAt, {
     callId,
-    target: 'telegram.listChats',
+    target: 'alpha.listItems',
     ...data
   });
 }

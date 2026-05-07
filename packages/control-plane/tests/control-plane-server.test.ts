@@ -1,35 +1,21 @@
-import type { EventBus, EventSubscription } from '@agentg/shared/events/bus';
-import { createIntegrationEvent, type IntegrationEvent } from '@agentg/shared/events/envelope';
+import type { EventBus, EventSubscription } from '@agentg/events/bus';
+import { createIntegrationEvent, type IntegrationEvent } from '@agentg/events/envelope';
 import { WebSocket, type RawData } from 'ws';
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-  callControlPlaneReadMethod,
-  type ControlPlaneReadModelRuntime
-} from '../src/server/control-plane-read-model.js';
 import { startControlPlaneServer } from '../src/server/control-plane-server.js';
 
 describe('Control Plane server boundary', () => {
-  it('routes browser history RPC to the History client and forwards events', async () => {
+  it('routes browser RPC through the procedure proxy and forwards events', async () => {
     const eventBus = createFakeEventBus();
-    const historyClient = {
-      close: vi.fn(),
-      deleteTarget: vi.fn(),
-      getChatHistoryState: vi.fn(),
-      getChatStats: vi.fn(),
-      getOverview: vi.fn(() =>
+    const procedureProxy = {
+      call: vi.fn(() =>
         Promise.resolve({
-          chats: 3,
-          coverageIntervals: 5
+          items: 3,
+          records: 5
         })
       ),
-      listJobs: vi.fn(),
-      requestSync: vi.fn(),
-      upsertTarget: vi.fn()
-    };
-    const telegramClient = {
-      close: vi.fn(),
-      listChatDirectory: vi.fn()
+      close: vi.fn()
     };
 
     const server = await startControlPlaneServer({
@@ -40,29 +26,28 @@ describe('Control Plane server boundary', () => {
         staticDir: '/tmp/agentg-control-plane-test-missing'
       },
       eventBus,
-      historyClient,
-      telegramClient
+      procedureProxy
     });
     const socket = await openWebSocket(`ws://127.0.0.1:${String(server.port)}/ws`);
 
     try {
-      socket.send(JSON.stringify({ id: 1, method: 'history.getOverview', params: {} }));
+      socket.send(JSON.stringify({ id: 1, method: 'beta.getOverview', params: { limit: 10 } }));
 
       await expect(nextJsonMessage(socket)).resolves.toEqual({
         id: 1,
         result: {
-          chats: 3,
-          coverageIntervals: 5
+          items: 3,
+          records: 5
         }
       });
-      expect(historyClient.getOverview).toHaveBeenCalledWith();
+      expect(procedureProxy.call).toHaveBeenCalledWith('beta.getOverview', { limit: 10 });
 
       const event = createIntegrationEvent({
         data: {
-          chatId: 'chat-a'
+          recordId: 'record-a'
         },
         source: 'test',
-        type: 'history.coverage.changed'
+        type: 'beta.coverage.changed'
       });
       await eventBus.emit(event);
 
@@ -73,10 +58,10 @@ describe('Control Plane server boundary', () => {
       const rpcEvent = createIntegrationEvent({
         data: {
           callId: 'call-a',
-          target: 'history.getOverview'
+          target: 'beta.getOverview'
         },
-        source: 'history-sync',
-        type: 'rpc.history.getOverview.started'
+        source: 'beta-service',
+        type: 'rpc.beta.getOverview.started'
       });
       await eventBus.emit(rpcEvent);
 
@@ -86,7 +71,7 @@ describe('Control Plane server boundary', () => {
 
       const summariesEvent = createIntegrationEvent({
         data: {
-          chatId: 'chat-a',
+          recordId: 'record-a',
           runId: 'run-a'
         },
         source: 'summaries',
@@ -103,64 +88,11 @@ describe('Control Plane server boundary', () => {
     }
   });
 
-  it('builds Control Plane chat lists from Telegram directory and History stats', async () => {
+  it('returns proxy failures as RPC errors', async () => {
     const eventBus = createFakeEventBus();
-    const historyClient = {
-      close: vi.fn(),
-      deleteTarget: vi.fn(),
-      getChatHistoryState: vi.fn(),
-      getChatStats: vi.fn(() =>
-        Promise.resolve({
-          stats: [
-            {
-              chatId: 'chat-b',
-              coverageIntervals: 2,
-              coverageNewestAt: '2026-05-01T01:00:00.000Z',
-              coverageOldestAt: '2026-05-01T00:00:00.000Z',
-              pendingJobs: 1,
-              runningJobs: 0,
-              targets: 3
-            }
-          ]
-        })
-      ),
-      getOverview: vi.fn(),
-      listJobs: vi.fn(),
-      requestSync: vi.fn(),
-      upsertTarget: vi.fn()
-    };
-    const mainChat = {
-      _model: 'telegram.chat' as const,
-      id: 'chat-b',
-      isBot: false,
-      isSelf: false,
-      lastMessageDate: 20,
-      placements: [{ kind: 'main' as const, order: '200' }],
-      title: 'Beta',
-      type: 'private',
-      updatedAt: '2026-05-01T01:00:00.000Z'
-    };
-    const archiveChat = {
-      _model: 'telegram.chat' as const,
-      id: 'chat-a',
-      isBot: false,
-      isSelf: false,
-      lastMessageDate: 10,
-      placements: [{ kind: 'archive' as const, order: '100' }],
-      title: 'Alpha',
-      type: 'basic_group',
-      updatedAt: '2026-05-01T00:00:00.000Z'
-    };
-    const telegramClient = {
-      close: vi.fn(),
-      listChatDirectory: vi.fn(() =>
-        Promise.resolve({
-          chats: [mainChat, archiveChat],
-          folders: [],
-          navigationChats: [mainChat, archiveChat],
-          types: [{ count: 1, type: 'private' }]
-        })
-      )
+    const procedureProxy = {
+      call: vi.fn(() => Promise.reject(new Error('Procedure failed'))),
+      close: vi.fn()
     };
 
     const server = await startControlPlaneServer({
@@ -171,90 +103,24 @@ describe('Control Plane server boundary', () => {
         staticDir: '/tmp/agentg-control-plane-test-missing'
       },
       eventBus,
-      historyClient,
-      telegramClient
+      procedureProxy
     });
     const socket = await openWebSocket(`ws://127.0.0.1:${String(server.port)}/ws`);
 
     try {
-      socket.send(
-        JSON.stringify({ id: 2, method: 'controlPlane.listChats', params: { list: 'main' } })
-      );
+      socket.send(JSON.stringify({ id: 2, method: 'alpha.fail', params: {} }));
 
-      await expect(nextJsonMessage(socket)).resolves.toMatchObject({
+      await expect(nextJsonMessage(socket)).resolves.toEqual({
         id: 2,
-        result: {
-          chats: [
-            {
-              coverageIntervals: 2,
-              id: 'chat-b',
-              pendingJobs: 1,
-              runningJobs: 0,
-              targets: 3,
-              title: 'Beta',
-              type: 'private'
-            }
-          ],
-          navigation: {
-            archiveCount: 1,
-            mainCount: 1
-          },
-          types: [{ count: 1, type: 'private' }]
+        error: {
+          code: 'method_failed',
+          message: 'Procedure failed'
         }
-      });
-      expect(telegramClient.listChatDirectory).toHaveBeenCalledWith({});
-      expect(historyClient.getChatStats).toHaveBeenCalledWith({
-        chatIds: ['chat-b']
       });
     } finally {
       socket.close();
       await server.close();
     }
-  });
-
-  it('keeps the focused chat visible when a list limit would otherwise hide it', async () => {
-    const chats = [
-      directoryChat({
-        id: 'chat-a',
-        order: '300',
-        title: 'Alpha'
-      }),
-      directoryChat({
-        id: 'chat-b',
-        order: '200',
-        title: 'Beta'
-      })
-    ];
-    const historyClient = {
-      getChatStats: vi.fn(() => Promise.resolve({ stats: [] }))
-    };
-    const telegramClient = {
-      listChatDirectory: vi.fn(() =>
-        Promise.resolve({
-          chats,
-          folders: [],
-          navigationChats: chats,
-          types: []
-        })
-      )
-    };
-
-    const result = await callControlPlaneReadMethod(
-      { historyClient, telegramClient } as unknown as ControlPlaneReadModelRuntime,
-      'controlPlane.listChats',
-      {
-        focusChatId: 'chat-b',
-        limit: 1,
-        list: 'main'
-      }
-    );
-
-    expect(result).toMatchObject({
-      chats: [{ id: 'chat-a' }, { id: 'chat-b' }]
-    });
-    expect(historyClient.getChatStats).toHaveBeenCalledWith({
-      chatIds: ['chat-a', 'chat-b']
-    });
   });
 });
 
@@ -299,20 +165,6 @@ function createFakeEventBus(): FakeEventBus {
         }
       };
     }
-  };
-}
-
-function directoryChat(input: { id: string; order: string; title: string }) {
-  return {
-    _model: 'telegram.chat' as const,
-    id: input.id,
-    isBot: false,
-    isSelf: false,
-    lastMessageDate: Number(input.order),
-    placements: [{ kind: 'main' as const, order: input.order }],
-    title: input.title,
-    type: 'private',
-    updatedAt: '2026-05-01T00:00:00.000Z'
   };
 }
 

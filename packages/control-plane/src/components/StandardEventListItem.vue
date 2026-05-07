@@ -24,28 +24,18 @@ function toggleBodyMode(): void {
 </script>
 
 <template>
-  <div
-    :class="[
-      'relative border-b border-zinc-200 py-2 pl-4 pr-3 font-mono text-xs leading-relaxed transition-colors',
-      event.muted ? 'bg-zinc-100 text-zinc-500' : 'bg-white'
-    ]"
-  >
+  <div class="standard-event-item" :data-muted="event.muted ? 'true' : undefined">
     <div
-      class="absolute left-0 top-0 h-full w-1.5"
-      :class="{ 'opacity-35': event.muted }"
+      class="standard-event-item__stripe"
+      :data-muted="event.muted ? 'true' : undefined"
       :style="{ background: event.color }"
     ></div>
-    <div class="mb-1 flex items-center gap-2">
-      <div class="flex min-w-0 flex-1 items-center gap-2">
-        <span :class="['shrink-0', event.muted ? 'text-zinc-400' : 'text-zinc-500']">
+    <div class="standard-event-item__header">
+      <div class="standard-event-item__meta">
+        <span class="standard-event-item__time" :data-muted="event.muted ? 'true' : undefined">
           {{ event.occurredAt }}
         </span>
-        <span
-          :class="[
-            'min-w-0 truncate font-semibold',
-            event.muted ? 'text-zinc-500' : 'text-zinc-900'
-          ]"
-        >
+        <span class="standard-event-item__type" :data-muted="event.muted ? 'true' : undefined">
           {{ event.type }}
         </span>
         <button
@@ -54,16 +44,12 @@ function toggleBodyMode(): void {
           :aria-pressed="event.muted"
           :aria-label="event.muted ? `Unmute ${event.type}` : `Mute ${event.type}`"
           :title="event.muted ? `Unmute ${event.type}` : `Mute ${event.type}`"
-          :class="[
-            'inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border text-[10px]',
-            event.muted
-              ? 'border-zinc-400 bg-zinc-200 text-zinc-600 hover:bg-zinc-300'
-              : 'border-zinc-200 bg-white text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
-          ]"
+          class="standard-event-item__mute-button"
+          :data-muted="event.muted ? 'true' : undefined"
           @click="emit('muteChange', event.type, !event.muted)"
         >
           <svg
-            class="h-3.5 w-3.5"
+            class="standard-event-item__button-icon"
             viewBox="0 0 20 20"
             fill="none"
             stroke="currentColor"
@@ -82,11 +68,11 @@ function toggleBodyMode(): void {
           type="button"
           :aria-label="`Clear ${event.type}`"
           :title="`Clear ${event.type}`"
-          class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900"
+          class="standard-event-item__clear-button"
           @click="emit('clearType', event.type)"
         >
           <svg
-            class="h-3.5 w-3.5"
+            class="standard-event-item__button-icon"
             viewBox="0 0 20 20"
             fill="none"
             stroke="currentColor"
@@ -100,7 +86,7 @@ function toggleBodyMode(): void {
       </div>
       <button
         type="button"
-        class="inline-flex h-5 shrink-0 items-center rounded border border-zinc-200 bg-white px-1.5 font-mono text-[10px] font-semibold text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900"
+        class="standard-event-item__body-mode-button"
         :aria-label="`Switch ${event.type} body display mode`"
         :title="`Body mode: ${bodyModeLabel}`"
         @click="toggleBodyMode"
@@ -111,3 +97,66 @@ function toggleBodyMode(): void {
     <EventBodyBlock :body="event.body" :mode="bodyMode" :muted="event.muted" />
   </div>
 </template>
+
+<style scoped>
+@reference "tailwindcss";
+.standard-event-item {
+  @apply relative border-b border-zinc-200 bg-white py-2 pl-4 pr-3 font-mono text-xs leading-relaxed transition-colors;
+}
+
+.standard-event-item[data-muted='true'] {
+  @apply bg-zinc-100 text-zinc-500;
+}
+
+.standard-event-item__stripe {
+  @apply absolute left-0 top-0 h-full w-1.5;
+}
+
+.standard-event-item__stripe[data-muted='true'] {
+  @apply opacity-35;
+}
+
+.standard-event-item__header {
+  @apply mb-1 flex items-center gap-2;
+}
+
+.standard-event-item__meta {
+  @apply flex min-w-0 flex-1 items-center gap-2;
+}
+
+.standard-event-item__time {
+  @apply shrink-0 text-zinc-500;
+}
+
+.standard-event-item__time[data-muted='true'] {
+  @apply text-zinc-400;
+}
+
+.standard-event-item__type {
+  @apply min-w-0 truncate font-semibold text-zinc-900;
+}
+
+.standard-event-item__type[data-muted='true'] {
+  @apply text-zinc-500;
+}
+
+.standard-event-item__mute-button {
+  @apply inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-zinc-200 bg-white text-[10px] text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900;
+}
+
+.standard-event-item__mute-button[data-muted='true'] {
+  @apply border-zinc-400 bg-zinc-200 text-zinc-600 hover:bg-zinc-300;
+}
+
+.standard-event-item__clear-button {
+  @apply inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900;
+}
+
+.standard-event-item__button-icon {
+  @apply h-3.5 w-3.5;
+}
+
+.standard-event-item__body-mode-button {
+  @apply inline-flex h-5 shrink-0 items-center rounded border border-zinc-200 bg-white px-1.5 font-mono text-[10px] font-semibold text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900;
+}
+</style>

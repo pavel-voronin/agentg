@@ -12,58 +12,32 @@ describe('event filters view', () => {
       eventFilters: {
         ...defaultEventFilters(),
         types: {
-          'rpc.telegram.listChats.completed': false,
-          'rpc.telegram.listChats.failed': false,
-          'rpc.telegram.listChats.progress': true,
-          'rpc.telegram.listChats.started': true
+          'rpc.alpha.listItems.completed': false,
+          'rpc.alpha.listItems.failed': false,
+          'rpc.alpha.listItems.progress': true,
+          'rpc.alpha.listItems.started': true
         }
       },
       events: []
     });
     const rpcGroup = view.groups.find((group) => group.id === 'rpc');
-    const telegramDomain = view.domains.find((domain) => domain.id === 'telegram');
-    const tdlibDomain = view.domains.find((domain) => domain.id === 'tdlib');
-    const listChatsCall = rpcGroup?.rpcCalls.find((call) => call.target === 'telegram.listChats');
+    const alphaDomain = view.domains.find((domain) => domain.id === 'alpha');
+    const listChatsCall = rpcGroup?.rpcCalls.find((call) => call.target === 'alpha.listItems');
     const completedColumn = rpcGroup?.lifecycleColumns.find(
       (lifecycle) => lifecycle.suffix === 'completed'
     );
 
-    expect(view.domains.map((domain) => domain.id)).toEqual([
-      'telegram',
-      'tdlib',
-      'history',
-      'summaries'
-    ]);
-    expect(telegramDomain).toMatchObject({
-      enabledCount: '12',
-      eventsChecked: true,
+    expect(view.domains.map((domain) => domain.id)).toEqual(['alpha']);
+    expect(alphaDomain).toMatchObject({
+      enabledCount: '2',
+      eventTypes: [],
+      events: [],
+      eventsChecked: false,
       eventsIndeterminate: false
     });
-    expect(telegramDomain?.eventTypes).toContain('telegram.status');
-    expect(telegramDomain?.events.map((event) => event.type)).toEqual([
-      'telegram.message.created',
-      'telegram.message.deleted',
-      'telegram.message.updated',
-      'telegram.chat.updated',
-      'telegram.chat_folders.updated',
-      'telegram.user.updated',
-      'telegram.status',
-      'telegram.login.completed',
-      'telegram.login.failed',
-      'telegram.login.started'
-    ]);
-    expect(telegramDomain?.rpc[0]?.rpcCalls.map((call) => call.target)).toContain(
-      'telegram.listChats'
-    );
-    expect(
-      telegramDomain?.rpc[0]?.rpcCalls.every((call) => call.target.startsWith('telegram.'))
-    ).toBe(true);
-    expect(tdlibDomain).toMatchObject({
-      enabledCount: '21',
-      rpc: []
-    });
-    expect(tdlibDomain?.events.map((event) => event.type)).toContain(
-      'telegram.tdlib.getChat.started'
+    expect(alphaDomain?.rpc[0]?.rpcCalls.map((call) => call.target)).toContain('alpha.listItems');
+    expect(alphaDomain?.rpc[0]?.rpcCalls.every((call) => call.target.startsWith('alpha.'))).toBe(
+      true
     );
     expect(rpcGroup).toMatchObject({
       kind: 'rpc',
@@ -78,23 +52,23 @@ describe('event filters view', () => {
       checked: false,
       indeterminate: true,
       lifecycles: [
-        { enabled: true, label: 'S', type: 'rpc.telegram.listChats.started' },
-        { enabled: false, label: 'C', type: 'rpc.telegram.listChats.completed' },
-        { enabled: false, label: 'F', type: 'rpc.telegram.listChats.failed' },
-        { enabled: true, label: 'P', type: 'rpc.telegram.listChats.progress' }
+        { enabled: true, label: 'S', type: 'rpc.alpha.listItems.started' },
+        { enabled: false, label: 'C', type: 'rpc.alpha.listItems.completed' },
+        { enabled: false, label: 'F', type: 'rpc.alpha.listItems.failed' },
+        { enabled: true, label: 'P', type: 'rpc.alpha.listItems.progress' }
       ],
       lifecycleTypes: [
-        'rpc.telegram.listChats.started',
-        'rpc.telegram.listChats.completed',
-        'rpc.telegram.listChats.failed',
-        'rpc.telegram.listChats.progress'
+        'rpc.alpha.listItems.started',
+        'rpc.alpha.listItems.completed',
+        'rpc.alpha.listItems.failed',
+        'rpc.alpha.listItems.progress'
       ]
     });
     expect(completedColumn).toMatchObject({
       checked: false,
       indeterminate: false
     });
-    expect(completedColumn?.types).toContain('rpc.telegram.listChats.completed');
+    expect(completedColumn?.types).toContain('rpc.alpha.listItems.completed');
 
     const html = await renderToString(
       createSSRApp({
@@ -108,12 +82,12 @@ describe('event filters view', () => {
     expect(html).toContain('All');
     expect(html).toContain('None');
     expect(html).toContain('role="tab"');
-    expect(html).not.toContain('Telegram messages');
-    expect(html).not.toContain('Telegram chats');
+    expect(html).not.toContain('Alpha messages');
+    expect(html).not.toContain('Alpha chats');
     expect(html).toContain('Toggle Completed RPC calls');
     expect(html).toContain('aria-pressed="false"');
-    expect(html).toContain('telegram.listChats');
-    expect(html).not.toContain('rpc.telegram.listChats.started');
+    expect(html).toContain('alpha.listItems');
+    expect(html).not.toContain('rpc.alpha.listItems.started');
     expect(html).not.toContain('Event limit');
   });
 });

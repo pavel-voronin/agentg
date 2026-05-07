@@ -1,12 +1,8 @@
 export const CONTROL_PLANE_STORAGE_KEYS = {
-  chatFilter: 'agentg.controlPlane.chatFilter',
-  chatListSelection: 'agentg.controlPlane.chatListSelection',
   dashboardCollapsed: 'agentg.controlPlane.dashboardCollapsed',
-  defaultViewportDays: 'agentg.controlPlane.defaultViewportDays',
   eventFilters: 'agentg.controlPlane.eventFilters',
   eventLimit: 'agentg.controlPlane.eventLimit',
   eventsPanelCollapsed: 'agentg.controlPlane.eventsPanelCollapsed',
-  selectedChatId: 'agentg.controlPlane.selectedChatId',
   slotDebugEnabled: 'agentg.controlPlane.slotDebugEnabled'
 } as const;
 

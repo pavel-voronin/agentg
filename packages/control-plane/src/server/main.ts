@@ -1,4 +1,4 @@
-import { createNatsEventBus } from '@agentg/shared/events/bus';
+import { createNatsEventBus } from '@agentg/events/bus';
 
 import { loadControlPlaneConfig } from './config.js';
 import { runControlPlaneServer } from './control-plane-server.js';

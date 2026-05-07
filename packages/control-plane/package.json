@@ -16,12 +16,10 @@
     "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {
-    "@agentg/control-plane-extension": "file:../control-plane-extension",
-    "@agentg/history-sync": "file:../history-sync",
+    "@agentg/control-plane-sdk": "file:../control-plane-sdk",
+    "@agentg/events": "file:../events",
+    "@agentg/rpc": "file:../rpc",
     "@agentg/service-directory": "file:../service-directory",
-    "@agentg/shared": "file:../shared",
-    "@agentg/telegram": "file:../telegram",
-    "@trpc/client": "^11.17.0",
     "dotenv": "17.4.2",
     "nats": "^2.29.3",
     "pinia": "^3.0.4",

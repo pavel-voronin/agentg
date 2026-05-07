@@ -3,7 +3,7 @@ import {
   eventGroupFilterStateInState,
   eventGroupForEvent,
   eventTypesForGroupInState,
-  filterableEventGroups,
+  filterableEventGroupsInState,
   isEventTypeEnabledInState
 } from '../domain/events.js';
 import {
@@ -34,30 +34,7 @@ export type EventsPanelViewSource = {
 
 export type EventTypeMutedLookup = (type: string) => boolean;
 
-type EventFilterDomainId = 'telegram' | 'tdlib' | 'history' | 'summaries';
-
-type EventFilterDomainDefinition = {
-  id: EventFilterDomainId;
-  label: string;
-};
-
-const EVENT_FILTER_DOMAINS: EventFilterDomainDefinition[] = [
-  { id: 'telegram', label: 'Telegram' },
-  { id: 'tdlib', label: 'Tdlib' },
-  { id: 'history', label: 'History' },
-  { id: 'summaries', label: 'Summaries' }
-];
-
-const EVENT_GROUP_DOMAIN_IDS: Record<string, EventFilterDomainId> = {
-  history: 'history',
-  summaries: 'summaries',
-  telegram_chats: 'telegram',
-  telegram_messages: 'telegram',
-  telegram_operations: 'telegram',
-  telegram_status: 'telegram',
-  telegram_tdlib: 'tdlib',
-  telegram_users: 'telegram'
-};
+type EventFilterDomainId = string;
 
 export function eventListItem(
   event: ControlPlaneEvent,
@@ -129,7 +106,9 @@ export function eventListItems(
 }
 
 export function eventFiltersPanelView(source: EventsPanelViewSource): EventFiltersPanelView {
-  const groups = filterableEventGroups().map((group) => eventFilterGroupView(source, group));
+  const groups = filterableEventGroupsInState(source).map((group) =>
+    eventFilterGroupView(source, group)
+  );
   return {
     domains: eventFilterDomains(groups),
     enabledCount: String(enabledEventFiltersCountInState(source)),
@@ -139,24 +118,35 @@ export function eventFiltersPanelView(source: EventsPanelViewSource): EventFilte
 
 function eventFilterDomains(groups: EventFilterGroupView[]): EventFilterDomainView[] {
   const rpcGroup = groups.find((group) => group.kind === 'rpc');
-  return EVENT_FILTER_DOMAINS.map((domain) => {
-    const events = groups.flatMap((group) =>
-      group.kind === 'types' && EVENT_GROUP_DOMAIN_IDS[group.id] === domain.id ? group.types : []
-    );
-    const rpc = rpcGroup === undefined ? [] : [eventFilterDomainRpcGroupView(rpcGroup, domain.id)];
-    const visibleRpc = rpc.filter((group) => group.rpcCalls.length > 0);
-    const enabledEventCount = events.filter((type) => type.enabled).length;
-    return {
-      enabledCount: String(eventFilterDomainEnabledCount(events, visibleRpc)),
-      events,
-      eventsChecked: events.length > 0 && enabledEventCount === events.length,
-      eventsIndeterminate: enabledEventCount > 0 && enabledEventCount < events.length,
-      eventTypes: events.map((event) => event.type),
-      id: domain.id,
-      label: domain.label,
-      rpc: visibleRpc
-    };
-  }).filter((domain) => domain.events.length > 0 || domain.rpc.length > 0);
+  const domainIds = [
+    ...new Set([
+      ...groups.flatMap((group) => (group.kind === 'types' ? [eventGroupDomainId(group.id)] : [])),
+      ...(rpcGroup?.rpcCalls
+        .map((call) => rpcTargetDomainId(call.target))
+        .filter((id): id is EventFilterDomainId => id !== null) ?? [])
+    ])
+  ].sort();
+
+  return domainIds
+    .map((domainId) => {
+      const events = groups.flatMap((group) =>
+        group.kind === 'types' && eventGroupDomainId(group.id) === domainId ? group.types : []
+      );
+      const rpc = rpcGroup === undefined ? [] : [eventFilterDomainRpcGroupView(rpcGroup, domainId)];
+      const visibleRpc = rpc.filter((group) => group.rpcCalls.length > 0);
+      const enabledEventCount = events.filter((type) => type.enabled).length;
+      return {
+        enabledCount: String(eventFilterDomainEnabledCount(events, visibleRpc)),
+        events,
+        eventsChecked: events.length > 0 && enabledEventCount === events.length,
+        eventsIndeterminate: enabledEventCount > 0 && enabledEventCount < events.length,
+        eventTypes: events.map((event) => event.type),
+        id: domainId,
+        label: eventDomainLabel(domainId),
+        rpc: visibleRpc
+      };
+    })
+    .filter((domain) => domain.events.length > 0 || domain.rpc.length > 0);
 }
 
 function eventFilterDomainEnabledCount(
@@ -573,17 +563,18 @@ function rpcCallId(data: unknown): string | null {
 }
 
 function rpcTargetDomainId(target: string): EventFilterDomainId | null {
-  if (target.startsWith('telegram.tdlib.')) {
-    return 'tdlib';
-  }
-  if (target.startsWith('telegram.')) {
-    return 'telegram';
-  }
-  if (target.startsWith('history.')) {
-    return 'history';
-  }
-  if (target.startsWith('summaries.')) {
-    return 'summaries';
-  }
-  return null;
+  const domainId = target.split('.')[0]?.trim();
+  return domainId === undefined || domainId.length === 0 ? null : domainId;
+}
+
+function eventGroupDomainId(groupId: string): EventFilterDomainId {
+  return groupId.startsWith('events:') ? groupId.slice('events:'.length) : groupId;
+}
+
+function eventDomainLabel(domainId: EventFilterDomainId): string {
+  return domainId
+    .split(/[-_]/)
+    .filter((part) => part.length > 0)
+    .map((part) => `${part[0]?.toUpperCase() ?? ''}${part.slice(1)}`)
+    .join(' ');
 }

@@ -6,7 +6,7 @@ import type {
   EventFiltersPanelView,
   EventsPanelMode
 } from '../stores/controlPlaneTypes.js';
-import UiButton from '@agentg/control-plane-extension/ui';
+import UiButton from '@agentg/control-plane-sdk/ui';
 import EventFilters from './EventFilters.vue';
 import EventSettings from './EventSettings.vue';
 import EventsList from './EventsList.vue';
@@ -50,36 +50,33 @@ const eventStreamToggleLabel = computed(() =>
   props.streamPaused ? 'Resume event stream' : 'Pause event stream'
 );
 const eventStreamStateLabel = computed(() => (props.streamPaused ? 'Paused' : 'Live'));
-const eventStreamDotClass = computed(() => (props.streamPaused ? 'bg-[#9CA3AF]' : 'bg-[#16A34A]'));
 </script>
 
 <template>
-  <aside
-    :id="panelId"
-    class="flex min-h-0 flex-col overflow-hidden rounded-lg border border-zinc-200 bg-white"
-  >
-    <div class="flex shrink-0 items-center justify-between gap-2 border-b border-zinc-200 p-3">
-      <div>
-        <div class="text-sm font-semibold">Events</div>
+  <aside :id="panelId" class="events-panel">
+    <div class="events-panel__header">
+      <div class="events-panel__title-frame">
+        <div class="events-panel__title">Events</div>
       </div>
-      <div class="flex shrink-0 items-center gap-2">
+      <div class="events-panel__toolbar">
         <UiButton
           :id="streamToggleId"
           :aria-label="eventStreamToggleLabel"
           :aria-pressed="!streamPaused"
-          class="w-[128px] justify-start pl-[14px] pr-[10px]"
+          class="events-panel__stream-button"
           :title="eventStreamToggleLabel"
           @click="emit('streamToggle')"
         >
           <span
-            :class="['mr-[9px] h-[9px] w-[9px] rounded-full', eventStreamDotClass]"
+            class="events-panel__stream-dot"
+            :data-paused="streamPaused ? 'true' : undefined"
             aria-hidden="true"
           ></span>
-          <span class="mr-[5px] w-[50px] min-w-0 text-left">{{ eventStreamStateLabel }}</span>
-          <span class="mr-[9px] h-[18px] w-px bg-[#E5E7EB]" aria-hidden="true"></span>
+          <span class="events-panel__stream-label">{{ eventStreamStateLabel }}</span>
+          <span class="events-panel__stream-divider" aria-hidden="true"></span>
           <svg
             v-if="streamPaused"
-            class="h-[18px] w-[18px] shrink-0 text-[#111827]"
+            class="events-panel__button-icon-large"
             viewBox="0 0 20 20"
             fill="currentColor"
             aria-hidden="true"
@@ -90,7 +87,7 @@ const eventStreamDotClass = computed(() => (props.streamPaused ? 'bg-[#9CA3AF]' 
           </svg>
           <svg
             v-else
-            class="h-[18px] w-[18px] shrink-0 text-[#111827]"
+            class="events-panel__button-icon-large"
             viewBox="0 0 20 20"
             fill="currentColor"
             aria-hidden="true"
@@ -102,12 +99,12 @@ const eventStreamDotClass = computed(() => (props.streamPaused ? 'bg-[#9CA3AF]' 
         </UiButton>
         <UiButton
           :id="filtersToggleId"
-          class="gap-1.5 px-2.5"
+          class="events-panel__filters-button"
           :variant="eventFilterToggleVariant"
           @click="emit('filtersToggle')"
         >
           <svg
-            class="h-3.5 w-3.5"
+            class="events-panel__button-icon"
             viewBox="0 0 20 20"
             fill="none"
             stroke="currentColor"
@@ -121,7 +118,7 @@ const eventStreamDotClass = computed(() => (props.streamPaused ? 'bg-[#9CA3AF]' 
             <path d="M8 15h4" />
           </svg>
           <span>Filters</span>
-          <span class="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] leading-none text-zinc-500">
+          <span class="events-panel__filters-count">
             {{ view.enabledCount }}
           </span>
         </UiButton>
@@ -133,7 +130,7 @@ const eventStreamDotClass = computed(() => (props.streamPaused ? 'bg-[#9CA3AF]' 
           @click="emit('clear')"
         >
           <svg
-            class="h-4 w-4"
+            class="events-panel__icon-button-icon"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -159,7 +156,7 @@ const eventStreamDotClass = computed(() => (props.streamPaused ? 'bg-[#9CA3AF]' 
           @click="emit('settingsToggle')"
         >
           <svg
-            class="h-4 w-4"
+            class="events-panel__icon-button-icon"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -200,3 +197,62 @@ const eventStreamDotClass = computed(() => (props.streamPaused ? 'bg-[#9CA3AF]' 
     />
   </aside>
 </template>
+
+<style scoped>
+@reference "tailwindcss";
+.events-panel {
+  @apply flex min-h-0 flex-col overflow-hidden rounded-lg border border-zinc-200 bg-white;
+}
+
+.events-panel__header {
+  @apply flex shrink-0 items-center justify-between gap-2 border-b border-zinc-200 p-3;
+}
+
+.events-panel__title {
+  @apply text-sm font-semibold;
+}
+
+.events-panel__toolbar {
+  @apply flex shrink-0 items-center gap-2;
+}
+
+.events-panel__stream-button {
+  @apply w-[128px] justify-start pl-[14px] pr-[10px];
+}
+
+.events-panel__stream-dot {
+  @apply mr-[9px] h-[9px] w-[9px] rounded-full bg-[#16A34A];
+}
+
+.events-panel__stream-dot[data-paused='true'] {
+  @apply bg-[#9CA3AF];
+}
+
+.events-panel__stream-label {
+  @apply mr-[5px] w-[50px] min-w-0 text-left;
+}
+
+.events-panel__stream-divider {
+  @apply mr-[9px] h-[18px] w-px bg-[#E5E7EB];
+}
+
+.events-panel__button-icon-large {
+  @apply h-[18px] w-[18px] shrink-0 text-[#111827];
+}
+
+.events-panel__filters-button {
+  @apply gap-1.5 px-2.5;
+}
+
+.events-panel__button-icon {
+  @apply h-3.5 w-3.5;
+}
+
+.events-panel__filters-count {
+  @apply rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] leading-none text-zinc-500;
+}
+
+.events-panel__icon-button-icon {
+  @apply h-4 w-4;
+}
+</style>

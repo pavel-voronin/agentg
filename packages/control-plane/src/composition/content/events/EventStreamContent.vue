@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 
-import type { SlotContext } from '@agentg/control-plane-extension/slots';
+import type { SlotContext } from '@agentg/control-plane-sdk/slots';
 import EventsPanel from '../../../components/EventsPanel.vue';
 import { useEventsStore } from '../../../stores/events.js';
 import { eventFiltersPanelView, eventListItems } from '../../../view-models/eventsPanelView.js';
@@ -69,7 +69,7 @@ function contextString(context: SlotContext | undefined, key: string, fallback: 
 
 <template>
   <EventsPanel
-    class="h-full"
+    class="event-stream-content"
     :clear-button-id="`${idPrefix}ClearEvents`"
     :event-filters-id="`${idPrefix}EventFilters`"
     :event-list-id="`${idPrefix}Events`"
@@ -96,3 +96,10 @@ function contextString(context: SlotContext | undefined, key: string, fallback: 
     @type-change="setEventTypeEnabled"
   />
 </template>
+
+<style scoped>
+@reference "tailwindcss";
+.event-stream-content {
+  @apply h-full;
+}
+</style>

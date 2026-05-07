@@ -21,9 +21,9 @@ describe('events store', () => {
 
   it('starts unpaused and drops incoming panel events while paused', () => {
     const store = useEventsStore();
-    const firstEvent = event('history.sync.started');
-    const pausedEvent = event('history.sync.completed');
-    const resumedEvent = event('history.sync.failed');
+    const firstEvent = event('beta.sync.started');
+    const pausedEvent = event('beta.sync.completed');
+    const resumedEvent = event('beta.sync.failed');
 
     expect(store.eventsPaused).toBe(false);
     expect(store.pushEvent(firstEvent)).toBe(true);
@@ -32,15 +32,15 @@ describe('events store', () => {
 
     expect(store.eventsPaused).toBe(true);
     expect(store.pushEvent(pausedEvent)).toBe(false);
-    expect(store.events.map((item) => item.type)).toEqual(['history.sync.started']);
+    expect(store.events.map((item) => item.type)).toEqual(['beta.sync.started']);
 
     store.toggleEventsPaused();
 
     expect(store.eventsPaused).toBe(false);
     expect(store.pushEvent(resumedEvent)).toBe(true);
     expect(store.events.map((item) => item.type)).toEqual([
-      'history.sync.failed',
-      'history.sync.started'
+      'beta.sync.failed',
+      'beta.sync.started'
     ]);
   });
 
@@ -59,59 +59,52 @@ describe('events store', () => {
 
   it('mutes future events without removing existing events of that type', () => {
     const store = useEventsStore();
-    const firstEvent = event('telegram.status');
-    const mutedEvent = event('telegram.status');
-    const otherEvent = event('history.sync.started');
+    const firstEvent = event('alpha.status');
+    const mutedEvent = event('alpha.status');
+    const otherEvent = event('beta.sync.started');
     const storage = localStorage as Storage & {
       setItem: ReturnType<typeof vi.fn>;
     };
 
     expect(store.pushEvent(firstEvent)).toBe(true);
 
-    store.setEventTypeMuted('telegram.status', true);
+    store.setEventTypeMuted('alpha.status', true);
 
-    expect(store.isEventTypeMuted('telegram.status')).toBe(true);
-    expect(store.eventFilters.types['telegram.status']).toBe(false);
+    expect(store.isEventTypeMuted('alpha.status')).toBe(true);
+    expect(store.eventFilters.types['alpha.status']).toBe(false);
     expect(storage.setItem).toHaveBeenCalled();
-    expect(store.events.map((item) => item.type)).toEqual(['telegram.status']);
+    expect(store.events.map((item) => item.type)).toEqual(['alpha.status']);
     expect(store.pushEvent(mutedEvent)).toBe(false);
     expect(store.pushEvent(otherEvent)).toBe(true);
-    expect(store.events.map((item) => item.type)).toEqual([
-      'history.sync.started',
-      'telegram.status'
-    ]);
+    expect(store.events.map((item) => item.type)).toEqual(['beta.sync.started', 'alpha.status']);
 
-    store.setEventTypeMuted('telegram.status', false);
+    store.setEventTypeMuted('alpha.status', false);
 
-    expect(store.isEventTypeMuted('telegram.status')).toBe(false);
-    expect(store.eventFilters.types['telegram.status']).toBe(true);
+    expect(store.isEventTypeMuted('alpha.status')).toBe(false);
+    expect(store.eventFilters.types['alpha.status']).toBe(true);
     expect(store.pushEvent(mutedEvent)).toBe(true);
     expect(store.events.map((item) => item.type)).toEqual([
-      'telegram.status',
-      'history.sync.started',
-      'telegram.status'
+      'alpha.status',
+      'beta.sync.started',
+      'alpha.status'
     ]);
   });
 
   it('clears muted event types only when explicitly requested', () => {
     const store = useEventsStore();
 
-    store.setEvents([
-      event('telegram.status'),
-      event('history.sync.started'),
-      event('telegram.status')
-    ]);
-    store.setEventTypeMuted('telegram.status', true);
+    store.setEvents([event('alpha.status'), event('beta.sync.started'), event('alpha.status')]);
+    store.setEventTypeMuted('alpha.status', true);
 
     expect(store.events.map((item) => item.type)).toEqual([
-      'telegram.status',
-      'history.sync.started',
-      'telegram.status'
+      'alpha.status',
+      'beta.sync.started',
+      'alpha.status'
     ]);
 
-    store.clearEventsOfType('telegram.status');
+    store.clearEventsOfType('alpha.status');
 
-    expect(store.events.map((item) => item.type)).toEqual(['history.sync.started']);
+    expect(store.events.map((item) => item.type)).toEqual(['beta.sync.started']);
   });
 
   it('persists positive event limits without an upper cap and trims current events', () => {
@@ -121,9 +114,9 @@ describe('events store', () => {
     };
 
     store.setEvents([
-      event('history.sync.failed'),
-      event('history.sync.completed'),
-      event('history.sync.started')
+      event('beta.sync.failed'),
+      event('beta.sync.completed'),
+      event('beta.sync.started')
     ]);
 
     store.setEventLimit(2);
@@ -131,8 +124,8 @@ describe('events store', () => {
     expect(store.eventLimit).toBe(2);
     expect(storage.setItem).toHaveBeenCalledWith(CONTROL_PLANE_STORAGE_KEYS.eventLimit, '2');
     expect(store.events.map((item) => item.type)).toEqual([
-      'history.sync.failed',
-      'history.sync.completed'
+      'beta.sync.failed',
+      'beta.sync.completed'
     ]);
 
     store.setEventLimit(2501);

@@ -1,53 +1,48 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
-import { provideControlPlaneActions } from '@agentg/control-plane-extension/actions';
+import { provideControlPlaneHost } from '@agentg/control-plane-sdk/host';
 import {
   createSlotRuntime,
   provideSlotRuntime,
   SlotDebugLayer,
   SlotOutlet
-} from '@agentg/control-plane-extension/slots';
-import UiButton from '@agentg/control-plane-extension/ui';
+} from '@agentg/control-plane-sdk/slots';
+import UiButton from '@agentg/control-plane-sdk/ui';
+import UiStatusBadge from '@agentg/control-plane-sdk/ui/status-badge';
 
 import { useControlPlaneRuntime } from '../runtime/useControlPlaneRuntime.js';
 import { useAppShellStore } from '../stores/appShell.js';
-import { useChatStore } from '../stores/chat.js';
-import { useSelectedHistoryStore } from '../stores/selectedHistory.js';
 import { appShellView } from '../view-models/appShellView.js';
-import { chatSidebarView } from '../view-models/chatSidebarView.js';
-import { selectedWorkspaceView } from '../view-models/selectedWorkspaceView.js';
-import { controlPlaneContentCatalog } from '../composition/contentProviders.js';
 import {
-  defaultControlPlaneLayout,
+  controlPlaneContentCatalog,
+  controlPlaneContentProviders
+} from '../composition/contentProviders.js';
+import {
+  defaultLayoutFromProviders,
   readControlPlaneLayout,
   writeControlPlaneLayout
 } from '../composition/slots/layout.js';
-import ShellStatusBadge from './ShellStatusBadge.vue';
+import DashboardPanel from './DashboardPanel.vue';
 import ShellToggleButton from './ShellToggleButton.vue';
 
 const appShellStore = useAppShellStore();
-const chatStore = useChatStore();
-const selectedHistoryStore = useSelectedHistoryStore();
-const actions = useControlPlaneRuntime();
+const host = useControlPlaneRuntime();
 const slotDebugEnabled = computed(() => appShellStore.slotDebugEnabled);
+const defaultLayout = defaultLayoutFromProviders(controlPlaneContentProviders);
 const slotRuntime = createSlotRuntime({
   catalog: controlPlaneContentCatalog,
   debugEnabled: slotDebugEnabled,
-  initialLayout: readControlPlaneLayout(defaultControlPlaneLayout),
+  initialLayout: readControlPlaneLayout(defaultLayout),
   onLayoutChange: writeControlPlaneLayout
 });
 
-provideControlPlaneActions(actions);
+provideControlPlaneHost(host);
 provideSlotRuntime(slotRuntime);
 
 const appShell = computed(() => appShellView(appShellStore));
-const chatSidebar = computed(() => chatSidebarView(chatStore, selectedHistoryStore.selectedChatId));
-const selectedWorkspace = computed(() => selectedWorkspaceView(selectedHistoryStore));
 const workspaceContext = computed(() => ({
-  chatSidebar: chatSidebar.value,
-  eventsPanelCollapsed: appShell.value.eventsPanelCollapsed,
-  selectedWorkspace: selectedWorkspace.value
+  eventsPanelCollapsed: appShell.value.eventsPanelCollapsed
 }));
 
 type BrowserGlobal = {
@@ -166,21 +161,27 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="flex h-screen min-h-0 flex-col">
-    <header ref="header" class="shrink-0 bg-zinc-100 px-4 py-3">
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <div class="min-w-0">
-          <h1 class="truncate text-lg font-semibold tracking-normal">AgenTG Control Plane</h1>
+  <div class="control-plane-app">
+    <header ref="header" class="control-plane-app__header">
+      <div class="control-plane-app__header-layout">
+        <div class="control-plane-app__title-frame">
+          <h1 class="control-plane-app__title">AgenTG Control Plane</h1>
         </div>
-        <div class="flex flex-wrap items-center justify-end gap-3">
-          <div class="flex flex-wrap items-center justify-end gap-2">
-            <ShellStatusBadge :badge="appShell.controlPlaneStatus" />
-            <ShellStatusBadge :badge="appShell.tdlibStatus" />
+        <div class="control-plane-app__toolbar">
+          <div class="control-plane-app__status-group">
+            <UiStatusBadge
+              :kind="appShell.controlPlaneStatus.kind"
+              :label="appShell.controlPlaneStatus.label"
+            />
+            <SlotOutlet
+              slot-id="control-plane.header.status"
+              :tags="['control-plane.header.status']"
+            />
           </div>
-          <div class="flex flex-wrap items-center justify-end gap-2">
+          <div class="control-plane-app__toggle-group">
             <UiButton
               :aria-pressed="appShell.slotDebugEnabled"
-              class="gap-1.5 px-2.5 text-xs"
+              class="control-plane-app__slot-debug-button"
               :title="
                 appShell.slotDebugEnabled ? 'Hide slot debug overlay' : 'Show slot debug overlay'
               "
@@ -188,7 +189,7 @@ onBeforeUnmount(() => {
               @click="toggleSlotDebug"
             >
               <svg
-                class="h-3.5 w-3.5"
+                class="control-plane-app__button-icon"
                 viewBox="0 0 20 20"
                 fill="none"
                 stroke="currentColor"
@@ -230,22 +231,14 @@ onBeforeUnmount(() => {
     </header>
 
     <section
-      v-show="!appShell.dashboardCollapsed"
+      v-if="!appShell.dashboardCollapsed"
       id="dashboardPanel"
-      class="shrink-0 bg-zinc-100 p-4 pt-0"
+      class="control-plane-app__dashboard-panel"
     >
-      <SlotOutlet
-        id="dashboardMetrics"
-        slot-id="control-plane.dashboard"
-        :tags="['control-plane.dashboard']"
-      />
+      <DashboardPanel />
     </section>
 
-    <main
-      id="mainLayout"
-      ref="mainLayout"
-      class="min-h-0 flex-1 overflow-hidden bg-zinc-100 p-4 pt-0"
-    >
+    <main id="mainLayout" ref="mainLayout" class="control-plane-app__main-layout">
       <SlotOutlet
         :context="workspaceContext"
         slot-id="control-plane.workspace"
@@ -256,16 +249,16 @@ onBeforeUnmount(() => {
   <section
     v-show="dashboardPreviewVisible"
     id="dashboardPreviewPanel"
-    class="fixed left-0 right-0 z-40 bg-zinc-100 p-4 pt-0"
+    class="control-plane-app__dashboard-preview"
     :style="dashboardPreviewStyle"
   >
-    <SlotOutlet
-      id="dashboardPreviewMetrics"
-      slot-id="control-plane.dashboard.preview"
-      :tags="['control-plane.dashboard']"
-    />
+    <DashboardPanel />
   </section>
-  <section v-show="eventsPreviewVisible" class="fixed z-40" :style="eventsPreviewStyle">
+  <section
+    v-show="eventsPreviewVisible"
+    class="control-plane-app__events-preview"
+    :style="eventsPreviewStyle"
+  >
     <SlotOutlet
       :context="{ idPrefix: 'eventsPreview' }"
       slot-id="control-plane.events.preview"
@@ -274,3 +267,59 @@ onBeforeUnmount(() => {
   </section>
   <SlotDebugLayer />
 </template>
+
+<style scoped>
+@reference "tailwindcss";
+.control-plane-app {
+  @apply flex h-screen min-h-0 flex-col;
+}
+
+.control-plane-app__header {
+  @apply shrink-0 bg-zinc-100 px-4 py-3;
+}
+
+.control-plane-app__header-layout {
+  @apply flex flex-wrap items-center justify-between gap-3;
+}
+
+.control-plane-app__title-frame {
+  @apply min-w-0;
+}
+
+.control-plane-app__title {
+  @apply truncate text-lg font-semibold tracking-normal;
+}
+
+.control-plane-app__toolbar {
+  @apply flex flex-wrap items-center justify-end gap-3;
+}
+
+.control-plane-app__status-group,
+.control-plane-app__toggle-group {
+  @apply flex flex-wrap items-center justify-end gap-2;
+}
+
+.control-plane-app__slot-debug-button {
+  @apply gap-1.5 px-2.5 text-xs;
+}
+
+.control-plane-app__button-icon {
+  @apply h-3.5 w-3.5;
+}
+
+.control-plane-app__dashboard-panel {
+  @apply shrink-0 bg-zinc-100 p-4 pt-0;
+}
+
+.control-plane-app__main-layout {
+  @apply min-h-0 flex-1 overflow-hidden bg-zinc-100 p-4 pt-0;
+}
+
+.control-plane-app__dashboard-preview {
+  @apply fixed left-0 right-0 z-40 bg-zinc-100 p-4 pt-0;
+}
+
+.control-plane-app__events-preview {
+  @apply fixed z-40;
+}
+</style>

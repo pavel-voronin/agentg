@@ -54,30 +54,16 @@ function toggleBodyMode(): void {
 </script>
 
 <template>
-  <div
-    :class="[
-      'relative border-b border-zinc-200 py-2 pl-4 pr-3 font-mono text-xs leading-relaxed transition-colors',
-      event.muted ? 'bg-zinc-100 text-zinc-500' : 'bg-white'
-    ]"
-  >
+  <div class="rpc-event-item" :data-muted="event.muted ? 'true' : undefined">
     <div
-      class="absolute left-0 top-0 h-full w-1.5"
-      :class="{ 'opacity-35': event.muted }"
+      class="rpc-event-item__stripe"
+      :data-muted="event.muted ? 'true' : undefined"
       :style="{ background: event.color }"
     ></div>
-    <div class="mb-2 flex items-center gap-2">
-      <div class="flex min-w-0 flex-1 items-center gap-2">
-        <span
-          class="shrink-0 rounded border border-zinc-300 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-normal text-zinc-500"
-        >
-          RPC call
-        </span>
-        <span
-          :class="[
-            'min-w-0 truncate font-semibold',
-            event.muted ? 'text-zinc-500' : 'text-zinc-900'
-          ]"
-        >
+    <div class="rpc-event-item__header">
+      <div class="rpc-event-item__meta">
+        <span class="rpc-event-item__kind-label"> RPC call </span>
+        <span class="rpc-event-item__target" :data-muted="event.muted ? 'true' : undefined">
           {{ event.target }}
         </span>
         <button
@@ -86,16 +72,12 @@ function toggleBodyMode(): void {
           :aria-pressed="event.muted"
           :aria-label="event.muted ? `Unmute ${event.target}` : `Mute ${event.target}`"
           :title="event.muted ? `Unmute ${event.target}` : `Mute ${event.target}`"
-          :class="[
-            'inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border text-[10px]',
-            event.muted
-              ? 'border-zinc-400 bg-zinc-200 text-zinc-600 hover:bg-zinc-300'
-              : 'border-zinc-200 bg-white text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
-          ]"
+          class="rpc-event-item__mute-button"
+          :data-muted="event.muted ? 'true' : undefined"
           @click="emit('procedureMuteToggle', event)"
         >
           <svg
-            class="h-3.5 w-3.5"
+            class="rpc-event-item__button-icon"
             viewBox="0 0 20 20"
             fill="none"
             stroke="currentColor"
@@ -114,11 +96,11 @@ function toggleBodyMode(): void {
           type="button"
           :aria-label="`Clear ${event.target}`"
           :title="`Clear ${event.target}`"
-          class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900"
+          class="rpc-event-item__clear-button"
           @click="clearRpcTypes"
         >
           <svg
-            class="h-3.5 w-3.5"
+            class="rpc-event-item__button-icon"
             viewBox="0 0 20 20"
             fill="none"
             stroke="currentColor"
@@ -132,7 +114,7 @@ function toggleBodyMode(): void {
       </div>
       <button
         type="button"
-        class="inline-flex h-5 shrink-0 items-center rounded border border-zinc-200 bg-white px-1.5 font-mono text-[10px] font-semibold text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900"
+        class="rpc-event-item__body-mode-button"
         :aria-label="`Switch ${event.target} body display mode`"
         :title="`Body mode: ${bodyModeLabel}`"
         @click="toggleBodyMode"
@@ -140,18 +122,14 @@ function toggleBodyMode(): void {
         {{ bodyModeLabel }}
       </button>
     </div>
-    <div class="grid gap-1">
+    <div class="rpc-event-item__lifecycle-list">
       <div
         v-for="(lifecycle, lifecycleIndex) in event.lifecycles"
         :key="lifecycle.key"
-        :class="[
-          'rounded border font-mono transition-colors',
-          lifecycle.muted
-            ? 'border-zinc-300 bg-zinc-200/70 text-zinc-500'
-            : 'border-zinc-200 bg-zinc-50 text-zinc-700'
-        ]"
+        class="rpc-event-item__lifecycle"
+        :data-muted="lifecycle.muted ? 'true' : undefined"
       >
-        <div class="flex flex-wrap items-center gap-2 px-2 py-1">
+        <div class="rpc-event-item__lifecycle-header">
           <button
             type="button"
             :aria-expanded="isLifecycleExpanded(lifecycle, lifecycleIndex)"
@@ -160,14 +138,12 @@ function toggleBodyMode(): void {
                 ? `Collapse ${lifecycle.title}`
                 : `Expand ${lifecycle.title}`
             "
-            class="inline-flex h-5 w-5 items-center justify-center rounded border border-zinc-300 bg-white text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900"
+            class="rpc-event-item__expand-button"
             @click="toggleLifecycle(lifecycle, lifecycleIndex)"
           >
             <svg
-              :class="[
-                'h-3.5 w-3.5 transition-transform',
-                isLifecycleExpanded(lifecycle, lifecycleIndex) ? 'rotate-90' : ''
-              ]"
+              class="rpc-event-item__expand-icon"
+              :data-expanded="isLifecycleExpanded(lifecycle, lifecycleIndex) ? 'true' : undefined"
               viewBox="0 0 20 20"
               fill="currentColor"
               aria-hidden="true"
@@ -175,10 +151,16 @@ function toggleBodyMode(): void {
               <path d="M7.5 4.75 13.25 10 7.5 15.25V4.75Z" />
             </svg>
           </button>
-          <span :class="['font-semibold', lifecycle.muted ? 'text-zinc-500' : 'text-zinc-800']">
+          <span
+            class="rpc-event-item__lifecycle-title"
+            :data-muted="lifecycle.muted ? 'true' : undefined"
+          >
             {{ lifecycle.title }}
           </span>
-          <span :class="lifecycle.muted ? 'text-zinc-400' : 'text-zinc-500'">
+          <span
+            class="rpc-event-item__lifecycle-time"
+            :data-muted="lifecycle.muted ? 'true' : undefined"
+          >
             {{ lifecycle.occurredAt }}
           </span>
           <button
@@ -186,16 +168,12 @@ function toggleBodyMode(): void {
             :aria-pressed="lifecycle.muted"
             :aria-label="lifecycle.muted ? `Unmute ${lifecycle.type}` : `Mute ${lifecycle.type}`"
             :title="lifecycle.muted ? `Unmute ${lifecycle.type}` : `Mute ${lifecycle.type}`"
-            :class="[
-              'inline-flex h-5 w-5 items-center justify-center rounded border text-[10px]',
-              lifecycle.muted
-                ? 'border-zinc-400 bg-zinc-200 text-zinc-600 hover:bg-zinc-300'
-                : 'border-zinc-200 bg-white text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900'
-            ]"
+            class="rpc-event-item__mute-button"
+            :data-muted="lifecycle.muted ? 'true' : undefined"
             @click="emit('muteChange', lifecycle.type, !lifecycle.muted)"
           >
             <svg
-              class="h-3.5 w-3.5"
+              class="rpc-event-item__button-icon"
               viewBox="0 0 20 20"
               fill="none"
               stroke="currentColor"
@@ -214,11 +192,11 @@ function toggleBodyMode(): void {
             type="button"
             :aria-label="`Clear ${lifecycle.type}`"
             :title="`Clear ${lifecycle.type}`"
-            class="inline-flex h-5 w-5 items-center justify-center rounded border border-zinc-300 bg-white text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900"
+            class="rpc-event-item__clear-button"
             @click="emit('clearType', lifecycle.type)"
           >
             <svg
-              class="h-3.5 w-3.5"
+              class="rpc-event-item__button-icon"
               viewBox="0 0 20 20"
               fill="none"
               stroke="currentColor"
@@ -241,3 +219,106 @@ function toggleBodyMode(): void {
     </div>
   </div>
 </template>
+
+<style scoped>
+@reference "tailwindcss";
+.rpc-event-item {
+  @apply relative border-b border-zinc-200 bg-white py-2 pl-4 pr-3 font-mono text-xs leading-relaxed transition-colors;
+}
+
+.rpc-event-item[data-muted='true'] {
+  @apply bg-zinc-100 text-zinc-500;
+}
+
+.rpc-event-item__stripe {
+  @apply absolute left-0 top-0 h-full w-1.5;
+}
+
+.rpc-event-item__stripe[data-muted='true'] {
+  @apply opacity-35;
+}
+
+.rpc-event-item__header {
+  @apply mb-2 flex items-center gap-2;
+}
+
+.rpc-event-item__meta {
+  @apply flex min-w-0 flex-1 items-center gap-2;
+}
+
+.rpc-event-item__kind-label {
+  @apply shrink-0 rounded border border-zinc-300 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-normal text-zinc-500;
+}
+
+.rpc-event-item__target {
+  @apply min-w-0 truncate font-semibold text-zinc-900;
+}
+
+.rpc-event-item__target[data-muted='true'] {
+  @apply text-zinc-500;
+}
+
+.rpc-event-item__mute-button {
+  @apply inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-zinc-200 bg-white text-[10px] text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900;
+}
+
+.rpc-event-item__mute-button[data-muted='true'] {
+  @apply border-zinc-400 bg-zinc-200 text-zinc-600 hover:bg-zinc-300;
+}
+
+.rpc-event-item__clear-button {
+  @apply inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900;
+}
+
+.rpc-event-item__button-icon {
+  @apply h-3.5 w-3.5;
+}
+
+.rpc-event-item__body-mode-button {
+  @apply inline-flex h-5 shrink-0 items-center rounded border border-zinc-200 bg-white px-1.5 font-mono text-[10px] font-semibold text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900;
+}
+
+.rpc-event-item__lifecycle-list {
+  @apply grid gap-1;
+}
+
+.rpc-event-item__lifecycle {
+  @apply rounded border border-zinc-200 bg-zinc-50 font-mono text-zinc-700 transition-colors;
+}
+
+.rpc-event-item__lifecycle[data-muted='true'] {
+  @apply border-zinc-300 bg-zinc-200/70 text-zinc-500;
+}
+
+.rpc-event-item__lifecycle-header {
+  @apply flex flex-wrap items-center gap-2 px-2 py-1;
+}
+
+.rpc-event-item__expand-button {
+  @apply inline-flex h-5 w-5 items-center justify-center rounded border border-zinc-300 bg-white text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900;
+}
+
+.rpc-event-item__expand-icon {
+  @apply h-3.5 w-3.5 transition-transform;
+}
+
+.rpc-event-item__expand-icon[data-expanded='true'] {
+  @apply rotate-90;
+}
+
+.rpc-event-item__lifecycle-title {
+  @apply font-semibold text-zinc-800;
+}
+
+.rpc-event-item__lifecycle-title[data-muted='true'] {
+  @apply text-zinc-500;
+}
+
+.rpc-event-item__lifecycle-time {
+  @apply text-zinc-500;
+}
+
+.rpc-event-item__lifecycle-time[data-muted='true'] {
+  @apply text-zinc-400;
+}
+</style>

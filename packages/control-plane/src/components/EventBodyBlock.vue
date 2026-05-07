@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { AppEventBodyView } from '../stores/controlPlaneTypes.js';
-import { dispatchModelRefSelected } from '@agentg/control-plane-extension/model-ref-events';
+import { dispatchModelRefSelected } from '@agentg/control-plane-sdk/model-ref-events';
 
 defineProps<{
   body: AppEventBodyView;
@@ -23,20 +23,16 @@ function selectModelRef(model: string, id: string): void {
 <template>
   <pre
     v-if="mode === 'raw'"
-    :class="[
-      'm-0 whitespace-pre-wrap break-words',
-      bordered ? 'border-t px-2 py-1' : '',
-      muted ? 'border-zinc-300 text-zinc-500' : 'border-zinc-200 text-zinc-700'
-    ]"
+    class="event-body-block__raw"
+    :data-bordered="bordered ? 'true' : undefined"
+    :data-muted="muted ? 'true' : undefined"
     >{{ body.raw }}</pre
   >
   <div
     v-else
-    :class="[
-      'm-0 whitespace-pre-wrap break-words font-mono',
-      bordered ? 'border-t px-2 py-1' : '',
-      muted ? 'border-zinc-300 text-zinc-500' : 'border-zinc-200 text-zinc-700'
-    ]"
+    class="event-body-block__yaml"
+    :data-bordered="bordered ? 'true' : undefined"
+    :data-muted="muted ? 'true' : undefined"
   >
     <div
       v-for="(line, lineIndex) in body.yamlLines"
@@ -48,18 +44,15 @@ function selectModelRef(model: string, id: string): void {
         <button
           v-else
           type="button"
-          class="inline-flex max-w-full overflow-hidden rounded border bg-transparent p-0 align-baseline font-mono leading-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
+          class="event-body-block__model-ref"
           :style="{ borderColor: token.color }"
           :title="`${token.model} ${token.id}`"
           @click="selectModelRef(token.model, token.id)"
         >
-          <span
-            class="max-w-[9rem] truncate px-1 text-white"
-            :style="{ backgroundColor: token.color }"
-          >
+          <span class="event-body-block__model-ref-model" :style="{ backgroundColor: token.color }">
             {{ token.model }}
           </span>
-          <span class="max-w-[12rem] truncate bg-white px-1" :style="{ color: token.color }">
+          <span class="event-body-block__model-ref-id" :style="{ color: token.color }">
             {{ token.id }}
           </span>
         </button>
@@ -67,3 +60,37 @@ function selectModelRef(model: string, id: string): void {
     </div>
   </div>
 </template>
+
+<style scoped>
+@reference "tailwindcss";
+.event-body-block__raw,
+.event-body-block__yaml {
+  @apply m-0 whitespace-pre-wrap break-words border-zinc-200 text-zinc-700;
+}
+
+.event-body-block__yaml {
+  @apply font-mono;
+}
+
+.event-body-block__raw[data-bordered='true'],
+.event-body-block__yaml[data-bordered='true'] {
+  @apply border-t px-2 py-1;
+}
+
+.event-body-block__raw[data-muted='true'],
+.event-body-block__yaml[data-muted='true'] {
+  @apply border-zinc-300 text-zinc-500;
+}
+
+.event-body-block__model-ref {
+  @apply inline-flex max-w-full overflow-hidden rounded border bg-transparent p-0 align-baseline font-mono leading-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1;
+}
+
+.event-body-block__model-ref-model {
+  @apply max-w-[9rem] truncate px-1 text-white;
+}
+
+.event-body-block__model-ref-id {
+  @apply max-w-[12rem] truncate bg-white px-1;
+}
+</style>

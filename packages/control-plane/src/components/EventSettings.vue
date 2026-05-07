@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 
-import UiButton from '@agentg/control-plane-extension/ui';
+import UiButton from '@agentg/control-plane-sdk/ui';
 
 const props = defineProps<{
   eventLimit: number;
@@ -48,14 +48,14 @@ function numberInputTarget(event: Event): NumberInputTarget | null {
 </script>
 
 <template>
-  <form :id="id" class="min-h-0 flex-1 overflow-auto bg-white" @submit.prevent>
-    <div class="grid gap-3 p-3">
-      <section class="rounded-lg border border-zinc-200 bg-white p-3">
-        <label :for="eventLimitInputId" class="block text-sm font-semibold">Event limit</label>
+  <form :id="id" class="event-settings" @submit.prevent>
+    <div class="event-settings__body">
+      <section class="event-settings__section">
+        <label :for="eventLimitInputId" class="event-settings__label">Event limit</label>
         <input
           :id="eventLimitInputId"
           v-model="eventLimitInput"
-          class="mt-2 h-9 w-full rounded-lg border border-zinc-300 bg-white px-3 text-sm text-zinc-900 shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+          class="event-settings__input"
           inputmode="numeric"
           min="1"
           step="1"
@@ -64,9 +64,36 @@ function numberInputTarget(event: Event): NumberInputTarget | null {
           @input="onEventLimitInput"
         />
       </section>
-      <UiButton class="mt-1 h-9 justify-center" variant="primary" @click="emit('close')">
+      <UiButton class="event-settings__close-button" variant="primary" @click="emit('close')">
         Close Settings
       </UiButton>
     </div>
   </form>
 </template>
+
+<style scoped>
+@reference "tailwindcss";
+.event-settings {
+  @apply min-h-0 flex-1 overflow-auto bg-white;
+}
+
+.event-settings__body {
+  @apply grid gap-3 p-3;
+}
+
+.event-settings__section {
+  @apply rounded-lg border border-zinc-200 bg-white p-3;
+}
+
+.event-settings__label {
+  @apply block text-sm font-semibold;
+}
+
+.event-settings__input {
+  @apply mt-2 h-9 w-full rounded-lg border border-zinc-300 bg-white px-3 text-sm text-zinc-900 shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-blue-500 focus:ring-offset-1;
+}
+
+.event-settings__close-button {
+  @apply mt-1 h-9 justify-center;
+}
+</style>

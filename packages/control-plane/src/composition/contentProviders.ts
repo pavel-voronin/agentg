@@ -1,13 +1,19 @@
-import { historySyncControlPlaneProvider } from '@agentg/history-sync/control-plane';
-import { telegramControlPlaneProvider } from '@agentg/telegram/control-plane';
-import type { ContentCatalog, ContentProvider } from '@agentg/control-plane-extension/slots';
+import type { ContentCatalog, ContentProvider } from '@agentg/control-plane-sdk/slots';
 
 import { controlPlaneContentProvider } from './content/control-plane/provider.js';
 
+type ControlPlaneProviderModule = Record<string, unknown>;
+
+const providerModules = import.meta.glob<ControlPlaneProviderModule>(
+  '../../../*/src/control-plane/index.ts',
+  {
+    eager: true
+  }
+);
+
 export const controlPlaneContentProviders = [
   controlPlaneContentProvider,
-  telegramControlPlaneProvider,
-  historySyncControlPlaneProvider
+  ...contentProvidersFromModules(providerModules)
 ] satisfies readonly ContentProvider[];
 
 export const controlPlaneContentCatalog = contentCatalogFromProviders(controlPlaneContentProviders);
@@ -19,4 +25,20 @@ export function contentCatalogFromProviders(providers: readonly ContentProvider[
       domainId: provider.domainId
     }))
   );
+}
+
+function contentProvidersFromModules(
+  modules: Record<string, ControlPlaneProviderModule>
+): ContentProvider[] {
+  return Object.entries(modules)
+    .flatMap(([, module]) => Object.values(module).filter(isContentProvider))
+    .sort((left, right) => left.domainId.localeCompare(right.domainId));
+}
+
+function isContentProvider(value: unknown): value is ContentProvider {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false;
+  }
+  const provider = value as Record<string, unknown>;
+  return typeof provider.domainId === 'string' && Array.isArray(provider.contents);
 }

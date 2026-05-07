@@ -1,16 +1,12 @@
-import type { ContentProvider } from '@agentg/control-plane-extension/slots';
+import type { ContentProvider } from '@agentg/control-plane-sdk/slots';
 
 export const controlPlaneContentProvider = {
   contents: [
     {
-      contentId: 'control-plane.dashboard.metrics',
-      load: () => import('./DashboardMetricsContent.vue'),
-      tags: ['control-plane.dashboard']
-    },
-    {
       contentId: 'events.stream.panel',
+      defaultSlotIds: ['control-plane.events.preview'],
       load: () => import('../events/EventStreamContent.vue'),
-      tags: ['control-plane.events', 'telegram.workspace.content']
+      tags: ['control-plane.events']
     }
   ],
   domainId: 'control-plane'
