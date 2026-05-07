@@ -2,7 +2,12 @@
 import { computed, onBeforeUnmount, onMounted, shallowRef, watch, type CSSProperties } from 'vue';
 
 import { useSlotRuntime } from './runtime.js';
-import type { ContentDefinition, SlotDebugEntry, SlotResolution } from './types.js';
+import type {
+  ContentDefinition,
+  SlotDebugEntry,
+  SlotRenderState,
+  SlotResolution
+} from './types.js';
 
 type SlotDebugRect = {
   height: number;
@@ -38,7 +43,7 @@ type SlotDebugIconGroup = {
 
 const ICON_SIZE = 16;
 const ICON_STEP = 18;
-const POPOVER_ESTIMATED_HEIGHT = 190;
+const POPOVER_ESTIMATED_HEIGHT = 230;
 const POPOVER_MAX_WIDTH = 360;
 const VIEWPORT_MARGIN = 16;
 
@@ -264,6 +269,17 @@ function contentTagList(resolution: SlotResolution): string {
   return tagList(contentForResolution(resolution)?.tags ?? []);
 }
 
+function stateError(state: SlotRenderState): string | null {
+  if (state.kind === 'component-load-error' || state.kind === 'component-render-error') {
+    return state.error;
+  }
+  return null;
+}
+
+function stateLabel(state: SlotRenderState): string {
+  return state.kind;
+}
+
 function bindObservedTargets(): void {
   disconnectResizeObserver();
   if (!runtime.debugEnabled.value || typeof ResizeObserver === 'undefined') {
@@ -441,12 +457,20 @@ function clamp(value: number, min: number, max: number): number {
             <dd>{{ tagList(activeEntry.tags) }}</dd>
           </div>
           <div>
+            <dt>State</dt>
+            <dd>{{ stateLabel(activeEntry.state) }}</dd>
+          </div>
+          <div>
             <dt>Content</dt>
             <dd>{{ contentLabel(activeEntry.resolution) }}</dd>
           </div>
           <div>
             <dt>Content tags</dt>
             <dd>{{ contentTagList(activeEntry.resolution) }}</dd>
+          </div>
+          <div v-if="stateError(activeEntry.state)">
+            <dt>Error</dt>
+            <dd>{{ stateError(activeEntry.state) }}</dd>
           </div>
         </dl>
       </div>

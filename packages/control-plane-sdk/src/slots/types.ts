@@ -57,11 +57,43 @@ export type SlotResolution =
       slotTags: readonly string[];
     };
 
+export type SlotRenderState =
+  | {
+      kind: 'empty';
+    }
+  | {
+      contentId: string;
+      kind: 'component-loading';
+    }
+  | {
+      contentId: string;
+      kind: 'component-ready';
+    }
+  | {
+      contentId: string;
+      kind: 'missing-content';
+    }
+  | {
+      contentId: string;
+      kind: 'incompatible-content';
+    }
+  | {
+      contentId: string;
+      error: string;
+      kind: 'component-load-error';
+    }
+  | {
+      contentId: string;
+      error: string;
+      kind: 'component-render-error';
+    };
+
 export type SlotDebugEntry = {
   id: number;
   order: number;
   resolution: SlotResolution;
   slotId: string;
+  state: SlotRenderState;
   tags: readonly string[];
   target: object | null;
 };

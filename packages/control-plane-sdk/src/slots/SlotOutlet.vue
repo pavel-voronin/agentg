@@ -3,6 +3,7 @@ import {
   computed,
   markRaw,
   onBeforeUnmount,
+  onErrorCaptured,
   shallowRef,
   useAttrs,
   watch,
@@ -16,10 +17,15 @@ import type {
   ContentDefinition,
   ContentModule,
   SlotContext,
-  SlotDebugRegistration
+  SlotDebugRegistration,
+  SlotRenderState
 } from './types.js';
 
 type SlotRootRef = ComponentPublicInstance | Element | null;
+type SlotRenderError = {
+  error: unknown;
+  info: string;
+};
 
 const props = withDefaults(
   defineProps<{
@@ -41,6 +47,7 @@ const runtime = useSlotRuntime();
 const contentComponent = shallowRef<Component | null>(null);
 const loadError = shallowRef<unknown>(null);
 const loadingContentId = shallowRef<string | null>(null);
+const renderError = shallowRef<SlotRenderError | null>(null);
 const slotRoot = shallowRef<SlotRootRef>(null);
 
 let loadSequence = 0;
@@ -64,6 +71,50 @@ const contentAttrs = computed(() => ({
   ...attrs
 }));
 const slotElement = computed(() => htmlElementFromRef(slotRoot.value));
+const slotState = computed<SlotRenderState>(() => {
+  if (resolution.value.kind === 'empty') {
+    return { kind: 'empty' };
+  }
+  if (resolution.value.kind === 'missing-content') {
+    return {
+      contentId: resolution.value.contentId,
+      kind: 'missing-content'
+    };
+  }
+  if (resolution.value.kind === 'incompatible') {
+    return {
+      contentId: resolution.value.content.contentId,
+      kind: 'incompatible-content'
+    };
+  }
+
+  const content = resolution.value.content;
+  if (loadError.value !== null) {
+    return {
+      contentId: content.contentId,
+      error: errorMessage(loadError.value),
+      kind: 'component-load-error'
+    };
+  }
+  if (renderError.value !== null) {
+    return {
+      contentId: content.contentId,
+      error: renderErrorMessage(renderError.value),
+      kind: 'component-render-error'
+    };
+  }
+  if (contentComponent.value === null) {
+    return {
+      contentId: loadingContentId.value ?? content.contentId,
+      kind: 'component-loading'
+    };
+  }
+
+  return {
+    contentId: content.contentId,
+    kind: 'component-ready'
+  };
+});
 let debugRegistration: SlotDebugRegistration | null = null;
 
 watch(
@@ -73,6 +124,7 @@ watch(
     contentComponent.value = null;
     loadError.value = null;
     loadingContentId.value = content?.contentId ?? null;
+    renderError.value = null;
     slotRoot.value = null;
 
     if (content === null) {
@@ -103,6 +155,7 @@ watch(
   () => ({
     resolution: resolution.value,
     slotId: props.slotId,
+    state: slotState.value,
     tags: [...props.tags],
     target: slotElement.value
   }),
@@ -116,30 +169,48 @@ watch(
   { flush: 'post', immediate: true }
 );
 
+onErrorCaptured((error, _instance, info) => {
+  if (resolvedContent.value === null) {
+    return;
+  }
+  renderError.value = {
+    error,
+    info
+  };
+  return false;
+});
+
 onBeforeUnmount(() => {
   debugRegistration?.unregister();
   debugRegistration = null;
 });
 
 const errorTitle = computed(() => {
-  if (resolution.value.kind === 'missing-content') {
-    return `Expected ${resolution.value.contentId}, but it is not in the content catalog.`;
+  switch (slotState.value.kind) {
+    case 'component-load-error':
+      return `Expected ${slotState.value.contentId}, but it did not load.`;
+    case 'component-render-error':
+      return `${slotState.value.contentId} failed while rendering.`;
+    case 'incompatible-content':
+      return `${slotState.value.contentId} is not compatible with this slot.`;
+    case 'missing-content':
+      return `Expected ${slotState.value.contentId}, but it is not in the content catalog.`;
+    case 'component-loading':
+    case 'component-ready':
+    case 'empty':
+      return '';
   }
-  if (resolution.value.kind === 'incompatible') {
-    return `${resolution.value.content.contentId} is not compatible with this slot.`;
-  }
-  if (loadError.value !== null) {
-    return `Expected ${resolvedContent.value?.contentId ?? 'content'}, but it did not load.`;
-  }
-  return '';
 });
 
 const errorDetail = computed(() => {
-  if (resolution.value.kind === 'incompatible') {
+  if (slotState.value.kind === 'incompatible-content' && resolution.value.kind === 'incompatible') {
     return `Slot tags: ${resolution.value.slotTags.join(', ')}. Content tags: ${resolution.value.content.tags.join(', ')}.`;
   }
-  if (loadError.value !== null) {
-    return errorMessage(loadError.value);
+  if (
+    slotState.value.kind === 'component-load-error' ||
+    slotState.value.kind === 'component-render-error'
+  ) {
+    return slotState.value.error;
   }
   return '';
 });
@@ -152,6 +223,12 @@ function errorMessage(error: unknown): string {
     return error;
   }
   return String(error);
+}
+
+function renderErrorMessage(error: SlotRenderError): string {
+  return error.info.length > 0
+    ? `${errorMessage(error.error)} (${error.info})`
+    : errorMessage(error.error);
 }
 
 function vueComponentFromModule(contentModule: unknown): Component {
@@ -178,7 +255,7 @@ function isComponentInstance(value: unknown): value is ComponentPublicInstance {
 </script>
 
 <template>
-  <div v-if="resolution.kind === 'empty'" ref="slotRoot" class="slot-outlet-default" v-bind="attrs">
+  <div v-if="slotState.kind === 'empty'" ref="slotRoot" class="slot-outlet-default" v-bind="attrs">
     <slot></slot>
   </div>
   <div v-else-if="errorTitle" ref="slotRoot" class="slot-outlet-error" v-bind="attrs">
@@ -186,14 +263,14 @@ function isComponentInstance(value: unknown): value is ComponentPublicInstance {
     <div v-if="errorDetail" class="slot-outlet-error__detail">{{ errorDetail }}</div>
   </div>
   <component
-    v-else-if="contentComponent"
+    v-else-if="slotState.kind === 'component-ready' && contentComponent"
     :is="contentComponent"
     ref="slotRoot"
     :slot-context="props.context"
     v-bind="contentAttrs"
   />
   <div v-else ref="slotRoot" class="slot-outlet-loading" v-bind="attrs">
-    Loading {{ loadingContentId }}.
+    Loading {{ slotState.kind === 'component-loading' ? slotState.contentId : 'content' }}.
   </div>
 </template>
 
