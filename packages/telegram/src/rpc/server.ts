@@ -1,29 +1,23 @@
 import type { Server } from 'node:http';
 
-import type { TelegramDatabase as AppDatabase } from '../database.js';
-import type { EventBus } from '@agentg/events/bus';
 import { createHTTPServer } from '@trpc/server/adapters/standalone';
 
-import { createTelegramHistoryRouter } from './history-router.js';
 import { formatInternalTrpcBindAddress, type InternalTrpcBindConfig } from './config.js';
+import { createTelegramRouter } from './router.js';
 import { createTelegramRpcContext } from './trpc.js';
+import type { TelegramRpcRuntime } from './runtime.js';
 
-type TelegramClient = {
-  invoke(request: Record<string, unknown>): Promise<unknown>;
-};
-
-export async function startTelegramHistoryTrpcServer(options: {
-  bind: InternalTrpcBindConfig;
-  client: TelegramClient;
-  database: AppDatabase;
-  eventBus: EventBus;
-}): Promise<Server> {
+export async function startTelegramTrpcServer(
+  options: TelegramRpcRuntime & {
+    bind: InternalTrpcBindConfig;
+  }
+): Promise<Server> {
   const server = createHTTPServer({
     createContext: (contextOptions) =>
       createTelegramRpcContext(contextOptions, {
         eventBus: options.eventBus
       }),
-    router: createTelegramHistoryRouter({
+    router: createTelegramRouter({
       client: options.client,
       database: options.database,
       eventBus: options.eventBus
@@ -33,11 +27,11 @@ export async function startTelegramHistoryTrpcServer(options: {
 
   await listen(server, options.bind.host, options.bind.port);
 
-  console.log(JSON.stringify({ address, event: 'telegram.history_trpc.ready' }));
+  console.log(JSON.stringify({ address, event: 'telegram.trpc.ready' }));
   return server;
 }
 
-export function stopTelegramHistoryTrpcServer(server: Server): Promise<void> {
+export function stopTelegramTrpcServer(server: Server): Promise<void> {
   return new Promise((resolve, reject) => {
     server.close((error) => {
       if (error !== undefined) {

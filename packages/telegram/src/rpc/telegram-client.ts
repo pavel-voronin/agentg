@@ -14,9 +14,9 @@ import {
   telegramHistoryListChatsInputSchema,
   telegramListChatDirectoryInputSchema,
   telegramListRecentMessagesInputSchema,
-  telegramSearchMessagesInputSchema,
-  type TelegramHistoryRouter
-} from './history-router.js';
+  telegramSearchMessagesInputSchema
+} from './contracts.js';
+import type { TelegramRouter } from './router.js';
 
 type TelegramRpcClientConfig = {
   url: string;
@@ -45,7 +45,7 @@ export function createTelegramRpcClient(
   config: TelegramRpcClientConfig,
   options: TelegramRpcClientOptions = {}
 ): TelegramRpcClient {
-  const client = createTRPCClient<TelegramHistoryRouter>({
+  const client = createTRPCClient<TelegramRouter>({
     links: [
       httpBatchLink({
         headers: ({ opList }) => createInternalRpcCallOptionsHeaders(opList),

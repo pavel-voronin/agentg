@@ -13,10 +13,7 @@ import {
 } from './normalize.js';
 import type { InternalTrpcBindConfig } from './rpc/config.js';
 import { createTelegramServiceManifest } from './registrations.js';
-import {
-  startTelegramHistoryTrpcServer,
-  stopTelegramHistoryTrpcServer
-} from './rpc/history-server.js';
+import { startTelegramTrpcServer, stopTelegramTrpcServer } from './rpc/server.js';
 import { persistCurrentTelegramUser, persistTelegramUpdate, upsertChat } from './store.js';
 import {
   createTelegramClient,
@@ -70,7 +67,7 @@ const TELEGRAM_SHUTDOWN_FORCE_EXIT_MS = 4500;
 const TELEGRAM_SHUTDOWN_STEP_TIMEOUT_MS = 2000;
 
 export async function runTelegramIngestion(options: TelegramIngestionOptions): Promise<void> {
-  let telegramHistoryServer: Awaited<ReturnType<typeof startTelegramHistoryTrpcServer>> | undefined;
+  let telegramRpcServer: Awaited<ReturnType<typeof startTelegramTrpcServer>> | undefined;
   let serviceDirectory: ReturnType<typeof createServiceDirectoryClient> | undefined;
   let tdlibStatusHeartbeat: ReturnType<typeof setInterval> | undefined;
   let client: TelegramClient | undefined;
@@ -104,7 +101,7 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
     tdlibStatusHeartbeat = startTdlibStatusHeartbeat(activeTdlibStatus);
     await syncInitialChats(options.database, activeClient, options.eventBus);
 
-    telegramHistoryServer = await startTelegramHistoryTrpcServer({
+    telegramRpcServer = await startTelegramTrpcServer({
       bind: options.internalRpc,
       client: activeClient,
       database: options.database,
@@ -127,15 +124,15 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
         tdlibStatusHeartbeat = undefined;
       }
       activeTdlibStatus.markDisconnected();
-      const historyRpcServer = telegramHistoryServer;
-      const historyRpcClosed =
-        historyRpcServer === undefined
+      const activeTelegramRpcServer = telegramRpcServer;
+      const telegramRpcClosed =
+        activeTelegramRpcServer === undefined
           ? true
-          : await runShutdownStep('telegram.history_trpc_close', () =>
-              stopTelegramHistoryTrpcServer(historyRpcServer)
+          : await runShutdownStep('telegram.trpc_close', () =>
+              stopTelegramTrpcServer(activeTelegramRpcServer)
             );
-      if (historyRpcClosed) {
-        telegramHistoryServer = undefined;
+      if (telegramRpcClosed) {
+        telegramRpcServer = undefined;
       }
       serviceDirectory?.close();
       serviceDirectory = undefined;
@@ -146,7 +143,7 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
         options.eventBus.close()
       );
 
-      return historyRpcClosed && tdlibClosed && eventBusClosed;
+      return telegramRpcClosed && tdlibClosed && eventBusClosed;
     });
   } catch (error) {
     if (!startupComplete) {
@@ -156,7 +153,7 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
         serviceDirectory,
         tdlibStatus,
         tdlibStatusHeartbeat,
-        telegramHistoryServer
+        telegramRpcServer
       });
     }
     throw error;
@@ -169,7 +166,7 @@ async function cleanupTelegramStartupFailure(options: {
   serviceDirectory: ReturnType<typeof createServiceDirectoryClient> | undefined;
   tdlibStatus: TdlibStatusTracker | undefined;
   tdlibStatusHeartbeat: ReturnType<typeof setInterval> | undefined;
-  telegramHistoryServer: Awaited<ReturnType<typeof startTelegramHistoryTrpcServer>> | undefined;
+  telegramRpcServer: Awaited<ReturnType<typeof startTelegramTrpcServer>> | undefined;
 }): Promise<void> {
   if (options.tdlibStatusHeartbeat !== undefined) {
     clearInterval(options.tdlibStatusHeartbeat);
@@ -178,10 +175,10 @@ async function cleanupTelegramStartupFailure(options: {
     Promise.resolve(options.tdlibStatus?.markDisconnected())
   );
 
-  const telegramHistoryServer = options.telegramHistoryServer;
-  if (telegramHistoryServer !== undefined) {
-    await runShutdownStep('telegram.history_trpc_startup_close', () =>
-      stopTelegramHistoryTrpcServer(telegramHistoryServer)
+  const telegramRpcServer = options.telegramRpcServer;
+  if (telegramRpcServer !== undefined) {
+    await runShutdownStep('telegram.trpc_startup_close', () =>
+      stopTelegramTrpcServer(telegramRpcServer)
     );
   }
 

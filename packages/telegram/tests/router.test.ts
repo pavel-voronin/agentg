@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { TelegramDatabase } from '../src/database.js';
-import { createTelegramHistoryRouter } from '../src/rpc/history-router.js';
+import { createTelegramRouter } from '../src/rpc/router.js';
 
 describe('Telegram history router chat listing', () => {
   it('filters chats without TDLib list placements from the chat directory', async () => {
@@ -88,7 +88,7 @@ describe('Telegram history router chat listing', () => {
 });
 
 function createCaller(database: ReturnType<typeof createFakeDatabase>) {
-  return createTelegramHistoryRouter({
+  return createTelegramRouter({
     client: {} as never,
     database: database as unknown as TelegramDatabase,
     eventBus: {} as never
