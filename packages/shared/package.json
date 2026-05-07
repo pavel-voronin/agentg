@@ -11,6 +11,8 @@
     "./events/bus": "./src/events/bus.ts",
     "./events/envelope": "./src/events/envelope.ts",
     "./events/telegram-events": "./src/events/telegram-events.ts",
+    "./control-plane/slot-content": "./src/control-plane/slot-content.ts",
+    "./control-plane/views": "./src/control-plane/views.ts",
     "./json": "./src/json.ts",
     "./modules/runtime": "./src/modules/runtime.ts",
     "./models/telegram": "./src/models/telegram.ts",

@@ -5,6 +5,7 @@
   "type": "module",
   "workspaces": [
     "packages/shared",
+    "packages/control-plane-extension",
     "packages/database",
     "packages/service-directory",
     "packages/gateway",

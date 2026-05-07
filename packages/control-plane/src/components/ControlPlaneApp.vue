@@ -1,54 +1,54 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
+import { provideControlPlaneActions } from '@agentg/control-plane-extension/actions';
+import {
+  createSlotRuntime,
+  provideSlotRuntime,
+  SlotDebugLayer,
+  SlotOutlet
+} from '@agentg/control-plane-extension/slots';
+import UiButton from '@agentg/control-plane-extension/ui';
+
 import { useControlPlaneRuntime } from '../runtime/useControlPlaneRuntime.js';
 import { useAppShellStore } from '../stores/appShell.js';
 import { useChatStore } from '../stores/chat.js';
-import { useEventsStore } from '../stores/events.js';
-import { useOverviewStore } from '../stores/overview.js';
 import { useSelectedHistoryStore } from '../stores/selectedHistory.js';
 import { appShellView } from '../view-models/appShellView.js';
 import { chatSidebarView } from '../view-models/chatSidebarView.js';
-import { dashboardMetricsFromOverview } from '../view-models/dashboardView.js';
-import { eventFiltersPanelView, eventListItems } from '../view-models/eventsPanelView.js';
 import { selectedWorkspaceView } from '../view-models/selectedWorkspaceView.js';
-import ChatSidebar from './ChatSidebar.vue';
-import DashboardMetrics from './DashboardMetrics.vue';
-import EventsPanel from './EventsPanel.vue';
-import SelectedWorkspace from './SelectedWorkspace.vue';
+import { controlPlaneContentCatalog } from '../composition/contentProviders.js';
+import {
+  defaultControlPlaneLayout,
+  readControlPlaneLayout,
+  writeControlPlaneLayout
+} from '../composition/slots/layout.js';
 import ShellStatusBadge from './ShellStatusBadge.vue';
 import ShellToggleButton from './ShellToggleButton.vue';
 
 const appShellStore = useAppShellStore();
 const chatStore = useChatStore();
-const eventsStore = useEventsStore();
-const overviewStore = useOverviewStore();
 const selectedHistoryStore = useSelectedHistoryStore();
+const actions = useControlPlaneRuntime();
+const slotDebugEnabled = computed(() => appShellStore.slotDebugEnabled);
+const slotRuntime = createSlotRuntime({
+  catalog: controlPlaneContentCatalog,
+  debugEnabled: slotDebugEnabled,
+  initialLayout: readControlPlaneLayout(defaultControlPlaneLayout),
+  onLayoutChange: writeControlPlaneLayout
+});
+
+provideControlPlaneActions(actions);
+provideSlotRuntime(slotRuntime);
+
 const appShell = computed(() => appShellView(appShellStore));
 const chatSidebar = computed(() => chatSidebarView(chatStore, selectedHistoryStore.selectedChatId));
-const dashboardMetrics = computed(() => dashboardMetricsFromOverview(overviewStore.overview));
-const eventFiltersPanel = computed(() => eventFiltersPanelView(eventsStore));
-const eventLimit = computed(() => eventsStore.eventLimit);
-const eventsPanelMode = computed(() => eventsStore.eventsPanelMode);
-const eventItems = computed(() =>
-  eventListItems(eventsStore.events, (type) => eventsStore.isEventTypeMuted(type))
-);
-const eventsPaused = computed(() => eventsStore.eventsPaused);
-const hasEvents = computed(() => eventsStore.events.length > 0);
 const selectedWorkspace = computed(() => selectedWorkspaceView(selectedHistoryStore));
-const {
-  addCustomTarget,
-  addPresetTarget,
-  clearChatSearch,
-  closeSelectedChat,
-  deleteTarget,
-  openArchiveChats,
-  openChat,
-  openFolderChats,
-  openMainChats,
-  searchChats,
-  toggleChat
-} = useControlPlaneRuntime();
+const workspaceContext = computed(() => ({
+  chatSidebar: chatSidebar.value,
+  eventsPanelCollapsed: appShell.value.eventsPanelCollapsed,
+  selectedWorkspace: selectedWorkspace.value
+}));
 
 type BrowserGlobal = {
   addEventListener: (type: string, listener: () => void) => void;
@@ -76,16 +76,6 @@ const eventsPreviewVisible = ref(false);
 const eventsPreviewStyle = ref<Record<string, string>>({});
 const header = ref<ShellElement | null>(null);
 const mainLayout = ref<ShellElement | null>(null);
-
-const mainLayoutClass = computed(() =>
-  appShell.value.eventsPanelCollapsed
-    ? 'grid min-h-0 flex-1 grid-cols-[380px_minmax(0,1fr)] gap-4 overflow-hidden bg-zinc-100 p-4 pt-0'
-    : 'grid min-h-0 flex-1 grid-cols-[380px_minmax(0,1fr)_420px] gap-4 overflow-hidden bg-zinc-100 p-4 pt-0'
-);
-
-function clearEvents(): void {
-  eventsStore.clearEvents();
-}
 
 function hideDashboardPreview(): void {
   dashboardPreviewVisible.value = false;
@@ -158,55 +148,12 @@ function toggleEventsPanel(): void {
   }
 }
 
+function toggleSlotDebug(): void {
+  appShellStore.setSlotDebugEnabled(!appShell.value.slotDebugEnabled);
+}
+
 function browserGlobal(): BrowserGlobal {
   return globalThis as unknown as BrowserGlobal;
-}
-
-function toggleEventFilters(): void {
-  eventsStore.toggleEventsPanelMode('filters');
-}
-
-function toggleEventSettings(): void {
-  eventsStore.toggleEventsPanelMode('settings');
-}
-
-function toggleEventStream(): void {
-  eventsStore.toggleEventsPaused();
-}
-
-function closeEventFilters(): void {
-  eventsStore.setEventsPanelMode('events');
-}
-
-function closeEventSettings(): void {
-  eventsStore.setEventsPanelMode('events');
-}
-
-function setEventLimit(value: number): void {
-  eventsStore.setEventLimit(value);
-}
-
-function setEventTypeEnabled(type: string, enabled: boolean): void {
-  eventsStore.setEventTypeEnabled(type, enabled);
-}
-
-function setEventTypeMuted(type: string, muted: boolean): void {
-  eventsStore.setEventTypeMuted(type, muted);
-}
-
-function clearEventsOfType(type: string): void {
-  eventsStore.clearEventsOfType(type);
-}
-
-function clearTimelineScale(): void {
-  selectedHistoryStore.setViewportDays(null);
-}
-
-function selectTimelineScale(value: number): void {
-  if (selectedHistoryStore.viewportDays === value) {
-    selectedHistoryStore.setDefaultViewportDays(value);
-  }
-  selectedHistoryStore.setViewportDays(value);
 }
 
 onMounted(() => {
@@ -231,6 +178,32 @@ onBeforeUnmount(() => {
             <ShellStatusBadge :badge="appShell.tdlibStatus" />
           </div>
           <div class="flex flex-wrap items-center justify-end gap-2">
+            <UiButton
+              :aria-pressed="appShell.slotDebugEnabled"
+              class="gap-1.5 px-2.5 text-xs"
+              :title="
+                appShell.slotDebugEnabled ? 'Hide slot debug overlay' : 'Show slot debug overlay'
+              "
+              :variant="appShell.slotDebugEnabled ? 'danger' : 'neutral'"
+              @click="toggleSlotDebug"
+            >
+              <svg
+                class="h-3.5 w-3.5"
+                viewBox="0 0 20 20"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M4 4h5v5H4z" />
+                <path d="M11 4h5v5h-5z" />
+                <path d="M4 11h5v5H4z" />
+                <path d="M11 11h5v5h-5z" />
+              </svg>
+              <span>Slots</span>
+            </UiButton>
             <ShellToggleButton
               :active="!appShell.dashboardCollapsed"
               icon="dashboard"
@@ -261,57 +234,22 @@ onBeforeUnmount(() => {
       id="dashboardPanel"
       class="shrink-0 bg-zinc-100 p-4 pt-0"
     >
-      <DashboardMetrics id="dashboardMetrics" :metrics="dashboardMetrics" />
+      <SlotOutlet
+        id="dashboardMetrics"
+        slot-id="control-plane.dashboard"
+        :tags="['control-plane.dashboard']"
+      />
     </section>
 
-    <main id="mainLayout" ref="mainLayout" :class="mainLayoutClass">
-      <ChatSidebar
-        :view="chatSidebar"
-        @archive-open="openArchiveChats"
-        @chat-open="openChat"
-        @chat-toggle="toggleChat"
-        @folder-open="openFolderChats"
-        @main-open="openMainChats"
-        @search-clear="clearChatSearch"
-        @search-input="searchChats"
-      />
-
-      <SelectedWorkspace
-        :view="selectedWorkspace"
-        @close="closeSelectedChat"
-        @custom-target="addCustomTarget"
-        @delete-target="deleteTarget"
-        @freeform-scale="clearTimelineScale"
-        @preset-target="addPresetTarget"
-        @scale-select="selectTimelineScale"
-      />
-
-      <EventsPanel
-        v-show="!appShell.eventsPanelCollapsed"
-        clear-button-id="clearEvents"
-        event-filters-id="eventFilters"
-        event-list-id="events"
-        :event-limit="eventLimit"
-        event-settings-id="eventSettings"
-        filters-toggle-id="eventFiltersToggle"
-        :events="eventItems"
-        :has-events="hasEvents"
-        :mode="eventsPanelMode"
-        panel-id="eventsPanel"
-        settings-toggle-id="eventSettingsToggle"
-        :stream-paused="eventsPaused"
-        stream-toggle-id="eventStreamToggle"
-        :view="eventFiltersPanel"
-        @clear="clearEvents"
-        @clear-type="clearEventsOfType"
-        @close-filters="closeEventFilters"
-        @close-settings="closeEventSettings"
-        @event-limit-change="setEventLimit"
-        @filters-toggle="toggleEventFilters"
-        @mute-change="setEventTypeMuted"
-        @settings-toggle="toggleEventSettings"
-        @stream-toggle="toggleEventStream"
-        @type-change="setEventTypeEnabled"
+    <main
+      id="mainLayout"
+      ref="mainLayout"
+      class="min-h-0 flex-1 overflow-hidden bg-zinc-100 p-4 pt-0"
+    >
+      <SlotOutlet
+        :context="workspaceContext"
+        slot-id="control-plane.workspace"
+        :tags="['control-plane.workspace']"
       />
     </main>
   </div>
@@ -321,31 +259,18 @@ onBeforeUnmount(() => {
     class="fixed left-0 right-0 z-40 bg-zinc-100 p-4 pt-0"
     :style="dashboardPreviewStyle"
   >
-    <DashboardMetrics id="dashboardPreviewMetrics" :metrics="dashboardMetrics" />
+    <SlotOutlet
+      id="dashboardPreviewMetrics"
+      slot-id="control-plane.dashboard.preview"
+      :tags="['control-plane.dashboard']"
+    />
   </section>
-  <EventsPanel
-    v-show="eventsPreviewVisible"
-    class="fixed z-40"
-    event-filters-id="eventFiltersPreview"
-    event-list-id="eventsPreview"
-    :event-limit="eventLimit"
-    event-settings-id="eventSettingsPreview"
-    :events="eventItems"
-    :has-events="hasEvents"
-    :mode="eventsPanelMode"
-    panel-id="eventsPreviewPanel"
-    :stream-paused="eventsPaused"
-    :style="eventsPreviewStyle"
-    :view="eventFiltersPanel"
-    @clear="clearEvents"
-    @clear-type="clearEventsOfType"
-    @close-filters="closeEventFilters"
-    @close-settings="closeEventSettings"
-    @event-limit-change="setEventLimit"
-    @filters-toggle="toggleEventFilters"
-    @mute-change="setEventTypeMuted"
-    @settings-toggle="toggleEventSettings"
-    @stream-toggle="toggleEventStream"
-    @type-change="setEventTypeEnabled"
-  />
+  <section v-show="eventsPreviewVisible" class="fixed z-40" :style="eventsPreviewStyle">
+    <SlotOutlet
+      :context="{ idPrefix: 'eventsPreview' }"
+      slot-id="control-plane.events.preview"
+      :tags="['control-plane.events']"
+    />
+  </section>
+  <SlotDebugLayer />
 </template>

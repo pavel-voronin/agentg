@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 
+import { onModelRefSelected } from '@agentg/control-plane-extension/model-ref-events';
+import UiButton from '@agentg/control-plane-extension/ui';
 import type {
   ChatFolderNavItem,
   ChatListItemView,
   ChatSidebarView
-} from '../stores/controlPlaneTypes.js';
-import UiButton from '../ui/UiButton.vue';
-import { onModelRefSelected } from '../ui/modelRefEvents.js';
+} from '@agentg/shared/control-plane/views';
 
 defineProps<{
   view: ChatSidebarView;

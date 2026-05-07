@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 
+import UiButton from '@agentg/control-plane-extension/ui';
 import type {
   SelectedWorkspaceView,
   TimelineScaleButtonView
-} from '../stores/controlPlaneTypes.js';
-import UiButton from '../ui/UiButton.vue';
+} from '@agentg/shared/control-plane/views';
 import HistoryTimeline from './HistoryTimeline.vue';
 
 defineProps<{

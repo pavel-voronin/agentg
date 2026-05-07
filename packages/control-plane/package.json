@@ -16,6 +16,7 @@
     "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {
+    "@agentg/control-plane-extension": "file:../control-plane-extension",
     "@agentg/history-sync": "file:../history-sync",
     "@agentg/service-directory": "file:../service-directory",
     "@agentg/shared": "file:../shared",

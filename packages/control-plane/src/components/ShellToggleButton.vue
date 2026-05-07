@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 
-import UiButton from '../ui/UiButton.vue';
+import UiButton from '@agentg/control-plane-extension/ui';
 
 const props = defineProps<{
   active: boolean;

@@ -1,4 +1,7 @@
 @import 'tailwindcss';
+@source '../../control-plane-extension/src';
+@source '../../history-sync/src/control-plane';
+@source '../../telegram/src/control-plane';
 
 * {
   box-sizing: border-box;

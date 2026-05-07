@@ -8,6 +8,7 @@ export type AppShellViewSource = {
   controlPlaneStatus: StatusBadgeKind;
   dashboardCollapsed: boolean;
   eventsPanelCollapsed: boolean;
+  slotDebugEnabled: boolean;
   tdlibStatus: StatusBadgeKind;
 };
 
@@ -16,6 +17,7 @@ export function appShellView(source: AppShellViewSource): AppShellView {
     controlPlaneStatus: statusBadgeView('CONTROL', source.controlPlaneStatus),
     dashboardCollapsed: source.dashboardCollapsed,
     eventsPanelCollapsed: source.eventsPanelCollapsed,
+    slotDebugEnabled: source.slotDebugEnabled,
     tdlibStatus: statusBadgeView('TDLIB', source.tdlibStatus)
   };
 }

@@ -1,3 +1,4 @@
+import type { ControlPlaneActions } from '@agentg/control-plane-extension/actions';
 import { onBeforeUnmount, onMounted } from 'vue';
 
 import {
@@ -16,20 +17,6 @@ import { useChatStore } from '../stores/chat.js';
 import { useEventsStore } from '../stores/events.js';
 import { useOverviewStore } from '../stores/overview.js';
 import { useSelectedHistoryStore } from '../stores/selectedHistory.js';
-
-export type ControlPlaneActions = {
-  addCustomTarget: (start: string, end: string) => void;
-  addPresetTarget: (preset: string) => void;
-  clearChatSearch: () => void;
-  closeSelectedChat: () => void;
-  deleteTarget: (targetId: string) => void;
-  openArchiveChats: () => void;
-  openChat: (chatId: string) => void;
-  openFolderChats: (folderId: number) => void;
-  openMainChats: () => void;
-  searchChats: (value: string) => void;
-  toggleChat: (chatId: string) => void;
-};
 
 type ChatListSelection = {
   folderId: number | null;
@@ -356,6 +343,9 @@ export function useControlPlaneRuntime() {
     addPresetTarget(preset) {
       void upsertPresetTarget(preset).catch(showError);
     },
+    clearTimelineScale() {
+      selectedHistoryStore.setViewportDays(null);
+    },
     clearChatSearch,
     closeSelectedChat() {
       clearSelectedChat();
@@ -376,6 +366,12 @@ export function useControlPlaneRuntime() {
       void openMainChats().catch(showError);
     },
     searchChats,
+    selectTimelineScale(value) {
+      if (selectedHistoryStore.viewportDays === value) {
+        selectedHistoryStore.setDefaultViewportDays(value);
+      }
+      selectedHistoryStore.setViewportDays(value);
+    },
     toggleChat(chatId) {
       void toggleChat(chatId).catch(showError);
     }

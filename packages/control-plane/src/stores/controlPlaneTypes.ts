@@ -66,6 +66,7 @@ export type AppShellView = {
   controlPlaneStatus: StatusBadgeView;
   dashboardCollapsed: boolean;
   eventsPanelCollapsed: boolean;
+  slotDebugEnabled: boolean;
   tdlibStatus: StatusBadgeView;
 };
 

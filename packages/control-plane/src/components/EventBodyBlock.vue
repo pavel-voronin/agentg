@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { AppEventBodyView } from '../stores/controlPlaneTypes.js';
-import { dispatchModelRefSelected } from '../ui/modelRefEvents.js';
+import { dispatchModelRefSelected } from '@agentg/control-plane-extension/model-ref-events';
 
 defineProps<{
   body: AppEventBodyView;

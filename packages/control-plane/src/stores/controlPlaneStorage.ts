@@ -6,7 +6,8 @@ export const CONTROL_PLANE_STORAGE_KEYS = {
   eventFilters: 'agentg.controlPlane.eventFilters',
   eventLimit: 'agentg.controlPlane.eventLimit',
   eventsPanelCollapsed: 'agentg.controlPlane.eventsPanelCollapsed',
-  selectedChatId: 'agentg.controlPlane.selectedChatId'
+  selectedChatId: 'agentg.controlPlane.selectedChatId',
+  slotDebugEnabled: 'agentg.controlPlane.slotDebugEnabled'
 } as const;
 
 export function readStoredBoolean(key: string, fallback: boolean): boolean {

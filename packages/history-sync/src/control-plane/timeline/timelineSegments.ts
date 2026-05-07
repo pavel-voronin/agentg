@@ -1,4 +1,4 @@
-import type { SelectedHistoryState } from '../stores/controlPlaneTypes.js';
+import type { SelectedHistoryState } from '@agentg/shared/control-plane/views';
 import { timelinePosition } from './timelineBounds.js';
 import { formatDate } from './timelineFormatters.js';
 import {

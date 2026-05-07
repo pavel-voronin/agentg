@@ -1,6 +1,6 @@
 import { computed, nextTick, reactive, ref, watch, type Ref } from 'vue';
 
-import type { SelectedHistoryState } from '../stores/controlPlaneTypes.js';
+import type { SelectedHistoryState } from '@agentg/shared/control-plane/views';
 import {
   TIMELINE_MIN_WINDOW_MS,
   TIMELINE_SELECTION_MIN_PX,

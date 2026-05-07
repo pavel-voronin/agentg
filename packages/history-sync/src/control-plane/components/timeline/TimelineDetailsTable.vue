@@ -1,6 +1,6 @@
 <script setup lang="ts">
+import UiButton from '@agentg/control-plane-extension/ui';
 import type { TimelineDetail, TimelineDetailSection } from '../../timeline/timelineModel.js';
-import UiButton from '../../ui/UiButton.vue';
 
 const props = defineProps<{
   highlightedKeys: string[];

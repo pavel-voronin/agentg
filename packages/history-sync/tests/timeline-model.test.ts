@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { h, createSSRApp } from 'vue';
 import { renderToString } from '@vue/server-renderer';
 
-import TimelineDetailsTable from '../src/components/timeline/TimelineDetailsTable.vue';
-import { buildTimelineViewModel } from '../src/timeline/timelineModel.js';
+import TimelineDetailsTable from '../src/control-plane/components/timeline/TimelineDetailsTable.vue';
+import { buildTimelineViewModel } from '../src/control-plane/timeline/timelineModel.js';
 
 describe('timeline view model', () => {
   it('shows live coverage rows with original interval dates when the segment is clipped', async () => {

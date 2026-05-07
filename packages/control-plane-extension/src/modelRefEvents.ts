@@ -9,18 +9,18 @@ type ModelRefSelectedEvent = {
   detail?: unknown;
 };
 
-type ModelRefSelectedEventListener = (event: ModelRefSelectedEvent) => void;
+type ModelRefSelectedEventListener = (event: Event) => void;
 
 type ModelRefEventTarget = {
   addEventListener: (type: string, listener: ModelRefSelectedEventListener) => void;
-  dispatchEvent: (event: unknown) => void;
+  dispatchEvent: (event: Event) => boolean;
   removeEventListener: (type: string, listener: ModelRefSelectedEventListener) => void;
 };
 
 type ModelRefCustomEventConstructor = new (
   type: string,
   init: { detail: ModelRefSelection }
-) => ModelRefSelectedEvent;
+) => Event;
 
 type ModelRefGlobal = Partial<ModelRefEventTarget> & {
   CustomEvent?: ModelRefCustomEventConstructor;
@@ -47,8 +47,8 @@ export function onModelRefSelected(listener: (selection: ModelRefSelection) => v
     return () => undefined;
   }
 
-  const eventListener = (event: ModelRefSelectedEvent): void => {
-    const detail = event.detail;
+  const eventListener = (event: Event): void => {
+    const detail = (event as ModelRefSelectedEvent).detail;
     if (isModelRefSelection(detail)) {
       listener(detail);
     }

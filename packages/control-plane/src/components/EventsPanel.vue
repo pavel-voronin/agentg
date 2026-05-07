@@ -6,7 +6,7 @@ import type {
   EventFiltersPanelView,
   EventsPanelMode
 } from '../stores/controlPlaneTypes.js';
-import UiButton from '../ui/UiButton.vue';
+import UiButton from '@agentg/control-plane-extension/ui';
 import EventFilters from './EventFilters.vue';
 import EventSettings from './EventSettings.vue';
 import EventsList from './EventsList.vue';

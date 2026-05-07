@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./control-plane": "./src/control-plane/index.ts",
     "./rpc": "./src/rpc/index.ts"
   },
   "scripts": {
@@ -17,6 +18,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@agentg/control-plane-extension": "file:../control-plane-extension",
     "@agentg/database": "file:../database",
     "@agentg/service-directory": "file:../service-directory",
     "@agentg/shared": "file:../shared",
@@ -28,11 +30,13 @@
     "pg": "8.20.0",
     "prebuilt-tdlib": "0.1008063.0",
     "tdl": "8.1.0",
+    "vue": "^3.5.33",
     "zod": "^4.4.1"
   },
   "devDependencies": {
     "@types/node": "24.10.0",
     "@types/pg": "8.15.6",
+    "@vitejs/plugin-vue": "^6.0.6",
     "drizzle-kit": "^0.31.10",
     "tsx": "4.21.0",
     "typescript": "6.0.3",

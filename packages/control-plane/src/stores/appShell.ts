@@ -11,6 +11,7 @@ type AppShellState = {
   controlPlaneStatus: StatusBadgeKind;
   dashboardCollapsed: boolean;
   eventsPanelCollapsed: boolean;
+  slotDebugEnabled: boolean;
   tdlibStatus: StatusBadgeKind;
 };
 
@@ -24,6 +25,10 @@ export const useAppShellStore = defineStore('controlPlane.appShell', {
       this.eventsPanelCollapsed = collapsed;
       writeStorage(CONTROL_PLANE_STORAGE_KEYS.eventsPanelCollapsed, collapsed ? '1' : '0');
     },
+    setSlotDebugEnabled(enabled: boolean) {
+      this.slotDebugEnabled = enabled;
+      writeStorage(CONTROL_PLANE_STORAGE_KEYS.slotDebugEnabled, enabled ? '1' : '0');
+    },
     setControlPlaneStatus(status: StatusBadgeKind) {
       this.controlPlaneStatus = status;
     },
@@ -35,6 +40,7 @@ export const useAppShellStore = defineStore('controlPlane.appShell', {
     controlPlaneStatus: 'warn',
     dashboardCollapsed: readStoredBoolean(CONTROL_PLANE_STORAGE_KEYS.dashboardCollapsed, false),
     eventsPanelCollapsed: readStoredBoolean(CONTROL_PLANE_STORAGE_KEYS.eventsPanelCollapsed, false),
+    slotDebugEnabled: readStoredBoolean(CONTROL_PLANE_STORAGE_KEYS.slotDebugEnabled, false),
     tdlibStatus: 'warn'
   })
 });

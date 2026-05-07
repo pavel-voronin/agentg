@@ -1,4 +1,4 @@
-import type { SelectedHistoryState } from '../stores/controlPlaneTypes.js';
+import type { SelectedHistoryState } from '@agentg/shared/control-plane/views';
 import { DAY_MS, TELEGRAM_HISTORY_START_AT, TIMELINE_MIN_WINDOW_MS } from './timelineConstants.js';
 import { formatDate, formatSignedDuration } from './timelineFormatters.js';
 import type { TimelineDateLabel, TimelinePosition, TimelineViewport } from './timelineTypes.js';
