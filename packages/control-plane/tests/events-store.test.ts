@@ -3,7 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CONTROL_PLANE_STORAGE_KEYS } from '../src/stores/controlPlaneStorage.js';
 import { useEventsStore } from '../src/stores/events.js';
-import type { ControlPlaneEvent } from '../src/stores/controlPlaneTypes.js';
+import {
+  DEFAULT_EVENT_YAML_LIST_LIMIT,
+  type ControlPlaneEvent
+} from '../src/stores/controlPlaneTypes.js';
 
 describe('events store', () => {
   beforeEach(() => {
@@ -132,6 +135,45 @@ describe('events store', () => {
 
     expect(store.eventLimit).toBe(2501);
     expect(storage.setItem).toHaveBeenCalledWith(CONTROL_PLANE_STORAGE_KEYS.eventLimit, '2501');
+  });
+
+  it('persists positive YAML list item limits without trimming current events', () => {
+    const store = useEventsStore();
+    const storage = localStorage as Storage & {
+      setItem: ReturnType<typeof vi.fn>;
+    };
+
+    store.setEvents([event('beta.sync.failed'), event('beta.sync.completed')]);
+
+    expect(store.eventYamlListLimit).toBe(DEFAULT_EVENT_YAML_LIST_LIMIT);
+
+    store.setEventYamlListLimit(5);
+
+    expect(store.eventYamlListLimit).toBe(5);
+    expect(storage.setItem).toHaveBeenCalledWith(
+      CONTROL_PLANE_STORAGE_KEYS.eventYamlListLimit,
+      '5'
+    );
+    expect(store.events.map((item) => item.type)).toEqual([
+      'beta.sync.failed',
+      'beta.sync.completed'
+    ]);
+  });
+
+  it('snapshots YAML list item limits onto stream events', () => {
+    const store = useEventsStore();
+
+    store.setEventYamlListLimit(5);
+    expect(store.pushEvent(event('beta.sync.started'))).toBe(true);
+
+    store.setEventYamlListLimit(2);
+    expect(store.pushEvent(event('beta.sync.completed'))).toBe(true);
+
+    expect(store.events.map((item) => item.type)).toEqual([
+      'beta.sync.completed',
+      'beta.sync.started'
+    ]);
+    expect(store.events.map((item) => item.yamlListItemLimit)).toEqual([2, 5]);
   });
 });
 

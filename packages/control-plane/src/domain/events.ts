@@ -1,6 +1,8 @@
 import {
   DEFAULT_EVENT_LIMIT,
+  DEFAULT_EVENT_YAML_LIST_LIMIT,
   MIN_EVENT_LIMIT,
+  MIN_EVENT_YAML_LIST_LIMIT,
   rpcCallEventTarget,
   type ControlPlaneEvent,
   type EventFiltersState,
@@ -124,6 +126,14 @@ export function normalizeEventLimit(value: number | string): number {
     return DEFAULT_EVENT_LIMIT;
   }
   return Math.max(MIN_EVENT_LIMIT, Math.round(limit));
+}
+
+export function normalizeEventYamlListLimit(value: number | string): number {
+  const limit = Number(value);
+  if (!Number.isFinite(limit) || limit <= 0) {
+    return DEFAULT_EVENT_YAML_LIST_LIMIT;
+  }
+  return Math.max(MIN_EVENT_YAML_LIST_LIMIT, Math.round(limit));
 }
 
 function eventSourceFromType(type: string): string {

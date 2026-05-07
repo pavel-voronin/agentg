@@ -1,13 +1,25 @@
 <script setup lang="ts">
-import type { AppEventBodyView } from '../stores/controlPlaneTypes.js';
 import { dispatchModelRefSelected } from '@agentg/control-plane-sdk/model-ref-events';
+import { computed, shallowRef } from 'vue';
 
-defineProps<{
+import type {
+  AppEventBodyView,
+  AppEventYamlLine,
+  AppEventYamlRevealLine
+} from '../stores/controlPlaneTypes.js';
+import { expandEventYamlRevealLine } from '../view-models/eventYamlView.js';
+
+const props = defineProps<{
   body: AppEventBodyView;
   bordered?: boolean;
   mode: 'raw' | 'yaml';
   muted: boolean;
 }>();
+
+const expandedRevealIds = shallowRef<ReadonlySet<string>>(new Set());
+const renderedYamlLines = computed(() =>
+  visibleYamlLines(props.body.yamlLines, expandedRevealIds.value)
+);
 
 function lineStyle(indent: number): Record<string, string> {
   return {
@@ -15,8 +27,30 @@ function lineStyle(indent: number): Record<string, string> {
   };
 }
 
+function revealYamlLine(line: AppEventYamlRevealLine): void {
+  if (expandedRevealIds.value.has(line.id)) {
+    return;
+  }
+  expandedRevealIds.value = new Set([...expandedRevealIds.value, line.id]);
+}
+
 function selectModelRef(model: string, id: string): void {
   dispatchModelRefSelected({ id, model });
+}
+
+function visibleYamlLines(
+  lines: AppEventYamlLine[],
+  expandedIds: ReadonlySet<string>
+): AppEventYamlLine[] {
+  return lines.flatMap((line) => {
+    if (line.kind === 'content') {
+      return [line];
+    }
+    if (!expandedIds.has(line.id)) {
+      return [line];
+    }
+    return visibleYamlLines(expandEventYamlRevealLine(line), expandedIds);
+  });
 }
 </script>
 
@@ -35,11 +69,21 @@ function selectModelRef(model: string, id: string): void {
     :data-muted="muted ? 'true' : undefined"
   >
     <div
-      v-for="(line, lineIndex) in body.yamlLines"
+      v-for="(line, lineIndex) in renderedYamlLines"
       :key="lineIndex"
       :style="lineStyle(line.indent)"
     >
-      <template v-for="(token, tokenIndex) in line.tokens" :key="tokenIndex">
+      <button
+        v-if="line.kind === 'reveal'"
+        type="button"
+        class="event-body-block__reveal"
+        :data-muted="muted ? 'true' : undefined"
+        :aria-label="`Show ${line.hiddenCount} more YAML list items`"
+        @click="revealYamlLine(line)"
+      >
+        {{ line.hiddenCount }} more
+      </button>
+      <template v-else v-for="(token, tokenIndex) in line.tokens" :key="tokenIndex">
         <span v-if="token.kind === 'text'">{{ token.text }}</span>
         <button
           v-else
@@ -92,5 +136,13 @@ function selectModelRef(model: string, id: string): void {
 
 .event-body-block__model-ref-id {
   @apply max-w-[12rem] truncate bg-white px-1;
+}
+
+.event-body-block__reveal {
+  @apply inline-flex items-center rounded border border-zinc-200 bg-white px-1.5 py-0.5 font-mono text-[10px] font-semibold leading-tight text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1;
+}
+
+.event-body-block__reveal[data-muted='true'] {
+  @apply border-zinc-300 bg-zinc-100 text-zinc-500 hover:bg-zinc-200;
 }
 </style>

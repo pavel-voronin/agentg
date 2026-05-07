@@ -6,7 +6,9 @@ import {
 import type { RpcCallEventSuffix } from '@agentg/rpc/call-event-types';
 
 export const DEFAULT_EVENT_LIMIT = 200;
+export const DEFAULT_EVENT_YAML_LIST_LIMIT = 12;
 export const MIN_EVENT_LIMIT = 1;
+export const MIN_EVENT_YAML_LIST_LIMIT = 1;
 
 export type EventGroup = {
   color: string;
@@ -22,6 +24,10 @@ export type ControlPlaneEvent = {
   id?: string;
   occurredAt?: Date | string;
   type?: string;
+};
+
+export type ControlPlaneStreamEvent = ControlPlaneEvent & {
+  yamlListItemLimit: number;
 };
 
 export type StatusBadgeKind = 'bad' | 'ok' | 'warn';
@@ -40,13 +46,27 @@ export type AppShellView = {
 
 export type AppEventBodyView = {
   raw: string;
-  yaml: string;
   yamlLines: AppEventYamlLine[];
 };
 
-export type AppEventYamlLine = {
+export type AppEventYamlLine = AppEventYamlContentLine | AppEventYamlRevealLine;
+
+export type AppEventYamlContentLine = {
+  kind: 'content';
   indent: number;
   tokens: AppEventYamlToken[];
+};
+
+export type AppEventYamlRevealLine = {
+  kind: 'reveal';
+  depth: number;
+  hiddenCount: number;
+  id: string;
+  indent: number;
+  listItemLimit: number;
+  path: string;
+  startIndex: number;
+  values: unknown[];
 };
 
 export type AppEventYamlToken =

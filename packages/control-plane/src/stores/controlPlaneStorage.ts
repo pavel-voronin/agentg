@@ -2,6 +2,7 @@ export const CONTROL_PLANE_STORAGE_KEYS = {
   dashboardCollapsed: 'agentg.controlPlane.dashboardCollapsed',
   eventFilters: 'agentg.controlPlane.eventFilters',
   eventLimit: 'agentg.controlPlane.eventLimit',
+  eventYamlListLimit: 'agentg.controlPlane.eventYamlListLimit',
   eventsPanelCollapsed: 'agentg.controlPlane.eventsPanelCollapsed',
   slotDebugEnabled: 'agentg.controlPlane.slotDebugEnabled'
 } as const;

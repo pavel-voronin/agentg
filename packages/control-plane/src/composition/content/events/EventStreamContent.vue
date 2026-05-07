@@ -16,6 +16,7 @@ const eventItems = computed(() =>
   eventListItems(eventsStore.events, (type) => eventsStore.isEventTypeMuted(type))
 );
 const eventLimit = computed(() => eventsStore.eventLimit);
+const eventYamlListLimit = computed(() => eventsStore.eventYamlListLimit);
 const eventsPanelMode = computed(() => eventsStore.eventsPanelMode);
 const eventsPaused = computed(() => eventsStore.eventsPaused);
 const hasEvents = computed(() => eventsStore.events.length > 0);
@@ -49,6 +50,10 @@ function setEventLimit(value: number): void {
   eventsStore.setEventLimit(value);
 }
 
+function setEventYamlListLimit(value: number): void {
+  eventsStore.setEventYamlListLimit(value);
+}
+
 function setEventTypeEnabled(type: string, enabled: boolean): void {
   eventsStore.setEventTypeEnabled(type, enabled);
 }
@@ -75,6 +80,7 @@ function contextString(context: SlotContext | undefined, key: string, fallback: 
     :event-list-id="`${idPrefix}Events`"
     :event-limit="eventLimit"
     :event-settings-id="`${idPrefix}EventSettings`"
+    :event-yaml-list-limit="eventYamlListLimit"
     :filters-toggle-id="`${idPrefix}EventFiltersToggle`"
     :events="eventItems"
     :has-events="hasEvents"
@@ -89,6 +95,7 @@ function contextString(context: SlotContext | undefined, key: string, fallback: 
     @close-filters="closeEventFilters"
     @close-settings="closeEventSettings"
     @event-limit-change="setEventLimit"
+    @event-yaml-list-limit-change="setEventYamlListLimit"
     @filters-toggle="toggleEventFilters"
     @mute-change="setEventTypeMuted"
     @settings-toggle="toggleEventSettings"

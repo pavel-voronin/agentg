@@ -4,10 +4,14 @@ import { describe, expect, it } from 'vitest';
 
 import EventsList from '../src/components/EventsList.vue';
 import type {
+  AppEventYamlLine,
+  AppEventYamlRevealLine,
+  AppEventYamlToken,
   AppRpcEventItem,
   AppStandardEventItem,
   ControlPlaneEvent
 } from '../src/stores/controlPlaneTypes.js';
+import { eventBodyView, expandEventYamlRevealLine } from '../src/view-models/eventYamlView.js';
 import { eventListItems } from '../src/view-models/eventsPanelView.js';
 
 describe('event list view', () => {
@@ -43,9 +47,11 @@ describe('event list view', () => {
       '+1000 ms'
     ]);
     expect(rpcItem.lifecycles[1]?.body).toMatchObject({
-      raw: '{"callId":"call_1","target":"alpha.listItems","stage":"completed"}',
-      yaml: 'callId: call_1\ntarget: alpha.listItems\nstage: completed'
+      raw: '{"callId":"call_1","target":"alpha.listItems","stage":"completed"}'
     });
+    expect(linesText(rpcItem.lifecycles[1]?.body.yamlLines ?? [])).toBe(
+      'callId: call_1\ntarget: alpha.listItems\nstage: completed'
+    );
     expect(rpcItem.lifecycles.map((lifecycle) => lifecycle.muted)).toEqual([true, false]);
   });
 
@@ -117,13 +123,17 @@ describe('event list view', () => {
     );
 
     const eventItem = items[0] as AppStandardEventItem;
-    const modelRefToken = eventItem.body.yamlLines[0]?.tokens[1];
+    const firstLine = eventItem.body.yamlLines[0];
+    if (firstLine?.kind !== 'content') {
+      throw new Error('Expected first YAML line to be content');
+    }
+    const modelRefToken = firstLine.tokens[1];
 
     expect(eventItem.body.raw).toContain('"_model":"alpha.record"');
-    expect(eventItem.body.yaml).toBe(
+    expect(linesText(eventItem.body.yamlLines)).toBe(
       'chat: alpha.record chat-a\n  title: "Chat A"\n  type: private\nreason: manual'
     );
-    expect(eventItem.body.yamlLines[0]?.tokens[0]).toEqual({ kind: 'text', text: 'chat: ' });
+    expect(firstLine.tokens[0]).toEqual({ kind: 'text', text: 'chat: ' });
     expect(modelRefToken).toMatchObject({
       id: 'chat-a',
       kind: 'modelRef',
@@ -148,6 +158,154 @@ describe('event list view', () => {
     expect(html).not.toContain('_model:');
     expect(html).not.toContain('&quot;_model&quot;');
   });
+
+  it('renders long YAML lists behind a current-level more row', async () => {
+    const items = Array.from({ length: 15 }, (_, index) => ({
+      children: [`child-${String(index + 1)}-1`, `child-${String(index + 1)}-2`],
+      id: `item-${String(index + 1)}`
+    }));
+    const body = eventBodyView({ items });
+    const reveal = onlyReveal(body.yamlLines);
+
+    expect(reveal).toMatchObject({
+      hiddenCount: 3,
+      indent: 1
+    });
+    expect(linesText(body.yamlLines)).toContain('- children:');
+    expect(linesText(body.yamlLines)).toContain('item-12');
+    expect(linesText(body.yamlLines)).toContain('3 more');
+    expect(linesText(body.yamlLines)).not.toContain('item-13');
+
+    const html = await renderToString(
+      createSSRApp({
+        render() {
+          return h(EventsList, {
+            events: [
+              eventListItem({
+                data: { items },
+                id: 'long-list',
+                occurredAt: '2026-05-05T00:00:01.000Z',
+                type: 'alpha.longList'
+              })
+            ],
+            hasEvents: true
+          });
+        }
+      })
+    );
+
+    expect(html).toContain('3 more');
+    expect(html).toContain('item-12');
+    expect(html).not.toContain('item-13');
+  });
+
+  it('does not add a more row for exactly twelve YAML list items', () => {
+    const body = eventBodyView({
+      items: Array.from({ length: 12 }, (_, index) => `item-${String(index + 1)}`)
+    });
+
+    expect(body.yamlLines.filter((line) => line.kind === 'reveal')).toHaveLength(0);
+    expect(linesText(body.yamlLines)).toContain('item-12');
+    expect(linesText(body.yamlLines)).not.toContain('more');
+  });
+
+  it('uses a configured YAML list item limit', () => {
+    const body = eventBodyView(
+      {
+        items: Array.from({ length: 5 }, (_, index) => `item-${String(index + 1)}`)
+      },
+      { listItemLimit: 3 }
+    );
+    const reveal = onlyReveal(body.yamlLines);
+
+    expect(reveal).toMatchObject({
+      hiddenCount: 2,
+      listItemLimit: 3,
+      startIndex: 3
+    });
+    expect(linesText(body.yamlLines)).toContain('item-3');
+    expect(linesText(body.yamlLines)).not.toContain('item-4');
+  });
+
+  it('uses per-event YAML list item limit snapshots', () => {
+    const items = eventListItems(
+      [
+        {
+          ...event('alpha.snapshot.first', '2026-05-05T00:00:01.000Z', {
+            items: ['a', 'b', 'c', 'd', 'e']
+          }),
+          yamlListItemLimit: 2
+        },
+        {
+          ...event('alpha.snapshot.second', '2026-05-05T00:00:02.000Z', {
+            items: ['a', 'b', 'c', 'd', 'e']
+          }),
+          yamlListItemLimit: 4
+        }
+      ],
+      () => false,
+      { yaml: { listItemLimit: 1 } }
+    );
+    const firstEvent = items[0] as AppStandardEventItem;
+    const secondEvent = items[1] as AppStandardEventItem;
+    const firstReveal = onlyReveal(firstEvent.body.yamlLines);
+    const secondReveal = onlyReveal(secondEvent.body.yamlLines);
+
+    expect(firstReveal).toMatchObject({
+      hiddenCount: 3,
+      listItemLimit: 2
+    });
+    expect(secondReveal).toMatchObject({
+      hiddenCount: 1,
+      listItemLimit: 4
+    });
+  });
+
+  it('expands a hidden list tail without expanding nested list tails', () => {
+    const items = Array.from({ length: 13 }, (_, index) => ({
+      id: `item-${String(index + 1)}`,
+      values: Array.from({ length: 13 }, (_, valueIndex) => `value-${String(valueIndex + 1)}`)
+    }));
+    const body = eventBodyView({ items });
+    const rootReveal = onlyReveal(
+      body.yamlLines.filter((line) => line.kind === 'reveal' && line.indent === 1)
+    );
+    const expandedRootLines = expandEventYamlRevealLine(rootReveal);
+    const nestedReveal = onlyReveal(expandedRootLines);
+
+    expect(rootReveal.hiddenCount).toBe(1);
+    expect(linesText(expandedRootLines)).toContain('item-13');
+    expect(linesText(expandedRootLines)).toContain('value-12');
+    expect(linesText(expandedRootLines)).not.toContain('value-13');
+    expect(nestedReveal).toMatchObject({
+      hiddenCount: 1
+    });
+  });
+
+  it('keeps lazy expansion indentation for a long first field inside a list item', () => {
+    const body = eventBodyView({
+      items: [
+        {
+          values: Array.from({ length: 13 }, (_, valueIndex) => `value-${String(valueIndex + 1)}`),
+          id: 'item-1'
+        }
+      ]
+    });
+    const nestedReveal = onlyReveal(body.yamlLines.filter((line) => line.kind === 'reveal'));
+    const expandedNestedLines = expandEventYamlRevealLine(nestedReveal);
+    const firstExpandedLine = expandedNestedLines[0];
+
+    expect(nestedReveal).toMatchObject({
+      depth: 3,
+      hiddenCount: 1,
+      indent: 3
+    });
+    expect(firstExpandedLine).toMatchObject({
+      indent: 3,
+      kind: 'content'
+    });
+    expect(linesText(expandedNestedLines)).toBe('      - value-13');
+  });
 });
 
 function rpcEvent(
@@ -170,4 +328,33 @@ function event(type: string, occurredAt: string, data: unknown): ControlPlaneEve
     occurredAt,
     type
   };
+}
+
+function eventListItem(event: ControlPlaneEvent): AppStandardEventItem {
+  return eventListItems([event], () => false)[0] as AppStandardEventItem;
+}
+
+function linesText(lines: AppEventYamlLine[]): string {
+  return lines.map(lineText).join('\n');
+}
+
+function lineText(line: AppEventYamlLine): string {
+  if (line.kind === 'reveal') {
+    return `${'  '.repeat(line.indent)}${String(line.hiddenCount)} more`;
+  }
+  return `${'  '.repeat(line.indent)}${line.tokens.map(tokenText).join('')}`;
+}
+
+function tokenText(token: AppEventYamlToken): string {
+  return token.kind === 'text' ? token.text : `${token.model} ${token.id}`;
+}
+
+function onlyReveal(lines: AppEventYamlLine[]): AppEventYamlRevealLine {
+  const reveals = lines.filter((line): line is AppEventYamlRevealLine => line.kind === 'reveal');
+  expect(reveals).toHaveLength(1);
+  const reveal = reveals[0];
+  if (reveal === undefined) {
+    throw new Error('Expected one reveal YAML line');
+  }
+  return reveal;
 }

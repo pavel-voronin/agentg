@@ -10,14 +10,12 @@ import {
   RPC_CALL_EVENT_LIFECYCLES,
   rpcCallEventTarget,
   rpcCallLifecycleEventType,
-  type AppEventBodyView,
-  type AppEventYamlLine,
-  type AppEventYamlToken,
   type AppEventItem,
   type AppRpcEventItem,
   type AppRpcLifecycleItem,
   type AppStandardEventItem,
   type ControlPlaneEvent,
+  type ControlPlaneStreamEvent,
   type EventFilterDomainView,
   type EventFilterGroupView,
   type EventFilterTypeView,
@@ -25,6 +23,7 @@ import {
   type EventFiltersState,
   type EventGroup
 } from '../stores/controlPlaneTypes.js';
+import { eventBodyView, type EventYamlViewOptions } from './eventYamlView.js';
 import { formatEventTime, formatOptionalValue } from './formatters.js';
 
 export type EventsPanelViewSource = {
@@ -36,15 +35,22 @@ export type EventTypeMutedLookup = (type: string) => boolean;
 
 type EventFilterDomainId = string;
 
+export type EventListItemsOptions = {
+  yaml?: EventYamlViewOptions;
+};
+
+type EventListSourceEvent = ControlPlaneEvent | ControlPlaneStreamEvent;
+
 export function eventListItem(
-  event: ControlPlaneEvent,
+  event: EventListSourceEvent,
   index: number,
-  muted: boolean
+  muted: boolean,
+  options: EventListItemsOptions = {}
 ): AppStandardEventItem {
   const group = eventGroupForEvent(event);
   const type = event.type ?? '';
   return {
-    body: eventBodyView(event.data ?? {}),
+    body: eventBodyView(event.data ?? {}, eventYamlViewOptions(event, options)),
     color: group.color,
     filterable: group.filterable !== false,
     kind: 'event',
@@ -56,8 +62,9 @@ export function eventListItem(
 }
 
 export function eventListItems(
-  events: ControlPlaneEvent[],
-  isEventTypeMuted: EventTypeMutedLookup
+  events: EventListSourceEvent[],
+  isEventTypeMuted: EventTypeMutedLookup,
+  options: EventListItemsOptions = {}
 ): AppEventItem[] {
   const items: AppEventItem[] = [];
   const rpcItems = new Map<string, AppRpcEventItem>();
@@ -67,7 +74,7 @@ export function eventListItems(
     const group = eventGroupForEvent(event);
     const rpcLifecycle = group.id === 'rpc' ? rpcCallLifecycle(event, type) : null;
     if (rpcLifecycle === null) {
-      items.push(eventListItem(event, index, isEventTypeMuted(type)));
+      items.push(eventListItem(event, index, isEventTypeMuted(type), options));
       return;
     }
 
@@ -89,7 +96,9 @@ export function eventListItems(
       items.push(item);
     }
 
-    item.lifecycles.unshift(rpcLifecycleItem(event, index, rpcLifecycle, isEventTypeMuted(type)));
+    item.lifecycles.unshift(
+      rpcLifecycleItem(event, index, rpcLifecycle, isEventTypeMuted(type), options)
+    );
   });
 
   for (const item of rpcItems.values()) {
@@ -309,18 +318,19 @@ function rpcCallLifecycle(
 }
 
 function rpcLifecycleItem(
-  event: ControlPlaneEvent,
+  event: EventListSourceEvent,
   index: number,
   rpcLifecycle: {
     callId: string;
     lifecycle: (typeof RPC_CALL_EVENT_LIFECYCLES)[number];
     target: string;
   },
-  muted: boolean
+  muted: boolean,
+  options: EventListItemsOptions
 ): AppRpcLifecycleItem {
   const type = event.type ?? '';
   return {
-    body: eventBodyView(event.data ?? {}),
+    body: eventBodyView(event.data ?? {}, eventYamlViewOptions(event, options)),
     key:
       event.id ??
       `${rpcEventItemKey(rpcLifecycle.target, rpcLifecycle.callId)}:${type}:${formatOptionalValue(event.occurredAt)}:${String(index)}`,
@@ -357,197 +367,17 @@ function formatFullEventTimestamp(timestamp: number | null): string {
   return timestamp === null ? '' : new Date(timestamp).toISOString().replace('T', ' ').slice(0, 23);
 }
 
-function eventBodyView(value: unknown): AppEventBodyView {
-  const yamlLines = yamlValueLines(value, 0);
-  return {
-    raw: JSON.stringify(value),
-    yaml: yamlLineText(yamlLines),
-    yamlLines
-  };
-}
-
-function yamlValueLines(value: unknown, depth: number): AppEventYamlLine[] {
-  if (isPlainObject(value)) {
-    const modelRef = modelRefParts(value);
-    if (modelRef !== null) {
-      return [
-        { indent: depth, tokens: [modelRef.token] },
-        ...modelRef.entries.flatMap(([key, item]) => yamlObjectEntryLines(key, item, depth))
-      ];
-    }
-    const entries = Object.entries(value);
-    return entries.length === 0
-      ? [{ indent: depth, tokens: [{ kind: 'text', text: '{}' }] }]
-      : entries.flatMap(([key, item]) => yamlObjectEntryLines(key, item, depth));
-  }
-  if (Array.isArray(value)) {
-    return value.length === 0
-      ? [{ indent: depth, tokens: [{ kind: 'text', text: '[]' }] }]
-      : yamlArrayLines(value, depth);
-  }
-  return [{ indent: depth, tokens: [{ kind: 'text', text: yamlScalar(value) }] }];
-}
-
-function yamlObjectEntryLines(key: string, value: unknown, depth: number): AppEventYamlLine[] {
-  if (isPlainObject(value)) {
-    const modelRef = modelRefParts(value);
-    if (modelRef !== null) {
-      return [
-        { indent: depth, tokens: [{ kind: 'text', text: `${key}: ` }, modelRef.token] },
-        ...modelRef.entries.flatMap(([childKey, childValue]) =>
-          yamlObjectEntryLines(childKey, childValue, depth + 1)
-        )
-      ];
-    }
-    const entries = Object.entries(value);
-    return entries.length === 0
-      ? [{ indent: depth, tokens: [{ kind: 'text', text: `${key}: {}` }] }]
-      : [
-          { indent: depth, tokens: [{ kind: 'text', text: `${key}:` }] },
-          ...entries.flatMap(([childKey, childValue]) =>
-            yamlObjectEntryLines(childKey, childValue, depth + 1)
-          )
-        ];
-  }
-  if (Array.isArray(value)) {
-    return value.length === 0
-      ? [{ indent: depth, tokens: [{ kind: 'text', text: `${key}: []` }] }]
-      : [
-          { indent: depth, tokens: [{ kind: 'text', text: `${key}:` }] },
-          ...yamlArrayLines(value, depth + 1)
-        ];
-  }
-  return [{ indent: depth, tokens: [{ kind: 'text', text: `${key}: ${yamlScalar(value)}` }] }];
-}
-
-function yamlArrayLines(values: unknown[], depth: number): AppEventYamlLine[] {
-  return values.flatMap((value) => yamlArrayItemLines(value, depth));
-}
-
-function yamlArrayItemLines(value: unknown, depth: number): AppEventYamlLine[] {
-  if (isPlainObject(value)) {
-    const modelRef = modelRefParts(value);
-    if (modelRef !== null) {
-      return [
-        { indent: depth, tokens: [{ kind: 'text', text: '- ' }, modelRef.token] },
-        ...modelRef.entries.flatMap(([key, item]) => yamlObjectEntryLines(key, item, depth + 1))
-      ];
-    }
-    const entries = Object.entries(value);
-    if (entries.length === 0) {
-      return [{ indent: depth, tokens: [{ kind: 'text', text: '- {}' }] }];
-    }
-    const firstEntry = entries[0];
-    if (firstEntry === undefined) {
-      return [{ indent: depth, tokens: [{ kind: 'text', text: '- {}' }] }];
-    }
-    const restEntries = entries.slice(1);
-    const [firstKey, firstValue] = firstEntry;
-    const [firstLine, ...firstNestedLines] = yamlObjectEntryLines(firstKey, firstValue, 0);
-    if (firstLine === undefined) {
-      return [{ indent: depth, tokens: [{ kind: 'text', text: '- {}' }] }];
-    }
-    return [
-      {
-        indent: depth,
-        tokens: [{ kind: 'text', text: '- ' }, ...firstLine.tokens]
-      },
-      ...firstNestedLines.map((line) => ({ ...line, indent: line.indent + depth + 1 })),
-      ...restEntries.flatMap(([key, item]) => yamlObjectEntryLines(key, item, depth + 1))
-    ];
-  }
-  if (Array.isArray(value)) {
-    return value.length === 0
-      ? [{ indent: depth, tokens: [{ kind: 'text', text: '- []' }] }]
-      : [
-          { indent: depth, tokens: [{ kind: 'text', text: '-' }] },
-          ...yamlArrayLines(value, depth + 1)
-        ];
-  }
-  return [{ indent: depth, tokens: [{ kind: 'text', text: `- ${yamlScalar(value)}` }] }];
-}
-
-function yamlScalar(value: unknown): string {
-  if (typeof value === 'string') {
-    return yamlStringScalar(value);
-  }
-  if (typeof value === 'number') {
-    return Number.isFinite(value) ? String(value) : JSON.stringify(value);
-  }
-  if (typeof value === 'boolean') {
-    return value ? 'true' : 'false';
-  }
-  if (value === null) {
-    return 'null';
-  }
-  if (value === undefined) {
-    return 'null';
-  }
-  return JSON.stringify(value);
-}
-
-function yamlStringScalar(value: string): string {
-  if (value.length === 0) {
-    return '""';
-  }
-  return /^[A-Za-z0-9._/@:-]+$/.test(value) ? value : JSON.stringify(value);
-}
-
-function yamlLineText(lines: AppEventYamlLine[]): string {
-  return lines
-    .map(
-      (line) =>
-        `${'  '.repeat(line.indent)}${line.tokens.map((token) => yamlTokenText(token)).join('')}`
-    )
-    .join('\n');
-}
-
-function yamlTokenText(token: AppEventYamlToken): string {
-  return token.kind === 'text' ? token.text : `${token.model} ${token.id}`;
-}
-
-function modelRefParts(
-  value: Record<string, unknown>
-): { entries: [string, unknown][]; token: AppEventYamlToken } | null {
-  const model = value._model;
-  const id = value.id;
-  if (typeof model !== 'string' || model.trim().length === 0) {
-    return null;
-  }
-  if (typeof id !== 'string' || id.trim().length === 0) {
-    return null;
+function eventYamlViewOptions(
+  event: EventListSourceEvent,
+  options: EventListItemsOptions
+): EventYamlViewOptions | undefined {
+  if (!('yamlListItemLimit' in event)) {
+    return options.yaml;
   }
   return {
-    entries: Object.entries(value).filter(([key]) => key !== '_model' && key !== 'id'),
-    token: {
-      color: modelColor(model),
-      id,
-      kind: 'modelRef',
-      model
-    }
+    ...options.yaml,
+    listItemLimit: event.yamlListItemLimit
   };
-}
-
-function modelColor(model: string): string {
-  const palette = [
-    '#2563eb',
-    '#059669',
-    '#7c3aed',
-    '#dc2626',
-    '#0891b2',
-    '#c2410c',
-    '#4f46e5',
-    '#be123c'
-  ] as const;
-  let hash = 0;
-  for (const char of model) {
-    hash += char.charCodeAt(0);
-  }
-  return palette[hash % palette.length] ?? '#2563eb';
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function rpcEventItemKey(target: string, callId: string): string {

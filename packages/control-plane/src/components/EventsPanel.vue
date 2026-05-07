@@ -17,6 +17,7 @@ const props = defineProps<{
   eventListId: string;
   eventLimit: number;
   eventSettingsId: string;
+  eventYamlListLimit: number;
   events: AppEventItem[];
   filtersToggleId?: string;
   hasEvents: boolean;
@@ -34,6 +35,7 @@ const emit = defineEmits<{
   closeFilters: [];
   closeSettings: [];
   eventLimitChange: [value: number];
+  eventYamlListLimitChange: [value: number];
   filtersToggle: [];
   muteChange: [type: string, muted: boolean];
   settingsToggle: [];
@@ -192,8 +194,10 @@ const eventStreamStateLabel = computed(() => (props.streamPaused ? 'Paused' : 'L
       v-show="settingsVisible"
       :id="eventSettingsId"
       :event-limit="eventLimit"
+      :event-yaml-list-limit="eventYamlListLimit"
       @close="emit('closeSettings')"
       @event-limit-change="(value) => emit('eventLimitChange', value)"
+      @event-yaml-list-limit-change="(value) => emit('eventYamlListLimitChange', value)"
     />
   </aside>
 </template>

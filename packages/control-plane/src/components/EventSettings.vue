@@ -5,12 +5,14 @@ import UiButton from '@agentg/control-plane-sdk/ui';
 
 const props = defineProps<{
   eventLimit: number;
+  eventYamlListLimit: number;
   id: string;
 }>();
 
 const emit = defineEmits<{
   close: [];
   eventLimitChange: [value: number];
+  eventYamlListLimitChange: [value: number];
 }>();
 
 type NumberInputTarget = {
@@ -19,11 +21,20 @@ type NumberInputTarget = {
 
 const eventLimitInput = ref(String(props.eventLimit));
 const eventLimitInputId = computed(() => `${props.id}Limit`);
+const eventYamlListLimitInput = ref(String(props.eventYamlListLimit));
+const eventYamlListLimitInputId = computed(() => `${props.id}YamlListLimit`);
 
 watch(
   () => props.eventLimit,
   (eventLimit) => {
     eventLimitInput.value = String(eventLimit);
+  }
+);
+
+watch(
+  () => props.eventYamlListLimit,
+  (eventYamlListLimit) => {
+    eventYamlListLimitInput.value = String(eventYamlListLimit);
   }
 );
 
@@ -38,8 +49,23 @@ function onEventLimitInput(event: Event): void {
   }
 }
 
+function onEventYamlListLimitInput(event: Event): void {
+  const input = numberInputTarget(event);
+  if (input === null) {
+    return;
+  }
+  const limit = Number(input.value);
+  if (Number.isFinite(limit) && limit > 0) {
+    emit('eventYamlListLimitChange', limit);
+  }
+}
+
 function syncEventLimitInput(): void {
   eventLimitInput.value = String(props.eventLimit);
+}
+
+function syncEventYamlListLimitInput(): void {
+  eventYamlListLimitInput.value = String(props.eventYamlListLimit);
 }
 
 function numberInputTarget(event: Event): NumberInputTarget | null {
@@ -62,6 +88,22 @@ function numberInputTarget(event: Event): NumberInputTarget | null {
           type="number"
           @blur="syncEventLimitInput"
           @input="onEventLimitInput"
+        />
+      </section>
+      <section class="event-settings__section">
+        <label :for="eventYamlListLimitInputId" class="event-settings__label">
+          YAML list limit
+        </label>
+        <input
+          :id="eventYamlListLimitInputId"
+          v-model="eventYamlListLimitInput"
+          class="event-settings__input"
+          inputmode="numeric"
+          min="1"
+          step="1"
+          type="number"
+          @blur="syncEventYamlListLimitInput"
+          @input="onEventYamlListLimitInput"
         />
       </section>
       <UiButton class="event-settings__close-button" variant="primary" @click="emit('close')">

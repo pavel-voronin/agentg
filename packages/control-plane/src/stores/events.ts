@@ -9,7 +9,8 @@ import {
   filterableEventGroupsInState,
   isEventEnabledInState,
   isEventTypeEnabledInState,
-  normalizeEventLimit
+  normalizeEventLimit,
+  normalizeEventYamlListLimit
 } from '../domain/events.js';
 import {
   CONTROL_PLANE_STORAGE_KEYS,
@@ -19,7 +20,9 @@ import {
 } from './controlPlaneStorage.js';
 import {
   DEFAULT_EVENT_LIMIT,
+  DEFAULT_EVENT_YAML_LIST_LIMIT,
   type ControlPlaneEvent,
+  type ControlPlaneStreamEvent,
   type EventFiltersState,
   type EventsPanelMode
 } from './controlPlaneTypes.js';
@@ -27,8 +30,9 @@ import {
 type EventsState = {
   eventFilters: EventFiltersState;
   eventLimit: number;
+  eventYamlListLimit: number;
   eventsPaused: boolean;
-  events: ControlPlaneEvent[];
+  events: ControlPlaneStreamEvent[];
   eventsPanelMode: EventsPanelMode;
 };
 
@@ -51,7 +55,10 @@ export const useEventsStore = defineStore('controlPlane.events', {
       if (!isEventEnabledInState(this, event)) {
         return false;
       }
-      this.events = [event, ...this.events].slice(0, this.eventLimit);
+      this.events = [eventStreamSnapshot(event, this.eventYamlListLimit), ...this.events].slice(
+        0,
+        this.eventLimit
+      );
       return true;
     },
     setEventGroupEnabled(groupId: string, enabled: boolean) {
@@ -73,6 +80,10 @@ export const useEventsStore = defineStore('controlPlane.events', {
       writeStorage(CONTROL_PLANE_STORAGE_KEYS.eventLimit, String(this.eventLimit));
       this.events = this.events.slice(0, this.eventLimit);
     },
+    setEventYamlListLimit(value: number | string) {
+      this.eventYamlListLimit = normalizeEventYamlListLimit(value);
+      writeStorage(CONTROL_PLANE_STORAGE_KEYS.eventYamlListLimit, String(this.eventYamlListLimit));
+    },
     setEventTypeEnabled(type: string, enabled: boolean) {
       const group = eventGroupForType(type);
       if (group.filterable === false) {
@@ -87,7 +98,9 @@ export const useEventsStore = defineStore('controlPlane.events', {
       }
     },
     setEvents(events: ControlPlaneEvent[]) {
-      this.events = events.slice(0, this.eventLimit);
+      this.events = events
+        .map((event) => eventStreamSnapshot(event, this.eventYamlListLimit))
+        .slice(0, this.eventLimit);
     },
     setEventTypeMuted(type: string, muted: boolean) {
       if (type.length === 0) {
@@ -121,6 +134,7 @@ export const useEventsStore = defineStore('controlPlane.events', {
   state: (): EventsState => ({
     eventFilters: readStoredEventFilters(),
     eventLimit: readStoredEventLimit(),
+    eventYamlListLimit: readStoredEventYamlListLimit(),
     eventsPaused: false,
     events: [],
     eventsPanelMode: 'events'
@@ -162,6 +176,22 @@ function readStoredEventLimit(): number {
   return normalizeEventLimit(
     readStorage(CONTROL_PLANE_STORAGE_KEYS.eventLimit) ?? DEFAULT_EVENT_LIMIT
   );
+}
+
+function readStoredEventYamlListLimit(): number {
+  return normalizeEventYamlListLimit(
+    readStorage(CONTROL_PLANE_STORAGE_KEYS.eventYamlListLimit) ?? DEFAULT_EVENT_YAML_LIST_LIMIT
+  );
+}
+
+function eventStreamSnapshot(
+  event: ControlPlaneEvent,
+  yamlListItemLimit: number
+): ControlPlaneStreamEvent {
+  return {
+    ...event,
+    yamlListItemLimit
+  };
 }
 
 function writeStoredEventFilters(filters: EventFiltersState): void {
