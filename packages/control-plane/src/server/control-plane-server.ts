@@ -1,7 +1,13 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { readFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { extname, resolve, sep } from 'node:path';
 
+import {
+  controlPlaneProviderManifestFromRegistration,
+  parseControlPlaneProviderRegistration,
+  type ControlPlaneProviderCatalogResponse
+} from '@agentg/control-plane-sdk/manifest';
 import { createInternalTrpcProcedureProxy } from '@agentg/rpc/trpc-proxy';
 import {
   createServiceDirectoryClient,
@@ -46,6 +52,7 @@ export type ControlPlaneProcedureProxy = {
 
 type ControlPlaneRuntime = {
   procedureProxy: ControlPlaneProcedureProxy;
+  serviceDirectory?: ServiceDirectoryClient;
 };
 
 type RpcRequest = {
@@ -64,6 +71,11 @@ type RpcResponse = {
 };
 
 const CONTROL_PLANE_RPC_REQUEST_TIMEOUT_MS = 15000;
+const CONTROL_PLANE_CONTENT_CATALOG_PATH = '/control-plane/content-catalog';
+const CONTROL_PLANE_PROVIDER_ASSETS_PREFIX = '/control-plane/provider-assets/';
+const CONTROL_PLANE_RUNTIME_VUE_PATH = '/control-plane/runtime/vue.js';
+const nodeRequire = createRequire(import.meta.url);
+const vueRuntimeFilePath = nodeRequire.resolve('vue/dist/vue.runtime.esm-browser.prod.js');
 
 export async function startControlPlaneServer(
   options: ControlPlaneServerOptions
@@ -93,11 +105,12 @@ export async function startControlPlaneServer(
         timeoutMs: CONTROL_PLANE_RPC_REQUEST_TIMEOUT_MS
       });
     const runtime: ControlPlaneRuntime = {
-      procedureProxy
+      procedureProxy,
+      ...(serviceDirectory === undefined ? {} : { serviceDirectory })
     };
     const staticRoot = resolve(options.config.staticDir);
     server = createServer((request, response) => {
-      void handleHttpRequest(staticRoot, request, response);
+      void handleHttpRequest(staticRoot, runtime, request, response);
     });
     const createdWebSocketServer = new WebSocketServer({ noServer: true });
     webSocketServer = createdWebSocketServer;
@@ -295,6 +308,7 @@ function requireServiceDirectory(
 
 async function handleHttpRequest(
   staticRoot: string,
+  runtime: ControlPlaneRuntime,
   request: IncomingMessage,
   response: ServerResponse
 ): Promise<void> {
@@ -306,6 +320,18 @@ async function handleHttpRequest(
   const path = requestPath(request);
   if (path === '/healthz') {
     sendHttp(response, 200, 'text/plain; charset=utf-8', 'ok');
+    return;
+  }
+  if (path === CONTROL_PLANE_RUNTIME_VUE_PATH) {
+    await sendFile(response, request.method, vueRuntimeFilePath);
+    return;
+  }
+  if (path === CONTROL_PLANE_CONTENT_CATALOG_PATH) {
+    sendJsonHttp(response, request.method, await controlPlaneContentCatalog(runtime));
+    return;
+  }
+  if (path.startsWith(CONTROL_PLANE_PROVIDER_ASSETS_PREFIX)) {
+    await proxyProviderAsset(runtime, path, request, response);
     return;
   }
 
@@ -330,6 +356,176 @@ async function handleHttpRequest(
     return;
   }
   response.end(body);
+}
+
+async function sendFile(
+  response: ServerResponse,
+  method: string | undefined,
+  filePath: string
+): Promise<void> {
+  try {
+    const body = await readFile(filePath);
+    response.writeHead(200, {
+      'content-length': body.byteLength,
+      'content-type': contentType(filePath)
+    });
+    if (method === 'HEAD') {
+      response.end();
+      return;
+    }
+    response.end(body);
+  } catch (error) {
+    if (isNotFoundError(error)) {
+      sendHttp(response, 404, 'text/plain; charset=utf-8', 'Not Found');
+      return;
+    }
+    throw error;
+  }
+}
+
+async function controlPlaneContentCatalog(
+  runtime: ControlPlaneRuntime
+): Promise<ControlPlaneProviderCatalogResponse> {
+  const serviceDirectory = runtime.serviceDirectory;
+  if (serviceDirectory === undefined) {
+    return {
+      providers: [],
+      version: 0
+    };
+  }
+
+  try {
+    await serviceDirectory.refresh();
+  } catch (error) {
+    console.warn(
+      JSON.stringify({
+        error: error instanceof Error ? error.message : String(error),
+        event: 'control_plane.provider_catalog_refresh_failed'
+      })
+    );
+  }
+
+  const snapshot = serviceDirectory.getSnapshot();
+  return {
+    providers: snapshot.services.flatMap((service) => {
+      if (service.controlPlane === undefined) {
+        return [];
+      }
+      const registration = parseControlPlaneProviderRegistration(service.controlPlane);
+      if (registration === null) {
+        console.warn(
+          JSON.stringify({
+            event: 'control_plane.provider_manifest_invalid',
+            service: service.slug
+          })
+        );
+        return [];
+      }
+
+      return controlPlaneProviderManifestFromRegistration(service.slug, registration, (assetPath) =>
+        providerAssetProxyUrl(service.slug, assetPath)
+      );
+    }),
+    version: snapshot.version
+  };
+}
+
+async function proxyProviderAsset(
+  runtime: ControlPlaneRuntime,
+  path: string,
+  request: IncomingMessage,
+  response: ServerResponse
+): Promise<void> {
+  const serviceDirectory = runtime.serviceDirectory;
+  if (serviceDirectory === undefined) {
+    sendHttp(response, 404, 'text/plain; charset=utf-8', 'Not Found');
+    return;
+  }
+  const asset = providerAssetFromPath(path);
+  if (asset === null) {
+    sendHttp(response, 404, 'text/plain; charset=utf-8', 'Not Found');
+    return;
+  }
+
+  const service = serviceDirectory.getSnapshot().services.find((item) => item.slug === asset.slug);
+  if (service?.controlPlane === undefined) {
+    sendHttp(response, 404, 'text/plain; charset=utf-8', 'Not Found');
+    return;
+  }
+
+  try {
+    const upstream = await fetch(providerRpcAssetUrl(service.rpcUrl, asset.assetPath), {
+      method: request.method ?? 'GET'
+    });
+    const body = Buffer.from(await upstream.arrayBuffer());
+    response.writeHead(upstream.status, {
+      'content-length': body.byteLength,
+      'content-type': upstream.headers.get('content-type') ?? contentType(asset.assetPath)
+    });
+    if (request.method === 'HEAD') {
+      response.end();
+      return;
+    }
+    response.end(body);
+  } catch (error) {
+    console.warn(
+      JSON.stringify({
+        error: error instanceof Error ? error.message : String(error),
+        event: 'control_plane.provider_asset_proxy_failed',
+        provider: asset.slug
+      })
+    );
+    sendHttp(response, 502, 'text/plain; charset=utf-8', 'Bad Gateway');
+  }
+}
+
+function providerAssetFromPath(path: string): { assetPath: string; slug: string } | null {
+  const relativePath = path.slice(CONTROL_PLANE_PROVIDER_ASSETS_PREFIX.length);
+  const separatorIndex = relativePath.indexOf('/');
+  if (separatorIndex <= 0 || separatorIndex === relativePath.length - 1) {
+    return null;
+  }
+  const slug = decodeURIComponent(relativePath.slice(0, separatorIndex));
+  const assetPath = decodeURIComponent(relativePath.slice(separatorIndex + 1));
+  if (!safeProviderAssetPath(assetPath)) {
+    return null;
+  }
+  return {
+    assetPath,
+    slug
+  };
+}
+
+function providerAssetProxyUrl(slug: string, assetPath: string): string {
+  return `${CONTROL_PLANE_PROVIDER_ASSETS_PREFIX}${encodeURIComponent(slug)}/${assetPath
+    .split('/')
+    .map(encodeURIComponent)
+    .join('/')}`;
+}
+
+function providerRpcAssetUrl(rpcUrl: string, assetPath: string): string {
+  return `${rpcUrl.replace(/\/$/, '')}/control-plane-assets/${assetPath
+    .split('/')
+    .map(encodeURIComponent)
+    .join('/')}`;
+}
+
+function safeProviderAssetPath(assetPath: string): boolean {
+  return assetPath.length > 0 && !assetPath.startsWith('/') && !assetPath.includes('..');
+}
+
+function sendJsonHttp(response: ServerResponse, method: string | undefined, body: unknown): void {
+  const payload = Buffer.from(JSON.stringify(body));
+  response.writeHead(200, {
+    'cache-control': 'no-store',
+    'content-length': payload.byteLength,
+    'content-type': 'application/json; charset=utf-8'
+  });
+  if (method === 'HEAD') {
+    response.end();
+    return;
+  }
+  response.end(payload);
 }
 
 async function readStaticFile(filePath: string, staticRoot: string): Promise<Buffer | null> {

@@ -122,6 +122,43 @@ describe('Control Plane server boundary', () => {
       await server.close();
     }
   });
+
+  it('serves browser runtime metadata endpoints without a service directory client', async () => {
+    const eventBus = createFakeEventBus();
+    const procedureProxy = {
+      call: vi.fn(() => Promise.resolve(null)),
+      close: vi.fn()
+    };
+
+    const server = await startControlPlaneServer({
+      config: {
+        host: '127.0.0.1',
+        port: 0,
+        serviceUrl: 'http://127.0.0.1:0',
+        staticDir: '/tmp/agentg-control-plane-test-missing'
+      },
+      eventBus,
+      procedureProxy
+    });
+
+    try {
+      await expect(
+        fetch(`http://127.0.0.1:${String(server.port)}/control-plane/content-catalog`).then(
+          (response) => response.json()
+        )
+      ).resolves.toEqual({
+        providers: [],
+        version: 0
+      });
+      const runtimeResponse = await fetch(
+        `http://127.0.0.1:${String(server.port)}/control-plane/runtime/vue.js`
+      );
+      expect(runtimeResponse.status).toBe(200);
+      await expect(runtimeResponse.text()).resolves.toContain('vue');
+    } finally {
+      await server.close();
+    }
+  });
 });
 
 type FakeEventBus = EventBus & {

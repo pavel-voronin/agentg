@@ -16,7 +16,9 @@ import { useAppShellStore } from '../stores/appShell.js';
 import { appShellView } from '../view-models/appShellView.js';
 import {
   controlPlaneContentCatalog,
-  controlPlaneContentProviders
+  controlPlaneContentProviders,
+  contentCatalogFromProviders,
+  loadRuntimeContentProviders
 } from '../composition/contentProviders.js';
 import {
   defaultLayoutFromProviders,
@@ -71,6 +73,8 @@ const eventsPreviewVisible = ref(false);
 const eventsPreviewStyle = ref<Record<string, string>>({});
 const header = ref<ShellElement | null>(null);
 const mainLayout = ref<ShellElement | null>(null);
+let lastContentCatalogVersion: number | null = null;
+let unsubscribeDirectoryEvents: (() => void) | null = null;
 
 function hideDashboardPreview(): void {
   dashboardPreviewVisible.value = false;
@@ -147,16 +151,41 @@ function toggleSlotDebug(): void {
   appShellStore.setSlotDebugEnabled(!appShell.value.slotDebugEnabled);
 }
 
+async function refreshRuntimeContentProviders(): Promise<void> {
+  const runtimeCatalog = await loadRuntimeContentProviders();
+  if (runtimeCatalog.version === lastContentCatalogVersion) {
+    return;
+  }
+  lastContentCatalogVersion = runtimeCatalog.version;
+  const providers = [...controlPlaneContentProviders, ...runtimeCatalog.providers];
+  slotRuntime.replaceCatalog(contentCatalogFromProviders(providers));
+  slotRuntime.replaceLayout(readControlPlaneLayout(defaultLayoutFromProviders(providers)));
+}
+
+function scheduleRuntimeContentProvidersRefresh(): void {
+  void refreshRuntimeContentProviders().catch((error: unknown) => {
+    console.error(error);
+  });
+}
+
 function browserGlobal(): BrowserGlobal {
   return globalThis as unknown as BrowserGlobal;
 }
 
 onMounted(() => {
   browserGlobal().addEventListener('resize', repositionVisiblePreviews);
+  unsubscribeDirectoryEvents = host.subscribeEvents((event) => {
+    if (event.type === 'service_directory.changed') {
+      scheduleRuntimeContentProvidersRefresh();
+    }
+  });
+  scheduleRuntimeContentProvidersRefresh();
 });
 
 onBeforeUnmount(() => {
   browserGlobal().removeEventListener('resize', repositionVisiblePreviews);
+  unsubscribeDirectoryEvents?.();
+  unsubscribeDirectoryEvents = null;
 });
 </script>
 

@@ -1,19 +1,15 @@
 import type { ContentCatalog, ContentProvider } from '@agentg/control-plane-sdk/slots';
+import {
+  contentProvidersFromControlPlaneCatalogResponse,
+  parseControlPlaneProviderCatalogResponse
+} from '@agentg/control-plane-sdk/manifest';
 
 import { controlPlaneContentProvider } from './content/control-plane/provider.js';
 
-type ControlPlaneProviderModule = Record<string, unknown>;
-
-const providerModules = import.meta.glob<ControlPlaneProviderModule>(
-  '../../../*/src/control-plane/index.ts',
-  {
-    eager: true
-  }
-);
+const controlPlaneContentCatalogUrl = '/control-plane/content-catalog';
 
 export const controlPlaneContentProviders = [
-  controlPlaneContentProvider,
-  ...contentProvidersFromModules(providerModules)
+  controlPlaneContentProvider
 ] satisfies readonly ContentProvider[];
 
 export const controlPlaneContentCatalog = contentCatalogFromProviders(controlPlaneContentProviders);
@@ -27,18 +23,24 @@ export function contentCatalogFromProviders(providers: readonly ContentProvider[
   );
 }
 
-function contentProvidersFromModules(
-  modules: Record<string, ControlPlaneProviderModule>
-): ContentProvider[] {
-  return Object.entries(modules)
-    .flatMap(([, module]) => Object.values(module).filter(isContentProvider))
-    .sort((left, right) => left.domainId.localeCompare(right.domainId));
-}
-
-function isContentProvider(value: unknown): value is ContentProvider {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    return false;
+export async function loadRuntimeContentProviders(): Promise<{
+  providers: readonly ContentProvider[];
+  version: number;
+}> {
+  const response = await fetch(controlPlaneContentCatalogUrl, {
+    headers: {
+      accept: 'application/json'
+    }
+  });
+  if (!response.ok) {
+    throw new Error(`Control Plane content catalog did not load: ${String(response.status)}`);
   }
-  const provider = value as Record<string, unknown>;
-  return typeof provider.domainId === 'string' && Array.isArray(provider.contents);
+  const parsed = parseControlPlaneProviderCatalogResponse(await response.json());
+  if (parsed === null) {
+    throw new Error('Control Plane content catalog response is invalid');
+  }
+  return {
+    providers: contentProvidersFromControlPlaneCatalogResponse(parsed),
+    version: parsed.version
+  };
 }

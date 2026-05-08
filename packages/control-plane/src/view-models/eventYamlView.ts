@@ -172,7 +172,7 @@ function yamlArrayItemLines(
       path,
       listItemLimit
     );
-    if (firstLine === undefined || firstLine.kind !== 'content') {
+    if (firstLine?.kind !== 'content') {
       return [yamlContentLine(depth, [{ kind: 'text', text: '- {}' }])];
     }
     return [
