@@ -7,6 +7,7 @@
     "./call-event-types": "./src/call-event-types.ts",
     "./call-events": "./src/call-events.ts",
     "./call-options": "./src/call-options.ts",
+    "./http-server": "./src/http-server.ts",
     "./surface": "./src/surface.ts",
     "./trpc-proxy": "./src/trpc-proxy.ts",
     "./model-refs": "./src/model-refs.ts"
@@ -18,11 +19,11 @@
   "dependencies": {
     "@agentg/events": "file:../events",
     "@trpc/client": "^11.17.0",
+    "@trpc/server": "^11.17.0",
     "zod": "^4.4.1"
   },
   "devDependencies": {
     "@types/node": "24.10.0",
-    "@trpc/server": "^11.17.0",
     "typescript": "6.0.3",
     "vitest": "4.1.5"
   }

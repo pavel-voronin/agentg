@@ -1,18 +1,23 @@
 import type { Server } from 'node:http';
+import { fileURLToPath } from 'node:url';
 
-import { createHTTPServer } from '@trpc/server/adapters/standalone';
+import { createInternalTrpcHttpServer } from '@agentg/rpc/http-server';
 
 import { formatInternalTrpcBindAddress, type InternalTrpcBindConfig } from './config.js';
 import { createTelegramRouter } from './router.js';
 import { createTelegramRpcContext } from './trpc.js';
 import type { TelegramRpcRuntime } from './runtime.js';
 
+const TELEGRAM_CONTROL_PLANE_ASSETS_ROOT = fileURLToPath(
+  new URL('../../dist-control-plane/', import.meta.url)
+);
+
 export async function startTelegramTrpcServer(
   options: TelegramRpcRuntime & {
     bind: InternalTrpcBindConfig;
   }
 ): Promise<Server> {
-  const server = createHTTPServer({
+  const server = createInternalTrpcHttpServer({
     createContext: (contextOptions) =>
       createTelegramRpcContext(contextOptions, {
         eventBus: options.eventBus
@@ -21,7 +26,11 @@ export async function startTelegramTrpcServer(
       client: options.client,
       database: options.database,
       eventBus: options.eventBus
-    })
+    }),
+    staticAssets: {
+      rootDir: TELEGRAM_CONTROL_PLANE_ASSETS_ROOT,
+      urlPrefix: '/control-plane-assets/'
+    }
   });
   const address = formatInternalTrpcBindAddress(options.bind);
 

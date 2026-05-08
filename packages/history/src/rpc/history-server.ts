@@ -1,13 +1,18 @@
 import type { Server } from 'node:http';
+import { fileURLToPath } from 'node:url';
 
 import type { HistoryDatabase as AppDatabase } from '../database.js';
 import type { EventBus } from '@agentg/events/bus';
-import { createHTTPServer } from '@trpc/server/adapters/standalone';
+import { createInternalTrpcHttpServer } from '@agentg/rpc/http-server';
 
 import { formatInternalTrpcBindAddress, type InternalTrpcBindConfig } from './config.js';
 import { createHistoryRouter } from './router.js';
 import { createHistoryRpcContext } from './trpc.js';
 import type { TelegramReadClient } from '../telegram-client.js';
+
+const HISTORY_CONTROL_PLANE_ASSETS_ROOT = fileURLToPath(
+  new URL('../../dist-control-plane/', import.meta.url)
+);
 
 export async function startHistoryTrpcServer(options: {
   bind: InternalTrpcBindConfig;
@@ -16,7 +21,7 @@ export async function startHistoryTrpcServer(options: {
   requestSync?: (reason: string, chatId?: string) => void;
   telegram: TelegramReadClient;
 }): Promise<Server> {
-  const server = createHTTPServer({
+  const server = createInternalTrpcHttpServer({
     createContext: (contextOptions) =>
       createHistoryRpcContext(contextOptions, {
         eventBus: options.eventBus
@@ -26,7 +31,11 @@ export async function startHistoryTrpcServer(options: {
       eventBus: options.eventBus,
       ...(options.requestSync === undefined ? {} : { requestSync: options.requestSync }),
       telegram: options.telegram
-    })
+    }),
+    staticAssets: {
+      rootDir: HISTORY_CONTROL_PLANE_ASSETS_ROOT,
+      urlPrefix: '/control-plane-assets/'
+    }
   });
   const address = formatInternalTrpcBindAddress(options.bind);
 
