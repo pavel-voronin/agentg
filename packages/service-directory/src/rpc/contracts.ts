@@ -20,6 +20,7 @@ export const serviceDirectoryExtensionInputSchema = z.object({
 });
 
 export const serviceDirectoryManifestInputSchema = z.object({
+  controlPlane: z.unknown().optional(),
   events: nonEmptyStringArraySchema,
   extensions: z.array(serviceDirectoryExtensionInputSchema).default([]),
   procedures: z.array(serviceDirectoryProcedureInputSchema).default([]),
@@ -40,6 +41,7 @@ export const serviceDirectoryLeaseSchema = z.object({
 });
 
 export const serviceDirectoryServiceRecordSchema = z.object({
+  controlPlane: z.unknown().optional(),
   events: z.array(nonEmptyStringSchema),
   expiresAt: z.iso.datetime(),
   extensions: z.array(serviceDirectoryExtensionInputSchema),

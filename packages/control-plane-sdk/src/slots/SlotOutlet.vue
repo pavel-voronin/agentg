@@ -59,7 +59,7 @@ const resolution = computed(() =>
       tags: props.tags
     },
     runtime.layout.value,
-    runtime.catalogIndex
+    runtime.catalogIndex.value
   )
 );
 
@@ -262,13 +262,13 @@ function isComponentInstance(value: unknown): value is ComponentPublicInstance {
     <div class="slot-outlet-error__title">{{ errorTitle }}</div>
     <div v-if="errorDetail" class="slot-outlet-error__detail">{{ errorDetail }}</div>
   </div>
-  <component
+  <div
     v-else-if="slotState.kind === 'component-ready' && contentComponent"
-    :is="contentComponent"
     ref="slotRoot"
-    :slot-context="props.context"
-    v-bind="contentAttrs"
-  />
+    class="slot-outlet-content"
+  >
+    <component :is="contentComponent" :slot-context="props.context" v-bind="contentAttrs" />
+  </div>
   <div v-else ref="slotRoot" class="slot-outlet-loading" v-bind="attrs">
     Loading {{ slotState.kind === 'component-loading' ? slotState.contentId : 'content' }}.
   </div>
@@ -277,6 +277,10 @@ function isComponentInstance(value: unknown): value is ComponentPublicInstance {
 <style scoped>
 @reference "tailwindcss";
 .slot-outlet-default {
+  @apply contents;
+}
+
+.slot-outlet-content {
   @apply contents;
 }
 

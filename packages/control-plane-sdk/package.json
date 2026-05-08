@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     "./host": "./src/host.ts",
+    "./manifest": "./src/manifest.ts",
     "./model-ref-events": "./src/modelRefEvents.ts",
     "./slots": "./src/slots/index.ts",
     "./ui": "./src/ui/UiButton.vue",

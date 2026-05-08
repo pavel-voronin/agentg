@@ -63,6 +63,7 @@ export function createServiceDirectory(options: { ttlMs?: number } = {}): Servic
       const expiresAt = new Date(now.getTime() + ttlMs);
 
       services.set(parsed.slug, {
+        ...(parsed.controlPlane === undefined ? {} : { controlPlane: parsed.controlPlane }),
         events: uniqueSorted(parsed.events),
         expiresAt: expiresAt.toISOString(),
         extensions: uniqueExtensions(parsed.extensions),
@@ -163,6 +164,7 @@ function snapshot(
 
 function publicServiceRecord(service: StoredServiceRecord): ServiceDirectoryServiceRecord {
   return {
+    ...(service.controlPlane === undefined ? {} : { controlPlane: service.controlPlane }),
     events: service.events,
     expiresAt: service.expiresAt,
     extensions: service.extensions,
@@ -176,6 +178,7 @@ function publicServiceRecord(service: StoredServiceRecord): ServiceDirectoryServ
 
 function stableManifestKey(input: ServiceDirectoryManifestInput): string {
   return JSON.stringify({
+    controlPlane: input.controlPlane ?? null,
     events: uniqueSorted(input.events ?? []),
     extensions: uniqueExtensions(input.extensions ?? []),
     procedures: uniqueProcedures(input.procedures ?? []),

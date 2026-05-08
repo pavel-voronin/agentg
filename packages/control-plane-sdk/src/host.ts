@@ -14,7 +14,9 @@ export type ControlPlaneHost = {
   subscribeEvents(listener: (event: ControlPlaneHostEvent) => void): () => void;
 };
 
-const controlPlaneHostKey: InjectionKey<ControlPlaneHost> = Symbol('controlPlaneHost');
+const controlPlaneHostKey = Symbol.for(
+  'agentg:control-plane:host'
+) as InjectionKey<ControlPlaneHost>;
 
 export function provideControlPlaneHost(host: ControlPlaneHost): void {
   provide(controlPlaneHostKey, host);

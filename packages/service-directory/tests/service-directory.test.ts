@@ -23,6 +23,17 @@ describe('service directory', () => {
 
     const joined = directory.join(
       {
+        controlPlane: {
+          contents: [
+            {
+              contentId: 'summaries.tile',
+              module: {
+                assetPath: 'tile.js'
+              },
+              tags: ['dashboard.tile']
+            }
+          ]
+        },
         events: ['summaries.summary.completed'],
         extensions: [
           {
@@ -50,6 +61,17 @@ describe('service directory', () => {
       ],
       services: [
         {
+          controlPlane: {
+            contents: [
+              {
+                contentId: 'summaries.tile',
+                module: {
+                  assetPath: 'tile.js'
+                },
+                tags: ['dashboard.tile']
+              }
+            ]
+          },
           events: ['summaries.summary.completed'],
           procedures: [{ kind: 'query', name: 'summaries.chatSummary' }],
           rpcUrl: 'http://summaries:8080',

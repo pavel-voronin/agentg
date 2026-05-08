@@ -19,19 +19,20 @@ import type {
 } from './types.js';
 
 export type SlotRuntime = {
-  catalog: ContentCatalog;
-  catalogIndex: ReadonlyMap<string, ContentDefinition>;
+  catalog: Readonly<ShallowRef<ContentCatalog>>;
+  catalogIndex: Readonly<ShallowRef<ReadonlyMap<string, ContentDefinition>>>;
   clearSlotContent: (slotId: string) => void;
   compatibleContent: (slotTags: readonly string[]) => ContentDefinition[];
   debugEntries: Readonly<ShallowRef<readonly SlotDebugEntry[]>>;
   debugEnabled: Readonly<Ref<boolean>>;
   layout: Ref<SlotLayout>;
   registerDebugEntry: (entry: SlotDebugEntryInput) => SlotDebugRegistration;
+  replaceCatalog: (nextCatalog: ContentCatalog) => void;
   replaceLayout: (nextLayout: SlotLayout) => void;
   setSlotContent: (slotId: string, contentId: string) => void;
 };
 
-const slotRuntimeKey: InjectionKey<SlotRuntime> = Symbol('slotRuntime');
+const slotRuntimeKey = Symbol.for('agentg:control-plane:slot-runtime') as InjectionKey<SlotRuntime>;
 
 export function createSlotRuntime(options: {
   catalog: ContentCatalog;
@@ -40,7 +41,10 @@ export function createSlotRuntime(options: {
   onLayoutChange?: (layout: SlotLayout) => void;
 }): SlotRuntime {
   const layout = ref(cloneSlotLayout(options.initialLayout));
-  const catalogIndex = createContentCatalogIndex(options.catalog);
+  const catalog = shallowRef<ContentCatalog>(options.catalog);
+  const catalogIndex = shallowRef<ReadonlyMap<string, ContentDefinition>>(
+    createContentCatalogIndex(options.catalog)
+  );
   const debugEnabled = options.debugEnabled ?? ref(false);
   const debugEntries = shallowRef<readonly SlotDebugEntry[]>([]);
   let nextDebugEntryId = 0;
@@ -68,7 +72,7 @@ export function createSlotRuntime(options: {
   }
 
   return {
-    catalog: options.catalog,
+    catalog,
     catalogIndex,
     clearSlotContent(slotId) {
       commit(
@@ -80,12 +84,16 @@ export function createSlotRuntime(options: {
       );
     },
     compatibleContent(slotTags) {
-      return options.catalog.filter((content) => tagsCompatible(slotTags, content.tags));
+      return catalog.value.filter((content) => tagsCompatible(slotTags, content.tags));
     },
     debugEntries,
     debugEnabled,
     layout,
     registerDebugEntry,
+    replaceCatalog(nextCatalog) {
+      catalog.value = nextCatalog;
+      catalogIndex.value = createContentCatalogIndex(nextCatalog);
+    },
     replaceLayout(nextLayout) {
       commit(cloneSlotLayout(nextLayout));
     },
