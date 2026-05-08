@@ -1,7 +1,9 @@
+import { historyControlPlane } from './control-plane/manifest.js';
 import { historyRpcSurface } from './rpc/surface.js';
 
 export function createHistoryServiceManifest(config: { rpcUrl: string }) {
   return {
+    controlPlane: historyControlPlane,
     events: [
       'history.coverage.changed',
       'history.job.completed',
