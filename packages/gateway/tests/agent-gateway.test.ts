@@ -27,6 +27,7 @@ describe('Agent Gateway external surface', () => {
   it('exposes only telegram.getChat through WebSocket RPC', async () => {
     const calls: unknown[] = [];
     const telegramServer = createHTTPServer({
+      allowMethodOverride: true,
       router: testRpcRouter({
         getChat: testRpc.input(telegramGetChatInputSchema).query(({ input }) => {
           calls.push(input);

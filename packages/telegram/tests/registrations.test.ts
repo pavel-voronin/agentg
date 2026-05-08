@@ -10,8 +10,18 @@ import {
 
 describe('Telegram service manifest', () => {
   it('lists exact Telegram events without wildcard types', () => {
-    const manifest = createTelegramServiceManifest({ rpcUrl: 'http://telegram.local' });
+    const manifest = createTelegramServiceManifest({
+      controlPlaneAssetVersion: 'asset-v1',
+      controlPlaneAssetVersions: {
+        'workspace.js': 'workspace-v1'
+      },
+      rpcUrl: 'http://telegram.local'
+    });
 
+    expect(manifest.controlPlane.assetVersion).toBe('asset-v1');
+    expect(manifest.controlPlane.assetVersions).toEqual({
+      'workspace.js': 'workspace-v1'
+    });
     expect(manifest.events).toEqual(TELEGRAM_EVENT_TYPES);
     expect(manifest.events).not.toContain('telegram.tdlib.*');
     expect(manifest.events.some((type) => type.includes('*'))).toBe(false);

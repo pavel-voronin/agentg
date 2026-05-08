@@ -40,7 +40,10 @@ describe('createTrpcTelegramHistoryClient', () => {
         }
       ])
     });
-    const server = createHTTPServer({ router });
+    const server = createHTTPServer({
+      allowMethodOverride: true,
+      router
+    });
     const port = await listenEphemeral(server);
     const client = createTrpcTelegramHistoryClient({
       url: `http://127.0.0.1:${String(port)}`

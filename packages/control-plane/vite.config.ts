@@ -7,8 +7,12 @@ import { defineConfig, type Plugin, type UserConfig } from 'vite';
 
 const browserSharedModules = new Set(['vue']);
 const browserSharedModuleUrls = new Map([['vue', '/control-plane/runtime/vue.js']]);
+const domainControlPlaneWatchIgnorePatterns = [
+  /\/packages\/(?!control-plane\/)[^/]+\/dist-control-plane\//,
+  /\/packages\/(?!control-plane\/)[^/]+\/src\/control-plane\//
+];
 const nodeRequire = createRequire(import.meta.url);
-const vueRuntimeFilePath = nodeRequire.resolve('vue/dist/vue.runtime.esm-browser.prod.js');
+const vueRuntimeFilePath = nodeRequire.resolve('vue/dist/vue.runtime.esm-browser.js');
 
 export default defineConfig(({ command }): UserConfig => {
   const devServer = command === 'serve';
@@ -46,6 +50,9 @@ export default defineConfig(({ command }): UserConfig => {
       },
       warmup: {
         clientFiles: ['./src/main.ts']
+      },
+      watch: {
+        ignored: domainControlPlaneWatchIgnorePatterns
       }
     }
   };

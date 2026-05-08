@@ -1,4 +1,9 @@
 import type { TelegramDatabase as AppDatabase } from './database.js';
+import {
+  readControlPlaneAssetVersions,
+  watchControlPlaneAssetVersion,
+  type ControlPlaneAssetVersionSubscription
+} from '@agentg/infra/control-plane/assets';
 import { createServiceDirectoryClient } from '@agentg/service-directory/rpc';
 import type { EventBus } from '@agentg/events/bus';
 import { createIntegrationEvent } from '@agentg/events/envelope';
@@ -19,7 +24,11 @@ import {
 import type { InternalTrpcBindConfig } from './rpc/config.js';
 import { getDirectoryEntryByChatId } from './rpc/procedures/support.js';
 import { createTelegramServiceManifest } from './registrations.js';
-import { startTelegramTrpcServer, stopTelegramTrpcServer } from './rpc/server.js';
+import {
+  startTelegramTrpcServer,
+  stopTelegramTrpcServer,
+  TELEGRAM_CONTROL_PLANE_ASSETS_ROOT
+} from './rpc/server.js';
 import { persistCurrentTelegramUser, persistTelegramUpdate, upsertChat } from './store.js';
 import {
   createTelegramClient,
@@ -73,12 +82,20 @@ const TELEGRAM_SHUTDOWN_FORCE_EXIT_MS = 4500;
 const TELEGRAM_SHUTDOWN_STEP_TIMEOUT_MS = 2000;
 
 export async function runTelegramIngestion(options: TelegramIngestionOptions): Promise<void> {
-  const serviceManifest = createTelegramServiceManifest({ rpcUrl: options.serviceRpcUrl });
+  const initialControlPlaneAssets = await readControlPlaneAssetVersions(
+    TELEGRAM_CONTROL_PLANE_ASSETS_ROOT
+  );
+  const serviceManifest = createTelegramServiceManifest({
+    controlPlaneAssetVersion: initialControlPlaneAssets.version,
+    controlPlaneAssetVersions: initialControlPlaneAssets.assets,
+    rpcUrl: options.serviceRpcUrl
+  });
   const eventBus = createValidatedEventBus(options.eventBus, {
     allowedTypes: serviceManifestEventTypes(serviceManifest),
     publisher: 'telegram'
   });
   let telegramRpcServer: Awaited<ReturnType<typeof startTelegramTrpcServer>> | undefined;
+  let controlPlaneAssets: ControlPlaneAssetVersionSubscription | undefined;
   let serviceDirectory: ReturnType<typeof createServiceDirectoryClient> | undefined;
   let tdlibStatusHeartbeat: ReturnType<typeof setInterval> | undefined;
   let client: TelegramClient | undefined;
@@ -126,10 +143,35 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
       url: options.services.serviceDirectory.url
     });
     await serviceDirectory.join(serviceManifest);
+    const activeServiceDirectory = serviceDirectory;
+    controlPlaneAssets = watchControlPlaneAssetVersion({
+      initialVersion: initialControlPlaneAssets,
+      onError: (error) => {
+        requestProcessShutdown('telegram.control_plane_assets_registration_failed', error);
+      },
+      onVersion: async (nextControlPlaneAssets) => {
+        await activeServiceDirectory.join(
+          createTelegramServiceManifest({
+            controlPlaneAssetVersion: nextControlPlaneAssets.version,
+            controlPlaneAssetVersions: nextControlPlaneAssets.assets,
+            rpcUrl: options.serviceRpcUrl
+          })
+        );
+        console.log(
+          JSON.stringify({
+            event: 'telegram.control_plane_assets_registered',
+            version: nextControlPlaneAssets.version
+          })
+        );
+      },
+      rootDir: TELEGRAM_CONTROL_PLANE_ASSETS_ROOT
+    });
     startupComplete = true;
 
     console.log(JSON.stringify({ event: 'telegram.ingestion_ready' }));
     await waitForShutdown(async () => {
+      controlPlaneAssets?.close();
+      controlPlaneAssets = undefined;
       if (tdlibStatusHeartbeat !== undefined) {
         clearInterval(tdlibStatusHeartbeat);
         tdlibStatusHeartbeat = undefined;
@@ -160,6 +202,7 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
     if (!startupComplete) {
       await cleanupTelegramStartupFailure({
         client,
+        controlPlaneAssets,
         eventBus,
         serviceDirectory,
         tdlibStatus,
@@ -173,12 +216,14 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
 
 async function cleanupTelegramStartupFailure(options: {
   client: TelegramClient | undefined;
+  controlPlaneAssets: ControlPlaneAssetVersionSubscription | undefined;
   eventBus: EventBus;
   serviceDirectory: ReturnType<typeof createServiceDirectoryClient> | undefined;
   tdlibStatus: TdlibStatusTracker | undefined;
   tdlibStatusHeartbeat: ReturnType<typeof setInterval> | undefined;
   telegramRpcServer: Awaited<ReturnType<typeof startTelegramTrpcServer>> | undefined;
 }): Promise<void> {
+  options.controlPlaneAssets?.close();
   if (options.tdlibStatusHeartbeat !== undefined) {
     clearInterval(options.tdlibStatusHeartbeat);
   }

@@ -12,6 +12,8 @@ export type ControlPlaneContentRegistration = {
 };
 
 export type ControlPlaneProviderRegistration = {
+  assetVersion: string;
+  assetVersions?: Readonly<Record<string, string>>;
   contents: readonly ControlPlaneContentRegistration[];
   defaultPlacements?: readonly SlotLayoutPlacement[];
 };
@@ -28,6 +30,7 @@ export type ControlPlaneContentManifest = {
 };
 
 export type ControlPlaneProviderManifest = {
+  assetVersion: string;
   contents: readonly ControlPlaneContentManifest[];
   defaultPlacements?: readonly SlotLayoutPlacement[];
   domainId: string;
@@ -48,31 +51,44 @@ type BrowserDocument = {
 type BrowserLinkElement = {
   addEventListener(type: 'error' | 'load', listener: () => void): void;
   href: string;
+  remove(): void;
   rel: string;
 };
 
 type BrowserGlobal = {
   document?: BrowserDocument;
+  location?: {
+    href: string;
+  };
 };
 
-const loadedStyleUrls = new Set<string>();
+const loadedStyleLinks = new Map<string, { link: BrowserLinkElement; url: string }>();
+const pendingStyleLoads = new Map<string, Promise<void>>();
 
 export function controlPlaneProviderManifestFromRegistration(
   domainId: string,
   registration: ControlPlaneProviderRegistration,
-  resolveAssetUrl: (assetPath: string) => string
+  resolveAssetUrl: (assetPath: string, assetVersion: string) => string
 ): ControlPlaneProviderManifest {
   return {
+    assetVersion: registration.assetVersion,
     contents: registration.contents.map((content) => ({
       contentId: content.contentId,
       module: {
-        url: resolveAssetUrl(content.module.assetPath)
+        url: resolveAssetUrl(
+          content.module.assetPath,
+          assetVersionForPath(registration, content.module.assetPath)
+        )
       },
       ...(content.defaultSlotIds === undefined ? {} : { defaultSlotIds: content.defaultSlotIds }),
       ...(content.props === undefined ? {} : { props: content.props }),
       ...(content.styleAssetPaths === undefined
         ? {}
-        : { styleUrls: content.styleAssetPaths.map(resolveAssetUrl) }),
+        : {
+            styleUrls: content.styleAssetPaths.map((assetPath) =>
+              resolveAssetUrl(assetPath, assetVersionForPath(registration, assetPath))
+            )
+          }),
       tags: content.tags
     })),
     ...(registration.defaultPlacements === undefined
@@ -94,6 +110,7 @@ export function contentProviderFromControlPlaneManifest(
       },
       ...(content.defaultSlotIds === undefined ? {} : { defaultSlotIds: content.defaultSlotIds }),
       ...(content.props === undefined ? {} : { props: content.props }),
+      revision: remoteContentRevision(content),
       tags: content.tags
     })),
     ...(manifest.defaultPlacements === undefined
@@ -109,10 +126,31 @@ export function contentProvidersFromControlPlaneCatalogResponse(
   return response.providers.map(contentProviderFromControlPlaneManifest);
 }
 
+export async function loadControlPlaneProviderCatalogStyles(
+  response: ControlPlaneProviderCatalogResponse
+): Promise<void> {
+  const styleUrls = new Set<string>();
+  for (const provider of response.providers) {
+    for (const content of provider.contents) {
+      for (const styleUrl of content.styleUrls ?? []) {
+        styleUrls.add(styleUrl);
+      }
+    }
+  }
+  await loadStyleUrls([...styleUrls]);
+}
+
 export function parseControlPlaneProviderRegistration(
   value: unknown
 ): ControlPlaneProviderRegistration | null {
   if (!isRecord(value)) {
+    return null;
+  }
+  if (!isSafeAssetVersion(value.assetVersion)) {
+    return null;
+  }
+  const assetVersions = optionalRecordOf(value.assetVersions, parseSafeAssetVersion);
+  if (assetVersions === null) {
     return null;
   }
   const contents = arrayOf(value.contents, parseContentRegistration);
@@ -124,6 +162,8 @@ export function parseControlPlaneProviderRegistration(
     return null;
   }
   return {
+    assetVersion: value.assetVersion,
+    ...(assetVersions === undefined ? {} : { assetVersions }),
     contents,
     ...(defaultPlacements === undefined ? {} : { defaultPlacements })
   };
@@ -146,7 +186,11 @@ export function parseControlPlaneProviderCatalogResponse(
 }
 
 function parseProviderManifest(value: unknown): ControlPlaneProviderManifest | null {
-  if (!isRecord(value) || !isNonEmptyString(value.domainId)) {
+  if (
+    !isRecord(value) ||
+    !isNonEmptyString(value.domainId) ||
+    !isSafeAssetVersion(value.assetVersion)
+  ) {
     return null;
   }
   const contents = arrayOf(value.contents, parseContentManifest);
@@ -158,6 +202,7 @@ function parseProviderManifest(value: unknown): ControlPlaneProviderManifest | n
     return null;
   }
   return {
+    assetVersion: value.assetVersion,
     contents,
     ...(defaultPlacements === undefined ? {} : { defaultPlacements }),
     domainId: value.domainId
@@ -232,6 +277,10 @@ function parseSafeAssetPath(value: unknown): string | null {
   return isSafeAssetPath(value) ? value : null;
 }
 
+function parseSafeAssetVersion(value: unknown): string | null {
+  return isSafeAssetVersion(value) ? value : null;
+}
+
 function arrayOf<T>(value: unknown, parse: (item: unknown) => T | null): T[] | null {
   if (!Array.isArray(value)) {
     return null;
@@ -254,6 +303,30 @@ function optionalArrayOf<T>(
   return value === undefined ? undefined : arrayOf(value, parse);
 }
 
+function optionalRecordOf<T>(
+  value: unknown,
+  parse: (item: unknown) => T | null
+): Record<string, T> | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!isRecord(value)) {
+    return null;
+  }
+  const parsed: Record<string, T> = {};
+  for (const [key, item] of Object.entries(value)) {
+    if (!isSafeAssetPath(key)) {
+      return null;
+    }
+    const parsedItem = parse(item);
+    if (parsedItem === null) {
+      return null;
+    }
+    parsed[key] = parsedItem;
+  }
+  return parsed;
+}
+
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
 }
@@ -271,6 +344,22 @@ function isSafeAssetPath(value: unknown): value is string {
   );
 }
 
+function isSafeAssetVersion(value: unknown): value is string {
+  return (
+    isNonEmptyString(value) &&
+    !value.includes('/') &&
+    !value.includes('..') &&
+    !value.includes('\\')
+  );
+}
+
+function assetVersionForPath(
+  registration: ControlPlaneProviderRegistration,
+  assetPath: string
+): string {
+  return registration.assetVersions?.[assetPath] ?? registration.assetVersion;
+}
+
 async function loadStyleUrls(urls: readonly string[]): Promise<void> {
   const document = browserDocument();
   if (document === null) {
@@ -280,26 +369,75 @@ async function loadStyleUrls(urls: readonly string[]): Promise<void> {
 }
 
 function loadStyleUrl(document: BrowserDocument, url: string): Promise<void> {
-  if (loadedStyleUrls.has(url)) {
+  const styleKey = styleAssetKey(url);
+  const loadedStyle = loadedStyleLinks.get(styleKey);
+  if (loadedStyle?.url === url) {
     return Promise.resolve();
   }
-  loadedStyleUrls.add(url);
+  const pendingStyleLoad = pendingStyleLoads.get(url);
+  if (pendingStyleLoad !== undefined) {
+    return pendingStyleLoad;
+  }
 
-  return new Promise((resolve, reject) => {
+  const styleLoad = new Promise<void>((resolve, reject) => {
     const link = document.createElement('link');
     link.href = url;
     link.rel = 'stylesheet';
     link.addEventListener('load', () => {
+      loadedStyle?.link.remove();
+      loadedStyleLinks.set(styleKey, {
+        link,
+        url
+      });
       resolve();
     });
     link.addEventListener('error', () => {
-      loadedStyleUrls.delete(url);
       reject(new Error(`Style asset did not load: ${url}`));
     });
     document.head.append(link);
   });
+  pendingStyleLoads.set(
+    url,
+    styleLoad.finally(() => {
+      pendingStyleLoads.delete(url);
+    })
+  );
+  return styleLoad;
 }
 
 function browserDocument(): BrowserDocument | null {
   return (globalThis as unknown as BrowserGlobal).document ?? null;
+}
+
+function styleAssetKey(url: string): string {
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(url, browserLocationHref());
+  } catch {
+    return url;
+  }
+  const segments = parsedUrl.pathname.split('/').filter((segment) => segment.length > 0);
+  if (
+    segments.length >= 5 &&
+    segments[0] === 'control-plane' &&
+    segments[1] === 'provider-assets'
+  ) {
+    const providerSlug = segments[2];
+    if (providerSlug === undefined) {
+      return parsedUrl.href;
+    }
+    return `${parsedUrl.origin}/${segments[0]}/${segments[1]}/${providerSlug}/${segments
+      .slice(4)
+      .join('/')}`;
+  }
+
+  return parsedUrl.href;
+}
+
+function browserLocationHref(): string {
+  return (globalThis as unknown as BrowserGlobal).location?.href ?? 'http://localhost/';
+}
+
+function remoteContentRevision(content: ControlPlaneContentManifest): string {
+  return content.module.url;
 }

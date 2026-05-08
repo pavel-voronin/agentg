@@ -12,6 +12,7 @@ export type ContentDefinition = {
   domainId?: string;
   load: () => Promise<ContentModule>;
   props?: Record<string, unknown>;
+  revision?: string;
   tags: readonly string[];
 };
 

@@ -1,5 +1,5 @@
 import { telegramRpcSurface } from './rpc/surface.js';
-import { telegramControlPlane } from './control-plane/manifest.js';
+import { createTelegramControlPlane } from './control-plane/manifest.js';
 
 const TELEGRAM_OPERATION_EVENT_TYPES = [
   'telegram.login.completed',
@@ -40,9 +40,16 @@ export const TELEGRAM_EVENT_TYPES = [
   ...TELEGRAM_TDLIB_EVENT_TYPES
 ].sort();
 
-export function createTelegramServiceManifest(config: { rpcUrl: string }) {
+export function createTelegramServiceManifest(config: {
+  controlPlaneAssetVersion: string;
+  controlPlaneAssetVersions: Readonly<Record<string, string>>;
+  rpcUrl: string;
+}) {
   return {
-    controlPlane: telegramControlPlane,
+    controlPlane: createTelegramControlPlane(
+      config.controlPlaneAssetVersion,
+      config.controlPlaneAssetVersions
+    ),
     events: TELEGRAM_EVENT_TYPES,
     extensions: [],
     procedures: telegramRpcSurface.procedures(),

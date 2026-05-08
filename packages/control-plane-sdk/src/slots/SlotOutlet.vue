@@ -47,6 +47,7 @@ const runtime = useSlotRuntime();
 const contentComponent = shallowRef<Component | null>(null);
 const loadError = shallowRef<unknown>(null);
 const loadingContentId = shallowRef<string | null>(null);
+const renderedContentId = shallowRef<string | null>(null);
 const renderError = shallowRef<SlotRenderError | null>(null);
 const slotRoot = shallowRef<SlotRootRef>(null);
 
@@ -103,7 +104,7 @@ const slotState = computed<SlotRenderState>(() => {
       kind: 'component-render-error'
     };
   }
-  if (contentComponent.value === null) {
+  if (contentComponent.value === null || renderedContentId.value !== content.contentId) {
     return {
       contentId: loadingContentId.value ?? content.contentId,
       kind: 'component-loading'
@@ -121,11 +122,18 @@ watch(
   resolvedContent,
   async (content) => {
     const sequence = ++loadSequence;
-    contentComponent.value = null;
     loadError.value = null;
     loadingContentId.value = content?.contentId ?? null;
     renderError.value = null;
-    slotRoot.value = null;
+    const keepRenderedContent =
+      content !== null &&
+      contentComponent.value !== null &&
+      renderedContentId.value === content.contentId;
+    if (!keepRenderedContent) {
+      contentComponent.value = null;
+      renderedContentId.value = null;
+      slotRoot.value = null;
+    }
 
     if (content === null) {
       return;
@@ -137,6 +145,7 @@ watch(
         return;
       }
       contentComponent.value = markRaw(vueComponentFromModule(contentModule));
+      renderedContentId.value = content.contentId;
     } catch (error) {
       if (sequence !== loadSequence) {
         return;

@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./control-plane/assets": "./src/control-plane/assets.ts",
     "./dotenv": "./src/dotenv.ts",
     "./modules/runtime": "./src/modules/runtime.ts"
   },

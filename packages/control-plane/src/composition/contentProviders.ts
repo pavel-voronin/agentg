@@ -1,6 +1,7 @@
 import type { ContentCatalog, ContentProvider } from '@agentg/control-plane-sdk/slots';
 import {
   contentProvidersFromControlPlaneCatalogResponse,
+  loadControlPlaneProviderCatalogStyles,
   parseControlPlaneProviderCatalogResponse
 } from '@agentg/control-plane-sdk/manifest';
 
@@ -39,6 +40,7 @@ export async function loadRuntimeContentProviders(): Promise<{
   if (parsed === null) {
     throw new Error('Control Plane content catalog response is invalid');
   }
+  await loadControlPlaneProviderCatalogStyles(parsed);
   return {
     providers: contentProvidersFromControlPlaneCatalogResponse(parsed),
     version: parsed.version

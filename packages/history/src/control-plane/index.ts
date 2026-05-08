@@ -1,1 +1,1 @@
-export { historyControlPlane } from './manifest.js';
+export { createHistoryControlPlane } from './manifest.js';

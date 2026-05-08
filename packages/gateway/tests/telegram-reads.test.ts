@@ -16,6 +16,7 @@ describe('createTrpcGatewayTelegramClient', () => {
   it('calls only Telegram getChat for the Gateway telegram RPC surface', async () => {
     const calls: { method: string; params: unknown }[] = [];
     const server = createHTTPServer({
+      allowMethodOverride: true,
       router: testRpcRouter({
         getChat: testRpc.input(telegramGetChatInputSchema).query(({ input }) => {
           calls.push({ method: 'getChat', params: input });

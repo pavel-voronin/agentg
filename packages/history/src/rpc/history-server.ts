@@ -10,7 +10,7 @@ import { createHistoryRouter } from './router.js';
 import { createHistoryRpcContext } from './trpc.js';
 import type { TelegramReadClient } from '../telegram-client.js';
 
-const HISTORY_CONTROL_PLANE_ASSETS_ROOT = fileURLToPath(
+export const HISTORY_CONTROL_PLANE_ASSETS_ROOT = fileURLToPath(
   new URL('../../dist-control-plane/', import.meta.url)
 );
 

@@ -8,7 +8,7 @@ import { createTelegramRouter } from './router.js';
 import { createTelegramRpcContext } from './trpc.js';
 import type { TelegramRpcRuntime } from './runtime.js';
 
-const TELEGRAM_CONTROL_PLANE_ASSETS_ROOT = fileURLToPath(
+export const TELEGRAM_CONTROL_PLANE_ASSETS_ROOT = fileURLToPath(
   new URL('../../dist-control-plane/', import.meta.url)
 );
 

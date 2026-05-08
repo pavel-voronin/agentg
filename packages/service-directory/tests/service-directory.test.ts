@@ -24,6 +24,7 @@ describe('service directory', () => {
     const joined = directory.join(
       {
         controlPlane: {
+          assetVersion: 'asset-v1',
           contents: [
             {
               contentId: 'summaries.tile',
@@ -62,6 +63,7 @@ describe('service directory', () => {
       services: [
         {
           controlPlane: {
+            assetVersion: 'asset-v1',
             contents: [
               {
                 contentId: 'summaries.tile',
@@ -91,8 +93,39 @@ describe('service directory', () => {
 
     expect(renewed.changed).toBe(false);
     expect(renewed.output.snapshot.version).toBe(1);
+    const updated = directory.join(
+      {
+        controlPlane: {
+          assetVersion: 'asset-v2',
+          contents: [
+            {
+              contentId: 'summaries.tile',
+              module: {
+                assetPath: 'tile.js'
+              },
+              tags: ['dashboard.tile']
+            }
+          ]
+        },
+        events: ['summaries.summary.completed'],
+        extensions: [
+          {
+            extension: 'summaries.chatSummary',
+            target: 'telegram.chat'
+          }
+        ],
+        procedures: [{ kind: 'query', name: 'summaries.chatSummary' }],
+        required: false,
+        rpcUrl: 'http://summaries:8080',
+        slug: 'summaries'
+      },
+      refreshedAt
+    );
+
+    expect(updated.changed).toBe(true);
+    expect(updated.output.snapshot.version).toBe(2);
     expect(directory.getSnapshot(new Date('2026-05-04T00:00:01.501Z')).output.services).toEqual([]);
-    expect(directory.getSnapshot(new Date('2026-05-04T00:00:01.501Z')).output.version).toBe(2);
+    expect(directory.getSnapshot(new Date('2026-05-04T00:00:01.501Z')).output.version).toBe(3);
   });
 
   it('exposes join, renew, and snapshot through tRPC and publishes invalidations', async () => {

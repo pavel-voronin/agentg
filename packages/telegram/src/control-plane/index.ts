@@ -1,1 +1,1 @@
-export { telegramControlPlane } from './manifest.js';
+export { createTelegramControlPlane } from './manifest.js';

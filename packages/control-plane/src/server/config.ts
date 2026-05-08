@@ -2,6 +2,8 @@ import 'dotenv/config';
 
 import { resolve } from 'node:path';
 
+import type { ControlPlaneRuntimeVueBuild } from './control-plane-server.js';
+
 type InternalServiceConfig = {
   url: string;
 };
@@ -10,6 +12,7 @@ export type ControlPlaneConfig = {
   controlPlane: {
     host: string;
     port: number;
+    runtimeVueBuild: ControlPlaneRuntimeVueBuild;
     serviceUrl: string;
     staticDir: string;
   };
@@ -31,6 +34,7 @@ export function loadControlPlaneConfig(env: NodeJS.ProcessEnv = process.env): Co
     controlPlane: {
       host,
       port,
+      runtimeVueBuild: runtimeVueBuild(env),
       serviceUrl: parseInternalServiceUrl(
         env.CONTROL_PLANE_URL ?? defaultServiceUrl(host, port),
         'CONTROL_PLANE_URL'
@@ -91,6 +95,10 @@ function parseInternalServiceUrl(value: string, name: string): string {
 
 function defaultControlPlanePort(env: NodeJS.ProcessEnv): number {
   return env.NODE_ENV === 'production' ? 8788 : 8789;
+}
+
+function runtimeVueBuild(env: NodeJS.ProcessEnv): ControlPlaneRuntimeVueBuild {
+  return env.NODE_ENV === 'production' ? 'production' : 'development';
 }
 
 function parseOptionalInteger(value: string | undefined, name: string): number | undefined {

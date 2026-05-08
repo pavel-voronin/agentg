@@ -1,9 +1,16 @@
-import { historyControlPlane } from './control-plane/manifest.js';
+import { createHistoryControlPlane } from './control-plane/manifest.js';
 import { historyRpcSurface } from './rpc/surface.js';
 
-export function createHistoryServiceManifest(config: { rpcUrl: string }) {
+export function createHistoryServiceManifest(config: {
+  controlPlaneAssetVersion: string;
+  controlPlaneAssetVersions: Readonly<Record<string, string>>;
+  rpcUrl: string;
+}) {
   return {
-    controlPlane: historyControlPlane,
+    controlPlane: createHistoryControlPlane(
+      config.controlPlaneAssetVersion,
+      config.controlPlaneAssetVersions
+    ),
     events: [
       'history.coverage.changed',
       'history.job.completed',

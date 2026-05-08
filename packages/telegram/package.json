@@ -11,6 +11,7 @@
   },
   "scripts": {
     "dev": "tsx watch --clear-screen=false src/main.ts",
+    "dev:control-plane-assets": "vite build --watch --config vite.control-plane.config.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/migrate-main.ts",
     "build": "npm run build:server && npm run build:control-plane",

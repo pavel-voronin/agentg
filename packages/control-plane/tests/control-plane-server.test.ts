@@ -1,9 +1,15 @@
+import { createServer, type Server } from 'node:http';
+
 import type { EventBus, EventSubscription } from '@agentg/events/bus';
 import { createIntegrationEvent, type IntegrationEvent } from '@agentg/events/envelope';
+import type { ServiceDirectoryClient } from '@agentg/service-directory/rpc';
 import { WebSocket, type RawData } from 'ws';
 import { describe, expect, it, vi } from 'vitest';
 
-import { startControlPlaneServer } from '../src/server/control-plane-server.js';
+import {
+  startControlPlaneServer,
+  type ControlPlaneServerConfig
+} from '../src/server/control-plane-server.js';
 
 describe('Control Plane server boundary', () => {
   it('routes browser RPC through the procedure proxy and forwards events', async () => {
@@ -19,12 +25,7 @@ describe('Control Plane server boundary', () => {
     };
 
     const server = await startControlPlaneServer({
-      config: {
-        host: '127.0.0.1',
-        port: 0,
-        serviceUrl: 'http://127.0.0.1:0',
-        staticDir: '/tmp/agentg-control-plane-test-missing'
-      },
+      config: testControlPlaneServerConfig(),
       eventBus,
       procedureProxy
     });
@@ -93,12 +94,7 @@ describe('Control Plane server boundary', () => {
     };
 
     const server = await startControlPlaneServer({
-      config: {
-        host: '127.0.0.1',
-        port: 0,
-        serviceUrl: 'http://127.0.0.1:0',
-        staticDir: '/tmp/agentg-control-plane-test-missing'
-      },
+      config: testControlPlaneServerConfig(),
       eventBus,
       procedureProxy
     });
@@ -128,12 +124,7 @@ describe('Control Plane server boundary', () => {
     };
 
     const server = await startControlPlaneServer({
-      config: {
-        host: '127.0.0.1',
-        port: 0,
-        serviceUrl: 'http://127.0.0.1:0',
-        staticDir: '/tmp/agentg-control-plane-test-missing'
-      },
+      config: testControlPlaneServerConfig(),
       eventBus,
       procedureProxy
     });
@@ -159,9 +150,110 @@ describe('Control Plane server boundary', () => {
         `http://127.0.0.1:${String(server.port)}/control-plane/runtime/vue.js`
       );
       expect(runtimeResponse.status).toBe(200);
-      await expect(runtimeResponse.text()).resolves.toContain('vue');
+      await expect(runtimeResponse.text()).resolves.toContain('__VUE_HMR_RUNTIME__');
     } finally {
       await server.close();
+    }
+  });
+
+  it('publishes versioned provider asset URLs and proxies only the active version', async () => {
+    const eventBus = createFakeEventBus();
+    const providerServer = await startProviderAssetServer({
+      '/control-plane-assets/assets/style.css': '.alpha { color: red; }',
+      '/control-plane-assets/chunks/shared.js': 'export const shared = true',
+      '/control-plane-assets/tile.js': 'export default {}'
+    });
+    const serviceDirectory = createFakeServiceDirectory({
+      extensions: [],
+      services: [
+        {
+          controlPlane: {
+            assetVersion: 'asset-v1',
+            assetVersions: {
+              'assets/style.css': 'style-v1',
+              'chunks/shared.js': 'chunk-v1',
+              'tile.js': 'tile-v1'
+            },
+            contents: [
+              {
+                contentId: 'alpha.tile',
+                module: {
+                  assetPath: 'tile.js'
+                },
+                styleAssetPaths: ['assets/style.css'],
+                tags: ['dashboard.tile']
+              }
+            ]
+          },
+          events: [],
+          expiresAt: '2026-05-04T00:01:00.000Z',
+          extensions: [],
+          procedures: [],
+          registeredAt: '2026-05-04T00:00:00.000Z',
+          required: false,
+          rpcUrl: serverUrl(providerServer),
+          slug: 'alpha'
+        }
+      ],
+      version: 1
+    });
+
+    try {
+      const controlPlane = await startControlPlaneServer({
+        config: testControlPlaneServerConfig(),
+        eventBus,
+        procedureProxy: {
+          call: vi.fn(() => Promise.resolve(null)),
+          close: vi.fn()
+        },
+        serviceDirectory
+      });
+
+      try {
+        const catalog = (await fetch(
+          `http://127.0.0.1:${String(controlPlane.port)}/control-plane/content-catalog`
+        ).then((response) => response.json())) as unknown;
+
+        expect(catalog).toMatchObject({
+          providers: [
+            {
+              assetVersion: 'asset-v1',
+              contents: [
+                {
+                  contentId: 'alpha.tile',
+                  module: {
+                    url: '/control-plane/provider-assets/alpha/tile-v1/tile.js'
+                  },
+                  styleUrls: ['/control-plane/provider-assets/alpha/style-v1/assets/style.css'],
+                  tags: ['dashboard.tile']
+                }
+              ],
+              domainId: 'alpha'
+            }
+          ]
+        });
+
+        await expect(
+          fetch(
+            `http://127.0.0.1:${String(controlPlane.port)}/control-plane/provider-assets/alpha/tile-v1/tile.js`
+          ).then((response) => response.text())
+        ).resolves.toBe('export default {}');
+        await expect(
+          fetch(
+            `http://127.0.0.1:${String(controlPlane.port)}/control-plane/provider-assets/alpha/tile-v1/chunks/shared.js`
+          ).then((response) => response.text())
+        ).resolves.toBe('export const shared = true');
+        await expect(
+          fetch(
+            `http://127.0.0.1:${String(controlPlane.port)}/control-plane/provider-assets/alpha/old/tile.js`
+          ).then((response) => response.status)
+        ).resolves.toBe(404);
+      } finally {
+        await controlPlane.close();
+      }
+    } finally {
+      serviceDirectory.close();
+      await closeServer(providerServer);
     }
   });
 });
@@ -169,6 +261,20 @@ describe('Control Plane server boundary', () => {
 type FakeEventBus = EventBus & {
   emit(event: IntegrationEvent): Promise<void>;
 };
+type ServiceDirectorySnapshot = ReturnType<ServiceDirectoryClient['getSnapshot']>;
+
+function testControlPlaneServerConfig(
+  overrides: Partial<ControlPlaneServerConfig> = {}
+): ControlPlaneServerConfig {
+  return {
+    host: '127.0.0.1',
+    port: 0,
+    runtimeVueBuild: 'development',
+    serviceUrl: 'http://127.0.0.1:0',
+    staticDir: '/tmp/agentg-control-plane-test-missing',
+    ...overrides
+  };
+}
 
 function createFakeEventBus(): FakeEventBus {
   const subscriptions = new Map<
@@ -259,4 +365,76 @@ function rawDataToString(data: RawData): string {
   }
 
   return Buffer.from(data).toString('utf8');
+}
+
+function createFakeServiceDirectory(snapshot: ServiceDirectorySnapshot): ServiceDirectoryClient {
+  return {
+    close(): void {
+      return;
+    },
+    extensionsForTarget(target): ServiceDirectorySnapshot['extensions'] {
+      return snapshot.extensions.filter((extension) => extension.target === target);
+    },
+    getSnapshot(): ServiceDirectorySnapshot {
+      return snapshot;
+    },
+    join(): Promise<ServiceDirectorySnapshot> {
+      return Promise.resolve(snapshot);
+    },
+    refresh(): Promise<ServiceDirectorySnapshot> {
+      return Promise.resolve(snapshot);
+    },
+    renew(): Promise<ServiceDirectorySnapshot> {
+      return Promise.resolve(snapshot);
+    },
+    resolveProcedure(procedure) {
+      throw new Error(`Procedure is not registered in fake Service Directory: ${procedure}`);
+    }
+  };
+}
+
+function startProviderAssetServer(assets: Record<string, string>): Promise<Server> {
+  const server = createServer((request, response) => {
+    const path = new URL(request.url ?? '/', 'http://localhost').pathname;
+    const body = assets[path];
+    if (body === undefined) {
+      response.writeHead(404, {
+        'content-type': 'text/plain; charset=utf-8'
+      });
+      response.end('Not Found');
+      return;
+    }
+    response.writeHead(200, {
+      'content-type': path.endsWith('.css')
+        ? 'text/css; charset=utf-8'
+        : 'text/javascript; charset=utf-8'
+    });
+    response.end(body);
+  });
+
+  return new Promise((resolve) => {
+    server.listen(0, '127.0.0.1', () => {
+      resolve(server);
+    });
+  });
+}
+
+function closeServer(server: Server): Promise<void> {
+  return new Promise((resolve, reject) => {
+    server.close((error) => {
+      if (error !== undefined) {
+        reject(error);
+        return;
+      }
+      resolve();
+    });
+  });
+}
+
+function serverUrl(server: Server): string {
+  const address = server.address();
+  if (typeof address !== 'object' || address === null) {
+    throw new Error('Server is not listening on a TCP port');
+  }
+  return `http://127.0.0.1:${String(address.port)}`;
 }

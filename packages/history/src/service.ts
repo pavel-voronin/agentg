@@ -1,4 +1,9 @@
 import type { HistoryDatabase as AppDatabase } from './database.js';
+import {
+  readControlPlaneAssetVersions,
+  watchControlPlaneAssetVersion,
+  type ControlPlaneAssetVersionSubscription
+} from '@agentg/infra/control-plane/assets';
 import { createServiceDirectoryClient } from '@agentg/service-directory/rpc';
 import type { EventBus, EventSubscription } from '@agentg/events/bus';
 import { createIntegrationEvent } from '@agentg/events/envelope';
@@ -12,7 +17,11 @@ import {
 } from './controller.js';
 import { createLiveCoverageObserver, type LiveCoverageObserver } from './live-coverage.js';
 import type { InternalTrpcBindConfig } from './rpc/config.js';
-import { startHistoryTrpcServer, stopHistoryTrpcServer } from './rpc/history-server.js';
+import {
+  HISTORY_CONTROL_PLANE_ASSETS_ROOT,
+  startHistoryTrpcServer,
+  stopHistoryTrpcServer
+} from './rpc/history-server.js';
 import { createHistoryServiceManifest } from './registrations.js';
 import { historyCoverageChangedData } from './events.js';
 import { addHistoryCoverageBatch } from './store.js';
@@ -38,8 +47,16 @@ const HISTORY_SHUTDOWN_STEP_TIMEOUT_MS = 2000;
 export async function runHistoryService(options: HistoryServiceOptions): Promise<void> {
   let shuttingDown = false;
   let historyRpcServer: Awaited<ReturnType<typeof startHistoryTrpcServer>> | undefined;
+  let controlPlaneAssets: ControlPlaneAssetVersionSubscription | undefined;
   let liveCoverageTick: ReturnType<typeof setInterval> | undefined;
-  const serviceManifest = createHistoryServiceManifest({ rpcUrl: options.serviceRpcUrl });
+  const initialControlPlaneAssets = await readControlPlaneAssetVersions(
+    HISTORY_CONTROL_PLANE_ASSETS_ROOT
+  );
+  const serviceManifest = createHistoryServiceManifest({
+    controlPlaneAssetVersion: initialControlPlaneAssets.version,
+    controlPlaneAssetVersions: initialControlPlaneAssets.assets,
+    rpcUrl: options.serviceRpcUrl
+  });
   const eventBus = createValidatedEventBus(options.eventBus, {
     allowedTypes: serviceManifestEventTypes(serviceManifest),
     publisher: 'history'
@@ -92,9 +109,32 @@ export async function runHistoryService(options: HistoryServiceOptions): Promise
       telegram
     });
     await serviceDirectory.join(serviceManifest);
+    controlPlaneAssets = watchControlPlaneAssetVersion({
+      initialVersion: initialControlPlaneAssets,
+      onError: (error) => {
+        requestProcessShutdown('history.control_plane_assets_registration_failed', error);
+      },
+      onVersion: async (nextControlPlaneAssets) => {
+        await serviceDirectory.join(
+          createHistoryServiceManifest({
+            controlPlaneAssetVersion: nextControlPlaneAssets.version,
+            controlPlaneAssetVersions: nextControlPlaneAssets.assets,
+            rpcUrl: options.serviceRpcUrl
+          })
+        );
+        console.log(
+          JSON.stringify({
+            event: 'history.control_plane_assets_registered',
+            version: nextControlPlaneAssets.version
+          })
+        );
+      },
+      rootDir: HISTORY_CONTROL_PLANE_ASSETS_ROOT
+    });
   } catch (error) {
     shuttingDown = true;
     await cleanupHistoryStartupFailure({
+      controlPlaneAssets,
       controller,
       eventBus,
       historyRpcServer,
@@ -111,6 +151,8 @@ export async function runHistoryService(options: HistoryServiceOptions): Promise
   console.log(JSON.stringify({ event: 'history.ready' }));
   await waitForShutdown(async () => {
     shuttingDown = true;
+    controlPlaneAssets?.close();
+    controlPlaneAssets = undefined;
     if (liveCoverageTick !== undefined) {
       clearInterval(liveCoverageTick);
       liveCoverageTick = undefined;
@@ -143,6 +185,7 @@ export async function runHistoryService(options: HistoryServiceOptions): Promise
 }
 
 async function cleanupHistoryStartupFailure(options: {
+  controlPlaneAssets: ControlPlaneAssetVersionSubscription | undefined;
   controller: HistorySyncController;
   eventBus: EventBus;
   historyRpcServer: Awaited<ReturnType<typeof startHistoryTrpcServer>> | undefined;
@@ -152,6 +195,7 @@ async function cleanupHistoryStartupFailure(options: {
   subscriptions: EventSubscription[];
   telegram: ReturnType<typeof createServiceDirectoryTelegramHistoryClient>;
 }): Promise<void> {
+  options.controlPlaneAssets?.close();
   if (options.liveCoverageTick !== undefined) {
     clearInterval(options.liveCoverageTick);
   }

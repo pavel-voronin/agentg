@@ -31,14 +31,18 @@ type ServiceDirectoryConfig = {
 export type ControlPlaneServerConfig = {
   host: string;
   port: number;
+  runtimeVueBuild: ControlPlaneRuntimeVueBuild;
   serviceUrl: string;
   staticDir: string;
 };
+
+export type ControlPlaneRuntimeVueBuild = 'development' | 'production';
 
 export type ControlPlaneServerOptions = {
   config: ControlPlaneServerConfig;
   eventBus: EventBus;
   procedureProxy?: ControlPlaneProcedureProxy;
+  serviceDirectory?: ServiceDirectoryClient;
   services?: {
     serviceDirectory: ServiceDirectoryConfig;
   };
@@ -58,6 +62,7 @@ export type ControlPlaneProcedureProxy = {
 type ControlPlaneRuntime = {
   procedureProxy: ControlPlaneProcedureProxy;
   serviceDirectory?: ServiceDirectoryClient;
+  vueRuntimeFilePath: string;
 };
 
 type RpcRequest = {
@@ -80,7 +85,10 @@ const CONTROL_PLANE_CONTENT_CATALOG_PATH = '/control-plane/content-catalog';
 const CONTROL_PLANE_PROVIDER_ASSETS_PREFIX = '/control-plane/provider-assets/';
 const CONTROL_PLANE_RUNTIME_VUE_PATH = '/control-plane/runtime/vue.js';
 const nodeRequire = createRequire(import.meta.url);
-const vueRuntimeFilePath = nodeRequire.resolve('vue/dist/vue.runtime.esm-browser.prod.js');
+const vueRuntimeFilePaths = {
+  development: nodeRequire.resolve('vue/dist/vue.runtime.esm-browser.js'),
+  production: nodeRequire.resolve('vue/dist/vue.runtime.esm-browser.prod.js')
+} satisfies Record<ControlPlaneRuntimeVueBuild, string>;
 
 export async function startControlPlaneServer(
   options: ControlPlaneServerOptions
@@ -92,7 +100,8 @@ export async function startControlPlaneServer(
   const clients = new Set<WebSocket>();
   let subscriptions: EventSubscription[] = [];
   const serviceDirectory =
-    options.procedureProxy === undefined
+    options.serviceDirectory ??
+    (options.procedureProxy === undefined
       ? createServiceDirectoryClient({
           eventBus: options.eventBus,
           onTopologyFailure: (error) => {
@@ -100,7 +109,7 @@ export async function startControlPlaneServer(
           },
           url: requireServiceDirectoryConfig(options).url
         })
-      : undefined;
+      : undefined);
 
   try {
     await serviceDirectory?.refresh();
@@ -111,7 +120,8 @@ export async function startControlPlaneServer(
       });
     const runtime: ControlPlaneRuntime = {
       procedureProxy,
-      ...(serviceDirectory === undefined ? {} : { serviceDirectory })
+      ...(serviceDirectory === undefined ? {} : { serviceDirectory }),
+      vueRuntimeFilePath: vueRuntimeFilePaths[options.config.runtimeVueBuild]
     };
     const staticRoot = resolve(options.config.staticDir);
     server = createServer((request, response) => {
@@ -328,7 +338,7 @@ async function handleHttpRequest(
     return;
   }
   if (path === CONTROL_PLANE_RUNTIME_VUE_PATH) {
-    await sendFile(response, request.method, vueRuntimeFilePath);
+    await sendFile(response, request.method, runtime.vueRuntimeFilePath);
     return;
   }
   if (path === CONTROL_PLANE_CONTENT_CATALOG_PATH) {
@@ -431,8 +441,10 @@ async function controlPlaneContentCatalog(
         return [];
       }
 
-      return controlPlaneProviderManifestFromRegistration(service.slug, registration, (assetPath) =>
-        providerAssetProxyUrl(service.slug, assetPath)
+      return controlPlaneProviderManifestFromRegistration(
+        service.slug,
+        registration,
+        (assetPath, assetVersion) => providerAssetProxyUrl(service.slug, assetVersion, assetPath)
       );
     }),
     version: snapshot.version
@@ -484,6 +496,11 @@ async function proxyProviderAsset(
     sendHttp(response, 404, 'text/plain; charset=utf-8', 'Not Found');
     return;
   }
+  const registration = parseControlPlaneProviderRegistration(service.controlPlane);
+  if (registration === null || !providerAssetVersionActive(registration, asset)) {
+    sendHttp(response, 404, 'text/plain; charset=utf-8', 'Not Found');
+    return;
+  }
 
   try {
     const upstream = await fetch(providerRpcAssetUrl(service.rpcUrl, asset.assetPath), {
@@ -511,28 +528,38 @@ async function proxyProviderAsset(
   }
 }
 
-function providerAssetFromPath(path: string): { assetPath: string; slug: string } | null {
+function providerAssetFromPath(
+  path: string
+): { assetPath: string; assetVersion: string; slug: string } | null {
   const relativePath = path.slice(CONTROL_PLANE_PROVIDER_ASSETS_PREFIX.length);
-  const separatorIndex = relativePath.indexOf('/');
-  if (separatorIndex <= 0 || separatorIndex === relativePath.length - 1) {
+  const segments = relativePath.split('/');
+  if (segments.length < 3) {
     return null;
   }
-  const slug = decodeURIComponent(relativePath.slice(0, separatorIndex));
-  const assetPath = decodeURIComponent(relativePath.slice(separatorIndex + 1));
-  if (!safeProviderAssetPath(assetPath)) {
+  const slug = decodeURIComponent(segments[0] ?? '');
+  const assetVersion = decodeURIComponent(segments[1] ?? '');
+  const assetPath = segments
+    .slice(2)
+    .map((segment) => decodeURIComponent(segment))
+    .join('/');
+  if (
+    !safeProviderAssetSegment(slug) ||
+    !safeProviderAssetVersion(assetVersion) ||
+    !safeProviderAssetPath(assetPath)
+  ) {
     return null;
   }
   return {
     assetPath,
+    assetVersion,
     slug
   };
 }
 
-function providerAssetProxyUrl(slug: string, assetPath: string): string {
-  return `${CONTROL_PLANE_PROVIDER_ASSETS_PREFIX}${encodeURIComponent(slug)}/${assetPath
-    .split('/')
-    .map(encodeURIComponent)
-    .join('/')}`;
+function providerAssetProxyUrl(slug: string, assetVersion: string, assetPath: string): string {
+  return `${CONTROL_PLANE_PROVIDER_ASSETS_PREFIX}${encodeURIComponent(slug)}/${encodeURIComponent(
+    assetVersion
+  )}/${assetPath.split('/').map(encodeURIComponent).join('/')}`;
 }
 
 function providerRpcAssetUrl(rpcUrl: string, assetPath: string): string {
@@ -543,7 +570,57 @@ function providerRpcAssetUrl(rpcUrl: string, assetPath: string): string {
 }
 
 function safeProviderAssetPath(assetPath: string): boolean {
-  return assetPath.length > 0 && !assetPath.startsWith('/') && !assetPath.includes('..');
+  return (
+    assetPath.length > 0 &&
+    !assetPath.startsWith('/') &&
+    !assetPath.includes('..') &&
+    !assetPath.includes('\\')
+  );
+}
+
+function safeProviderAssetVersion(assetVersion: string): boolean {
+  return safeProviderAssetSegment(assetVersion);
+}
+
+function safeProviderAssetSegment(segment: string): boolean {
+  return (
+    segment.length > 0 &&
+    !segment.includes('/') &&
+    !segment.includes('..') &&
+    !segment.includes('\\')
+  );
+}
+
+type ControlPlaneProviderRegistration = NonNullable<
+  ReturnType<typeof parseControlPlaneProviderRegistration>
+>;
+
+function providerAssetVersionActive(
+  registration: ControlPlaneProviderRegistration,
+  asset: { assetPath: string; assetVersion: string }
+): boolean {
+  const activeAssetVersion = activeVersionForPath(registration, asset.assetPath);
+  return activeAssetVersion !== null && activeVersionScope(registration, asset.assetVersion);
+}
+
+function activeVersionForPath(
+  registration: ControlPlaneProviderRegistration,
+  assetPath: string
+): string | null {
+  if (registration.assetVersions !== undefined) {
+    return registration.assetVersions[assetPath] ?? null;
+  }
+  return registration.assetVersion;
+}
+
+function activeVersionScope(
+  registration: ControlPlaneProviderRegistration,
+  assetVersion: string
+): boolean {
+  return (
+    registration.assetVersion === assetVersion ||
+    Object.values(registration.assetVersions ?? {}).includes(assetVersion)
+  );
 }
 
 function sendJsonHttp(response: ServerResponse, method: string | undefined, body: unknown): void {
