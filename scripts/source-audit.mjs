@@ -617,9 +617,11 @@ function ignoredDirectory(directory) {
   return (
     rel === 'node_modules' ||
     rel === 'dist' ||
+    rel === 'dist-control-plane' ||
     rel === 'dist-server' ||
     rel.endsWith('/node_modules') ||
     rel.endsWith('/dist') ||
+    rel.endsWith('/dist-control-plane') ||
     rel.endsWith('/dist-server') ||
     rel === '.git' ||
     rel.endsWith('/.git')
@@ -631,9 +633,11 @@ function ignored(file) {
   return (
     rel.includes('/node_modules/') ||
     rel.includes('/dist/') ||
+    rel.includes('/dist-control-plane/') ||
     rel.includes('/dist-server/') ||
     rel.startsWith('node_modules/') ||
     rel.startsWith('dist/') ||
+    rel.startsWith('dist-control-plane/') ||
     rel.startsWith('dist-server/')
   );
 }

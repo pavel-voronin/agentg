@@ -6,6 +6,8 @@ export default tseslint.config(
     ignores: [
       'dist/**',
       '**/dist/**',
+      'dist-control-plane/**',
+      '**/dist-control-plane/**',
       'dist-server/**',
       '**/dist-server/**',
       'coverage/**',

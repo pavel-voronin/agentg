@@ -43,8 +43,10 @@ COPY --from=build --chown=agentg:agentg /app/packages/control-plane/dist-server 
 COPY --from=build --chown=agentg:agentg /app/packages/service-directory/dist ./packages/service-directory/dist
 COPY --from=build --chown=agentg:agentg /app/packages/gateway/dist ./packages/gateway/dist
 COPY --from=build --chown=agentg:agentg /app/packages/history/dist ./packages/history/dist
+COPY --from=build --chown=agentg:agentg /app/packages/history/dist-control-plane ./packages/history/dist-control-plane
 COPY --from=build --chown=agentg:agentg /app/packages/summaries/dist ./packages/summaries/dist
 COPY --from=build --chown=agentg:agentg /app/packages/telegram/dist ./packages/telegram/dist
+COPY --from=build --chown=agentg:agentg /app/packages/telegram/dist-control-plane ./packages/telegram/dist-control-plane
 RUN mkdir -p /app/td-data/database /app/td-data/files && chown -R agentg:agentg /app
 USER agentg
 CMD ["npm", "--workspace", "@agentg/telegram", "run", "start"]
