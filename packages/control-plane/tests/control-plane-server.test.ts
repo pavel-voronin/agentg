@@ -31,7 +31,7 @@ describe('Control Plane server boundary', () => {
     const socket = await openWebSocket(`ws://127.0.0.1:${String(server.port)}/ws`);
 
     try {
-      socket.send(JSON.stringify({ id: 1, method: 'beta.getOverview', params: { limit: 10 } }));
+      socket.send(JSON.stringify({ id: 1, method: 'beta.getStatus', params: { limit: 10 } }));
 
       await expect(nextJsonMessage(socket)).resolves.toEqual({
         id: 1,
@@ -40,7 +40,7 @@ describe('Control Plane server boundary', () => {
           records: 5
         }
       });
-      expect(procedureProxy.call).toHaveBeenCalledWith('beta.getOverview', { limit: 10 });
+      expect(procedureProxy.call).toHaveBeenCalledWith('beta.getStatus', { limit: 10 });
 
       const event = createIntegrationEvent({
         data: {
@@ -58,10 +58,10 @@ describe('Control Plane server boundary', () => {
       const rpcEvent = createIntegrationEvent({
         data: {
           callId: 'call-a',
-          target: 'beta.getOverview'
+          target: 'beta.getStatus'
         },
         source: 'beta-service',
-        type: 'rpc.beta.getOverview.started'
+        type: 'rpc.beta.getStatus.started'
       });
       await eventBus.emit(rpcEvent);
 

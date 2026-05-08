@@ -23,7 +23,6 @@ type HistoryRpcClient = {
   deleteTarget(input: unknown): Promise<unknown>;
   getChatHistoryState(input: unknown): Promise<unknown>;
   getChatStats(input: unknown): Promise<unknown>;
-  getOverview(): Promise<unknown>;
   listJobs(input?: unknown): Promise<unknown>;
   requestSync(input?: unknown): Promise<unknown>;
   upsertTarget(input: unknown): Promise<unknown>;
@@ -67,11 +66,6 @@ export function createHistoryRpcClient(config: HistoryRpcClientConfig): HistoryR
           historyGetChatStatsInputSchema.parse(input),
           internalRpcProcedureOptions(undefined, signal)
         )
-      );
-    },
-    getOverview() {
-      return callHistoryProcedure((signal) =>
-        client.getOverview.query(undefined, internalRpcProcedureOptions(undefined, signal))
       );
     },
     listJobs(input = {}) {

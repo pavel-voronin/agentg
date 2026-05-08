@@ -54,12 +54,12 @@ describe('Control Plane browser client', () => {
     });
 
     client.connect();
-    const pending = client.rpc('beta.getOverview').catch(() => undefined);
+    const pending = client.rpc('beta.getStatus').catch(() => undefined);
 
     expect(FakeWebSocket.instances[0]?.sent).toEqual([
       JSON.stringify({
         id: 1,
-        method: 'beta.getOverview'
+        method: 'beta.getStatus'
       })
     ]);
     client.disconnect();

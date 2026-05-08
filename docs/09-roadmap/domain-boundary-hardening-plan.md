@@ -164,14 +164,12 @@ JSON while keeping History in charge of history aggregation.
   - return only History-owned target, coverage, pending job, and running job
     counters keyed by `chatId`
   - return no Telegram title, folder, navigation, placement, or type data
-- Keep `history.getOverview` limited to History-owned template, target,
-  coverage, and job counters.
 - Keep Control Plane server as a browser WebSocket proxy for domain RPC.
 - Move Control Plane browser composition into domain-provided slot content:
   - Telegram content owns chat directory state and calls
     `telegram.listChatDirectory`.
-  - History content owns overview, chat stats, selected history state, targets,
-    jobs, and timeline state through `history.*` procedures.
+  - History content owns chat stats, selected history state, targets, jobs, and
+    timeline state through `history.*` procedures.
 - Change History `history.getChatHistoryState` to get selected chat
   metadata, message count, earliest message date, and interval message counts
   through Telegram read procedures.
@@ -190,7 +188,6 @@ JSON while keeping History in charge of history aggregation.
 - History still owns target writes, coverage writes, backfill job state,
   reconciliation, and sync lifecycle events.
 - History does not expose a chat-list RPC.
-- `history.getOverview` does not return chat counts.
 - Telegram control-plane content owns chat list filtering for main, archive, and
   folder placement without raw Telegram JSON fixtures.
 - Tests cover selected chat history state message counts without direct

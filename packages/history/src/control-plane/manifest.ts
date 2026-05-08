@@ -5,37 +5,10 @@ const providerStyleAssets = ['assets/style.css'];
 export const historyControlPlane = {
   contents: [
     {
-      contentId: 'history.dashboard.targets',
-      defaultSlotIds: ['control-plane.dashboard.tile.2'],
-      module: {
-        assetPath: 'dashboard-tile.js'
-      },
-      props: {
-        metric: 'targets'
-      },
-      styleAssetPaths: providerStyleAssets,
-      tags: ['control-plane.dashboard.tile']
-    },
-    {
-      contentId: 'history.dashboard.coverage',
-      defaultSlotIds: ['control-plane.dashboard.tile.3'],
-      module: {
-        assetPath: 'dashboard-tile.js'
-      },
-      props: {
-        metric: 'coverage'
-      },
-      styleAssetPaths: providerStyleAssets,
-      tags: ['control-plane.dashboard.tile']
-    },
-    {
       contentId: 'history.dashboard.current-job',
       defaultSlotIds: ['control-plane.dashboard.tile.4'],
       module: {
         assetPath: 'dashboard-tile.js'
-      },
-      props: {
-        metric: 'currentJob'
       },
       styleAssetPaths: providerStyleAssets,
       tags: ['control-plane.dashboard.tile']

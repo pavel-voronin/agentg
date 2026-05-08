@@ -12,15 +12,7 @@ const tiles = [
     slotId: 'control-plane.dashboard.tile.1'
   },
   {
-    label: 'Tile 2',
-    slotId: 'control-plane.dashboard.tile.2'
-  },
-  {
-    label: 'Tile 3',
-    slotId: 'control-plane.dashboard.tile.3'
-  },
-  {
-    label: 'Tile 4',
+    label: 'Current job',
     slotId: 'control-plane.dashboard.tile.4'
   }
 ] satisfies readonly DashboardTile[];
@@ -43,7 +35,7 @@ const tiles = [
 <style scoped>
 @reference "tailwindcss";
 .dashboard-panel {
-  @apply grid grid-cols-4 overflow-hidden rounded-lg border border-zinc-200 bg-white;
+  @apply grid grid-cols-2 overflow-hidden rounded-lg border border-zinc-200 bg-white;
 }
 
 .dashboard-panel__tile {

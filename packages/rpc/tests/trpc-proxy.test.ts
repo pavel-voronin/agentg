@@ -17,8 +17,8 @@ describe('internal tRPC procedure proxy', () => {
   it('resolves full procedure ids but calls local tRPC paths', async () => {
     const calls: string[] = [];
     const router = rpc.router({
-      getOverview: rpc.procedure.query(() => {
-        calls.push('getOverview');
+      getStatus: rpc.procedure.query(() => {
+        calls.push('getStatus');
         return { value: 3 };
       }),
       upsertTarget: rpc.procedure.input(z.object({ id: z.string() })).mutation(({ input }) => {
@@ -32,7 +32,7 @@ describe('internal tRPC procedure proxy', () => {
     const proxy = createInternalTrpcProcedureProxy(
       {
         resolveProcedure(procedure) {
-          if (procedure === 'alpha.getOverview') {
+          if (procedure === 'alpha.getStatus') {
             return { kind: 'query', rpcUrl: `http://127.0.0.1:${String(port)}` };
           }
           if (procedure === 'alpha.upsertTarget') {
@@ -44,11 +44,11 @@ describe('internal tRPC procedure proxy', () => {
       { timeoutMs: 1000 }
     );
 
-    await expect(proxy.call('alpha.getOverview', undefined)).resolves.toEqual({ value: 3 });
+    await expect(proxy.call('alpha.getStatus', undefined)).resolves.toEqual({ value: 3 });
     await expect(proxy.call('alpha.upsertTarget', { id: 'target-a' })).resolves.toEqual({
       ok: true
     });
-    expect(calls).toEqual(['getOverview', 'upsertTarget:target-a']);
+    expect(calls).toEqual(['getStatus', 'upsertTarget:target-a']);
     proxy.close();
   });
 });

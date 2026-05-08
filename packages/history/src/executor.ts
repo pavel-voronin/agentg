@@ -194,6 +194,10 @@ async function executePendingBackfillJobs(
         endAt: job.endAt,
         startAt: job.startAt
       });
+      emitCompletedJob(options, job, {
+        fetchedMessages: 0,
+        reachedBeginning: false
+      });
       continue;
     }
 
@@ -205,16 +209,7 @@ async function executePendingBackfillJobs(
         jobStart: job.startAt.toISOString()
       });
       const result = await executeBackfillJob(database, client, job, options);
-      emitHistoryEvent(options, 'history.job.completed', {
-        chatId: job.chatId,
-        fetchedMessages: result.fetchedMessages,
-        ...(result.historyStartAt === undefined ? {} : { historyStartAt: result.historyStartAt }),
-        jobEnd: job.endAt.toISOString(),
-        jobId: job.id,
-        jobStart: job.startAt.toISOString(),
-        reachedBeginning: result.reachedBeginning,
-        storedMessages: result.storedMessages
-      });
+      emitCompletedJob(options, job, result);
 
       console.log(
         JSON.stringify({
@@ -239,6 +234,23 @@ async function executePendingBackfillJobs(
       throw error;
     }
   }
+}
+
+function emitCompletedJob(
+  options: Pick<HistorySyncOptions, 'publishEvent'>,
+  job: BackfillJob,
+  result: Partial<BackfillJobExecutionResult>
+): void {
+  emitHistoryEvent(options, 'history.job.completed', {
+    chatId: job.chatId,
+    ...(result.fetchedMessages === undefined ? {} : { fetchedMessages: result.fetchedMessages }),
+    ...(result.historyStartAt === undefined ? {} : { historyStartAt: result.historyStartAt }),
+    jobEnd: job.endAt.toISOString(),
+    jobId: job.id,
+    jobStart: job.startAt.toISOString(),
+    ...(result.reachedBeginning === undefined ? {} : { reachedBeginning: result.reachedBeginning }),
+    ...(result.storedMessages === undefined ? {} : { storedMessages: result.storedMessages })
+  });
 }
 
 async function executeBackfillJob(

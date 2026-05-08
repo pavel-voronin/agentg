@@ -20,8 +20,6 @@ export const historyRangeSchema = z.object({
   start: historyBoundarySchema
 });
 
-export const historyGetOverviewInputSchema = z.void();
-
 export const historyGetChatStatsInputSchema = z.object({
   chatIds: z.array(nonEmptyStringSchema)
 });
@@ -69,22 +67,6 @@ export const historyListJobsInputSchema = z
     status: nonEmptyStringSchema.optional()
   })
   .default({});
-
-export const historyActiveJobOutputSchema = z.object({
-  chatId: z.string(),
-  endAt: z.string(),
-  startAt: z.string(),
-  status: z.string()
-});
-
-export const historyOverviewOutputSchema = z.object({
-  activeJob: historyActiveJobOutputSchema.nullable(),
-  coverageIntervals: nonNegativeIntegerSchema,
-  pendingJobs: nonNegativeIntegerSchema,
-  runningJobs: nonNegativeIntegerSchema,
-  targets: nonNegativeIntegerSchema,
-  templates: nonNegativeIntegerSchema
-});
 
 export const historyChatStatsOutputSchema = z.object({
   chatId: z.string(),
@@ -166,7 +148,6 @@ export const historyListJobsOutputSchema = z.object({
   jobs: z.array(historyJobOutputSchema)
 });
 
-export type HistoryGetOverviewInput = z.infer<typeof historyGetOverviewInputSchema>;
 export type HistoryGetChatStatsInput = z.infer<typeof historyGetChatStatsInputSchema>;
 export type HistoryGetChatHistoryStateInput = z.infer<typeof historyGetChatHistoryStateInputSchema>;
 export type HistoryUpsertTargetInput = z.infer<typeof historyUpsertTargetInputSchema>;
@@ -174,7 +155,6 @@ export type HistoryDeleteTargetInput = z.infer<typeof historyDeleteTargetInputSc
 export type HistoryRequestSyncInput = z.infer<typeof historyRequestSyncInputSchema>;
 export type HistoryListJobsInput = z.infer<typeof historyListJobsInputSchema>;
 
-export type HistoryOverviewOutput = z.infer<typeof historyOverviewOutputSchema>;
 export type HistoryGetChatStatsOutput = z.infer<typeof historyGetChatStatsOutputSchema>;
 export type HistoryChatHistoryStateOutput = z.infer<typeof historyChatHistoryStateOutputSchema>;
 export type HistoryIntervalOutput = z.infer<typeof historyIntervalOutputSchema>;
