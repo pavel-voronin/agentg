@@ -2,7 +2,10 @@ import type { TelegramDatabase as AppDatabase } from './database.js';
 import { createServiceDirectoryClient } from '@agentg/service-directory/rpc';
 import type { EventBus } from '@agentg/events/bus';
 import { createIntegrationEvent } from '@agentg/events/envelope';
-import { createTelegramIntegrationEvents } from '@agentg/telegram/integration-events';
+import {
+  createTelegramIntegrationEvents,
+  type TelegramChatDirectoryEvent
+} from '@agentg/telegram/integration-events';
 
 import {
   asTdObject,
@@ -12,6 +15,7 @@ import {
   type TdObject
 } from './normalize.js';
 import type { InternalTrpcBindConfig } from './rpc/config.js';
+import { getDirectoryEntryByChatId } from './rpc/procedures/support.js';
 import { createTelegramServiceManifest } from './registrations.js';
 import { startTelegramTrpcServer, stopTelegramTrpcServer } from './rpc/server.js';
 import { persistCurrentTelegramUser, persistTelegramUpdate, upsertChat } from './store.js';
@@ -290,6 +294,10 @@ async function persistLiveUpdate(
   }
 
   const result = await persistTelegramUpdate(database, normalized);
+  const chatDirectoryEvent =
+    normalized.chat === undefined
+      ? undefined
+      : await createChatDirectoryEvent(database, normalized.chat.id);
   if (result.chat) {
     stats.chats += 1;
   }
@@ -303,7 +311,9 @@ async function persistLiveUpdate(
     stats.users += 1;
   }
 
-  for (const event of createTelegramIntegrationEvents(normalized, result)) {
+  for (const event of createTelegramIntegrationEvents(normalized, result, {
+    ...(chatDirectoryEvent === undefined ? {} : { chatDirectoryEvent })
+  })) {
     eventBus.publish(event);
   }
 
@@ -315,6 +325,14 @@ async function persistLiveUpdate(
       })
     );
   }
+}
+
+async function createChatDirectoryEvent(
+  database: AppDatabase,
+  chatId: string
+): Promise<TelegramChatDirectoryEvent> {
+  const chat = await getDirectoryEntryByChatId(database, chatId);
+  return chat === null ? { chatId, kind: 'removed' } : { chat, kind: 'updated' };
 }
 
 function createPersistenceStats(): PersistenceStats {

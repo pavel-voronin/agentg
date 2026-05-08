@@ -215,6 +215,9 @@ function subscribeHistoryService(options: {
     options.eventBus.subscribe('telegram.chat.updated', () => {
       options.controller.request('chat-updated');
     }),
+    options.eventBus.subscribe('telegram.chat.removed', () => {
+      options.controller.request('chat-removed');
+    }),
     options.eventBus.subscribe('telegram.message.created', (event) => {
       const message = asRecord(asRecord(event.data)?.message);
       const chat = asRecord(message?.chat);

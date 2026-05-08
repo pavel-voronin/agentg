@@ -5,6 +5,7 @@ export function createTelegramServiceManifest(config: { rpcUrl: string }) {
   return {
     controlPlane: telegramControlPlane,
     events: [
+      'telegram.chat.removed',
       'telegram.chat.updated',
       'telegram.chat_folders.updated',
       'telegram.login.completed',

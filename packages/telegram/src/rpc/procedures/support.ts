@@ -4,7 +4,7 @@ import {
   telegramMessageRef,
   telegramMessageSenderRef
 } from '@agentg/telegram/model-refs';
-import { and, asc, ilike, inArray, sql, type SQL } from 'drizzle-orm';
+import { and, asc, eq, ilike, inArray, sql, type SQL } from 'drizzle-orm';
 
 import type { TelegramDatabase as AppDatabase } from '../../database.js';
 import { asTdObject, normalizeChat, type JsonObject, type TdObject } from '../../normalize.js';
@@ -34,7 +34,7 @@ type ChatListKind =
       kind: 'folder';
     };
 
-type TelegramChatStorageRow = {
+export type TelegramChatStorageRow = {
   raw: JsonObject;
   telegramChatId: string;
   title: string;
@@ -264,6 +264,26 @@ export async function toDirectoryEntries(
     const user = usersById.get(telegramChatUserId(chat.raw) ?? '');
     return toDirectoryEntry(chat, user);
   });
+}
+
+export async function getDirectoryEntryByChatId(
+  database: AppDatabase,
+  chatId: string
+): Promise<TelegramChatDirectoryEntry | null> {
+  const rows = await database
+    .select({
+      raw: telegramChats.raw,
+      telegramChatId: telegramChats.telegramChatId,
+      title: telegramChats.title,
+      type: telegramChats.type,
+      updatedAt: telegramChats.updatedAt
+    })
+    .from(telegramChats)
+    .where(eq(telegramChats.telegramChatId, chatId))
+    .limit(1);
+
+  const [entry] = listableDirectoryEntries(await toDirectoryEntries(database, rows));
+  return entry ?? null;
 }
 
 export function chatSearchWhere(value: string): SQL {

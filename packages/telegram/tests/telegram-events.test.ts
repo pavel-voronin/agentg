@@ -42,6 +42,22 @@ describe('Telegram integration events', () => {
         chatFolders: true,
         message: true,
         user: true
+      },
+      {
+        chatDirectoryEvent: {
+          chat: {
+            _model: 'telegram.chat',
+            id: 'chat-a',
+            isBot: false,
+            isSelf: false,
+            lastMessageDate: 1777777777,
+            placements: [{ kind: 'main', order: '100' }],
+            title: 'Chat A',
+            type: 'group',
+            updatedAt: '2026-05-05T00:00:00.000Z'
+          },
+          kind: 'updated'
+        }
       }
     );
 
@@ -51,8 +67,13 @@ describe('Telegram integration events', () => {
           chat: {
             _model: 'telegram.chat',
             id: 'chat-a',
+            isBot: false,
+            isSelf: false,
+            lastMessageDate: 1777777777,
+            placements: [{ kind: 'main', order: '100' }],
             title: 'Chat A',
-            type: 'group'
+            type: 'group',
+            updatedAt: '2026-05-05T00:00:00.000Z'
           }
         },
         meta: {
@@ -65,6 +86,7 @@ describe('Telegram integration events', () => {
           folders: [
             {
               _model: 'telegram.chatFolder',
+              folderId: 4,
               iconName: 'Work',
               id: '4',
               position: 1,
@@ -153,5 +175,41 @@ describe('Telegram integration events', () => {
       },
       type: 'telegram.message.deleted'
     });
+  });
+
+  it('publishes removed chat directory events separately from folders', () => {
+    const events = createTelegramIntegrationEvents(
+      {
+        chat: {
+          id: 'chat-a',
+          title: 'Chat A',
+          type: 'group'
+        }
+      },
+      {
+        chat: false,
+        chatFolders: false,
+        message: false,
+        user: false
+      },
+      {
+        chatDirectoryEvent: {
+          chatId: 'chat-a',
+          kind: 'removed'
+        }
+      }
+    );
+
+    expect(events).toMatchObject([
+      {
+        data: {
+          chatId: 'chat-a'
+        },
+        meta: {
+          chatId: 'chat-a'
+        },
+        type: 'telegram.chat.removed'
+      }
+    ]);
   });
 });

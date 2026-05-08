@@ -5,13 +5,13 @@ import {
   telegramMessageRef,
   telegramMessageSenderRef,
   telegramUserRef,
-  type TelegramChatFolderModelRef,
   type TelegramChatModelRef,
   type TelegramMessageModelRef,
   type TelegramSenderModelRef,
   type TelegramUserModelRef
 } from './model-refs.js';
 import { createIntegrationEvent, type IntegrationEvent } from '@agentg/events/envelope';
+import type { TelegramChatDirectoryEntry, TelegramChatFolder } from './rpc/contracts.js';
 
 export type TelegramEventPersistResult = {
   chat: boolean;
@@ -19,6 +19,16 @@ export type TelegramEventPersistResult = {
   message: boolean;
   user: boolean;
 };
+
+export type TelegramChatDirectoryEvent =
+  | {
+      chat: TelegramChatDirectoryEntry;
+      kind: 'updated';
+    }
+  | {
+      chatId: string;
+      kind: 'removed';
+    };
 
 export type TelegramEventSourceChat = {
   id: string;
@@ -82,23 +92,13 @@ export type TelegramEventSourceUpdate = {
 
 export function createTelegramIntegrationEvents(
   update: TelegramEventSourceUpdate,
-  result: TelegramEventPersistResult
+  result: TelegramEventPersistResult,
+  options: { chatDirectoryEvent?: TelegramChatDirectoryEvent } = {}
 ): IntegrationEvent[] {
   const events: IntegrationEvent[] = [];
 
-  if (result.chat && update.chat !== undefined) {
-    events.push(
-      createIntegrationEvent({
-        type: 'telegram.chat.updated',
-        source: 'telegram',
-        data: {
-          chat: eventChat(update.chat)
-        },
-        meta: {
-          chatId: update.chat.id
-        }
-      })
-    );
+  if (options.chatDirectoryEvent !== undefined) {
+    events.push(chatDirectoryEvent(options.chatDirectoryEvent));
   }
 
   if (result.chatFolders && update.chatFolders !== undefined) {
@@ -143,16 +143,7 @@ export function createTelegramIntegrationEvents(
   return events;
 }
 
-type TelegramEventChat = TelegramChatModelRef & {
-  title: string;
-  type: string;
-};
-
-type TelegramEventChatFolder = TelegramChatFolderModelRef & {
-  iconName: string | null;
-  position: number;
-  title: string;
-};
+type TelegramEventChatFolder = TelegramChatFolder;
 
 type TelegramEventUser = TelegramUserModelRef & {
   firstName: string;
@@ -238,21 +229,40 @@ function compactMessage(message: TelegramEventSourceMessage): JsonObject {
   return eventMessage(message);
 }
 
-function eventChat(chat: TelegramEventSourceChat): TelegramEventChat {
-  return {
-    ...telegramChatRef(chat.id),
-    title: chat.title,
-    type: chat.type
-  };
-}
-
 function eventChatFolder(folder: TelegramEventSourceChatFolder): TelegramEventChatFolder {
   return {
     ...telegramChatFolderRef(folder.id),
+    folderId: folder.id,
     iconName: folder.iconName ?? null,
     position: folder.position,
     title: folder.title
   };
+}
+
+function chatDirectoryEvent(event: TelegramChatDirectoryEvent): IntegrationEvent {
+  if (event.kind === 'removed') {
+    return createIntegrationEvent({
+      data: {
+        chatId: event.chatId
+      },
+      meta: {
+        chatId: event.chatId
+      },
+      source: 'telegram',
+      type: 'telegram.chat.removed'
+    });
+  }
+
+  return createIntegrationEvent({
+    data: {
+      chat: event.chat
+    },
+    meta: {
+      chatId: event.chat.id
+    },
+    source: 'telegram',
+    type: 'telegram.chat.updated'
+  });
 }
 
 function eventUser(user: TelegramEventSourceUser): TelegramEventUser {
