@@ -1,7 +1,9 @@
 import { telegramRpcSurface } from './rpc/surface.js';
+import { telegramControlPlane } from './control-plane/manifest.js';
 
 export function createTelegramServiceManifest(config: { rpcUrl: string }) {
   return {
+    controlPlane: telegramControlPlane,
     events: [
       'telegram.chat.updated',
       'telegram.chat_folders.updated',
