@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 
-import { useControlPlaneHost } from '@agentg/control-plane-sdk/host';
 import { SlotOutlet, type SlotContext } from '@agentg/control-plane-sdk/slots';
 
 import { chatSidebarView } from './chatSidebarView.js';
 import ChatSidebar from './components/ChatSidebar.vue';
 import { readStorage, writeStorage } from './storage.js';
+import { useTelegramDirectoryProjection } from './telegramDirectoryProjection.js';
+import { useTelegramHistoryStatsProjection } from './telegramHistoryStatsProjection.js';
 import type {
   ChatListMode,
   ChatNavigation,
@@ -33,28 +34,14 @@ type ChatListKind =
       kind: 'folder';
     };
 
-type TelegramDirectoryResult = {
-  chats?: unknown;
-  folders?: unknown;
-  navigationChats?: unknown;
-};
-
-type HistoryChatStatsResult = {
-  stats?: unknown;
-};
-
 const DEFAULT_CHAT_LIMIT = 500;
 const telegramStoragePrefix = 'agentg.telegram.controlPlane';
-const host = useControlPlaneHost();
+const directoryProjection = useTelegramDirectoryProjection();
+const historyStatsProjection = useTelegramHistoryStatsProjection();
 const chatFilter = ref(readStorage(`${telegramStoragePrefix}.chatFilter`) ?? '');
 const chatFolderId = ref<number | null>(readStoredChatListSelection().folderId);
 const chatListMode = ref<ChatListMode>(readStoredChatListSelection().mode);
-const chatNavigation = ref<ChatNavigation>(emptyChatNavigation());
-const chats = ref<ControlPlaneChat[]>([]);
 const selectedChatId = ref(readStorage(`${telegramStoragePrefix}.selectedChatId`) ?? null);
-let refreshTimer: ReturnType<typeof setTimeout> | null = null;
-let stopEvents: (() => void) | null = null;
-let chatLoadSequence = 0;
 
 const eventsPanelCollapsed = computed(() => props.slotContext?.eventsPanelCollapsed === true);
 const nestedSlotContext = computed(() => ({
@@ -62,6 +49,22 @@ const nestedSlotContext = computed(() => ({
   closeSelectedChat,
   selectedChatId: selectedChatId.value
 }));
+const chatNavigation = computed(() =>
+  buildChatNavigation(directoryProjection.chats.value, directoryProjection.folders.value)
+);
+const visibleDirectoryChats = computed(() => {
+  const query = normalizedChatQuery();
+  const listFilter = query.length === 0 ? chatListFilter() : undefined;
+  const matchingChats = directoryProjection.chats.value
+    .filter((chat) => (query.length === 0 ? true : chatMatchesSearch(chat, query)))
+    .filter((chat) => (listFilter === undefined ? true : chatMatchesListFilter(chat, listFilter)))
+    .sort((left, right) => compareTelegramChatsByTdlibOrder(left, right, listFilter));
+
+  return limitChats(matchingChats, DEFAULT_CHAT_LIMIT, selectedChatId.value ?? undefined);
+});
+const chats = computed<ControlPlaneChat[]>(() =>
+  chatsWithStats(visibleDirectoryChats.value, historyStatsProjection.statsByChat.value)
+);
 const chatSidebar = computed(() =>
   chatSidebarView(
     {
@@ -93,90 +96,21 @@ watch(
   { immediate: true }
 );
 
-onMounted(() => {
-  stopEvents = host.subscribeEvents((event) => {
-    const type = event.type ?? '';
-    if (type.startsWith('telegram.') || type.startsWith('history.')) {
-      scheduleChatRefresh();
-    }
-  });
-  void loadChats().catch(pushLocalError);
-});
-
-onBeforeUnmount(() => {
-  stopEvents?.();
-  stopEvents = null;
-  clearRefreshTimer();
-});
+watch(chatNavigation, ensureSelectedFolderExists, { immediate: true });
 
 function clearChatSearch(): void {
   chatFilter.value = '';
   writeStorage(`${telegramStoragePrefix}.chatFilter`, '');
-  clearRefreshTimer();
-  void loadChats().catch(pushLocalError);
 }
 
 function searchChats(value: string): void {
   chatFilter.value = value;
   writeStorage(`${telegramStoragePrefix}.chatFilter`, value);
-  clearRefreshTimer();
-  refreshTimer = setTimeout(() => {
-    void loadChats().catch(pushLocalError);
-  }, 250);
-}
-
-async function loadChats(options: { focusChatId?: string } = {}): Promise<void> {
-  const sequence = ++chatLoadSequence;
-  const query = chatFilter.value.trim();
-  const directory = await host.rpc<TelegramDirectoryResult>('telegram.listChatDirectory', {
-    ...(query.length === 0 ? {} : { query })
-  });
-  if (sequence !== chatLoadSequence) {
-    return;
-  }
-
-  const directoryChats = asArray(directory.chats).map(normalizeDirectoryChat).filter(isDefined);
-  const folders = asArray(directory.folders).map(normalizeDirectoryFolder).filter(isDefined);
-  const navigationChats = asArray(directory.navigationChats)
-    .map(normalizeDirectoryChat)
-    .filter(isDefined);
-  const listFilter = query.length === 0 ? chatListFilter() : undefined;
-  const matchingChats = directoryChats
-    .filter((chat) => (listFilter === undefined ? true : chatMatchesListFilter(chat, listFilter)))
-    .sort((left, right) => compareTelegramChatsByTdlibOrder(left, right, listFilter));
-  const visibleChats = limitChats(matchingChats, DEFAULT_CHAT_LIMIT, options.focusChatId);
-
-  chats.value = chatsWithStats(visibleChats, existingStatsByChat());
-  chatNavigation.value = buildChatNavigation(navigationChats, folders);
-  if (query.length === 0 && chatListMode.value === 'folder' && !hasChatFolder(chatFolderId.value)) {
-    selectMainChatList();
-    await loadChats();
-    return;
-  }
-
-  void loadStatsForVisibleChats(sequence, visibleChats);
-}
-
-async function loadStatsForVisibleChats(
-  sequence: number,
-  visibleChats: TelegramDirectoryChat[]
-): Promise<void> {
-  try {
-    const statsByChat = await loadStatsByChat(visibleChats.map((chat) => chat.id));
-    if (sequence !== chatLoadSequence) {
-      return;
-    }
-    chats.value = chatsWithStats(visibleChats, statsByChat);
-  } catch (error) {
-    if (sequence === chatLoadSequence) {
-      pushLocalError(error);
-    }
-  }
 }
 
 function chatsWithStats(
   visibleChats: TelegramDirectoryChat[],
-  statsByChat: Map<string, ChatStats>
+  statsByChat: ReadonlyMap<string, ChatStats>
 ): ControlPlaneChat[] {
   return visibleChats.map((chat) => {
     const stats = statsByChat.get(chat.id) ?? emptyChatStats(chat.id);
@@ -193,32 +127,6 @@ function chatsWithStats(
   });
 }
 
-async function loadStatsByChat(chatIds: string[]): Promise<Map<string, ChatStats>> {
-  if (chatIds.length === 0) {
-    return new Map();
-  }
-  const result = await host.rpc<HistoryChatStatsResult>('history.getChatStats', { chatIds });
-  const stats = asArray(result.stats).map(normalizeChatStats).filter(isDefined);
-  return new Map(stats.map((stat) => [stat.chatId, stat]));
-}
-
-function existingStatsByChat(): Map<string, ChatStats> {
-  return new Map(
-    chats.value.map((chat) => [
-      chat.id,
-      {
-        chatId: chat.id,
-        coverageIntervals: chat.coverageIntervals,
-        coverageNewestAt: chat.coverageNewestAt,
-        coverageOldestAt: chat.coverageOldestAt,
-        pendingJobs: chat.pendingJobs,
-        runningJobs: chat.runningJobs,
-        targets: chat.targets
-      }
-    ])
-  );
-}
-
 async function openChat(chatId: string): Promise<void> {
   const normalizedChatId = chatId.trim();
   if (normalizedChatId.length === 0) {
@@ -226,10 +134,6 @@ async function openChat(chatId: string): Promise<void> {
   }
   const chat = await findChatById(normalizedChatId);
   selectChatList(preferredChatListSelection(chat));
-  await loadChats({ focusChatId: normalizedChatId });
-  if (!chats.value.some((item) => item.id === normalizedChatId)) {
-    throw new Error(`Chat ${normalizedChatId} is not visible in its Telegram list`);
-  }
   selectedChatId.value = normalizedChatId;
 }
 
@@ -242,12 +146,7 @@ async function toggleChat(chatId: string): Promise<void> {
 }
 
 async function findChatById(chatId: string): Promise<TelegramDirectoryChat> {
-  const result = await host.rpc<TelegramDirectoryResult>('telegram.listChatDirectory', {
-    query: chatId
-  });
-  const chat = asArray(result.chats)
-    .map(normalizeDirectoryChat)
-    .find((item) => item?.id === chatId);
+  const chat = directoryProjection.chats.value.find((item) => item.id === chatId);
   if (chat === undefined) {
     throw new Error(`Chat ${chatId} is not available in the chat directory`);
   }
@@ -256,7 +155,6 @@ async function findChatById(chatId: string): Promise<TelegramDirectoryChat> {
 
 function openMainChats(): void {
   selectMainChatList();
-  void loadChats().catch(pushLocalError);
 }
 
 function openArchiveChats(): void {
@@ -265,7 +163,6 @@ function openArchiveChats(): void {
   chatFilter.value = '';
   writeStorage(`${telegramStoragePrefix}.chatFilter`, '');
   writeStoredChatListSelection({ folderId: null, mode: 'archive' });
-  void loadChats().catch(pushLocalError);
 }
 
 function openFolderChats(folderId: number): void {
@@ -277,7 +174,6 @@ function openFolderChats(folderId: number): void {
   chatFilter.value = '';
   writeStorage(`${telegramStoragePrefix}.chatFilter`, '');
   writeStoredChatListSelection({ folderId, mode: 'folder' });
-  void loadChats().catch(pushLocalError);
 }
 
 function selectMainChatList(): void {
@@ -292,20 +188,6 @@ function closeSelectedChat(): void {
   selectedChatId.value = null;
 }
 
-function scheduleChatRefresh(): void {
-  clearRefreshTimer();
-  refreshTimer = setTimeout(() => {
-    void loadChats().catch(pushLocalError);
-  }, 250);
-}
-
-function clearRefreshTimer(): void {
-  if (refreshTimer !== null) {
-    clearTimeout(refreshTimer);
-    refreshTimer = null;
-  }
-}
-
 function pushLocalError(error: unknown): void {
   console.error(error);
 }
@@ -317,6 +199,14 @@ function hasChatFolder(folderId: number | null): boolean {
   );
 }
 
+function ensureSelectedFolderExists(): void {
+  if (normalizedChatQuery().length === 0 && chatListMode.value === 'folder') {
+    if (!hasChatFolder(chatFolderId.value)) {
+      selectMainChatList();
+    }
+  }
+}
+
 function chatListFilter(): ChatListKind {
   if (chatListMode.value === 'archive') {
     return { kind: 'archive' };
@@ -325,6 +215,17 @@ function chatListFilter(): ChatListKind {
     return { folderId: chatFolderId.value, kind: 'folder' };
   }
   return { kind: 'main' };
+}
+
+function normalizedChatQuery(): string {
+  return chatFilter.value.trim().toLocaleLowerCase();
+}
+
+function chatMatchesSearch(chat: TelegramDirectoryChat, normalizedQuery: string): boolean {
+  return (
+    chat.title.toLocaleLowerCase().includes(normalizedQuery) ||
+    chat.id.toLocaleLowerCase().includes(normalizedQuery)
+  );
 }
 
 function buildChatNavigation(
@@ -530,69 +431,6 @@ function selectChatList(selection: { folderId: number | null; mode: ChatListMode
   }
 }
 
-function normalizeDirectoryChat(value: Record<string, unknown>): TelegramDirectoryChat | undefined {
-  const id = asString(value.id);
-  if (id === undefined) {
-    return undefined;
-  }
-  return {
-    id,
-    isBot: value.isBot === true,
-    lastMessageDate: asNonNegativeInteger(value.lastMessageDate),
-    placements: asArray(value.placements).map(normalizePlacement).filter(isDefined),
-    title: asString(value.title) ?? '',
-    type: asString(value.type) ?? '',
-    updatedAt: asString(value.updatedAt) ?? ''
-  };
-}
-
-function normalizeDirectoryFolder(
-  value: Record<string, unknown>
-): TelegramDirectoryFolder | undefined {
-  const folderId = value.folderId;
-  if (typeof folderId !== 'number' || !Number.isSafeInteger(folderId) || folderId < 0) {
-    return undefined;
-  }
-  return {
-    count: asNonNegativeInteger(value.count),
-    folderId,
-    iconName: asNullableString(value.iconName),
-    position: asNonNegativeInteger(value.position),
-    title: asString(value.title) ?? ''
-  };
-}
-
-function normalizePlacement(value: Record<string, unknown>): ChatPlacement | undefined {
-  const kind = asString(value.kind);
-  const order = asString(value.order) ?? '0';
-  if (kind === 'main' || kind === 'archive') {
-    return { kind, order };
-  }
-  if (kind === 'folder') {
-    const folderId = value.folderId;
-    if (typeof folderId === 'number' && Number.isSafeInteger(folderId) && folderId >= 0) {
-      return { folderId, kind, order };
-    }
-  }
-  return undefined;
-}
-
-function normalizeChatStats(value: Record<string, unknown>): ChatStats | undefined {
-  const chatId = asString(value.chatId);
-  if (chatId === undefined) {
-    return undefined;
-  }
-  return {
-    chatId,
-    coverageIntervals: asNonNegativeInteger(value.coverageIntervals),
-    coverageNewestAt: asNullableString(value.coverageNewestAt),
-    coverageOldestAt: asNullableString(value.coverageOldestAt),
-    pendingJobs: asNonNegativeInteger(value.pendingJobs),
-    runningJobs: asNonNegativeInteger(value.runningJobs),
-    targets: asNonNegativeInteger(value.targets)
-  };
-}
-
 function emptyChatStats(chatId: string): ChatStats {
   return {
     chatId,
@@ -602,14 +440,6 @@ function emptyChatStats(chatId: string): ChatStats {
     pendingJobs: 0,
     runningJobs: 0,
     targets: 0
-  };
-}
-
-function emptyChatNavigation(): ChatNavigation {
-  return {
-    archiveCount: 0,
-    folders: [],
-    mainCount: 0
   };
 }
 
@@ -666,24 +496,6 @@ function parsePositiveBigInt(value: unknown): bigint | undefined {
     return parsed > 0n ? parsed : undefined;
   }
   return undefined;
-}
-
-function asArray(value: unknown): Record<string, unknown>[] {
-  return Array.isArray(value)
-    ? value.filter((item): item is Record<string, unknown> => isPlainRecord(item))
-    : [];
-}
-
-function asString(value: unknown): string | undefined {
-  return typeof value === 'string' && value.length > 0 ? value : undefined;
-}
-
-function asNullableString(value: unknown): string | null {
-  return typeof value === 'string' ? value : null;
-}
-
-function asNonNegativeInteger(value: unknown): number {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : 0;
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
