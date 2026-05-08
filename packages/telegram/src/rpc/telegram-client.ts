@@ -49,6 +49,7 @@ export function createTelegramRpcClient(
     links: [
       httpBatchLink({
         headers: ({ opList }) => createInternalRpcCallOptionsHeaders(opList),
+        methodOverride: 'POST',
         url: parseTelegramRpcUrl(config.url)
       })
     ]

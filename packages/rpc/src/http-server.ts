@@ -18,7 +18,10 @@ export type InternalTrpcHttpServerOptions<TRouter extends AnyRouter> =
 export function createInternalTrpcHttpServer<TRouter extends AnyRouter>(
   options: InternalTrpcHttpServerOptions<TRouter>
 ): Server {
-  const trpcHandler = createHTTPHandler(options);
+  const trpcHandler = createHTTPHandler({
+    ...options,
+    allowMethodOverride: true
+  });
   const staticAssets =
     options.staticAssets === undefined
       ? undefined

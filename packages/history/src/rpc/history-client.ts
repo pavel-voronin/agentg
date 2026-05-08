@@ -35,6 +35,7 @@ export function createHistoryRpcClient(config: HistoryRpcClientConfig): HistoryR
     links: [
       httpBatchLink({
         headers: ({ opList }) => createInternalRpcCallOptionsHeaders(opList),
+        methodOverride: 'POST',
         url: parseHistoryRpcUrl(config.url)
       })
     ]
