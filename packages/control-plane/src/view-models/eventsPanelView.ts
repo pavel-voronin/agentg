@@ -16,6 +16,7 @@ import {
   type AppStandardEventItem,
   type ControlPlaneEvent,
   type ControlPlaneStreamEvent,
+  type EventCatalogState,
   type EventFilterDomainView,
   type EventFilterGroupView,
   type EventFilterTypeView,
@@ -27,6 +28,7 @@ import { eventBodyView, type EventYamlViewOptions } from './eventYamlView.js';
 import { formatEventTime, formatOptionalValue } from './formatters.js';
 
 export type EventsPanelViewSource = {
+  eventCatalog: EventCatalogState;
   eventFilters: EventFiltersState;
   events: ControlPlaneEvent[];
 };

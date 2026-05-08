@@ -2,6 +2,7 @@ import type { ControlPlaneHost, ControlPlaneHostEvent } from '@agentg/control-pl
 import { onBeforeUnmount, onMounted } from 'vue';
 
 import { createControlPlaneClient } from '../control-plane/controlPlaneClient.js';
+import { loadControlPlaneEventCatalog } from '../control-plane/eventCatalog.js';
 import { useAppShellStore } from '../stores/appShell.js';
 import { useEventsStore } from '../stores/events.js';
 
@@ -27,6 +28,7 @@ export function useControlPlaneRuntime(): ControlPlaneHost {
     onOpen() {
       if (runtimeStarted) {
         setControlPlaneStatus('ok');
+        refreshEventCatalog();
       }
     }
   });
@@ -47,9 +49,27 @@ export function useControlPlaneRuntime(): ControlPlaneHost {
     if (event.type) {
       eventsStore.pushEvent(event);
     }
+    if (event.type === 'service_directory.changed') {
+      refreshEventCatalog();
+    }
     for (const listener of eventListeners) {
       listener(event);
     }
+  }
+
+  function refreshEventCatalog(): void {
+    void loadControlPlaneEventCatalog()
+      .then((catalog) => {
+        eventsStore.setEventCatalog(catalog);
+      })
+      .catch((error: unknown) => {
+        console.error(
+          JSON.stringify({
+            error: error instanceof Error ? error.message : String(error),
+            event: 'control_plane.event_catalog_load_failed'
+          })
+        );
+      });
   }
 
   function setControlPlaneStatus(kind: StatusBadgeKind): void {

@@ -20,7 +20,6 @@ export const requestSync = mutation((options: CreateHistoryRouterOptions) =>
             ...(input.chatId === undefined ? {} : { chatId: input.chatId }),
             reason: 'manual'
           },
-          source: 'history',
           type: 'history.sync.requested'
         })
       );

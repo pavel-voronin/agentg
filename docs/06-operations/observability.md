@@ -36,13 +36,13 @@ The system should support answering:
 
 RPC methods publish these live events by default:
 
-The event name is `rpc.{target}.{lifecycle}`. For target
+The event name is `{domain}.rpc.{procedure}.{lifecycle}`. For target
 `history.getChatHistoryState`, the lifecycle events are:
 
-- `rpc.history.getChatHistoryState.started`
-- `rpc.history.getChatHistoryState.progress`
-- `rpc.history.getChatHistoryState.completed`
-- `rpc.history.getChatHistoryState.failed`
+- `history.rpc.getChatHistoryState.started`
+- `history.rpc.getChatHistoryState.progress`
+- `history.rpc.getChatHistoryState.completed`
+- `history.rpc.getChatHistoryState.failed`
 
 The `callId` is stored in `event.data.callId`. These events are ephemeral and
 should be used for live debugging, not recovery.

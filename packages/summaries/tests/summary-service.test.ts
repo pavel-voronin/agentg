@@ -52,7 +52,6 @@ describe('summaries service', () => {
             telegramMessageId: '43'
           }
         },
-        source: 'telegram',
         type: 'telegram.message.created'
       })
     );

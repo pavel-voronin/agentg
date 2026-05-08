@@ -4,12 +4,15 @@ import {
   MIN_EVENT_LIMIT,
   MIN_EVENT_YAML_LIST_LIMIT,
   rpcCallEventTarget,
+  rpcCallEventTypesForProcedure,
   type ControlPlaneEvent,
+  type EventCatalogState,
   type EventFiltersState,
   type EventGroup
 } from '../stores/controlPlaneTypes.js';
 
 export type EventFilterSource = {
+  eventCatalog: EventCatalogState;
   eventFilters: EventFiltersState;
   events: ControlPlaneEvent[];
 };
@@ -60,30 +63,25 @@ export function eventGroupForType(type: string): EventGroup {
     };
   }
 
-  const source = eventSourceFromType(normalizedType);
+  const domain = eventDomainFromType(normalizedType);
   const group = {
-    color: colorForEventSource(source),
+    color: colorForEventDomain(domain),
     eventTypes: [],
-    id: `events:${source}`,
-    label: labelForEventSource(source),
-    match: (candidate: string) => eventSourceFromType(candidate) === source
+    id: `events:${domain}`,
+    label: labelForEventDomain(domain),
+    match: (candidate: string) =>
+      rpcCallEventTarget(candidate.trim()) === null && eventDomainFromType(candidate) === domain
   };
-  return source === 'ui' || source === 'other' ? { ...group, filterable: false } : group;
+  return domain === 'ui' || domain === 'other' ? { ...group, filterable: false } : group;
 }
 
 export function eventTypesForGroupInState(state: EventFilterSource, group: EventGroup): string[] {
-  const observed = state.events
-    .filter((event) => eventGroupForEvent(event).id === group.id)
-    .map((event) => event.type ?? 'unknown');
-  const configured = Object.keys(state.eventFilters.types).filter((type) => group.match(type));
-  return [...new Set([...group.eventTypes, ...observed, ...configured])].sort();
+  const configured = eventCatalogTypesInState(state).filter((type) => group.match(type));
+  return [...new Set([...group.eventTypes, ...configured])].sort();
 }
 
 export function filterableEventGroupsInState(state: EventFilterSource): EventGroup[] {
-  const types = [
-    ...state.events.map((event) => event.type ?? ''),
-    ...Object.keys(state.eventFilters.types)
-  ];
+  const types = eventCatalogTypesInState(state);
   const groups = new Map<string, EventGroup>();
 
   for (const type of types) {
@@ -136,23 +134,30 @@ export function normalizeEventYamlListLimit(value: number | string): number {
   return Math.max(MIN_EVENT_YAML_LIST_LIMIT, Math.round(limit));
 }
 
-function eventSourceFromType(type: string): string {
-  const source = type.split('.')[0]?.trim();
-  if (source === undefined || source.length === 0) {
+function eventDomainFromType(type: string): string {
+  const domain = type.split('.')[0]?.trim();
+  if (domain === undefined || domain.length === 0) {
     return 'other';
   }
-  return source;
+  return domain;
 }
 
-function labelForEventSource(source: string): string {
-  return source
+function eventCatalogTypesInState(state: EventFilterSource): string[] {
+  return state.eventCatalog.services.flatMap((service) => [
+    ...service.events,
+    ...service.procedures.flatMap((procedure) => rpcCallEventTypesForProcedure(procedure.name))
+  ]);
+}
+
+function labelForEventDomain(domain: string): string {
+  return domain
     .split(/[-_]/)
     .filter((part) => part.length > 0)
     .map((part) => `${part[0]?.toUpperCase() ?? ''}${part.slice(1)}`)
     .join(' ');
 }
 
-function colorForEventSource(source: string): string {
+function colorForEventDomain(domain: string): string {
   const palette = [
     '#0ea5e9',
     '#10b981',
@@ -164,7 +169,7 @@ function colorForEventSource(source: string): string {
     '#2563eb'
   ] as const;
   let hash = 0;
-  for (const char of source) {
+  for (const char of domain) {
     hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
   }
   return palette[hash % palette.length] ?? '#2563eb';

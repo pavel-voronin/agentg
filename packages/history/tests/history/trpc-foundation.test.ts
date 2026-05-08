@@ -108,7 +108,6 @@ describe('History tRPC foundation', () => {
     expect(typeof successCallId).toBe('string');
     expect(publishedEvents).toMatchObject([
       {
-        source: 'history',
         data: {
           callId: successCallId,
           input: { value: 'ok' },
@@ -116,7 +115,6 @@ describe('History tRPC foundation', () => {
         }
       },
       {
-        source: 'history',
         data: {
           callId: successCallId,
           progress: { step: 'loaded' },
@@ -124,7 +122,6 @@ describe('History tRPC foundation', () => {
         }
       },
       {
-        source: 'history',
         data: {
           callId: successCallId,
           output: {
@@ -292,7 +289,6 @@ function createFactEvent(type: string, value: string): IntegrationEvent {
     data: {
       value
     },
-    source: 'history',
     type
   });
 }

@@ -222,10 +222,10 @@ their response shape identical to other wrapped calls.
 - Implement the `observable` builder on top of the standard envelope runtime.
 - Generate a `callId` for each observable RPC invocation.
 - Publish call lifecycle events to NATS:
-  - `rpc.{target}.started`;
-  - `rpc.{target}.progress`;
-  - `rpc.{target}.completed`;
-  - `rpc.{target}.failed`.
+  - `{domain}.rpc.{procedure}.started`;
+  - `{domain}.rpc.{procedure}.progress`;
+  - `{domain}.rpc.{procedure}.completed`;
+  - `{domain}.rpc.{procedure}.failed`.
 - Include these fields in lifecycle events:
   - `callId`;
   - source service slug;
@@ -235,7 +235,7 @@ their response shape identical to other wrapped calls.
   - error where available;
   - timestamps.
 - Add a `ctx.progress(...)` API for observable handlers.
-- Make `ctx.progress(...)` publish `rpc.{target}.progress` events with the
+- Make `ctx.progress(...)` publish `{domain}.rpc.{procedure}.progress` events with the
   current `callId`.
 - Keep the response envelope for `observable` identical to `rpc`.
 - Add tests for started, progress, completed, and failed event publication.

@@ -40,7 +40,7 @@ describe('summaries runtime integration', () => {
         }
       });
       expect(
-        events.map((event) => event.type).filter((type) => type.startsWith('summaries.'))
+        events.map((event) => event.type).filter((type) => type.startsWith('summaries.summary.'))
       ).toEqual(['summaries.summary.requested', 'summaries.summary.completed']);
 
       await expect(

@@ -52,7 +52,6 @@ describe('history sync executor', () => {
             chatId: 'chat-orphan',
             targetId: 'target-orphan'
           },
-          source: 'history',
           type: 'history.target.auto_deleted'
         })
       ])

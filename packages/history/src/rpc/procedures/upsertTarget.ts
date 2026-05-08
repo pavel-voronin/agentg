@@ -23,7 +23,6 @@ export const upsertTarget = mutation((options: CreateHistoryRouterOptions) =>
           data: {
             target: historyTargetToResponse(target, currentHistoryProjectionContext())
           },
-          source: 'history',
           type: 'history.target.upserted'
         })
       );
@@ -32,7 +31,6 @@ export const upsertTarget = mutation((options: CreateHistoryRouterOptions) =>
           data: {
             reason: 'target-upserted'
           },
-          source: 'history',
           type: 'history.sync.requested'
         })
       );

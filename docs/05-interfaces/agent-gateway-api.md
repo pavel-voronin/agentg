@@ -62,7 +62,6 @@ The notification payload uses the integration event envelope:
   "event": {
     "id": "evt_...",
     "type": "telegram.login.completed",
-    "source": "telegram",
     "occurredAt": "2026-05-05T00:00:00.000Z",
     "data": {}
   }

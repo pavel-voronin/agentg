@@ -46,7 +46,6 @@ describe('Control Plane server boundary', () => {
         data: {
           recordId: 'record-a'
         },
-        source: 'test',
         type: 'beta.coverage.changed'
       });
       await eventBus.emit(event);
@@ -60,8 +59,7 @@ describe('Control Plane server boundary', () => {
           callId: 'call-a',
           target: 'beta.getStatus'
         },
-        source: 'beta-service',
-        type: 'rpc.beta.getStatus.started'
+        type: 'beta.rpc.getStatus.started'
       });
       await eventBus.emit(rpcEvent);
 
@@ -74,7 +72,6 @@ describe('Control Plane server boundary', () => {
           recordId: 'record-a',
           runId: 'run-a'
         },
-        source: 'summaries',
         type: 'summaries.summary.requested'
       });
       await eventBus.emit(summariesEvent);
@@ -148,6 +145,14 @@ describe('Control Plane server boundary', () => {
         )
       ).resolves.toEqual({
         providers: [],
+        version: 0
+      });
+      await expect(
+        fetch(`http://127.0.0.1:${String(server.port)}/control-plane/event-catalog`).then(
+          (response) => response.json()
+        )
+      ).resolves.toEqual({
+        services: [],
         version: 0
       });
       const runtimeResponse = await fetch(

@@ -2,6 +2,8 @@ import type { Server } from 'node:http';
 
 import { createServiceDirectoryClient } from '@agentg/service-directory/rpc';
 import type { EventBus, EventSubscription } from '@agentg/events/bus';
+import { createValidatedEventBus } from '@agentg/events/validated-bus';
+import { serviceManifestEventTypes } from '@agentg/rpc/call-event-types';
 
 import type { SummariesServiceConfig } from './config.js';
 import type { SummariesDatabase } from './database.js';
@@ -21,8 +23,13 @@ export type SummariesServiceOptions = {
 };
 
 export async function runSummariesService(options: SummariesServiceOptions): Promise<void> {
+  const serviceManifest = createSummariesServiceManifest(options.config.module);
+  const eventBus = createValidatedEventBus(options.eventBus, {
+    allowedTypes: serviceManifestEventTypes(serviceManifest),
+    publisher: 'summaries'
+  });
   const runtime: SummariesRuntime = {
-    eventBus: options.eventBus,
+    eventBus,
     repository: createDrizzleSummaryRepository(options.database)
   };
   let summariesRpcServer: Server | undefined;
@@ -30,23 +37,23 @@ export async function runSummariesService(options: SummariesServiceOptions): Pro
   let subscriptions: EventSubscription[] = [];
 
   try {
-    subscriptions = subscribeSummariesService(runtime, options.eventBus);
+    subscriptions = subscribeSummariesService(runtime, eventBus);
     summariesRpcServer = await startSummariesTrpcServer({
       bind: options.config.internalRpc,
-      eventBus: options.eventBus,
+      eventBus,
       runtime
     });
     serviceDirectory = createServiceDirectoryClient({
-      eventBus: options.eventBus,
+      eventBus,
       onTopologyFailure: (error) => {
         requestProcessShutdown('summaries.topology_failure', error);
       },
       url: options.config.services.serviceDirectory.url
     });
-    await serviceDirectory.join(createSummariesServiceManifest(options.config.module));
+    await serviceDirectory.join(serviceManifest);
   } catch (error) {
     await cleanupSummariesStartupFailure({
-      eventBus: options.eventBus,
+      eventBus,
       serviceDirectory,
       subscriptions,
       summariesRpcServer
@@ -72,7 +79,7 @@ export async function runSummariesService(options: SummariesServiceOptions): Pro
       summariesRpcServer = undefined;
     }
     const eventBusClosed = await runShutdownStep('summaries.event_bus_close', () =>
-      options.eventBus.close()
+      eventBus.close()
     );
 
     return summariesRpcStopped && eventBusClosed;

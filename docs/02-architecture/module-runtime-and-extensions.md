@@ -96,12 +96,12 @@ readChatSummary: rpc
 ```
 
 RPC lifecycle events are published by default. Event names use
-`rpc.{target}.{lifecycle}`, for example:
+`{domain}.rpc.{procedure}.{lifecycle}`, for example:
 
-- `rpc.history.getChatHistoryState.started`
-- `rpc.history.getChatHistoryState.progress`
-- `rpc.history.getChatHistoryState.completed`
-- `rpc.history.getChatHistoryState.failed`
+- `history.rpc.getChatHistoryState.started`
+- `history.rpc.getChatHistoryState.progress`
+- `history.rpc.getChatHistoryState.completed`
+- `history.rpc.getChatHistoryState.failed`
 
 Callers can pass call options through internal RPC context:
 

@@ -2,8 +2,6 @@ import { createIntegrationEvent, type IntegrationEvent } from '@agentg/events/en
 
 import type { SummaryInvalidation, SummaryResult, SummaryRun } from './types.js';
 
-const SUMMARIES_EVENT_SOURCE = 'summaries';
-
 export function createSummaryRequestedEvent(run: SummaryRun): IntegrationEvent {
   return createIntegrationEvent({
     data: {
@@ -15,7 +13,6 @@ export function createSummaryRequestedEvent(run: SummaryRun): IntegrationEvent {
       chatId: run.chatId,
       runId: run.id
     },
-    source: SUMMARIES_EVENT_SOURCE,
     type: 'summaries.summary.requested'
   });
 }
@@ -36,7 +33,6 @@ export function createSummaryCompletedEvent(input: {
       resultId: input.result.id,
       runId: input.run.id
     },
-    source: SUMMARIES_EVENT_SOURCE,
     type: 'summaries.summary.completed'
   });
 }
@@ -51,7 +47,6 @@ export function createSummaryInvalidatedEvent(invalidation: SummaryInvalidation)
       chatId: invalidation.chatId,
       reason: invalidation.reason
     },
-    source: SUMMARIES_EVENT_SOURCE,
     type: 'summaries.summary.invalidated'
   });
 }

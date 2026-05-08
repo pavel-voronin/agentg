@@ -73,7 +73,6 @@ async function publishOperationEvents<T>(
         method,
         startedAt: startedAt.toISOString()
       },
-      source: 'telegram',
       type: `${target}.started`
     })
   );
@@ -90,7 +89,6 @@ async function publishOperationEvents<T>(
           method,
           startedAt: startedAt.toISOString()
         },
-        source: 'telegram',
         type: `${target}.completed`
       })
     );
@@ -109,7 +107,6 @@ async function publishOperationEvents<T>(
           method,
           startedAt: startedAt.toISOString()
         },
-        source: 'telegram',
         type: `${target}.failed`
       })
     );

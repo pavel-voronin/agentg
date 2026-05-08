@@ -17,6 +17,11 @@ import type { EventBus, EventSubscription } from '@agentg/events/bus';
 import type { IntegrationEvent } from '@agentg/events/envelope';
 import { WebSocket, WebSocketServer, type RawData } from 'ws';
 
+import {
+  CONTROL_PLANE_EVENT_CATALOG_PATH,
+  eventCatalogFromServiceDirectorySnapshot
+} from '../control-plane/eventCatalog.js';
+import type { EventCatalogState } from '../stores/controlPlaneTypes.js';
 import { createControlPlaneServiceManifest } from './registrations.js';
 
 type ServiceDirectoryConfig = {
@@ -330,6 +335,10 @@ async function handleHttpRequest(
     sendJsonHttp(response, request.method, await controlPlaneContentCatalog(runtime));
     return;
   }
+  if (path === CONTROL_PLANE_EVENT_CATALOG_PATH) {
+    sendJsonHttp(response, request.method, await controlPlaneEventCatalog(runtime));
+    return;
+  }
   if (path.startsWith(CONTROL_PLANE_PROVIDER_ASSETS_PREFIX)) {
     await proxyProviderAsset(runtime, path, request, response);
     return;
@@ -428,6 +437,29 @@ async function controlPlaneContentCatalog(
     }),
     version: snapshot.version
   };
+}
+
+async function controlPlaneEventCatalog(runtime: ControlPlaneRuntime): Promise<EventCatalogState> {
+  const serviceDirectory = runtime.serviceDirectory;
+  if (serviceDirectory === undefined) {
+    return {
+      services: [],
+      version: 0
+    };
+  }
+
+  try {
+    await serviceDirectory.refresh();
+  } catch (error) {
+    console.warn(
+      JSON.stringify({
+        error: error instanceof Error ? error.message : String(error),
+        event: 'control_plane.event_catalog_refresh_failed'
+      })
+    );
+  }
+
+  return eventCatalogFromServiceDirectorySnapshot(serviceDirectory.getSnapshot());
 }
 
 async function proxyProviderAsset(

@@ -105,7 +105,6 @@ function parseEvent(payload: string): IntegrationEvent | undefined {
       record === undefined ||
       typeof record.id !== 'string' ||
       typeof record.type !== 'string' ||
-      typeof record.source !== 'string' ||
       typeof record.occurredAt !== 'string' ||
       asRecord(record.data) === undefined
     ) {

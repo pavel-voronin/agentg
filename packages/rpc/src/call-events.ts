@@ -12,15 +12,16 @@ import {
 
 export {
   RPC_CALL_COMPLETED_EVENT_SUFFIX,
+  RPC_CALL_EVENT_CATEGORY,
   RPC_CALL_EVENT_LIFECYCLES,
-  RPC_CALL_EVENT_PREFIX,
   RPC_CALL_FAILED_EVENT_SUFFIX,
   RPC_CALL_PROGRESS_EVENT_SUFFIX,
   RPC_CALL_STARTED_EVENT_SUFFIX,
   rpcCallEventTarget,
+  rpcCallEventTypesForProcedure,
   rpcCallEventType
 } from './call-event-types.js';
-export type { RpcCallEventSuffix } from './call-event-types.js';
+export type { RpcCallEventSuffix, RpcEventManifest } from './call-event-types.js';
 
 export type RpcProgressData = JsonObject;
 
@@ -33,7 +34,6 @@ export type RpcCallError = {
 export type RpcCallEventBase = {
   callId: string;
   input?: unknown;
-  source: string;
   startedAt?: Date;
   target: string;
 };
@@ -64,7 +64,6 @@ export function createRpcCallStartedEvent(input: RpcCallStartedEventInput): Inte
       ...(input.input === undefined ? {} : { input: toJsonValue(input.input) })
     },
     occurredAt,
-    source: input.source,
     type: rpcCallEventType(input.target, RPC_CALL_STARTED_EVENT_SUFFIX)
   });
 }
@@ -82,7 +81,6 @@ export function createRpcCallProgressEvent(input: RpcCallProgressEventInput): In
       ...(input.startedAt === undefined ? {} : { startedAt: input.startedAt.toISOString() })
     },
     occurredAt,
-    source: input.source,
     type: rpcCallEventType(input.target, RPC_CALL_PROGRESS_EVENT_SUFFIX)
   });
 }
@@ -100,7 +98,6 @@ export function createRpcCallCompletedEvent(input: RpcCallCompletedEventInput): 
       ...(input.startedAt === undefined ? {} : { startedAt: input.startedAt.toISOString() })
     },
     occurredAt,
-    source: input.source,
     type: rpcCallEventType(input.target, RPC_CALL_COMPLETED_EVENT_SUFFIX)
   });
 }
@@ -119,7 +116,6 @@ export function createRpcCallFailedEvent(input: RpcCallFailedEventInput): Integr
       ...(input.startedAt === undefined ? {} : { startedAt: input.startedAt.toISOString() })
     },
     occurredAt,
-    source: input.source,
     type: rpcCallEventType(input.target, RPC_CALL_FAILED_EVENT_SUFFIX)
   });
 }
@@ -129,19 +125,7 @@ export function publishRpcCallEvent(eventBus: EventBus | undefined, event: Integ
     return;
   }
 
-  try {
-    eventBus.publish(event);
-  } catch (error) {
-    console.error(
-      JSON.stringify({
-        callId: event.data.callId,
-        error: error instanceof Error ? error.message : String(error),
-        event: 'rpc.call_event_publish_failed',
-        rpcEventType: event.type,
-        target: event.data.target
-      })
-    );
-  }
+  eventBus.publish(event);
 }
 
 export function errorFromUnknown(error: unknown): RpcCallError {

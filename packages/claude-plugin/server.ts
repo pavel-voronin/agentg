@@ -26,7 +26,6 @@ type GatewayResponse = {
 type IntegrationEvent = {
   id: string;
   type: string;
-  source: string;
   occurredAt: string;
   data: Record<string, unknown>;
   meta?: Record<string, unknown>;

@@ -17,7 +17,6 @@ Every event published to NATS uses the integration event envelope:
 {
   "id": "evt_...",
   "type": "history.coverage.changed",
-  "source": "history",
   "occurredAt": "2026-05-01T00:00:00.000Z",
   "data": {},
   "meta": {}
@@ -25,7 +24,7 @@ Every event published to NATS uses the integration event envelope:
 ```
 
 - `type` is also the NATS subject.
-- `source` names the publishing domain or component.
+- The first `type` segment names the publishing domain or component.
 - `data` is owned by the publishing domain.
 - `meta` is optional routing/debug metadata, not a read model.
 
@@ -96,16 +95,16 @@ Summaries publishes:
 
 RPC calls publish lifecycle events by default:
 
-- `rpc.{target}.started`
-- `rpc.{target}.progress`
-- `rpc.{target}.completed`
-- `rpc.{target}.failed`
+- `{domain}.rpc.{procedure}.started`
+- `{domain}.rpc.{procedure}.progress`
+- `{domain}.rpc.{procedure}.completed`
+- `{domain}.rpc.{procedure}.failed`
 
 For example, `history.getChatHistoryState` publishes
-`rpc.history.getChatHistoryState.started`,
-`rpc.history.getChatHistoryState.progress`,
-`rpc.history.getChatHistoryState.completed`, and
-`rpc.history.getChatHistoryState.failed`.
+`history.rpc.getChatHistoryState.started`,
+`history.rpc.getChatHistoryState.progress`,
+`history.rpc.getChatHistoryState.completed`, and
+`history.rpc.getChatHistoryState.failed`.
 
 `history.sync.requested` is a notification that a sync wake-up was accepted at
 the History boundary. It is not consumed as a NATS command.

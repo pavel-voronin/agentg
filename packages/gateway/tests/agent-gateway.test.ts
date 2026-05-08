@@ -286,7 +286,6 @@ function createEvent(type: string): IntegrationEvent {
     data: {},
     id: `evt_${randomUUID()}`,
     occurredAt: '2026-05-05T00:00:00.000Z',
-    source: 'telegram',
     type
   };
 }

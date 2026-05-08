@@ -22,7 +22,6 @@ export const deleteTarget = mutation((options: CreateHistoryRouterOptions) =>
           data: {
             target
           },
-          source: 'history',
           type: 'history.target.deleted'
         })
       );
@@ -31,7 +30,6 @@ export const deleteTarget = mutation((options: CreateHistoryRouterOptions) =>
           data: {
             reason: 'target-deleted'
           },
-          source: 'history',
           type: 'history.sync.requested'
         })
       );

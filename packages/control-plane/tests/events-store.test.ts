@@ -175,6 +175,32 @@ describe('events store', () => {
     ]);
     expect(store.events.map((item) => item.yamlListItemLimit)).toEqual([2, 5]);
   });
+
+  it('stores the Service Directory event catalog used by filter view models', () => {
+    const store = useEventsStore();
+
+    store.setEventCatalog({
+      services: [
+        {
+          events: ['alpha.message.created'],
+          procedures: [{ kind: 'query', name: 'alpha.listItems' }],
+          slug: 'alpha'
+        }
+      ],
+      version: 7
+    });
+
+    expect(store.eventCatalog).toEqual({
+      services: [
+        {
+          events: ['alpha.message.created'],
+          procedures: [{ kind: 'query', name: 'alpha.listItems' }],
+          slug: 'alpha'
+        }
+      ],
+      version: 7
+    });
+  });
 });
 
 function event(type: string): ControlPlaneEvent {

@@ -7,15 +7,59 @@ import { defaultEventFilters } from '../src/domain/events.js';
 import { eventFiltersPanelView } from '../src/view-models/eventsPanelView.js';
 
 describe('event filters view', () => {
+  it('keeps domain event filters and RPC lifecycle filters in the same domain tab', () => {
+    const view = eventFiltersPanelView({
+      eventCatalog: {
+        services: [
+          {
+            events: ['alpha.message.created'],
+            procedures: [{ kind: 'query', name: 'alpha.listItems' }],
+            slug: 'alpha'
+          }
+        ],
+        version: 1
+      },
+      eventFilters: defaultEventFilters(),
+      events: [
+        {
+          data: {},
+          type: 'alpha.message.created'
+        },
+        {
+          data: {
+            callId: 'call-a',
+            target: 'alpha.listItems'
+          },
+          type: 'alpha.rpc.listItems.started'
+        }
+      ]
+    });
+    const alphaDomain = view.domains.find((domain) => domain.id === 'alpha');
+
+    expect(view.domains.map((domain) => domain.id)).toEqual(['alpha']);
+    expect(alphaDomain?.eventTypes).toEqual(['alpha.message.created']);
+    expect(alphaDomain?.rpc[0]?.rpcCalls.map((call) => call.target)).toEqual(['alpha.listItems']);
+  });
+
   it('collapses RPC lifecycle event types into call rows with fixed lifecycle columns', async () => {
     const view = eventFiltersPanelView({
+      eventCatalog: {
+        services: [
+          {
+            events: [],
+            procedures: [{ kind: 'query', name: 'alpha.listItems' }],
+            slug: 'alpha'
+          }
+        ],
+        version: 1
+      },
       eventFilters: {
         ...defaultEventFilters(),
         types: {
-          'rpc.alpha.listItems.completed': false,
-          'rpc.alpha.listItems.failed': false,
-          'rpc.alpha.listItems.progress': true,
-          'rpc.alpha.listItems.started': true
+          'alpha.rpc.listItems.completed': false,
+          'alpha.rpc.listItems.failed': false,
+          'alpha.rpc.listItems.progress': true,
+          'alpha.rpc.listItems.started': true
         }
       },
       events: []
@@ -52,23 +96,23 @@ describe('event filters view', () => {
       checked: false,
       indeterminate: true,
       lifecycles: [
-        { enabled: true, label: 'S', type: 'rpc.alpha.listItems.started' },
-        { enabled: false, label: 'C', type: 'rpc.alpha.listItems.completed' },
-        { enabled: false, label: 'F', type: 'rpc.alpha.listItems.failed' },
-        { enabled: true, label: 'P', type: 'rpc.alpha.listItems.progress' }
+        { enabled: true, label: 'S', type: 'alpha.rpc.listItems.started' },
+        { enabled: false, label: 'C', type: 'alpha.rpc.listItems.completed' },
+        { enabled: false, label: 'F', type: 'alpha.rpc.listItems.failed' },
+        { enabled: true, label: 'P', type: 'alpha.rpc.listItems.progress' }
       ],
       lifecycleTypes: [
-        'rpc.alpha.listItems.started',
-        'rpc.alpha.listItems.completed',
-        'rpc.alpha.listItems.failed',
-        'rpc.alpha.listItems.progress'
+        'alpha.rpc.listItems.started',
+        'alpha.rpc.listItems.completed',
+        'alpha.rpc.listItems.failed',
+        'alpha.rpc.listItems.progress'
       ]
     });
     expect(completedColumn).toMatchObject({
       checked: false,
       indeterminate: false
     });
-    expect(completedColumn?.types).toContain('rpc.alpha.listItems.completed');
+    expect(completedColumn?.types).toContain('alpha.rpc.listItems.completed');
 
     const html = await renderToString(
       createSSRApp({
@@ -87,7 +131,7 @@ describe('event filters view', () => {
     expect(html).toContain('Toggle Completed RPC calls');
     expect(html).toContain('aria-pressed="false"');
     expect(html).toContain('alpha.listItems');
-    expect(html).not.toContain('rpc.alpha.listItems.started');
+    expect(html).not.toContain('alpha.rpc.listItems.started');
     expect(html).not.toContain('Event limit');
   });
 });

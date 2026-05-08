@@ -22,7 +22,7 @@ describe('event list view', () => {
         event('alpha.status', '2026-05-05T00:00:01.500Z', { online: true }),
         rpcEvent('started', '2026-05-05T00:00:01.000Z', { stage: 'started' })
       ],
-      (type) => type === 'rpc.alpha.listItems.started'
+      (type) => type === 'alpha.rpc.listItems.started'
     );
 
     expect(items.map((item) => item.kind)).toEqual(['rpc', 'event']);
@@ -35,8 +35,8 @@ describe('event list view', () => {
       target: 'alpha.listItems'
     });
     expect(rpcItem.lifecycleTypes).toEqual([
-      'rpc.alpha.listItems.started',
-      'rpc.alpha.listItems.completed'
+      'alpha.rpc.listItems.started',
+      'alpha.rpc.listItems.completed'
     ]);
     expect(rpcItem.lifecycles.map((lifecycle) => lifecycle.suffix)).toEqual([
       'started',
@@ -314,7 +314,7 @@ function rpcEvent(
   data: Record<string, unknown>,
   callId = 'call_1'
 ): ControlPlaneEvent {
-  return event(`rpc.alpha.listItems.${suffix}`, occurredAt, {
+  return event(`alpha.rpc.listItems.${suffix}`, occurredAt, {
     callId,
     target: 'alpha.listItems',
     ...data

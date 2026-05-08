@@ -12,7 +12,6 @@ export type ControlPlaneEvent = {
   id?: string;
   meta?: unknown;
   occurredAt?: Date | string;
-  source?: string;
   type?: string;
 };
 

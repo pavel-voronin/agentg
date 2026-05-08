@@ -37,7 +37,6 @@ export type SummariesRpcContextRuntime = {
   eventBus?: EventBus | undefined;
 };
 
-const SUMMARIES_RPC_SOURCE = 'summaries';
 const SUMMARIES_RPC_TARGET_PREFIX = 'summaries';
 
 export function createSummariesRpcContext(
@@ -85,7 +84,6 @@ const lifecycleMiddleware = summariesRpc.middleware(
         createRpcCallStartedEvent({
           callId,
           input: eventInput,
-          source: SUMMARIES_RPC_SOURCE,
           startedAt,
           target
         })
@@ -103,7 +101,6 @@ const lifecycleMiddleware = summariesRpc.middleware(
           callId,
           input: eventInput,
           progress: progressData,
-          source: SUMMARIES_RPC_SOURCE,
           startedAt,
           target
         })
@@ -130,7 +127,6 @@ const lifecycleMiddleware = summariesRpc.middleware(
             callId,
             error: errorFromUnknown(result.error),
             input: eventInput,
-            source: SUMMARIES_RPC_SOURCE,
             startedAt,
             target
           })
@@ -146,7 +142,6 @@ const lifecycleMiddleware = summariesRpc.middleware(
           callId,
           input: eventInput,
           output: result.data,
-          source: SUMMARIES_RPC_SOURCE,
           startedAt,
           target
         })

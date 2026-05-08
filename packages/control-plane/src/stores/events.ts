@@ -23,11 +23,13 @@ import {
   DEFAULT_EVENT_YAML_LIST_LIMIT,
   type ControlPlaneEvent,
   type ControlPlaneStreamEvent,
+  type EventCatalogState,
   type EventFiltersState,
   type EventsPanelMode
 } from './controlPlaneTypes.js';
 
 type EventsState = {
+  eventCatalog: EventCatalogState;
   eventFilters: EventFiltersState;
   eventLimit: number;
   eventYamlListLimit: number;
@@ -40,6 +42,9 @@ export const useEventsStore = defineStore('controlPlane.events', {
   actions: {
     clearEvents() {
       this.events = [];
+    },
+    setEventCatalog(catalog: EventCatalogState) {
+      this.eventCatalog = catalog;
     },
     isEventEnabled(event: ControlPlaneEvent): boolean {
       return isEventEnabledInState(this, event);
@@ -132,6 +137,10 @@ export const useEventsStore = defineStore('controlPlane.events', {
     }
   },
   state: (): EventsState => ({
+    eventCatalog: {
+      services: [],
+      version: 0
+    },
     eventFilters: readStoredEventFilters(),
     eventLimit: readStoredEventLimit(),
     eventYamlListLimit: readStoredEventYamlListLimit(),

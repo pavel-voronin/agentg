@@ -2,6 +2,8 @@ import type { HistoryDatabase as AppDatabase } from './database.js';
 import { createServiceDirectoryClient } from '@agentg/service-directory/rpc';
 import type { EventBus, EventSubscription } from '@agentg/events/bus';
 import { createIntegrationEvent } from '@agentg/events/envelope';
+import { createValidatedEventBus } from '@agentg/events/validated-bus';
+import { serviceManifestEventTypes } from '@agentg/rpc/call-event-types';
 
 import {
   createHistorySyncController,
@@ -37,8 +39,13 @@ export async function runHistoryService(options: HistoryServiceOptions): Promise
   let shuttingDown = false;
   let historyRpcServer: Awaited<ReturnType<typeof startHistoryTrpcServer>> | undefined;
   let liveCoverageTick: ReturnType<typeof setInterval> | undefined;
+  const serviceManifest = createHistoryServiceManifest({ rpcUrl: options.serviceRpcUrl });
+  const eventBus = createValidatedEventBus(options.eventBus, {
+    allowedTypes: serviceManifestEventTypes(serviceManifest),
+    publisher: 'history'
+  });
   const serviceDirectory = createServiceDirectoryClient({
-    eventBus: options.eventBus,
+    eventBus,
     onTopologyFailure: (error) => {
       requestProcessShutdown('history.topology_failure', error);
     },
@@ -49,17 +56,16 @@ export async function runHistoryService(options: HistoryServiceOptions): Promise
     options.database,
     telegram,
     options.backfill,
-    options.eventBus,
+    eventBus,
     () => shuttingDown
   );
   const liveCoverageObserver = createLiveCoverageObserver({
     addCoverageBatch: (intervals) => addHistoryCoverageBatch(options.database, intervals),
     listChatIds: async () => (await telegram.listChats({ discover: false })).map((chat) => chat.id),
     publishCoverageChanged: (intervals) => {
-      options.eventBus.publish(
+      eventBus.publish(
         createIntegrationEvent({
           data: historyCoverageChangedData(intervals),
-          source: 'history.live',
           type: 'history.coverage.changed'
         })
       );
@@ -70,7 +76,7 @@ export async function runHistoryService(options: HistoryServiceOptions): Promise
     await serviceDirectory.refresh();
     subscriptions = subscribeHistoryService({
       controller,
-      eventBus: options.eventBus,
+      eventBus,
       liveCoverageObserver
     });
     liveCoverageTick = setInterval(() => {
@@ -79,18 +85,18 @@ export async function runHistoryService(options: HistoryServiceOptions): Promise
     historyRpcServer = await startHistoryTrpcServer({
       bind: options.internalRpc,
       database: options.database,
-      eventBus: options.eventBus,
+      eventBus,
       requestSync(reason) {
         controller.request(reason);
       },
       telegram
     });
-    await serviceDirectory.join(createHistoryServiceManifest({ rpcUrl: options.serviceRpcUrl }));
+    await serviceDirectory.join(serviceManifest);
   } catch (error) {
     shuttingDown = true;
     await cleanupHistoryStartupFailure({
       controller,
-      eventBus: options.eventBus,
+      eventBus,
       historyRpcServer,
       liveCoverageObserver,
       liveCoverageTick,
@@ -130,9 +136,7 @@ export async function runHistoryService(options: HistoryServiceOptions): Promise
       runShutdownStep('history.controller_wait', () => controller.wait()),
       runShutdownStep('history.live_coverage_wait', () => liveCoverageObserver.wait())
     ]);
-    const eventBusClosed = await runShutdownStep('history.event_bus_close', () =>
-      options.eventBus.close()
-    );
+    const eventBusClosed = await runShutdownStep('history.event_bus_close', () => eventBus.close());
 
     return historyRpcStopped && historyStopped && liveCoverageStopped && eventBusClosed;
   });

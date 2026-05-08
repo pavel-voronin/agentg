@@ -53,7 +53,6 @@ export function createHistorySyncController(
         eventBus.publish(
           createIntegrationEvent({
             data: { reason: currentReason },
-            source: 'history',
             type: 'history.sync.accepted'
           })
         );
@@ -75,7 +74,6 @@ export function createHistorySyncController(
                 error: message,
                 reason: currentReason
               },
-              source: 'history',
               type: 'history.sync.failed'
             })
           );

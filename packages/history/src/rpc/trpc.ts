@@ -37,7 +37,6 @@ export type HistoryRpcContextRuntime = {
   eventBus?: EventBus | undefined;
 };
 
-const HISTORY_RPC_SOURCE = 'history';
 const HISTORY_RPC_TARGET_PREFIX = 'history';
 
 export function createHistoryRpcContext(
@@ -85,7 +84,6 @@ const lifecycleMiddleware = historyRpc.middleware(
         createRpcCallStartedEvent({
           callId,
           input: eventInput,
-          source: HISTORY_RPC_SOURCE,
           startedAt,
           target
         })
@@ -103,7 +101,6 @@ const lifecycleMiddleware = historyRpc.middleware(
           callId,
           input: eventInput,
           progress: progressData,
-          source: HISTORY_RPC_SOURCE,
           startedAt,
           target
         })
@@ -130,7 +127,6 @@ const lifecycleMiddleware = historyRpc.middleware(
             callId,
             error: errorFromUnknown(result.error),
             input: eventInput,
-            source: HISTORY_RPC_SOURCE,
             startedAt,
             target
           })
@@ -146,7 +142,6 @@ const lifecycleMiddleware = historyRpc.middleware(
           callId,
           input: eventInput,
           output: result.data,
-          source: HISTORY_RPC_SOURCE,
           startedAt,
           target
         })

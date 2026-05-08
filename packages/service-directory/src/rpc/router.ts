@@ -54,7 +54,6 @@ export function publishServiceDirectoryChanged(
       data: {
         version
       },
-      source: 'service-directory',
       type: SERVICE_DIRECTORY_CHANGED_EVENT
     })
   );

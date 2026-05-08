@@ -420,7 +420,6 @@ function emitHistoryEvent(
   options.publishEvent?.(
     createIntegrationEvent({
       data,
-      source: 'history',
       type
     })
   );

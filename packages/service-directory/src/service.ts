@@ -1,8 +1,10 @@
 import type { Server } from 'node:http';
 
 import type { EventBus } from '@agentg/events/bus';
+import { createValidatedEventBus } from '@agentg/events/validated-bus';
 
 import type { ServiceDirectoryServiceConfig } from './config.js';
+import { SERVICE_DIRECTORY_CHANGED_EVENT } from './rpc/contracts.js';
 import { startServiceDirectoryTrpcServer, stopServiceDirectoryTrpcServer } from './rpc/server.js';
 
 const SERVICE_DIRECTORY_SHUTDOWN_FORCE_EXIT_MS = 4500;
@@ -13,10 +15,14 @@ export async function runServiceDirectoryService(options: {
   eventBus: EventBus;
 }): Promise<void> {
   let rpcServer: Server | undefined;
+  const eventBus = createValidatedEventBus(options.eventBus, {
+    allowedTypes: [SERVICE_DIRECTORY_CHANGED_EVENT],
+    publisher: 'service-directory'
+  });
 
   rpcServer = await startServiceDirectoryTrpcServer({
     bind: options.config.internalRpc,
-    eventBus: options.eventBus,
+    eventBus,
     ttlMs: options.config.leaseTtlMs
   });
 
@@ -35,7 +41,7 @@ export async function runServiceDirectoryService(options: {
     }
 
     const eventBusClosed = await runShutdownStep('service_directory.event_bus_close', () =>
-      options.eventBus.close()
+      eventBus.close()
     );
 
     return stopped && eventBusClosed;

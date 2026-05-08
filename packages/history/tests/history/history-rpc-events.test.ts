@@ -43,7 +43,6 @@ describe('History RPC event behavior', () => {
           chatId: 'chat-a',
           reason: 'manual'
         },
-        source: 'history',
         type: 'history.sync.requested'
       }
     ]);

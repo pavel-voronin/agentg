@@ -9,7 +9,6 @@ Raw events preserve Telegram facts before normalization.
 ```json
 {
   "id": "evt_...",
-  "source": "telegram",
   "telegram_chat_id": "123",
   "telegram_message_id": "456",
   "event_type": "message_created",
@@ -28,4 +27,3 @@ Raw events preserve Telegram facts before normalization.
 - enough metadata to rebuild current message state
 - idempotent ingestion
 - raw TDLib payload retained at least during early development
-

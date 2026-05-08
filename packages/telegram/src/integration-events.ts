@@ -105,7 +105,6 @@ export function createTelegramIntegrationEvents(
     events.push(
       createIntegrationEvent({
         type: 'telegram.chat_folders.updated',
-        source: 'telegram',
         data: {
           folders: update.chatFolders.folders.map(eventChatFolder)
         }
@@ -129,7 +128,6 @@ export function createTelegramIntegrationEvents(
     events.push(
       createIntegrationEvent({
         type: 'telegram.user.updated',
-        source: 'telegram',
         data: {
           user: eventUser(update.user)
         },
@@ -183,7 +181,6 @@ type TelegramEventMessageDelete = {
 function messageEvent(type: string, message: TelegramEventSourceMessage): IntegrationEvent {
   return createIntegrationEvent({
     type,
-    source: 'telegram',
     data: {
       message: compactMessage(message)
     },
@@ -198,7 +195,6 @@ function messageEvent(type: string, message: TelegramEventSourceMessage): Integr
 function contentUpdateEvent(update: TelegramEventSourceMessageContentUpdate): IntegrationEvent {
   return createIntegrationEvent({
     type: 'telegram.message.updated',
-    source: 'telegram',
     data: {
       message: eventMessageUpdate(update)
     },
@@ -213,7 +209,6 @@ function contentUpdateEvent(update: TelegramEventSourceMessageContentUpdate): In
 function deleteEvent(update: TelegramEventSourceMessageDelete): IntegrationEvent {
   return createIntegrationEvent({
     type: 'telegram.message.deleted',
-    source: 'telegram',
     occurredAt: update.deletedAt,
     data: {
       delete: eventMessageDelete(update)
@@ -248,7 +243,6 @@ function chatDirectoryEvent(event: TelegramChatDirectoryEvent): IntegrationEvent
       meta: {
         chatId: event.chatId
       },
-      source: 'telegram',
       type: 'telegram.chat.removed'
     });
   }
@@ -260,7 +254,6 @@ function chatDirectoryEvent(event: TelegramChatDirectoryEvent): IntegrationEvent
     meta: {
       chatId: event.chat.id
     },
-    source: 'telegram',
     type: 'telegram.chat.updated'
   });
 }

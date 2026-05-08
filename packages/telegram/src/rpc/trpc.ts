@@ -37,7 +37,6 @@ export type TelegramRpcContextRuntime = {
   eventBus?: EventBus | undefined;
 };
 
-const TELEGRAM_RPC_SOURCE = 'telegram';
 const TELEGRAM_RPC_TARGET_PREFIX = 'telegram';
 
 export function createTelegramRpcContext(
@@ -85,7 +84,6 @@ const lifecycleMiddleware = telegramRpc.middleware(
         createRpcCallStartedEvent({
           callId,
           input: eventInput,
-          source: TELEGRAM_RPC_SOURCE,
           startedAt,
           target
         })
@@ -103,7 +101,6 @@ const lifecycleMiddleware = telegramRpc.middleware(
           callId,
           input: eventInput,
           progress: progressData,
-          source: TELEGRAM_RPC_SOURCE,
           startedAt,
           target
         })
@@ -130,7 +127,6 @@ const lifecycleMiddleware = telegramRpc.middleware(
             callId,
             error: errorFromUnknown(result.error),
             input: eventInput,
-            source: TELEGRAM_RPC_SOURCE,
             startedAt,
             target
           })
@@ -146,7 +142,6 @@ const lifecycleMiddleware = telegramRpc.middleware(
           callId,
           input: eventInput,
           output: result.data,
-          source: TELEGRAM_RPC_SOURCE,
           startedAt,
           target
         })

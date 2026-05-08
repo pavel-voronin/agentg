@@ -3,7 +3,6 @@ export type ControlPlaneEvent = {
   occurredAt?: Date | string;
   id?: string;
   meta?: unknown;
-  source?: string;
   type?: string;
 };
 

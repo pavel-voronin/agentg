@@ -60,7 +60,8 @@
   neutral prose.
 - If a response lists alternatives for context, it must still name the preferred
   recommendation and explain why it is preferred.
-- Do not use the Russian words "почти" or "примерно" in assistant replies.
+- Do not use the Russian words "почти", "примерно", or "частично" in assistant
+  replies.
 - Do not use uncertainty markers such as "возможно", "вероятно",
   "наверное", "скорее всего", or substitute vague phrasing when the answer can
   be verified directly.

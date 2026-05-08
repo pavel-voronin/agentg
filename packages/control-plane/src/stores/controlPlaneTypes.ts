@@ -1,6 +1,7 @@
 import {
   RPC_CALL_EVENT_LIFECYCLES,
   rpcCallEventTarget,
+  rpcCallEventTypesForProcedure,
   rpcCallEventType
 } from '@agentg/rpc/call-event-types';
 import type { RpcCallEventSuffix } from '@agentg/rpc/call-event-types';
@@ -123,6 +124,22 @@ export type EventFiltersState = {
   types: Record<string, boolean>;
 };
 
+export type EventCatalogProcedure = {
+  kind: 'mutation' | 'query';
+  name: string;
+};
+
+export type EventCatalogService = {
+  events: string[];
+  procedures: EventCatalogProcedure[];
+  slug: string;
+};
+
+export type EventCatalogState = {
+  services: EventCatalogService[];
+  version: number;
+};
+
 export type EventFilterTypeView = {
   enabled: boolean;
   groupId: string;
@@ -185,7 +202,7 @@ export type EventFiltersPanelView = {
 
 export type EventsPanelMode = 'events' | 'filters' | 'settings';
 
-export { RPC_CALL_EVENT_LIFECYCLES, rpcCallEventTarget };
+export { RPC_CALL_EVENT_LIFECYCLES, rpcCallEventTarget, rpcCallEventTypesForProcedure };
 
 export function rpcCallLifecycleEventType(target: string, suffix: RpcCallEventSuffix): string {
   return rpcCallEventType(target, suffix);

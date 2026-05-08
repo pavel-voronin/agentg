@@ -2,6 +2,8 @@ import type { TelegramDatabase as AppDatabase } from './database.js';
 import { createServiceDirectoryClient } from '@agentg/service-directory/rpc';
 import type { EventBus } from '@agentg/events/bus';
 import { createIntegrationEvent } from '@agentg/events/envelope';
+import { createValidatedEventBus } from '@agentg/events/validated-bus';
+import { serviceManifestEventTypes } from '@agentg/rpc/call-event-types';
 import {
   createTelegramIntegrationEvents,
   type TelegramChatDirectoryEvent
@@ -71,6 +73,11 @@ const TELEGRAM_SHUTDOWN_FORCE_EXIT_MS = 4500;
 const TELEGRAM_SHUTDOWN_STEP_TIMEOUT_MS = 2000;
 
 export async function runTelegramIngestion(options: TelegramIngestionOptions): Promise<void> {
+  const serviceManifest = createTelegramServiceManifest({ rpcUrl: options.serviceRpcUrl });
+  const eventBus = createValidatedEventBus(options.eventBus, {
+    allowedTypes: serviceManifestEventTypes(serviceManifest),
+    publisher: 'telegram'
+  });
   let telegramRpcServer: Awaited<ReturnType<typeof startTelegramTrpcServer>> | undefined;
   let serviceDirectory: ReturnType<typeof createServiceDirectoryClient> | undefined;
   let tdlibStatusHeartbeat: ReturnType<typeof setInterval> | undefined;
@@ -86,7 +93,7 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
     client = await createTelegramClient(options.telegram);
     const activeClient = client;
     const persistenceStats = createPersistenceStats();
-    tdlibStatus = createTdlibStatusTracker(options.eventBus);
+    tdlibStatus = createTdlibStatusTracker(eventBus);
     const activeTdlibStatus = tdlibStatus;
 
     activeClient.on('error', (error: unknown) => {
@@ -95,30 +102,30 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
     activeClient.on('update', (update: unknown) => {
       logSafeTelegramUpdate(update);
       handleTdlibConnectionUpdate(update, activeTdlibStatus);
-      void persistLiveUpdate(options.database, update, persistenceStats, options.eventBus);
+      void persistLiveUpdate(options.database, update, persistenceStats, eventBus);
     });
 
-    await publishTelegramOperationEvents(options.eventBus, 'login', {}, () => activeClient.login());
-    await persistAndLogAuthenticatedClient(options.database, activeClient, options.eventBus);
+    await publishTelegramOperationEvents(eventBus, 'login', {}, () => activeClient.login());
+    await persistAndLogAuthenticatedClient(options.database, activeClient, eventBus);
     activeTdlibStatus.markAuthenticated(true);
     activeTdlibStatus.markConnectionState('connectionStateReady');
     tdlibStatusHeartbeat = startTdlibStatusHeartbeat(activeTdlibStatus);
-    await syncInitialChats(options.database, activeClient, options.eventBus);
+    await syncInitialChats(options.database, activeClient, eventBus);
 
     telegramRpcServer = await startTelegramTrpcServer({
       bind: options.internalRpc,
       client: activeClient,
       database: options.database,
-      eventBus: options.eventBus
+      eventBus
     });
     serviceDirectory = createServiceDirectoryClient({
-      eventBus: options.eventBus,
+      eventBus,
       onTopologyFailure: (error) => {
         requestProcessShutdown('telegram.topology_failure', error);
       },
       url: options.services.serviceDirectory.url
     });
-    await serviceDirectory.join(createTelegramServiceManifest({ rpcUrl: options.serviceRpcUrl }));
+    await serviceDirectory.join(serviceManifest);
     startupComplete = true;
 
     console.log(JSON.stringify({ event: 'telegram.ingestion_ready' }));
@@ -141,10 +148,10 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
       serviceDirectory?.close();
       serviceDirectory = undefined;
       const tdlibClosed = await runShutdownStep('telegram.tdlib.close', () =>
-        publishTdlibOperationEvents(options.eventBus, 'close', {}, () => activeClient.close())
+        publishTdlibOperationEvents(eventBus, 'close', {}, () => activeClient.close())
       );
       const eventBusClosed = await runShutdownStep('telegram.event_bus_close', () =>
-        options.eventBus.close()
+        eventBus.close()
       );
 
       return telegramRpcClosed && tdlibClosed && eventBusClosed;
@@ -153,7 +160,7 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
     if (!startupComplete) {
       await cleanupTelegramStartupFailure({
         client,
-        eventBus: options.eventBus,
+        eventBus,
         serviceDirectory,
         tdlibStatus,
         tdlibStatusHeartbeat,
@@ -229,7 +236,6 @@ function createTdlibStatusTracker(eventBus: EventBus): TdlibStatusTracker {
           authenticated: state.authenticated,
           connected: state.connected
         },
-        source: 'telegram',
         type: 'telegram.status'
       })
     );
