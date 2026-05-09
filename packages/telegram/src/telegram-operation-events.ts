@@ -4,14 +4,23 @@ import type { EventBus } from '@agentg/events/bus';
 import { createIntegrationEvent } from '@agentg/events/envelope';
 import { toJsonValue } from '@agentg/events/json';
 
+import type { TelegramTdlibPriority } from './telegram-tdlib-priority.js';
+import type { TelegramTdlibQueueStats } from './telegram-tdlib-scheduler.js';
+
+export type TdlibInvokeOptions = {
+  priority?: TelegramTdlibPriority | number;
+};
+
 export type TdlibInvoker = {
-  invoke(request: Record<string, unknown>): Promise<unknown>;
+  getQueueStats?(): TelegramTdlibQueueStats;
+  invoke(request: Record<string, unknown>, options?: TdlibInvokeOptions): Promise<unknown>;
 };
 
 export async function invokeTdlibWithEvents(
   eventBus: EventBus,
   client: TdlibInvoker,
-  request: Record<string, unknown>
+  request: Record<string, unknown>,
+  options: TdlibInvokeOptions = {}
 ): Promise<unknown> {
   const method = tdlibMethodName(request._);
   return publishOperationEvents(
@@ -19,9 +28,10 @@ export async function invokeTdlibWithEvents(
     `telegram.tdlib.${sanitizeEventSegment(method)}`,
     method,
     {
+      ...(options.priority === undefined ? {} : { priority: options.priority }),
       request
     },
-    () => client.invoke(request)
+    () => client.invoke(request, options)
   );
 }
 

@@ -257,6 +257,45 @@ describe('Telegram file policy', () => {
     ).toBe('record');
   });
 
+  it('keeps history media indexed without automatic downloads', () => {
+    const [photo] = extractTelegramFileSlots(
+      normalizeTelegramUpdate({
+        _: 'updateNewMessage',
+        message: message({
+          content: {
+            _: 'messagePhoto',
+            photo: {
+              _: 'photo',
+              sizes: [
+                {
+                  _: 'photoSize',
+                  height: 800,
+                  photo: tdFile(6601, 800_000),
+                  width: 800
+                }
+              ]
+            }
+          },
+          id: 36
+        })
+      }) ?? {}
+    );
+
+    expect(photo).toBeDefined();
+    if (photo === undefined) {
+      throw new Error('expected history photo slot');
+    }
+
+    expect(
+      decideTelegramFilePolicy({
+        cause: 'history_fetch',
+        current: null,
+        slot: photo,
+        sourceFingerprint: 'history-photo'
+      }).action
+    ).toBe('record');
+  });
+
   it('keeps failed files idle until an explicit retry request', () => {
     const [photo] = extractTelegramFileSlots(
       normalizeTelegramUpdate({

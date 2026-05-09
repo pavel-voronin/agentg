@@ -26,7 +26,8 @@ export async function startTelegramTrpcServer(
     router: createTelegramRouter({
       client: options.client,
       database: options.database,
-      eventBus: options.eventBus
+      eventBus: options.eventBus,
+      fileIndexer: options.fileIndexer
     }),
     staticAssets: [
       {

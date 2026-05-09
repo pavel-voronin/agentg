@@ -8,7 +8,6 @@ import {
 import type { TelegramRpcRuntime } from '../runtime.js';
 import { rpc } from '../trpc.js';
 import { persistTelegramUpdate } from '../../store.js';
-import { publishTelegramFileQueueUpdated } from '../../telegram-file-worker.js';
 import {
   getLastMessageNoLaterThan,
   invokeTdlib,
@@ -40,7 +39,10 @@ export const fetchPage = mutation((runtime: TelegramRpcRuntime) =>
           runtime.client,
           runtime.eventBus,
           chatId,
-          endAt
+          endAt,
+          {
+            priority: 'p4'
+          }
         );
         const anchorDate = tdMessageDate(anchor);
         const anchorMessageId = tdMessageId(anchor);
@@ -66,14 +68,21 @@ export const fetchPage = mutation((runtime: TelegramRpcRuntime) =>
       }
 
       const history = asTdObject(
-        await invokeTdlib(runtime.eventBus, runtime.client, {
-          _: 'getChatHistory',
-          chat_id: chatId,
-          from_message_id: cursorMessageId,
-          limit,
-          offset: 0,
-          only_local: false
-        })
+        await invokeTdlib(
+          runtime.eventBus,
+          runtime.client,
+          {
+            _: 'getChatHistory',
+            chat_id: chatId,
+            from_message_id: cursorMessageId,
+            limit,
+            offset: 0,
+            only_local: false
+          },
+          {
+            priority: 'p4'
+          }
+        )
       );
       const messages = Array.isArray(history?.messages) ? history.messages.map(asTdObject) : [];
       const concreteMessages = messages.filter(isTdObject);
@@ -87,7 +96,6 @@ export const fetchPage = mutation((runtime: TelegramRpcRuntime) =>
       }
 
       let storedMessages = 0;
-      let filesChanged = false;
       for (const message of concreteMessages) {
         const messageDate = tdMessageDate(message);
         if (messageDate === undefined || messageDate < startAt || messageDate >= endAt) {
@@ -99,16 +107,11 @@ export const fetchPage = mutation((runtime: TelegramRpcRuntime) =>
           continue;
         }
 
-        const result = await persistTelegramUpdate(runtime.database, normalized, {
-          fileCause: 'history_fetch'
-        });
+        const result = await persistTelegramUpdate(runtime.database, normalized);
+        runtime.fileIndexer.enqueue(normalized, 'history_fetch');
         if (result.message) {
           storedMessages += 1;
         }
-        filesChanged ||= result.files;
-      }
-      if (filesChanged) {
-        await publishTelegramFileQueueUpdated(runtime.database, runtime.eventBus);
       }
 
       const nextCursorMessageId = oldestMessageIdOlderThan(concreteMessages, cursorMessageId);

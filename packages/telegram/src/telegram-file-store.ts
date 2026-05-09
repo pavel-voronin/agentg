@@ -11,6 +11,7 @@ import {
   extractTelegramFileSlots,
   telegramFileSourceFingerprint
 } from './telegram-file-extractor.js';
+import { telegramTdlibPriorities } from './telegram-tdlib-priority.js';
 import {
   decideTelegramFilePolicy,
   type TelegramFilePolicyDecision,
@@ -44,6 +45,7 @@ export type TelegramFileDownloadRow = {
   fileName: string | null;
   latestTdlibFileId: number | null;
   mimeType: string | null;
+  priority: number;
 };
 
 export type StoredCanonicalFile = {
@@ -169,7 +171,11 @@ export async function requestTelegramFile(
   });
 
   if (decision.action === 'enqueue' && row.assetStatus !== 'ready') {
-    await enqueueTelegramFileAssetDownload(database, row.assetKey);
+    await enqueueTelegramFileAssetDownload(
+      database,
+      row.assetKey,
+      downloadPriorityForCause('explicit_request')
+    );
   }
 
   return {
@@ -504,7 +510,7 @@ async function upsertExtractedSlot(
   });
 
   if (decision.action === 'enqueue' && asset.status !== 'ready') {
-    await enqueueTelegramFileAssetDownload(database, assetKey);
+    await enqueueTelegramFileAssetDownload(database, assetKey, downloadPriorityForCause(cause));
   }
 
   const upserted = await database
@@ -596,7 +602,8 @@ async function upsertTelegramFileAsset(
 
 async function enqueueTelegramFileAssetDownload(
   database: AppDatabase,
-  assetKey: string
+  assetKey: string,
+  priority: number
 ): Promise<void> {
   const [job] = await database
     .select({
@@ -609,13 +616,20 @@ async function enqueueTelegramFileAssetDownload(
   if (job === undefined) {
     await database.insert(telegramFileDownloadJobs).values({
       assetKey,
-      priority: 0,
+      priority,
       status: 'queued'
     });
     return;
   }
 
   if (job.status === 'queued' || job.status === 'downloading') {
+    await database
+      .update(telegramFileDownloadJobs)
+      .set({
+        priority: sql`greatest(${telegramFileDownloadJobs.priority}, ${priority})`,
+        updatedAt: sql`now()`
+      })
+      .where(eq(telegramFileDownloadJobs.assetKey, assetKey));
     return;
   }
 
@@ -624,10 +638,25 @@ async function enqueueTelegramFileAssetDownload(
     .set({
       claimedAt: null,
       lastError: null,
+      priority: sql`greatest(${telegramFileDownloadJobs.priority}, ${priority})`,
       status: 'queued',
       updatedAt: sql`now()`
     })
     .where(eq(telegramFileDownloadJobs.assetKey, assetKey));
+}
+
+function downloadPriorityForCause(cause: TelegramMediaDownloadPolicyCause): number {
+  switch (cause) {
+    case 'explicit_request':
+      return telegramTdlibPriorities.p1;
+    case 'operator_page':
+      return telegramTdlibPriorities.p2;
+    case 'initialization':
+    case 'live_update':
+      return telegramTdlibPriorities.p3;
+    case 'history_fetch':
+      return telegramTdlibPriorities.p4;
+  }
 }
 
 async function readTelegramFileDownloadRow(
@@ -640,10 +669,15 @@ async function readTelegramFileDownloadRow(
       byteSize: telegramFileAssets.byteSize,
       fileName: telegramFiles.fileName,
       latestTdlibFileId: telegramFileAssets.latestTdlibFileId,
-      mimeType: telegramFiles.mimeType
+      mimeType: telegramFiles.mimeType,
+      priority: telegramFileDownloadJobs.priority
     })
-    .from(telegramFileAssets)
-    .leftJoin(telegramFiles, eq(telegramFiles.assetKey, telegramFileAssets.assetKey))
+    .from(telegramFileDownloadJobs)
+    .innerJoin(
+      telegramFileAssets,
+      eq(telegramFileAssets.assetKey, telegramFileDownloadJobs.assetKey)
+    )
+    .leftJoin(telegramFiles, eq(telegramFiles.assetKey, telegramFileDownloadJobs.assetKey))
     .where(eq(telegramFileAssets.assetKey, assetKey))
     .limit(1);
 

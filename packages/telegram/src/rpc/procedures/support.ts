@@ -26,7 +26,7 @@ import {
   readTelegramFileRefsForOwners,
   type TelegramFileOwnerKey
 } from '../../telegram-file-store.js';
-import { invokeTdlibWithEvents } from '../../telegram-operation-events.js';
+import { invokeTdlibWithEvents, type TdlibInvokeOptions } from '../../telegram-operation-events.js';
 import type {
   TelegramChatDirectoryEntry,
   TelegramChatPlacement,
@@ -145,15 +145,21 @@ export async function getLastMessageNoLaterThan(
   client: TelegramClient,
   eventBus: EventBus,
   chatId: number,
-  end: Date
+  end: Date,
+  options: TdlibInvokeOptions = {}
 ): Promise<TdObject | undefined> {
   try {
     return asTdObject(
-      await invokeTdlib(eventBus, client, {
-        _: 'getChatMessageByDate',
-        chat_id: chatId,
-        date: Math.floor((end.getTime() - 1) / 1000)
-      })
+      await invokeTdlib(
+        eventBus,
+        client,
+        {
+          _: 'getChatMessageByDate',
+          chat_id: chatId,
+          date: Math.floor((end.getTime() - 1) / 1000)
+        },
+        options
+      )
     );
   } catch (error) {
     if (isTdlibNotFound(error)) {
@@ -167,11 +173,12 @@ export async function getLastMessageNoLaterThan(
 export async function invokeTdlib(
   eventBus: EventBus,
   client: TelegramClient,
-  request: TdObject
+  request: TdObject,
+  options: TdlibInvokeOptions = {}
 ): Promise<unknown> {
   for (;;) {
     try {
-      return await invokeTdlibWithEvents(eventBus, client, request);
+      return await invokeTdlibWithEvents(eventBus, client, request, options);
     } catch (error) {
       const floodWaitSeconds = parseFloodWaitSeconds(error);
       if (floodWaitSeconds === undefined) {
@@ -543,11 +550,16 @@ async function loadAllChatsFromList(
 ): Promise<void> {
   for (;;) {
     try {
-      await invokeTdlib(eventBus, client, {
-        _: 'loadChats',
-        chat_list: toTdChatList(chatList),
-        limit: batchSize
-      });
+      await invokeTdlib(
+        eventBus,
+        client,
+        {
+          _: 'loadChats',
+          chat_list: toTdChatList(chatList),
+          limit: batchSize
+        },
+        { priority: 'p0' }
+      );
     } catch (error) {
       if (isTdlibNotFound(error)) {
         return;
@@ -567,11 +579,16 @@ async function getChatIds(
   let chats: TdObject | undefined;
   try {
     chats = asTdObject(
-      await invokeTdlib(eventBus, client, {
-        _: 'getChats',
-        chat_list: toTdChatList(chatList),
-        limit
-      })
+      await invokeTdlib(
+        eventBus,
+        client,
+        {
+          _: 'getChats',
+          chat_list: toTdChatList(chatList),
+          limit
+        },
+        { priority: 'p0' }
+      )
     );
   } catch (error) {
     if (isOptionalChatListNotFound(chatList, error)) {
@@ -603,7 +620,9 @@ async function getChatOrUndefined(
   chatId: number
 ): Promise<TdObject | undefined> {
   try {
-    return asTdObject(await invokeTdlib(eventBus, client, { _: 'getChat', chat_id: chatId }));
+    return asTdObject(
+      await invokeTdlib(eventBus, client, { _: 'getChat', chat_id: chatId }, { priority: 'p0' })
+    );
   } catch (error) {
     if (isTdlibNotFound(error)) {
       return undefined;

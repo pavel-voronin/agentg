@@ -91,7 +91,15 @@ function createCaller(database: ReturnType<typeof createFakeDatabase>) {
   return createTelegramRouter({
     client: {} as never,
     database: database as unknown as TelegramDatabase,
-    eventBus: {} as never
+    eventBus: {} as never,
+    fileIndexer: {
+      close() {
+        return;
+      },
+      enqueue() {
+        return;
+      }
+    }
   }).createCaller({});
 }
 

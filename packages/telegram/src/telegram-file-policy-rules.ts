@@ -18,25 +18,25 @@ export type TelegramMediaDownloadPolicyCause =
 
 export const telegramAutomaticDownloadPolicyRules = [
   {
-    causes: ['initialization', 'live_update', 'operator_page', 'history_fetch'],
+    causes: ['initialization', 'live_update'],
     maxBytes: null,
     mediaKind: 'avatar',
     name: 'chat avatars'
   },
   {
-    causes: ['live_update', 'operator_page', 'history_fetch'],
+    causes: ['live_update', 'operator_page'],
     maxBytes: 1 * TELEGRAM_MEDIA_MEGABYTE,
     mediaKind: 'photo',
     name: 'photos up to 1 MB'
   },
   {
-    causes: ['live_update', 'operator_page', 'history_fetch'],
+    causes: ['live_update', 'operator_page'],
     maxBytes: 1 * TELEGRAM_MEDIA_MEGABYTE,
     mediaKind: 'thumbnail',
     name: 'media thumbnails up to 1 MB'
   },
   {
-    causes: ['live_update', 'operator_page', 'history_fetch'],
+    causes: ['live_update', 'operator_page'],
     maxBytes: 5 * TELEGRAM_MEDIA_MEGABYTE,
     mediaKind: 'video',
     name: 'videos up to 5 MB'

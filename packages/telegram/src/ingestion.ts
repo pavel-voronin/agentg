@@ -30,6 +30,7 @@ import {
   TELEGRAM_CONTROL_PLANE_ASSETS_ROOT
 } from './rpc/server.js';
 import { persistCurrentTelegramUser, persistTelegramUpdate } from './store.js';
+import { startTelegramFileIndexer, type TelegramFileIndexer } from './telegram-file-indexer.js';
 import { applyTelegramFileProgressUpdate } from './telegram-file-store.js';
 import {
   createTelegramClient,
@@ -38,6 +39,7 @@ import {
 } from './tdlib.js';
 import {
   invokeTdlibWithEvents,
+  type TdlibInvokeOptions,
   publishTdlibOperationEvents,
   publishTelegramOperationEvents
 } from './telegram-operation-events.js';
@@ -47,6 +49,10 @@ import {
   startTelegramFileDownloadWorker,
   type TelegramFileDownloadWorker
 } from './telegram-file-worker.js';
+import {
+  createTelegramTdlibScheduler,
+  type TelegramTdlibScheduler
+} from './telegram-tdlib-scheduler.js';
 
 export type TelegramIngestionOptions = {
   database: AppDatabase;
@@ -105,7 +111,9 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
   let controlPlaneAssets: ControlPlaneAssetVersionSubscription | undefined;
   let serviceDirectory: ReturnType<typeof createServiceDirectoryClient> | undefined;
   let tdlibStatusHeartbeat: ReturnType<typeof setInterval> | undefined;
+  let fileIndexer: TelegramFileIndexer | undefined;
   let fileDownloadWorker: TelegramFileDownloadWorker | undefined;
+  let tdlibScheduler: TelegramTdlibScheduler | undefined;
   let client: TelegramClient | undefined;
   let tdlibStatus: TdlibStatusTracker | undefined;
   let startupComplete = false;
@@ -117,6 +125,13 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
 
     client = await createTelegramClient(options.telegram);
     const activeClient = client;
+    tdlibScheduler = createTelegramTdlibScheduler(activeClient);
+    const activeTdlibScheduler = tdlibScheduler;
+    fileIndexer = startTelegramFileIndexer({
+      database: options.database,
+      eventBus
+    });
+    const activeFileIndexer = fileIndexer;
     const persistenceStats = createPersistenceStats();
     tdlibStatus = createTdlibStatusTracker(eventBus);
     const activeTdlibStatus = tdlibStatus;
@@ -127,17 +142,23 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
     activeClient.on('update', (update: unknown) => {
       logSafeTelegramUpdate(update);
       handleTdlibConnectionUpdate(update, activeTdlibStatus);
-      void persistLiveUpdate(options.database, update, persistenceStats, eventBus);
+      void persistLiveUpdate(
+        options.database,
+        update,
+        persistenceStats,
+        eventBus,
+        activeFileIndexer
+      );
     });
 
     await publishTelegramOperationEvents(eventBus, 'login', {}, () => activeClient.login());
-    await persistAndLogAuthenticatedClient(options.database, activeClient, eventBus);
+    await persistAndLogAuthenticatedClient(options.database, activeTdlibScheduler, eventBus);
     activeTdlibStatus.markAuthenticated(true);
     activeTdlibStatus.markConnectionState('connectionStateReady');
     tdlibStatusHeartbeat = startTdlibStatusHeartbeat(activeTdlibStatus);
-    await syncInitialChats(options.database, activeClient, eventBus);
+    await syncInitialChats(options.database, activeTdlibScheduler, eventBus, activeFileIndexer);
     fileDownloadWorker = startTelegramFileDownloadWorker({
-      client: activeClient,
+      client: activeTdlibScheduler,
       database: options.database,
       eventBus,
       filesDirectory: options.telegram.filesDirectory
@@ -146,9 +167,10 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
 
     telegramRpcServer = await startTelegramTrpcServer({
       bind: options.internalRpc,
-      client: activeClient,
+      client: activeTdlibScheduler,
       database: options.database,
       eventBus,
+      fileIndexer: activeFileIndexer,
       filesDirectory: options.telegram.filesDirectory
     });
     serviceDirectory = createServiceDirectoryClient({
@@ -194,6 +216,10 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
       }
       fileDownloadWorker?.close();
       fileDownloadWorker = undefined;
+      fileIndexer?.close();
+      fileIndexer = undefined;
+      activeTdlibScheduler.close();
+      tdlibScheduler = undefined;
       activeTdlibStatus.markDisconnected();
       const activeTelegramRpcServer = telegramRpcServer;
       const telegramRpcClosed =
@@ -222,9 +248,11 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
         client,
         controlPlaneAssets,
         eventBus,
+        fileIndexer,
         fileDownloadWorker,
         serviceDirectory,
         tdlibStatus,
+        tdlibScheduler,
         tdlibStatusHeartbeat,
         telegramRpcServer
       });
@@ -237,9 +265,11 @@ async function cleanupTelegramStartupFailure(options: {
   client: TelegramClient | undefined;
   controlPlaneAssets: ControlPlaneAssetVersionSubscription | undefined;
   eventBus: EventBus;
+  fileIndexer: TelegramFileIndexer | undefined;
   fileDownloadWorker: TelegramFileDownloadWorker | undefined;
   serviceDirectory: ReturnType<typeof createServiceDirectoryClient> | undefined;
   tdlibStatus: TdlibStatusTracker | undefined;
+  tdlibScheduler: TelegramTdlibScheduler | undefined;
   tdlibStatusHeartbeat: ReturnType<typeof setInterval> | undefined;
   telegramRpcServer: Awaited<ReturnType<typeof startTelegramTrpcServer>> | undefined;
 }): Promise<void> {
@@ -248,6 +278,8 @@ async function cleanupTelegramStartupFailure(options: {
     clearInterval(options.tdlibStatusHeartbeat);
   }
   options.fileDownloadWorker?.close();
+  options.fileIndexer?.close();
+  options.tdlibScheduler?.close();
   await runShutdownStep('telegram.tdlib_status_startup_disconnect', () =>
     Promise.resolve(options.tdlibStatus?.markDisconnected())
   );
@@ -328,21 +360,26 @@ function createTdlibStatusTracker(eventBus: EventBus): TdlibStatusTracker {
 
 async function persistAndLogAuthenticatedClient(
   database: AppDatabase,
-  client: TelegramClient,
+  client: TelegramTdlibScheduler,
   eventBus: EventBus
 ): Promise<void> {
-  const me = asTdObject(await invokeTdlib(eventBus, client, { _: 'getMe' }));
+  const me = asTdObject(await invokeTdlib(eventBus, client, { _: 'getMe' }, { priority: 'p0' }));
   const currentUser = normalizeUser(me, { isSelf: true });
   if (currentUser !== undefined) {
     await persistCurrentTelegramUser(database, currentUser);
   }
 
   const chats = asTdObject(
-    await invokeTdlib(eventBus, client, {
-      _: 'getChats',
-      chat_list: { _: 'chatListMain' },
-      limit: 20
-    })
+    await invokeTdlib(
+      eventBus,
+      client,
+      {
+        _: 'getChats',
+        chat_list: { _: 'chatListMain' },
+        limit: 20
+      },
+      { priority: 'p0' }
+    )
   );
 
   console.log(
@@ -358,7 +395,8 @@ async function persistLiveUpdate(
   database: AppDatabase,
   update: unknown,
   stats: PersistenceStats,
-  eventBus: EventBus
+  eventBus: EventBus,
+  fileIndexer: TelegramFileIndexer
 ): Promise<void> {
   const normalized = normalizeTelegramUpdate(update);
   const progressOwners = await applyTelegramFileProgressUpdate(database, update);
@@ -372,9 +410,8 @@ async function persistLiveUpdate(
     return;
   }
 
-  const result = await persistTelegramUpdate(database, normalized, {
-    fileCause: 'live_update'
-  });
+  const result = await persistTelegramUpdate(database, normalized);
+  fileIndexer.enqueue(normalized, 'live_update');
   const chatDirectoryEvent =
     normalized.chat === undefined
       ? undefined
@@ -398,11 +435,10 @@ async function persistLiveUpdate(
     eventBus.publish(event);
   }
 
-  const visibleFileOwners = uniqueFileOwners([...result.fileOwners, ...progressOwners]);
-  for (const owner of visibleFileOwners) {
+  for (const owner of progressOwners) {
     await publishTelegramFileOwnerUpdated(database, eventBus, owner);
   }
-  if (result.files || progressOwners.length > 0) {
+  if (progressOwners.length > 0) {
     await publishTelegramFileQueueUpdated(database, eventBus);
   }
 
@@ -433,12 +469,6 @@ function createPersistenceStats(): PersistenceStats {
   };
 }
 
-function uniqueFileOwners<T extends { ownerId: string; ownerModel: string }>(owners: T[]): T[] {
-  return [
-    ...new Map(owners.map((owner) => [`${owner.ownerModel}:${owner.ownerId}`, owner])).values()
-  ];
-}
-
 function handleTdlibConnectionUpdate(update: unknown, status: TdlibStatusTracker): void {
   const connectionState = extractTdlibConnectionState(update);
   if (connectionState === undefined) {
@@ -450,8 +480,9 @@ function handleTdlibConnectionUpdate(update: unknown, status: TdlibStatusTracker
 
 async function syncInitialChats(
   database: AppDatabase,
-  client: TelegramClient,
+  client: TelegramTdlibScheduler,
   eventBus: EventBus,
+  fileIndexer: TelegramFileIndexer,
   limit = 100
 ): Promise<void> {
   const chatIds = await getMainChatIds(eventBus, client, limit);
@@ -459,23 +490,18 @@ async function syncInitialChats(
 
   for (const chatId of chatIds) {
     const chat = normalizeChat(
-      asTdObject(await invokeTdlib(eventBus, client, { _: 'getChat', chat_id: chatId }))
+      asTdObject(
+        await invokeTdlib(eventBus, client, { _: 'getChat', chat_id: chatId }, { priority: 'p0' })
+      )
     );
-    if (
-      chat !== undefined &&
-      (
-        await persistTelegramUpdate(
-          database,
-          {
-            chat
-          },
-          {
-            fileCause: 'initialization'
-          }
-        )
-      ).chat
-    ) {
-      storedChatCount += 1;
+    if (chat !== undefined) {
+      const result = await persistTelegramUpdate(database, {
+        chat
+      });
+      fileIndexer.enqueue({ chat }, 'initialization');
+      if (result.chat) {
+        storedChatCount += 1;
+      }
     }
   }
 
@@ -489,7 +515,7 @@ async function syncInitialChats(
 
 async function getMainChatIds(
   eventBus: EventBus,
-  client: TelegramClient,
+  client: TelegramTdlibScheduler,
   limit: number
 ): Promise<number[]> {
   return getChatIds(eventBus, client, 'main', limit);
@@ -497,18 +523,23 @@ async function getMainChatIds(
 
 async function getChatIds(
   eventBus: EventBus,
-  client: TelegramClient,
+  client: TelegramTdlibScheduler,
   chatList: ChatListKind,
   limit: number
 ): Promise<number[]> {
   let chats: TdObject | undefined;
   try {
     chats = asTdObject(
-      await invokeTdlib(eventBus, client, {
-        _: 'getChats',
-        chat_list: toTdChatList(chatList),
-        limit
-      })
+      await invokeTdlib(
+        eventBus,
+        client,
+        {
+          _: 'getChats',
+          chat_list: toTdChatList(chatList),
+          limit
+        },
+        { priority: 'p0' }
+      )
     );
   } catch (error) {
     if (chatList === 'archive' && isTdlibNotFound(error)) {
@@ -527,12 +558,13 @@ function toTdChatList(chatList: ChatListKind): TdObject {
 
 async function invokeTdlib(
   eventBus: EventBus,
-  client: TelegramClient,
-  request: TdObject
+  client: TelegramTdlibScheduler,
+  request: TdObject,
+  options: TdlibInvokeOptions = {}
 ): Promise<unknown> {
   for (;;) {
     try {
-      return await invokeTdlibWithEvents(eventBus, client, request);
+      return await invokeTdlibWithEvents(eventBus, client, request, options);
     } catch (error) {
       const floodWaitSeconds = parseFloodWaitSeconds(error);
       if (floodWaitSeconds === undefined) {
