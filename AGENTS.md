@@ -60,6 +60,22 @@
 
 ## Communication Rules
 
+- A user question is a request for an answer only.
+- Do not interpret questions as implementation requests, bug reports requiring
+  changes, or implicit permission to edit files.
+- Do not start code changes, file edits, refactors, tests, commits, or
+  implementation work unless the user gives an explicit action instruction.
+- Explicit action instructions include direct commands such as "change", "edit",
+  "implement", "fix", "remove", "add", "commit", "run", or equivalent wording.
+- If the user asks why something works a certain way, explain the current
+  behavior and the reasoning. Do not change the behavior unless explicitly
+  instructed.
+- If the user points out a problem in a question, answer the question first. Do
+  not treat the problem statement as authorization to fix it.
+- If the user's intent is ambiguous, default to answering only. Ask for
+  confirmation before making changes.
+- Do not treat frustrated wording, criticism, or direct language as an
+  implementation request. Respond to the technical content only.
 - When the user asks about an architectural decision, present viable options and
   mark one option as the preferred recommendation. The user makes the decision.
 - Do not present architecturally forbidden designs as viable options. When
