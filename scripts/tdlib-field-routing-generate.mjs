@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 
 const ROOT = new URL('../', import.meta.url);
-const DATA_MODEL_PATH = new URL('docs/04-data/data-model.md', ROOT);
+const DOMAIN_MODEL_CATALOG_PATH = new URL('docs/04-data/tdlib-domain-model.catalog.json', ROOT);
 const CATALOG_PATH = new URL('docs/04-data/tdlib-field-routing.catalog.json', ROOT);
 const MARKDOWN_PATH = new URL('docs/04-data/tdlib-field-routing.generated.md', ROOT);
 
@@ -34,11 +34,12 @@ if (schemaHash !== SCHEMA_SHA256) {
   throw new Error(`TDLib schema hash mismatch: expected ${SCHEMA_SHA256}, got ${schemaHash}`);
 }
 
-const dataModel = await readFile(DATA_MODEL_PATH, 'utf8');
+const domainModelCatalog = JSON.parse(await readFile(DOMAIN_MODEL_CATALOG_PATH, 'utf8'));
 const parsed = parseTdSchema(schemaText);
-const logicalToPhysical = extractLogicalProjectionMapping(dataModel);
-const physicalTables = extractPhysicalTables(dataModel);
-const updateToLogicalProjection = extractUpdateProjectionCoverage(dataModel);
+validateDomainModelCatalog(domainModelCatalog);
+const logicalToPhysical = logicalProjectionMappingFromCatalog(domainModelCatalog);
+const physicalTables = domainModelCatalog.physicalTables.map((table) => table.name).sort();
+const updateToLogicalProjection = updateProjectionCoverageFromCatalog(domainModelCatalog);
 const validTables = new Set([...physicalTables, ...CONTROL_TABLES]);
 
 const objectFieldRoutes = parsed.constructors.flatMap((constructor) =>
@@ -57,7 +58,6 @@ validateRoutes({
 });
 
 const catalog = {
-  generatedAt: new Date().toISOString(),
   schema: {
     commit: SCHEMA_COMMIT,
     sha256: SCHEMA_SHA256,
@@ -164,70 +164,34 @@ function parseTlFields(fieldsText) {
     });
 }
 
-function extractPhysicalTables(markdown) {
-  const section = extractSection(
-    markdown,
-    '## Physical Storage Plan',
-    '## Logical Projection Mapping'
-  );
-  const tables = [];
-  for (const line of section.split('\n')) {
-    const match = line.match(/^\| `(telegram_[a-z0-9_]+)` \|/);
-    if (match !== null) {
-      tables.push(match[1]);
-    }
+function validateDomainModelCatalog(catalog) {
+  if (catalog.schema.commit !== SCHEMA_COMMIT) {
+    throw new Error(
+      `Domain model catalog TDLib commit mismatch: expected ${SCHEMA_COMMIT}, got ${catalog.schema.commit}`
+    );
   }
-  return [...new Set(tables)].sort();
+  if (catalog.schema.sha256 !== SCHEMA_SHA256) {
+    throw new Error(
+      `Domain model catalog TDLib SHA mismatch: expected ${SCHEMA_SHA256}, got ${catalog.schema.sha256}`
+    );
+  }
 }
 
-function extractLogicalProjectionMapping(markdown) {
-  const section = extractSection(
-    markdown,
-    '## Logical Projection Mapping',
-    '## Update Projection Coverage'
+function logicalProjectionMappingFromCatalog(catalog) {
+  return new Map(
+    catalog.logicalProjectionMappings.map((mapping) => [
+      mapping.logicalProjection,
+      mapping.physicalTable
+    ])
   );
-  const mapping = new Map();
-  for (const line of section.split('\n')) {
-    const match = line.match(/^\| `(telegram_[a-z0-9_]+)` \| `(telegram_[a-z0-9_]+)` \|/);
-    if (match !== null) {
-      mapping.set(match[1], match[2]);
-    }
-  }
-  return mapping;
 }
 
-function extractUpdateProjectionCoverage(markdown) {
-  const section = extractSection(
-    markdown,
-    '## Update Projection Coverage',
-    '## MessageContent Coverage'
+function updateProjectionCoverageFromCatalog(catalog) {
+  return new Map(
+    catalog.updateProjectionCoverage.flatMap((projection) =>
+      projection.updates.map((update) => [update, projection.projectionGroup])
+    )
   );
-  const mapping = new Map();
-  for (const line of section.split('\n')) {
-    const match = line.match(/^\| `(telegram_[a-z0-9_]+)` \| \d+ \| (.*) \|$/);
-    if (match === null) {
-      continue;
-    }
-
-    for (const update of [...match[2].matchAll(/`(update[A-Za-z0-9_]+)`/g)].map(
-      (entry) => entry[1]
-    )) {
-      mapping.set(update, match[1]);
-    }
-  }
-  return mapping;
-}
-
-function extractSection(text, startHeading, endHeading) {
-  const startIndex = text.indexOf(startHeading);
-  if (startIndex === -1) {
-    throw new Error(`Missing section: ${startHeading}`);
-  }
-  const endIndex = text.indexOf(endHeading, startIndex + startHeading.length);
-  if (endIndex === -1) {
-    throw new Error(`Missing section end: ${endHeading}`);
-  }
-  return text.slice(startIndex, endIndex);
 }
 
 function routeObjectField(constructor, field) {

@@ -1,0 +1,1450 @@
+{
+  "schema": {
+    "source": "https://raw.githubusercontent.com/tdlib/td/49b3bcbb6bfebf2ed44dd9f25102d2e1a94a58c4/td/generate/scheme/td_api.tl",
+    "commit": "49b3bcbb6bfebf2ed44dd9f25102d2e1a94a58c4",
+    "sha256": "1a0d13cebb0c04a866da3aac55bb6b47b084b4a789877ab019348c5374f4f2d2"
+  },
+  "counts": {
+    "logicalProjections": 132,
+    "physicalDomainTables": 29,
+    "projectionGroups": 16,
+    "procedureResponseFamilies": 12,
+    "procedureResponseMethods": 990,
+    "procedureResponseReturnTypeFamilies": 279,
+    "updateConstructors": 180,
+    "updateProjectionGroups": 14,
+    "messageContentCoverageFamilies": 9
+  },
+  "controlTables": [
+    {
+      "name": "telegram_schema_versions",
+      "purpose": "Pinned TDLib schema version, generated coverage counts, and migration gate."
+    },
+    {
+      "name": "telegram_projection_gaps",
+      "purpose": "Bounded quarantine for inputs that could not be projected."
+    },
+    {
+      "name": "telegram_procedure_observations",
+      "purpose": "Normalized procedure-call observation records for explicit TDLib calls."
+    }
+  ],
+  "projectionGroups": [
+    {
+      "name": "Account state",
+      "logicalProjections": [
+        "telegram_account_state",
+        "telegram_account_options",
+        "telegram_autosave_settings",
+        "telegram_global_counters"
+      ],
+      "purpose": "Account-level counters, options, autosave, unread totals, premium/star/ton balances when not chat-scoped."
+    },
+    {
+      "name": "Client state",
+      "logicalProjections": [
+        "telegram_client_state",
+        "telegram_authorization_state",
+        "telegram_connection_state",
+        "telegram_service_notifications",
+        "telegram_oauth_requests",
+        "telegram_terms",
+        "telegram_suggested_actions",
+        "telegram_speed_limits"
+      ],
+      "purpose": "TDLib runtime and user-facing client state."
+    },
+    {
+      "name": "Users",
+      "logicalProjections": [
+        "telegram_users",
+        "telegram_user_status",
+        "telegram_user_full_info",
+        "telegram_user_privacy_rules",
+        "telegram_contacts",
+        "telegram_close_birthdays",
+        "telegram_user_profile_media"
+      ],
+      "purpose": "Users, contacts, privacy, profile metadata, relationship state."
+    },
+    {
+      "name": "Chats",
+      "logicalProjections": [
+        "telegram_chats",
+        "telegram_chat_lists",
+        "telegram_chat_positions",
+        "telegram_chat_folders",
+        "telegram_chat_permissions",
+        "telegram_chat_notification_settings",
+        "telegram_chat_counters",
+        "telegram_chat_actions",
+        "telegram_chat_members",
+        "telegram_basic_groups",
+        "telegram_supergroups",
+        "telegram_secret_chats",
+        "telegram_chat_join_requests",
+        "telegram_chat_boosts",
+        "telegram_chat_revenue",
+        "telegram_chat_invite_links"
+      ],
+      "purpose": "Chat state, membership, list placement, permissions, counters, group/channel/secret chat details."
+    },
+    {
+      "name": "Topics",
+      "logicalProjections": [
+        "telegram_forum_topics",
+        "telegram_saved_message_topics",
+        "telegram_direct_message_topics",
+        "telegram_message_topics",
+        "telegram_topic_counters"
+      ],
+      "purpose": "Forum, saved-message, direct-message, and message topic state."
+    },
+    {
+      "name": "Messages",
+      "logicalProjections": [
+        "telegram_messages",
+        "telegram_message_contents",
+        "telegram_message_texts",
+        "telegram_message_text_entities",
+        "telegram_message_replies",
+        "telegram_message_forwards",
+        "telegram_message_import_info",
+        "telegram_message_send_state",
+        "telegram_message_scheduling",
+        "telegram_message_interactions",
+        "telegram_message_pins",
+        "telegram_message_mentions",
+        "telegram_message_live_locations",
+        "telegram_message_fact_checks",
+        "telegram_message_suggested_posts",
+        "telegram_message_business_state",
+        "telegram_message_deletions"
+      ],
+      "purpose": "Message identity, content, timestamps, sender, reply/thread links, edits, delivery state, interaction metadata, and deletes."
+    },
+    {
+      "name": "Media and files",
+      "logicalProjections": [
+        "telegram_files",
+        "telegram_file_downloads",
+        "telegram_file_generations",
+        "telegram_file_sources",
+        "telegram_message_media",
+        "telegram_photos",
+        "telegram_videos",
+        "telegram_audio",
+        "telegram_documents",
+        "telegram_voice_notes",
+        "telegram_video_notes",
+        "telegram_stickers",
+        "telegram_paid_media"
+      ],
+      "purpose": "File owner slots, physical file assets, request-driven download jobs, message media metadata, and file references."
+    },
+    {
+      "name": "Reactions",
+      "logicalProjections": [
+        "telegram_reaction_catalog",
+        "telegram_default_reactions",
+        "telegram_message_reactions",
+        "telegram_message_unread_reactions",
+        "telegram_chat_available_reactions"
+      ],
+      "purpose": "Reaction catalogs, defaults, chat availability, message reactions, unread reactions."
+    },
+    {
+      "name": "Polls",
+      "logicalProjections": [
+        "telegram_polls",
+        "telegram_poll_options",
+        "telegram_poll_answers",
+        "telegram_message_poll_links"
+      ],
+      "purpose": "Poll state, options, votes, and message links."
+    },
+    {
+      "name": "Stories",
+      "logicalProjections": [
+        "telegram_stories",
+        "telegram_story_lists",
+        "telegram_story_interactions",
+        "telegram_story_albums",
+        "telegram_story_statistics",
+        "telegram_chat_active_stories"
+      ],
+      "purpose": "Story lifecycle, story lists, interactions, and chat-story state."
+    },
+    {
+      "name": "Calls",
+      "logicalProjections": [
+        "telegram_calls",
+        "telegram_group_calls",
+        "telegram_group_call_participants",
+        "telegram_group_call_messages",
+        "telegram_call_signaling",
+        "telegram_call_streams"
+      ],
+      "purpose": "Private calls, group calls, participants, call messages, stream/signaling data."
+    },
+    {
+      "name": "Notifications",
+      "logicalProjections": [
+        "telegram_notifications",
+        "telegram_notification_groups",
+        "telegram_active_notifications",
+        "telegram_notification_settings",
+        "telegram_reaction_notification_settings"
+      ],
+      "purpose": "Notification state and settings."
+    },
+    {
+      "name": "Commerce",
+      "logicalProjections": [
+        "telegram_payments",
+        "telegram_invoices",
+        "telegram_shipping_queries",
+        "telegram_pre_checkout_queries",
+        "telegram_gifts",
+        "telegram_giveaways",
+        "telegram_gift_auctions",
+        "telegram_paid_media_purchases",
+        "telegram_star_revenue",
+        "telegram_ton_revenue"
+      ],
+      "purpose": "Payments, invoices, paid media, gifts, giveaways, auctions, Stars, TON, revenue."
+    },
+    {
+      "name": "Catalogs",
+      "logicalProjections": [
+        "telegram_sticker_sets",
+        "telegram_saved_stickers",
+        "telegram_saved_animations",
+        "telegram_saved_notification_sounds",
+        "telegram_backgrounds",
+        "telegram_themes",
+        "telegram_emoji_statuses",
+        "telegram_accent_colors",
+        "telegram_language_pack_strings",
+        "telegram_quick_replies",
+        "telegram_attachment_menu_bots",
+        "telegram_message_effects",
+        "telegram_dice_catalog",
+        "telegram_text_composition_styles"
+      ],
+      "purpose": "Reference and user-specific catalogs used by messages, chats, and UI."
+    },
+    {
+      "name": "Bots and business",
+      "logicalProjections": [
+        "telegram_business_connections",
+        "telegram_business_messages",
+        "telegram_managed_bots",
+        "telegram_inline_queries",
+        "telegram_chosen_inline_results",
+        "telegram_callback_queries",
+        "telegram_guest_queries",
+        "telegram_custom_queries",
+        "telegram_web_app_events",
+        "telegram_keyboard_buttons"
+      ],
+      "purpose": "Bot, inline, callback, web app, custom query, guest query, and business integration state."
+    },
+    {
+      "name": "Diagnostics",
+      "logicalProjections": [
+        "telegram_tdlib_diagnostics",
+        "telegram_operation_effects"
+      ],
+      "purpose": "TDLib test functions, `Ok` effects, and non-product diagnostics with bounded retention."
+    }
+  ],
+  "physicalTables": [
+    {
+      "name": "telegram_account_settings",
+      "storedLogicalProjections": "Account options and autosave settings."
+    },
+    {
+      "name": "telegram_account_state",
+      "storedLogicalProjections": "Account-level current state and global counters."
+    },
+    {
+      "name": "telegram_bot_interactions",
+      "storedLogicalProjections": "Bot, inline, callback, guest, custom, web app, keyboard, managed bot, and business interaction state."
+    },
+    {
+      "name": "telegram_calls",
+      "storedLogicalProjections": "Private calls, group calls, participants, signaling, streams, and call messages."
+    },
+    {
+      "name": "telegram_catalog_items",
+      "storedLogicalProjections": "Stickers, animations, sounds, backgrounds, themes, emoji status, accent colors, language strings, quick replies, attachment menu bots, message effects, dice, and text composition catalog entries."
+    },
+    {
+      "name": "telegram_chat_lists",
+      "storedLogicalProjections": "Chat lists, folders, and per-list positions."
+    },
+    {
+      "name": "telegram_chat_members",
+      "storedLogicalProjections": "Members, join requests, invite links, boosts, and access state."
+    },
+    {
+      "name": "telegram_chat_topics",
+      "storedLogicalProjections": "Forum, saved-message, direct-message, message topic links, and topic counters."
+    },
+    {
+      "name": "telegram_chats",
+      "storedLogicalProjections": "Chat current state, type-specific group/channel/secret metadata, settings, permissions, counters, actions, and notification settings."
+    },
+    {
+      "name": "telegram_client_state",
+      "storedLogicalProjections": "Authorization, connection, service notifications, OAuth requests, terms, suggested actions, and speed limits."
+    },
+    {
+      "name": "telegram_commerce",
+      "storedLogicalProjections": "Payments, invoices, shipping/pre-checkout queries, gifts, giveaways, auctions, paid media purchases, Stars, TON, and chat revenue."
+    },
+    {
+      "name": "telegram_file_assets",
+      "storedLogicalProjections": "Physical Telegram file identity, readiness, canonical path, hash, byte counters, and terminal errors."
+    },
+    {
+      "name": "telegram_file_download_jobs",
+      "storedLogicalProjections": "Per-asset request-driven download queue state."
+    },
+    {
+      "name": "telegram_files",
+      "storedLogicalProjections": "Owner-slot metadata linking chats/messages to file assets."
+    },
+    {
+      "name": "telegram_message_contents",
+      "storedLogicalProjections": "Constructor-level message content and normalized domain payload for rare or wide content variants."
+    },
+    {
+      "name": "telegram_message_interactions",
+      "storedLogicalProjections": "Views, reply counters, mentions, unread state, fact checks, and interaction summaries."
+    },
+    {
+      "name": "telegram_message_media",
+      "storedLogicalProjections": "Message-media links and typed media metadata for photos, videos, audio, documents, notes, stickers, and paid media."
+    },
+    {
+      "name": "telegram_message_relations",
+      "storedLogicalProjections": "Replies, forwards, imports, thread links, origin links, and other message-to-object edges."
+    },
+    {
+      "name": "telegram_message_state",
+      "storedLogicalProjections": "Send state, scheduling, pins, deletions, suggested posts, business state, and live location state."
+    },
+    {
+      "name": "telegram_message_texts",
+      "storedLogicalProjections": "Message text, captions, formatted text entities, link previews, and text-derived links."
+    },
+    {
+      "name": "telegram_messages",
+      "storedLogicalProjections": "Hot message row: chat, message id, date, sender, content type, text summary, edit/delete flags, and timestamps."
+    },
+    {
+      "name": "telegram_notifications",
+      "storedLogicalProjections": "Notifications, groups, active notification state, notification settings, and reaction notification settings."
+    },
+    {
+      "name": "telegram_polls",
+      "storedLogicalProjections": "Polls, options, answers, and message-poll links."
+    },
+    {
+      "name": "telegram_reactions",
+      "storedLogicalProjections": "Reaction catalog, defaults, chat availability, message reactions, and unread reactions."
+    },
+    {
+      "name": "telegram_stories",
+      "storedLogicalProjections": "Stories, story lists, interactions, albums, statistics, and chat active stories."
+    },
+    {
+      "name": "telegram_tdlib_diagnostics",
+      "storedLogicalProjections": "TDLib test/diagnostic results and operation effect observations with bounded retention."
+    },
+    {
+      "name": "telegram_user_details",
+      "storedLogicalProjections": "User full info, privacy rules, profile media, and other wide user detail blocks."
+    },
+    {
+      "name": "telegram_user_relationships",
+      "storedLogicalProjections": "Contacts, mutual/close state, close birthdays, and account-user relationship state."
+    },
+    {
+      "name": "telegram_users",
+      "storedLogicalProjections": "Hot user row and latest status."
+    }
+  ],
+  "logicalProjectionMappings": [
+    {
+      "logicalProjection": "telegram_accent_colors",
+      "physicalTable": "telegram_catalog_items",
+      "collapseReason": "Reference catalog item."
+    },
+    {
+      "logicalProjection": "telegram_account_options",
+      "physicalTable": "telegram_account_settings",
+      "collapseReason": "Account settings are one-to-one with the account; a separate table only adds joins."
+    },
+    {
+      "logicalProjection": "telegram_account_state",
+      "physicalTable": "telegram_account_state",
+      "collapseReason": "Root account aggregate."
+    },
+    {
+      "logicalProjection": "telegram_active_notifications",
+      "physicalTable": "telegram_notifications",
+      "collapseReason": "Active notifications are latest notification state."
+    },
+    {
+      "logicalProjection": "telegram_attachment_menu_bots",
+      "physicalTable": "telegram_catalog_items",
+      "collapseReason": "Catalog entry with bot references."
+    },
+    {
+      "logicalProjection": "telegram_audio",
+      "physicalTable": "telegram_message_media",
+      "collapseReason": "Media subtype."
+    },
+    {
+      "logicalProjection": "telegram_authorization_state",
+      "physicalTable": "telegram_client_state",
+      "collapseReason": "Runtime client state."
+    },
+    {
+      "logicalProjection": "telegram_autosave_settings",
+      "physicalTable": "telegram_account_settings",
+      "collapseReason": "Account setting without its own lifecycle."
+    },
+    {
+      "logicalProjection": "telegram_backgrounds",
+      "physicalTable": "telegram_catalog_items",
+      "collapseReason": "Catalog item."
+    },
+    {
+      "logicalProjection": "telegram_basic_groups",
+      "physicalTable": "telegram_chats",
+      "collapseReason": "Type-specific chat details."
+    },
+    {
+      "logicalProjection": "telegram_business_connections",
+      "physicalTable": "telegram_bot_interactions",
+      "collapseReason": "Integration state with the same access pattern as bot/business interactions."
+    },
+    {
+      "logicalProjection": "telegram_business_messages",
+      "physicalTable": "telegram_bot_interactions",
+      "collapseReason": "Business interaction linked to message refs."
+    },
+    {
+      "logicalProjection": "telegram_call_signaling",
+      "physicalTable": "telegram_calls",
+      "collapseReason": "Call-scoped state."
+    },
+    {
+      "logicalProjection": "telegram_call_streams",
+      "physicalTable": "telegram_calls",
+      "collapseReason": "Child rows of the call aggregate."
+    },
+    {
+      "logicalProjection": "telegram_callback_queries",
+      "physicalTable": "telegram_bot_interactions",
+      "collapseReason": "Bot interaction subtype."
+    },
+    {
+      "logicalProjection": "telegram_calls",
+      "physicalTable": "telegram_calls",
+      "collapseReason": "Root call aggregate."
+    },
+    {
+      "logicalProjection": "telegram_chat_actions",
+      "physicalTable": "telegram_chats",
+      "collapseReason": "Transient/latest chat state."
+    },
+    {
+      "logicalProjection": "telegram_chat_active_stories",
+      "physicalTable": "telegram_stories",
+      "collapseReason": "Chat-scoped story state."
+    },
+    {
+      "logicalProjection": "telegram_chat_available_reactions",
+      "physicalTable": "telegram_reactions",
+      "collapseReason": "Chat-scoped reaction availability."
+    },
+    {
+      "logicalProjection": "telegram_chat_boosts",
+      "physicalTable": "telegram_chat_members",
+      "collapseReason": "Chat/member/account-linked participant state."
+    },
+    {
+      "logicalProjection": "telegram_chat_counters",
+      "physicalTable": "telegram_chats",
+      "collapseReason": "Volatile chat current-state counters."
+    },
+    {
+      "logicalProjection": "telegram_chat_folders",
+      "physicalTable": "telegram_chat_lists",
+      "collapseReason": "Folders and list positions are one chat-list placement model."
+    },
+    {
+      "logicalProjection": "telegram_chat_invite_links",
+      "physicalTable": "telegram_chat_members",
+      "collapseReason": "Access and membership state share the same lifecycle."
+    },
+    {
+      "logicalProjection": "telegram_chat_join_requests",
+      "physicalTable": "telegram_chat_members",
+      "collapseReason": "Pending membership state."
+    },
+    {
+      "logicalProjection": "telegram_chat_lists",
+      "physicalTable": "telegram_chat_lists",
+      "collapseReason": "Root chat-list placement aggregate."
+    },
+    {
+      "logicalProjection": "telegram_chat_members",
+      "physicalTable": "telegram_chat_members",
+      "collapseReason": "Root membership aggregate."
+    },
+    {
+      "logicalProjection": "telegram_chat_notification_settings",
+      "physicalTable": "telegram_chats",
+      "collapseReason": "Chat setting one-to-one with chat state."
+    },
+    {
+      "logicalProjection": "telegram_chat_permissions",
+      "physicalTable": "telegram_chats",
+      "collapseReason": "Chat setting one-to-one with chat state."
+    },
+    {
+      "logicalProjection": "telegram_chat_positions",
+      "physicalTable": "telegram_chat_lists",
+      "collapseReason": "Position exists only inside a chat list."
+    },
+    {
+      "logicalProjection": "telegram_chat_revenue",
+      "physicalTable": "telegram_commerce",
+      "collapseReason": "Accounting and revenue state belongs to commerce."
+    },
+    {
+      "logicalProjection": "telegram_chats",
+      "physicalTable": "telegram_chats",
+      "collapseReason": "Root chat aggregate."
+    },
+    {
+      "logicalProjection": "telegram_chosen_inline_results",
+      "physicalTable": "telegram_bot_interactions",
+      "collapseReason": "Inline interaction flow state."
+    },
+    {
+      "logicalProjection": "telegram_client_state",
+      "physicalTable": "telegram_client_state",
+      "collapseReason": "Root client runtime aggregate."
+    },
+    {
+      "logicalProjection": "telegram_close_birthdays",
+      "physicalTable": "telegram_user_relationships",
+      "collapseReason": "Account-user relationship view."
+    },
+    {
+      "logicalProjection": "telegram_connection_state",
+      "physicalTable": "telegram_client_state",
+      "collapseReason": "Runtime client state."
+    },
+    {
+      "logicalProjection": "telegram_contacts",
+      "physicalTable": "telegram_user_relationships",
+      "collapseReason": "Account-user relationship."
+    },
+    {
+      "logicalProjection": "telegram_custom_queries",
+      "physicalTable": "telegram_bot_interactions",
+      "collapseReason": "Interaction subtype."
+    },
+    {
+      "logicalProjection": "telegram_default_reactions",
+      "physicalTable": "telegram_reactions",
+      "collapseReason": "Scoped reaction setting."
+    },
+    {
+      "logicalProjection": "telegram_dice_catalog",
+      "physicalTable": "telegram_catalog_items",
+      "collapseReason": "Reference catalog state."
+    },
+    {
+      "logicalProjection": "telegram_direct_message_topics",
+      "physicalTable": "telegram_chat_topics",
+      "collapseReason": "Topic subtype."
+    },
+    {
+      "logicalProjection": "telegram_documents",
+      "physicalTable": "telegram_message_media",
+      "collapseReason": "Media subtype."
+    },
+    {
+      "logicalProjection": "telegram_emoji_statuses",
+      "physicalTable": "telegram_catalog_items",
+      "collapseReason": "Catalog item or user setting reference."
+    },
+    {
+      "logicalProjection": "telegram_file_downloads",
+      "physicalTable": "telegram_file_download_jobs",
+      "collapseReason": "Download lifecycle belongs to the per-asset queue."
+    },
+    {
+      "logicalProjection": "telegram_file_generations",
+      "physicalTable": "telegram_file_assets",
+      "collapseReason": "Generated file lifecycle belongs to the physical file asset."
+    },
+    {
+      "logicalProjection": "telegram_file_sources",
+      "physicalTable": "telegram_file_assets",
+      "collapseReason": "Source refs belong to the physical file asset."
+    },
+    {
+      "logicalProjection": "telegram_files",
+      "physicalTable": "telegram_file_assets",
+      "collapseReason": "TDLib file identity is a physical file asset; owner references stay in `telegram_files`."
+    },
+    {
+      "logicalProjection": "telegram_forum_topics",
+      "physicalTable": "telegram_chat_topics",
+      "collapseReason": "Root topic aggregate."
+    },
+    {
+      "logicalProjection": "telegram_gift_auctions",
+      "physicalTable": "telegram_commerce",
+      "collapseReason": "Commerce subtype."
+    },
+    {
+      "logicalProjection": "telegram_gifts",
+      "physicalTable": "telegram_commerce",
+      "collapseReason": "Commerce subtype."
+    },
+    {
+      "logicalProjection": "telegram_giveaways",
+      "physicalTable": "telegram_commerce",
+      "collapseReason": "Commerce subtype."
+    },
+    {
+      "logicalProjection": "telegram_global_counters",
+      "physicalTable": "telegram_account_state",
+      "collapseReason": "Account-level counters."
+    },
+    {
+      "logicalProjection": "telegram_group_call_messages",
+      "physicalTable": "telegram_calls",
+      "collapseReason": "Child call state."
+    },
+    {
+      "logicalProjection": "telegram_group_call_participants",
+      "physicalTable": "telegram_calls",
+      "collapseReason": "Child rows of a group call."
+    },
+    {
+      "logicalProjection": "telegram_group_calls",
+      "physicalTable": "telegram_calls",
+      "collapseReason": "Call subtype."
+    },
+    {
+      "logicalProjection": "telegram_guest_queries",
+      "physicalTable": "telegram_bot_interactions",
+      "collapseReason": "Interaction subtype."
+    },
+    {
+      "logicalProjection": "telegram_inline_queries",
+      "physicalTable": "telegram_bot_interactions",
+      "collapseReason": "Bot interaction subtype."
+    },
+    {
+      "logicalProjection": "telegram_invoices",
+      "physicalTable": "telegram_commerce",
+      "collapseReason": "Commerce document."
+    },
+    {
+      "logicalProjection": "telegram_keyboard_buttons",
+      "physicalTable": "telegram_bot_interactions",
+      "collapseReason": "Interaction artifact."
+    },
+    {
+      "logicalProjection": "telegram_language_pack_strings",
+      "physicalTable": "telegram_catalog_items",
+      "collapseReason": "Catalog entries keyed by language and key."
+    },
+    {
+      "logicalProjection": "telegram_managed_bots",
+      "physicalTable": "telegram_bot_interactions",
+      "collapseReason": "Bot integration state."
+    },
+    {
+      "logicalProjection": "telegram_message_business_state",
+      "physicalTable": "telegram_message_state",
+      "collapseReason": "Message lifecycle state."
+    },
+    {
+      "logicalProjection": "telegram_message_contents",
+      "physicalTable": "telegram_message_contents",
+      "collapseReason": "Root message-content aggregate."
+    },
+    {
+      "logicalProjection": "telegram_message_deletions",
+      "physicalTable": "telegram_message_state",
+      "collapseReason": "Message lifecycle tombstone."
+    },
+    {
+      "logicalProjection": "telegram_message_effects",
+      "physicalTable": "telegram_catalog_items",
+      "collapseReason": "Catalog entry."
+    },
+    {
+      "logicalProjection": "telegram_message_fact_checks",
+      "physicalTable": "telegram_message_interactions",
+      "collapseReason": "Attached interaction metadata."
+    },
+    {
+      "logicalProjection": "telegram_message_forwards",
+      "physicalTable": "telegram_message_relations",
+      "collapseReason": "Message/source relation."
+    },
+    {
+      "logicalProjection": "telegram_message_import_info",
+      "physicalTable": "telegram_message_relations",
+      "collapseReason": "Message origin/source relation."
+    },
+    {
+      "logicalProjection": "telegram_message_interactions",
+      "physicalTable": "telegram_message_interactions",
+      "collapseReason": "Root interaction aggregate."
+    },
+    {
+      "logicalProjection": "telegram_message_live_locations",
+      "physicalTable": "telegram_message_state",
+      "collapseReason": "Message state subtype."
+    },
+    {
+      "logicalProjection": "telegram_message_media",
+      "physicalTable": "telegram_message_media",
+      "collapseReason": "Root message-file bridge."
+    },
+    {
+      "logicalProjection": "telegram_message_mentions",
+      "physicalTable": "telegram_message_interactions",
+      "collapseReason": "Interaction state."
+    },
+    {
+      "logicalProjection": "telegram_message_pins",
+      "physicalTable": "telegram_message_state",
+      "collapseReason": "Message state flag."
+    },
+    {
+      "logicalProjection": "telegram_message_poll_links",
+      "physicalTable": "telegram_polls",
+      "collapseReason": "Poll-message edge."
+    },
+    {
+      "logicalProjection": "telegram_message_reactions",
+      "physicalTable": "telegram_reactions",
+      "collapseReason": "Message-scoped reaction rows."
+    },
+    {
+      "logicalProjection": "telegram_message_replies",
+      "physicalTable": "telegram_message_relations",
+      "collapseReason": "Reply/thread relation."
+    },
+    {
+      "logicalProjection": "telegram_message_scheduling",
+      "physicalTable": "telegram_message_state",
+      "collapseReason": "Message state."
+    },
+    {
+      "logicalProjection": "telegram_message_send_state",
+      "physicalTable": "telegram_message_state",
+      "collapseReason": "Delivery/send state."
+    },
+    {
+      "logicalProjection": "telegram_message_suggested_posts",
+      "physicalTable": "telegram_message_state",
+      "collapseReason": "Message lifecycle state."
+    },
+    {
+      "logicalProjection": "telegram_message_text_entities",
+      "physicalTable": "telegram_message_texts",
+      "collapseReason": "Child rows of the text block."
+    },
+    {
+      "logicalProjection": "telegram_message_texts",
+      "physicalTable": "telegram_message_texts",
+      "collapseReason": "Root text aggregate."
+    },
+    {
+      "logicalProjection": "telegram_message_topics",
+      "physicalTable": "telegram_chat_topics",
+      "collapseReason": "Topic-message relation."
+    },
+    {
+      "logicalProjection": "telegram_message_unread_reactions",
+      "physicalTable": "telegram_reactions",
+      "collapseReason": "Reaction state subset."
+    },
+    {
+      "logicalProjection": "telegram_messages",
+      "physicalTable": "telegram_messages",
+      "collapseReason": "Root message aggregate."
+    },
+    {
+      "logicalProjection": "telegram_notification_groups",
+      "physicalTable": "telegram_notifications",
+      "collapseReason": "Notification grouping state."
+    },
+    {
+      "logicalProjection": "telegram_notification_settings",
+      "physicalTable": "telegram_notifications",
+      "collapseReason": "Scoped notification settings."
+    },
+    {
+      "logicalProjection": "telegram_notifications",
+      "physicalTable": "telegram_notifications",
+      "collapseReason": "Root notification aggregate."
+    },
+    {
+      "logicalProjection": "telegram_oauth_requests",
+      "physicalTable": "telegram_client_state",
+      "collapseReason": "Temporary client state."
+    },
+    {
+      "logicalProjection": "telegram_operation_effects",
+      "physicalTable": "telegram_tdlib_diagnostics",
+      "collapseReason": "Operation trace, not a domain root."
+    },
+    {
+      "logicalProjection": "telegram_paid_media",
+      "physicalTable": "telegram_message_media",
+      "collapseReason": "Media subtype with commerce refs."
+    },
+    {
+      "logicalProjection": "telegram_paid_media_purchases",
+      "physicalTable": "telegram_commerce",
+      "collapseReason": "Commerce event."
+    },
+    {
+      "logicalProjection": "telegram_payments",
+      "physicalTable": "telegram_commerce",
+      "collapseReason": "Commerce subtype."
+    },
+    {
+      "logicalProjection": "telegram_photos",
+      "physicalTable": "telegram_message_media",
+      "collapseReason": "Media subtype."
+    },
+    {
+      "logicalProjection": "telegram_poll_answers",
+      "physicalTable": "telegram_polls",
+      "collapseReason": "Child rows of the poll aggregate."
+    },
+    {
+      "logicalProjection": "telegram_poll_options",
+      "physicalTable": "telegram_polls",
+      "collapseReason": "Child rows of the poll aggregate."
+    },
+    {
+      "logicalProjection": "telegram_polls",
+      "physicalTable": "telegram_polls",
+      "collapseReason": "Root poll aggregate."
+    },
+    {
+      "logicalProjection": "telegram_pre_checkout_queries",
+      "physicalTable": "telegram_commerce",
+      "collapseReason": "Payment workflow state."
+    },
+    {
+      "logicalProjection": "telegram_quick_replies",
+      "physicalTable": "telegram_catalog_items",
+      "collapseReason": "User-scoped catalog entries."
+    },
+    {
+      "logicalProjection": "telegram_reaction_catalog",
+      "physicalTable": "telegram_reactions",
+      "collapseReason": "Reaction rows differ by scope and kind."
+    },
+    {
+      "logicalProjection": "telegram_reaction_notification_settings",
+      "physicalTable": "telegram_notifications",
+      "collapseReason": "Specialized notification settings."
+    },
+    {
+      "logicalProjection": "telegram_saved_animations",
+      "physicalTable": "telegram_catalog_items",
+      "collapseReason": "User-scoped catalog membership."
+    },
+    {
+      "logicalProjection": "telegram_saved_message_topics",
+      "physicalTable": "telegram_chat_topics",
+      "collapseReason": "Topic subtype."
+    },
+    {
+      "logicalProjection": "telegram_saved_notification_sounds",
+      "physicalTable": "telegram_catalog_items",
+      "collapseReason": "Catalog item."
+    },
+    {
+      "logicalProjection": "telegram_saved_stickers",
+      "physicalTable": "telegram_catalog_items",
+      "collapseReason": "User-scoped catalog membership."
+    },
+    {
+      "logicalProjection": "telegram_secret_chats",
+      "physicalTable": "telegram_chats",
+      "collapseReason": "Type-specific chat details."
+    },
+    {
+      "logicalProjection": "telegram_service_notifications",
+      "physicalTable": "telegram_client_state",
+      "collapseReason": "Client runtime notification state."
+    },
+    {
+      "logicalProjection": "telegram_shipping_queries",
+      "physicalTable": "telegram_commerce",
+      "collapseReason": "Payment workflow state."
+    },
+    {
+      "logicalProjection": "telegram_speed_limits",
+      "physicalTable": "telegram_client_state",
+      "collapseReason": "Runtime client constraints."
+    },
+    {
+      "logicalProjection": "telegram_star_revenue",
+      "physicalTable": "telegram_commerce",
+      "collapseReason": "Accounting subtype."
+    },
+    {
+      "logicalProjection": "telegram_sticker_sets",
+      "physicalTable": "telegram_catalog_items",
+      "collapseReason": "Catalog item."
+    },
+    {
+      "logicalProjection": "telegram_stickers",
+      "physicalTable": "telegram_message_media",
+      "collapseReason": "Media subtype with file refs."
+    },
+    {
+      "logicalProjection": "telegram_stories",
+      "physicalTable": "telegram_stories",
+      "collapseReason": "Root story aggregate."
+    },
+    {
+      "logicalProjection": "telegram_story_albums",
+      "physicalTable": "telegram_stories",
+      "collapseReason": "Story grouping state."
+    },
+    {
+      "logicalProjection": "telegram_story_interactions",
+      "physicalTable": "telegram_stories",
+      "collapseReason": "Story-attached interactions."
+    },
+    {
+      "logicalProjection": "telegram_story_lists",
+      "physicalTable": "telegram_stories",
+      "collapseReason": "Story list membership."
+    },
+    {
+      "logicalProjection": "telegram_story_statistics",
+      "physicalTable": "telegram_stories",
+      "collapseReason": "Metrics attached to story."
+    },
+    {
+      "logicalProjection": "telegram_suggested_actions",
+      "physicalTable": "telegram_client_state",
+      "collapseReason": "Current client suggestions."
+    },
+    {
+      "logicalProjection": "telegram_supergroups",
+      "physicalTable": "telegram_chats",
+      "collapseReason": "Type-specific chat details."
+    },
+    {
+      "logicalProjection": "telegram_tdlib_diagnostics",
+      "physicalTable": "telegram_tdlib_diagnostics",
+      "collapseReason": "Root diagnostic aggregate."
+    },
+    {
+      "logicalProjection": "telegram_terms",
+      "physicalTable": "telegram_client_state",
+      "collapseReason": "Client prompt/state."
+    },
+    {
+      "logicalProjection": "telegram_text_composition_styles",
+      "physicalTable": "telegram_catalog_items",
+      "collapseReason": "Catalog item."
+    },
+    {
+      "logicalProjection": "telegram_themes",
+      "physicalTable": "telegram_catalog_items",
+      "collapseReason": "Catalog item."
+    },
+    {
+      "logicalProjection": "telegram_ton_revenue",
+      "physicalTable": "telegram_commerce",
+      "collapseReason": "Accounting subtype."
+    },
+    {
+      "logicalProjection": "telegram_topic_counters",
+      "physicalTable": "telegram_chat_topics",
+      "collapseReason": "Topic latest-state."
+    },
+    {
+      "logicalProjection": "telegram_user_full_info",
+      "physicalTable": "telegram_user_details",
+      "collapseReason": "Wide user details."
+    },
+    {
+      "logicalProjection": "telegram_user_privacy_rules",
+      "physicalTable": "telegram_user_details",
+      "collapseReason": "Wide user details."
+    },
+    {
+      "logicalProjection": "telegram_user_profile_media",
+      "physicalTable": "telegram_user_details",
+      "collapseReason": "User details with file refs."
+    },
+    {
+      "logicalProjection": "telegram_user_status",
+      "physicalTable": "telegram_users",
+      "collapseReason": "Latest user attribute."
+    },
+    {
+      "logicalProjection": "telegram_users",
+      "physicalTable": "telegram_users",
+      "collapseReason": "Root user aggregate."
+    },
+    {
+      "logicalProjection": "telegram_video_notes",
+      "physicalTable": "telegram_message_media",
+      "collapseReason": "Media subtype."
+    },
+    {
+      "logicalProjection": "telegram_videos",
+      "physicalTable": "telegram_message_media",
+      "collapseReason": "Media subtype."
+    },
+    {
+      "logicalProjection": "telegram_voice_notes",
+      "physicalTable": "telegram_message_media",
+      "collapseReason": "Media subtype."
+    },
+    {
+      "logicalProjection": "telegram_web_app_events",
+      "physicalTable": "telegram_bot_interactions",
+      "collapseReason": "Bot/web-app interaction subtype."
+    }
+  ],
+  "updateProjectionCoverage": [
+    {
+      "projectionGroup": "telegram_account_state",
+      "updates": [
+        "updateUnreadMessageCount",
+        "updateUnreadChatCount",
+        "updateAutosaveSettings"
+      ]
+    },
+    {
+      "projectionGroup": "telegram_bot_interactions",
+      "updates": [
+        "updateNewInlineQuery",
+        "updateNewChosenInlineResult",
+        "updateNewGuestQuery",
+        "updateNewCallbackQuery",
+        "updateNewInlineCallbackQuery",
+        "updateNewBusinessCallbackQuery",
+        "updateNewShippingQuery",
+        "updateNewPreCheckoutQuery",
+        "updateNewCustomEvent",
+        "updateNewCustomQuery",
+        "updatePaidMediaPurchased",
+        "updateBusinessConnection",
+        "updateManagedBot"
+      ]
+    },
+    {
+      "projectionGroup": "telegram_calls",
+      "updates": [
+        "updateCall",
+        "updateGroupCall",
+        "updateGroupCallParticipant",
+        "updateGroupCallParticipants",
+        "updateGroupCallVerificationState",
+        "updateNewGroupCallMessage",
+        "updateNewGroupCallPaidReaction",
+        "updateGroupCallMessageSendFailed",
+        "updateGroupCallMessagesDeleted",
+        "updateLiveStoryTopDonors",
+        "updateNewCallSignalingData",
+        "updateGroupCallMessageLevels"
+      ]
+    },
+    {
+      "projectionGroup": "telegram_catalog_items",
+      "updates": [
+        "updateQuickReplyShortcut",
+        "updateQuickReplyShortcutDeleted",
+        "updateQuickReplyShortcuts",
+        "updateQuickReplyShortcutMessages",
+        "updateTrustedMiniAppBots",
+        "updateStickerSet",
+        "updateInstalledStickerSets",
+        "updateTrendingStickerSets",
+        "updateRecentStickers",
+        "updateFavoriteStickers",
+        "updateSavedAnimations",
+        "updateSavedNotificationSounds",
+        "updateDefaultBackground",
+        "updateEmojiChatThemes",
+        "updateAccentColors",
+        "updateProfileAccentColors",
+        "updateLanguagePackStrings",
+        "updateAttachmentMenuBots",
+        "updateWebAppMessageSent",
+        "updateAvailableMessageEffects",
+        "updateDiceEmojis",
+        "updateStakeDiceState",
+        "updateAnimatedEmojiMessageClicked",
+        "updateAnimationSearchParameters",
+        "updateTextCompositionStyles"
+      ]
+    },
+    {
+      "projectionGroup": "telegram_chats",
+      "updates": [
+        "updateNewChat",
+        "updateChatTitle",
+        "updateChatPhoto",
+        "updateChatAccentColors",
+        "updateChatPermissions",
+        "updateChatLastMessage",
+        "updateChatPosition",
+        "updateChatAddedToList",
+        "updateChatRemovedFromList",
+        "updateChatReadInbox",
+        "updateChatReadOutbox",
+        "updateChatActionBar",
+        "updateChatBusinessBotManageBar",
+        "updateChatAvailableReactions",
+        "updateChatDraftMessage",
+        "updateChatEmojiStatus",
+        "updateChatMessageSender",
+        "updateChatMessageAutoDeleteTime",
+        "updateChatNotificationSettings",
+        "updateChatPendingJoinRequests",
+        "updateChatReplyMarkup",
+        "updateChatBackground",
+        "updateChatTheme",
+        "updateChatUnreadMentionCount",
+        "updateChatUnreadReactionCount",
+        "updateChatUnreadPollVoteCount",
+        "updateChatVideoChat",
+        "updateChatDefaultDisableNotification",
+        "updateChatHasProtectedContent",
+        "updateChatIsTranslatable",
+        "updateChatIsMarkedAsUnread",
+        "updateChatViewAsTopics",
+        "updateChatBlockList",
+        "updateChatHasScheduledMessages",
+        "updateChatFolders",
+        "updateChatOnlineMemberCount",
+        "updateSavedMessagesTopic",
+        "updateSavedMessagesTopicCount",
+        "updateDirectMessagesChatTopic",
+        "updateTopicMessageCount",
+        "updateForumTopicInfo",
+        "updateForumTopic",
+        "updateChatAction",
+        "updateBasicGroup",
+        "updateSupergroup",
+        "updateSecretChat",
+        "updateBasicGroupFullInfo",
+        "updateSupergroupFullInfo",
+        "updateSavedMessagesTags",
+        "updateChatMember",
+        "updateNewChatJoinRequest",
+        "updateChatBoost"
+      ]
+    },
+    {
+      "projectionGroup": "telegram_client_state",
+      "updates": [
+        "updateAuthorizationState",
+        "updateServiceNotification",
+        "updateNewOauthRequest",
+        "updateApplicationVerificationRequired",
+        "updateApplicationRecaptchaVerificationRequired",
+        "updateOption",
+        "updateConnectionState",
+        "updateFreezeState",
+        "updateAgeVerificationParameters",
+        "updateTermsOfService",
+        "updateUnconfirmedSession",
+        "updateSpeechRecognitionTrial",
+        "updateSuggestedActions",
+        "updateSpeedLimitNotification"
+      ]
+    },
+    {
+      "projectionGroup": "telegram_commerce",
+      "updates": [
+        "updateGiftAuctionState",
+        "updateActiveGiftAuctions",
+        "updateOwnedStarCount",
+        "updateOwnedTonCount",
+        "updateChatRevenueAmount",
+        "updateStarRevenueStatus",
+        "updateTonRevenueStatus"
+      ]
+    },
+    {
+      "projectionGroup": "telegram_files",
+      "updates": [
+        "updateFile",
+        "updateFileGenerationStart",
+        "updateFileGenerationStop",
+        "updateFileDownloads",
+        "updateFileAddedToDownloads",
+        "updateFileDownload",
+        "updateFileRemovedFromDownloads"
+      ]
+    },
+    {
+      "projectionGroup": "telegram_messages",
+      "updates": [
+        "updateNewMessage",
+        "updateMessageSendAcknowledged",
+        "updateMessageSendSucceeded",
+        "updateMessageSendFailed",
+        "updateMessageContent",
+        "updateMessageEdited",
+        "updateMessageIsPinned",
+        "updateMessageInteractionInfo",
+        "updateMessageContentOpened",
+        "updateMessageMentionRead",
+        "updateMessageContainsUnreadPollVotes",
+        "updateMessageFactCheck",
+        "updateMessageSuggestedPostInfo",
+        "updateMessageLiveLocationViewed",
+        "updateVideoPublished",
+        "updateDeleteMessages",
+        "updatePendingTextMessage",
+        "updateActiveLiveLocationMessages",
+        "updateNewBusinessMessage",
+        "updateBusinessMessageEdited",
+        "updateBusinessMessagesDeleted"
+      ]
+    },
+    {
+      "projectionGroup": "telegram_notifications",
+      "updates": [
+        "updateScopeNotificationSettings",
+        "updateReactionNotificationSettings",
+        "updateNotification",
+        "updateNotificationGroup",
+        "updateActiveNotifications",
+        "updateHavePendingNotifications"
+      ]
+    },
+    {
+      "projectionGroup": "telegram_polls",
+      "updates": [
+        "updatePoll",
+        "updatePollAnswer"
+      ]
+    },
+    {
+      "projectionGroup": "telegram_reactions",
+      "updates": [
+        "updateMessageUnreadReactions",
+        "updateMessageReaction",
+        "updateMessageReactions",
+        "updateActiveEmojiReactions",
+        "updateDefaultReactionType",
+        "updateDefaultPaidReactionType"
+      ]
+    },
+    {
+      "projectionGroup": "telegram_stories",
+      "updates": [
+        "updateChatActiveStories",
+        "updateStory",
+        "updateStoryDeleted",
+        "updateStoryPostSucceeded",
+        "updateStoryPostFailed",
+        "updateStoryListChatCount",
+        "updateStoryStealthMode"
+      ]
+    },
+    {
+      "projectionGroup": "telegram_users",
+      "updates": [
+        "updateUserStatus",
+        "updateUser",
+        "updateUserFullInfo",
+        "updateUserPrivacySettingRules",
+        "updateContactCloseBirthdays"
+      ]
+    }
+  ],
+  "messageContentCoverage": [
+    {
+      "contentFamily": "Text and captions",
+      "physicalStorage": [
+        "telegram_messages",
+        "telegram_message_texts",
+        "telegram_message_contents"
+      ],
+      "policy": "telegram_messages, telegram_message_texts, telegram_message_contents"
+    },
+    {
+      "contentFamily": "Media content",
+      "physicalStorage": [
+        "telegram_message_media",
+        "telegram_files",
+        "telegram_message_contents"
+      ],
+      "policy": "telegram_message_media, telegram_files, telegram_message_contents"
+    },
+    {
+      "contentFamily": "Location, contact, game, checklist, and story content",
+      "physicalStorage": [
+        "telegram_message_contents",
+        "telegram_message_relations",
+        "telegram_stories"
+      ],
+      "policy": "telegram_message_contents, telegram_message_relations, telegram_stories"
+    },
+    {
+      "contentFamily": "Poll content",
+      "physicalStorage": [
+        "telegram_polls",
+        "telegram_message_relations",
+        "telegram_message_contents"
+      ],
+      "policy": "telegram_polls, telegram_message_relations, telegram_message_contents"
+    },
+    {
+      "contentFamily": "Chat and forum service content",
+      "physicalStorage": [
+        "telegram_chats",
+        "telegram_chat_members",
+        "telegram_chat_topics",
+        "telegram_message_contents"
+      ],
+      "policy": "telegram_chats, telegram_chat_members, telegram_chat_topics, telegram_message_contents"
+    },
+    {
+      "contentFamily": "Payments, gifts, giveaways, and paid messages",
+      "physicalStorage": [
+        "telegram_commerce",
+        "telegram_message_media",
+        "telegram_message_contents"
+      ],
+      "policy": "telegram_commerce, telegram_message_media, telegram_message_contents"
+    },
+    {
+      "contentFamily": "Calls and video chats",
+      "physicalStorage": [
+        "telegram_calls",
+        "telegram_message_contents"
+      ],
+      "policy": "telegram_calls, telegram_message_contents"
+    },
+    {
+      "contentFamily": "Bot, web app, passport, and shared users/chats",
+      "physicalStorage": [
+        "telegram_bot_interactions",
+        "telegram_message_contents",
+        "telegram_user_relationships",
+        "telegram_chat_members"
+      ],
+      "policy": "telegram_bot_interactions, telegram_message_contents, telegram_user_relationships, telegram_chat_members"
+    },
+    {
+      "contentFamily": "Unsupported content",
+      "physicalStorage": [
+        "telegram_message_contents"
+      ],
+      "policy": "telegram_message_contents with constructor messageUnsupported, no raw JSON retention after normalized unsupported marker is written."
+    }
+  ],
+  "procedureResponseCoverage": [
+    {
+      "responseProjectionFamily": "account_catalog_or_operation",
+      "methods": 238,
+      "returnTypes": 142,
+      "tables": "Account state, settings, options, URLs, statistics, premium, commerce references, localization, primitive values, and external account operation tables."
+    },
+    {
+      "responseProjectionFamily": "bot_business_projection",
+      "methods": 42,
+      "returnTypes": 24,
+      "tables": "Bot, inline, callback, web app, keyboard, game, business, and custom query tables."
+    },
+    {
+      "responseProjectionFamily": "call_projection",
+      "methods": 8,
+      "returnTypes": 7,
+      "tables": "Calls, group calls, call participants, streams, signaling."
+    },
+    {
+      "responseProjectionFamily": "catalog_projection",
+      "methods": 43,
+      "returnTypes": 18,
+      "tables": "Stickers, emoji, animations, dice, sounds, backgrounds, themes, attachment menu, message effects."
+    },
+    {
+      "responseProjectionFamily": "chat_projection",
+      "methods": 80,
+      "returnTypes": 41,
+      "tables": "Chats, chat lists, groups, supergroups, secret chats, topics, members, boosts, invites, folders."
+    },
+    {
+      "responseProjectionFamily": "file_projection",
+      "methods": 9,
+      "returnTypes": 3,
+      "tables": "Files, file parts, downloads, uploads, local/remote file metadata."
+    },
+    {
+      "responseProjectionFamily": "message_projection",
+      "methods": 58,
+      "returnTypes": 18,
+      "tables": "Messages, found messages, business messages, polls, reactions, previews, reports, quick replies."
+    },
+    {
+      "responseProjectionFamily": "operation_effect",
+      "methods": 462,
+      "returnTypes": 1,
+      "tables": "telegram_operation_effects; resulting state must arrive through updates or explicit follow-up reads."
+    },
+    {
+      "responseProjectionFamily": "story_projection",
+      "methods": 18,
+      "returnTypes": 7,
+      "tables": "Stories, active stories, story interactions, albums, statistics."
+    },
+    {
+      "responseProjectionFamily": "tdlib_diagnostics",
+      "methods": 7,
+      "returnTypes": 7,
+      "tables": "TDLib test/diagnostic result tables with bounded retention."
+    },
+    {
+      "responseProjectionFamily": "update_dispatch_or_error",
+      "methods": 3,
+      "returnTypes": 3,
+      "tables": "Returned updates are dispatched through the update coverage table; errors are normalized into operation observations."
+    },
+    {
+      "responseProjectionFamily": "user_projection",
+      "methods": 22,
+      "returnTypes": 8,
+      "tables": "Users, user full info, contacts, profile media, support info, privacy."
+    }
+  ]
+}

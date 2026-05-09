@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 
 const ROOT = new URL('../', import.meta.url);
 const DATA_MODEL_PATH = new URL('docs/04-data/data-model.md', ROOT);
+const DOMAIN_MODEL_CATALOG_PATH = new URL('docs/04-data/tdlib-domain-model.catalog.json', ROOT);
 const FIELD_ROUTING_CATALOG_PATH = new URL('docs/04-data/tdlib-field-routing.catalog.json', ROOT);
 const FIELD_ROUTING_MARKDOWN_PATH = new URL('docs/04-data/tdlib-field-routing.generated.md', ROOT);
 
@@ -50,228 +51,9 @@ const SCHEMA_EXPECTED_KEYS = [
   'updateConstructors'
 ];
 
-const UPDATE_PROJECTIONS = {
-  telegram_account_state: [
-    'updateUnreadMessageCount',
-    'updateUnreadChatCount',
-    'updateAutosaveSettings'
-  ],
-  telegram_bot_interactions: [
-    'updateNewInlineQuery',
-    'updateNewChosenInlineResult',
-    'updateNewGuestQuery',
-    'updateNewCallbackQuery',
-    'updateNewInlineCallbackQuery',
-    'updateNewBusinessCallbackQuery',
-    'updateNewShippingQuery',
-    'updateNewPreCheckoutQuery',
-    'updateNewCustomEvent',
-    'updateNewCustomQuery',
-    'updatePaidMediaPurchased',
-    'updateBusinessConnection',
-    'updateManagedBot'
-  ],
-  telegram_calls: [
-    'updateCall',
-    'updateGroupCall',
-    'updateGroupCallParticipant',
-    'updateGroupCallParticipants',
-    'updateGroupCallVerificationState',
-    'updateNewGroupCallMessage',
-    'updateNewGroupCallPaidReaction',
-    'updateGroupCallMessageSendFailed',
-    'updateGroupCallMessagesDeleted',
-    'updateLiveStoryTopDonors',
-    'updateNewCallSignalingData',
-    'updateGroupCallMessageLevels'
-  ],
-  telegram_catalog_items: [
-    'updateQuickReplyShortcut',
-    'updateQuickReplyShortcutDeleted',
-    'updateQuickReplyShortcuts',
-    'updateQuickReplyShortcutMessages',
-    'updateTrustedMiniAppBots',
-    'updateStickerSet',
-    'updateInstalledStickerSets',
-    'updateTrendingStickerSets',
-    'updateRecentStickers',
-    'updateFavoriteStickers',
-    'updateSavedAnimations',
-    'updateSavedNotificationSounds',
-    'updateDefaultBackground',
-    'updateEmojiChatThemes',
-    'updateAccentColors',
-    'updateProfileAccentColors',
-    'updateLanguagePackStrings',
-    'updateAttachmentMenuBots',
-    'updateWebAppMessageSent',
-    'updateAvailableMessageEffects',
-    'updateDiceEmojis',
-    'updateStakeDiceState',
-    'updateAnimatedEmojiMessageClicked',
-    'updateAnimationSearchParameters',
-    'updateTextCompositionStyles'
-  ],
-  telegram_chats: [
-    'updateNewChat',
-    'updateChatTitle',
-    'updateChatPhoto',
-    'updateChatAccentColors',
-    'updateChatPermissions',
-    'updateChatLastMessage',
-    'updateChatPosition',
-    'updateChatAddedToList',
-    'updateChatRemovedFromList',
-    'updateChatReadInbox',
-    'updateChatReadOutbox',
-    'updateChatActionBar',
-    'updateChatBusinessBotManageBar',
-    'updateChatAvailableReactions',
-    'updateChatDraftMessage',
-    'updateChatEmojiStatus',
-    'updateChatMessageSender',
-    'updateChatMessageAutoDeleteTime',
-    'updateChatNotificationSettings',
-    'updateChatPendingJoinRequests',
-    'updateChatReplyMarkup',
-    'updateChatBackground',
-    'updateChatTheme',
-    'updateChatUnreadMentionCount',
-    'updateChatUnreadReactionCount',
-    'updateChatUnreadPollVoteCount',
-    'updateChatVideoChat',
-    'updateChatDefaultDisableNotification',
-    'updateChatHasProtectedContent',
-    'updateChatIsTranslatable',
-    'updateChatIsMarkedAsUnread',
-    'updateChatViewAsTopics',
-    'updateChatBlockList',
-    'updateChatHasScheduledMessages',
-    'updateChatFolders',
-    'updateChatOnlineMemberCount',
-    'updateSavedMessagesTopic',
-    'updateSavedMessagesTopicCount',
-    'updateDirectMessagesChatTopic',
-    'updateTopicMessageCount',
-    'updateForumTopicInfo',
-    'updateForumTopic',
-    'updateChatAction',
-    'updateBasicGroup',
-    'updateSupergroup',
-    'updateSecretChat',
-    'updateBasicGroupFullInfo',
-    'updateSupergroupFullInfo',
-    'updateSavedMessagesTags',
-    'updateChatMember',
-    'updateNewChatJoinRequest',
-    'updateChatBoost'
-  ],
-  telegram_client_state: [
-    'updateAuthorizationState',
-    'updateServiceNotification',
-    'updateNewOauthRequest',
-    'updateApplicationVerificationRequired',
-    'updateApplicationRecaptchaVerificationRequired',
-    'updateOption',
-    'updateConnectionState',
-    'updateFreezeState',
-    'updateAgeVerificationParameters',
-    'updateTermsOfService',
-    'updateUnconfirmedSession',
-    'updateSpeechRecognitionTrial',
-    'updateSuggestedActions',
-    'updateSpeedLimitNotification'
-  ],
-  telegram_commerce: [
-    'updateGiftAuctionState',
-    'updateActiveGiftAuctions',
-    'updateOwnedStarCount',
-    'updateOwnedTonCount',
-    'updateChatRevenueAmount',
-    'updateStarRevenueStatus',
-    'updateTonRevenueStatus'
-  ],
-  telegram_files: [
-    'updateFile',
-    'updateFileGenerationStart',
-    'updateFileGenerationStop',
-    'updateFileDownloads',
-    'updateFileAddedToDownloads',
-    'updateFileDownload',
-    'updateFileRemovedFromDownloads'
-  ],
-  telegram_messages: [
-    'updateNewMessage',
-    'updateMessageSendAcknowledged',
-    'updateMessageSendSucceeded',
-    'updateMessageSendFailed',
-    'updateMessageContent',
-    'updateMessageEdited',
-    'updateMessageIsPinned',
-    'updateMessageInteractionInfo',
-    'updateMessageContentOpened',
-    'updateMessageMentionRead',
-    'updateMessageContainsUnreadPollVotes',
-    'updateMessageFactCheck',
-    'updateMessageSuggestedPostInfo',
-    'updateMessageLiveLocationViewed',
-    'updateVideoPublished',
-    'updateDeleteMessages',
-    'updatePendingTextMessage',
-    'updateActiveLiveLocationMessages',
-    'updateNewBusinessMessage',
-    'updateBusinessMessageEdited',
-    'updateBusinessMessagesDeleted'
-  ],
-  telegram_notifications: [
-    'updateScopeNotificationSettings',
-    'updateReactionNotificationSettings',
-    'updateNotification',
-    'updateNotificationGroup',
-    'updateActiveNotifications',
-    'updateHavePendingNotifications'
-  ],
-  telegram_polls: ['updatePoll', 'updatePollAnswer'],
-  telegram_reactions: [
-    'updateMessageUnreadReactions',
-    'updateMessageReaction',
-    'updateMessageReactions',
-    'updateActiveEmojiReactions',
-    'updateDefaultReactionType',
-    'updateDefaultPaidReactionType'
-  ],
-  telegram_stories: [
-    'updateChatActiveStories',
-    'updateStory',
-    'updateStoryDeleted',
-    'updateStoryPostSucceeded',
-    'updateStoryPostFailed',
-    'updateStoryListChatCount',
-    'updateStoryStealthMode'
-  ],
-  telegram_users: [
-    'updateUserStatus',
-    'updateUser',
-    'updateUserFullInfo',
-    'updateUserPrivacySettingRules',
-    'updateContactCloseBirthdays'
-  ]
-};
-
-const FUNCTION_PROJECTION_EXPECTED = {
-  account_catalog_or_operation: { methods: 238, returnTypes: 142 },
-  bot_business_projection: { methods: 42, returnTypes: 24 },
-  call_projection: { methods: 8, returnTypes: 7 },
-  catalog_projection: { methods: 43, returnTypes: 18 },
-  chat_projection: { methods: 80, returnTypes: 41 },
-  file_projection: { methods: 9, returnTypes: 3 },
-  message_projection: { methods: 58, returnTypes: 18 },
-  operation_effect: { methods: 462, returnTypes: 1 },
-  story_projection: { methods: 18, returnTypes: 7 },
-  tdlib_diagnostics: { methods: 7, returnTypes: 7 },
-  update_dispatch_or_error: { methods: 3, returnTypes: 3 },
-  user_projection: { methods: 22, returnTypes: 8 }
-};
+const domainModelCatalog = JSON.parse(await readFile(DOMAIN_MODEL_CATALOG_PATH, 'utf8'));
+const UPDATE_PROJECTIONS = updateProjectionListsFromCatalog(domainModelCatalog);
+const FUNCTION_PROJECTION_EXPECTED = functionProjectionExpectedFromCatalog(domainModelCatalog);
 
 const schemaText = await fetchSchemaText();
 const docText = await readFile(DATA_MODEL_PATH, 'utf8');
@@ -304,15 +86,24 @@ assertDocContains(
   docText,
   `MessageContent constructors: ${String(EXPECTED.messageContentConstructors)}/${String(EXPECTED.messageContentConstructors)}`
 );
+assertDocContains(docText, `docs/04-data/tdlib-domain-model.catalog.json`);
 assertDocContains(docText, `npm run tdlib:field-routing:generate`);
 assertDocContains(docText, `docs/04-data/tdlib-field-routing.catalog.json`);
 assertDocContains(docText, `docs/04-data/tdlib-field-routing.generated.md`);
 assertDocContains(docText, `The model has 132 logical Telegram projections.`);
 assertDocContains(docText, `The physical schema stores these`);
 assertDocContains(docText, `projections in 29 durable domain tables`);
-const physicalTables = extractPhysicalTables(docText);
+assertDomainModelCatalog({
+  catalog: domainModelCatalog,
+  docText,
+  parsed
+});
+const physicalTables = domainModelCatalog.physicalTables.map((table) => table.name).sort();
 assertEqual('physical domain table count', physicalTables.length, EXPECTED.physicalDomainTables);
-const logicalProjectionMapping = extractLogicalProjectionMapping(docText);
+const logicalProjectionMapping = domainModelCatalog.logicalProjectionMappings.map((row) => ({
+  logical: row.logicalProjection,
+  physical: row.physicalTable
+}));
 assertEqual(
   'logical projection mapping count',
   logicalProjectionMapping.length,
@@ -450,6 +241,130 @@ function schemaStats(parsed) {
     objectTypes: new Set(parsed.constructors.map((constructor) => constructor.type)).size,
     updateConstructors: parsed.updateConstructors.length
   };
+}
+
+function updateProjectionListsFromCatalog(catalog) {
+  return Object.fromEntries(
+    catalog.updateProjectionCoverage.map((projection) => [
+      projection.projectionGroup,
+      [...projection.updates]
+    ])
+  );
+}
+
+function functionProjectionExpectedFromCatalog(catalog) {
+  return Object.fromEntries(
+    catalog.procedureResponseCoverage.map((projection) => [
+      projection.responseProjectionFamily,
+      {
+        methods: projection.methods,
+        returnTypes: projection.returnTypes
+      }
+    ])
+  );
+}
+
+function assertDomainModelCatalog({ catalog, docText, parsed }) {
+  assertEqual('domain model schema commit', catalog.schema.commit, SCHEMA_COMMIT);
+  assertEqual('domain model schema sha256', catalog.schema.sha256, SCHEMA_SHA256);
+  assertEqual('domain model logical projection count', catalog.counts.logicalProjections, 132);
+  assertEqual('domain model physical table count', catalog.counts.physicalDomainTables, 29);
+  assertEqual(
+    'domain model update constructor count',
+    catalog.counts.updateConstructors,
+    EXPECTED.updateConstructors
+  );
+  assertEqual(
+    'domain model procedure method count',
+    catalog.counts.procedureResponseMethods,
+    EXPECTED.functions
+  );
+  assertEqual(
+    'domain model procedure return-type count',
+    catalog.counts.procedureResponseReturnTypeFamilies,
+    EXPECTED.functionReturnTypes
+  );
+
+  const physicalTables = catalog.physicalTables.map((table) => table.name);
+  assertEqual(
+    'domain model physical table derived count',
+    new Set(physicalTables).size,
+    catalog.counts.physicalDomainTables
+  );
+
+  const logicalProjectionMappings = catalog.logicalProjectionMappings.map(
+    (mapping) => mapping.logicalProjection
+  );
+  assertEqual(
+    'domain model logical projection derived count',
+    logicalProjectionMappings.length,
+    catalog.counts.logicalProjections
+  );
+  assertEqual(
+    'domain model logical projection unique count',
+    new Set(logicalProjectionMappings).size,
+    catalog.counts.logicalProjections
+  );
+
+  const groupedLogicalProjections = catalog.projectionGroups.flatMap(
+    (projectionGroup) => projectionGroup.logicalProjections
+  );
+  assertSameStringSet(
+    'domain projection groups to logical mapping',
+    groupedLogicalProjections,
+    logicalProjectionMappings
+  );
+
+  const physicalTableSet = new Set(physicalTables);
+  const unknownPhysicalTargets = catalog.logicalProjectionMappings
+    .map((mapping) => mapping.physicalTable)
+    .filter((physicalTable) => !physicalTableSet.has(physicalTable));
+  assertEqual('domain model unknown physical targets', unknownPhysicalTargets.length, 0);
+
+  const messageContentPhysicalTables = catalog.messageContentCoverage.flatMap(
+    (coverage) => coverage.physicalStorage
+  );
+  const unknownMessageContentTables = messageContentPhysicalTables.filter(
+    (physicalTable) => !physicalTableSet.has(physicalTable)
+  );
+  assertEqual('domain model unknown MessageContent tables', unknownMessageContentTables.length, 0);
+
+  const updateCount = catalog.updateProjectionCoverage.reduce(
+    (sum, projection) => sum + projection.updates.length,
+    0
+  );
+  assertEqual(
+    'domain model update constructor derived count',
+    updateCount,
+    parsed.updateConstructors.length
+  );
+
+  const procedureMethodCount = catalog.procedureResponseCoverage.reduce(
+    (sum, projection) => sum + projection.methods,
+    0
+  );
+  assertEqual(
+    'domain model procedure method derived count',
+    procedureMethodCount,
+    parsed.functions.length
+  );
+
+  const docPhysicalTables = extractPhysicalTables(docText);
+  assertSameStringSet('domain model doc physical tables', docPhysicalTables, physicalTables);
+
+  const docLogicalProjectionMapping = extractLogicalProjectionMapping(docText);
+  assertSameStringSet(
+    'domain model doc logical projections',
+    docLogicalProjectionMapping.map((mapping) => mapping.logical),
+    logicalProjectionMappings
+  );
+  assertSameStringSet(
+    'domain model doc logical physical pairs',
+    docLogicalProjectionMapping.map((mapping) => `${mapping.logical}:${mapping.physical}`),
+    catalog.logicalProjectionMappings.map(
+      (mapping) => `${mapping.logicalProjection}:${mapping.physicalTable}`
+    )
+  );
 }
 
 function coverageByExplicitLists(schemaNames, projectionLists) {
