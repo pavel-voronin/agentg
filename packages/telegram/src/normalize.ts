@@ -57,6 +57,11 @@ export type NormalizedTelegramTextEntity = {
   url: string;
 };
 
+export type NormalizedTelegramMessageServiceAction = {
+  kind: 'chatMemberLeft';
+  userId: string;
+};
+
 export type NormalizedTelegramMessage = {
   chatId: string;
   messageId: string;
@@ -66,6 +71,7 @@ export type NormalizedTelegramMessage = {
   isOutgoing: boolean;
   replyToChatId?: string;
   replyToMessageId?: string;
+  serviceAction?: NormalizedTelegramMessageServiceAction;
   text?: string;
   textEntities: NormalizedTelegramTextEntity[];
   messageDate?: Date;
@@ -79,6 +85,7 @@ export type NormalizedTelegramMessageContentUpdate = {
   editDate?: Date;
   messageId: string;
   raw: JsonObject;
+  serviceAction?: NormalizedTelegramMessageServiceAction;
   text?: string;
   textEntities: NormalizedTelegramTextEntity[];
 };
@@ -185,6 +192,7 @@ export function normalizeMessageContentUpdate(
   const editDate = unixSecondsToDate(update.edit_date);
   const text = extractMessageText(content);
   const textEntities = extractMessageTextEntities(content);
+  const serviceAction = extractMessageServiceAction(content);
 
   return {
     chatId,
@@ -192,6 +200,7 @@ export function normalizeMessageContentUpdate(
     messageId,
     raw: toJsonObject(update),
     ...(editDate === undefined ? {} : { editDate }),
+    ...(serviceAction === undefined ? {} : { serviceAction }),
     ...(text === undefined ? {} : { text }),
     textEntities
   };
@@ -301,6 +310,7 @@ export function normalizeMessage(
   const senderId = extractSenderId(sender);
   const text = extractMessageText(content);
   const textEntities = extractMessageTextEntities(content);
+  const serviceAction = extractMessageServiceAction(content);
 
   return {
     chatId,
@@ -315,6 +325,7 @@ export function normalizeMessage(
       : { replyToChatId: reply.chatId, replyToMessageId: reply.messageId }),
     ...(sender?._ === undefined ? {} : { senderType: sender._ }),
     ...(senderId === undefined ? {} : { senderId }),
+    ...(serviceAction === undefined ? {} : { serviceAction }),
     ...(text === undefined ? {} : { text }),
     textEntities
   };
@@ -385,6 +396,22 @@ function extractMessageTextEntities(content: TdObject | undefined): NormalizedTe
     return [];
   }
   return extractFormattedTextLinkEntities(content.text);
+}
+
+function extractMessageServiceAction(
+  content: TdObject | undefined
+): NormalizedTelegramMessageServiceAction | undefined {
+  if (content?._ !== 'messageChatDeleteMember') {
+    return undefined;
+  }
+
+  const userId = stringifyTelegramId(content.user_id);
+  return userId === undefined
+    ? undefined
+    : {
+        kind: 'chatMemberLeft',
+        userId
+      };
 }
 
 export function extractFormattedTextLinkEntities(value: unknown): NormalizedTelegramTextEntity[] {

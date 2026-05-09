@@ -72,6 +72,14 @@ export const telegramMessageTextEntitySchema = z.object({
   url: z.string()
 });
 
+export const telegramMessageServiceActionSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('chatMemberLeft'),
+    user: telegramUserModelRefSchema,
+    userDisplayName: z.string()
+  })
+]);
+
 export const telegramReadMessageSchema = z.object({
   _model: z.literal('telegram.message'),
   id: z.string(),
@@ -95,6 +103,7 @@ export const telegramReadMessageSchema = z.object({
   sender: z.union([telegramChatModelRefSchema, telegramUserModelRefSchema]).nullable(),
   senderDisplayName: z.string().nullable(),
   senderType: z.string().nullable(),
+  serviceAction: telegramMessageServiceActionSchema.nullable(),
   telegramMessageId: z.string(),
   text: z.string().nullable(),
   textEntities: z.array(telegramMessageTextEntitySchema),
@@ -221,6 +230,7 @@ export type TelegramHistoryFetchPageRequest = z.infer<typeof telegramHistoryFetc
 export type TelegramHistoryFetchPageResult = z.infer<typeof telegramHistoryFetchPageResultSchema>;
 export type TelegramReadChat = z.infer<typeof telegramReadChatSchema>;
 export type TelegramMessageTextEntity = z.infer<typeof telegramMessageTextEntitySchema>;
+export type TelegramMessageServiceAction = z.infer<typeof telegramMessageServiceActionSchema>;
 export type TelegramReadMessage = z.infer<typeof telegramReadMessageSchema>;
 export type TelegramGetChatInput = z.infer<typeof telegramGetChatInputSchema>;
 export type TelegramGetMessageInput = z.infer<typeof telegramGetMessageInputSchema>;

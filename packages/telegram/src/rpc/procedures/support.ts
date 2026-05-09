@@ -2,7 +2,8 @@ import type { EventBus } from '@agentg/events/bus';
 import {
   telegramChatRef,
   telegramMessageRef,
-  telegramMessageSenderRef
+  telegramMessageSenderRef,
+  telegramUserRef
 } from '@agentg/telegram/model-refs';
 import { and, asc, eq, ilike, inArray, sql, type SQL } from 'drizzle-orm';
 
@@ -70,6 +71,10 @@ type TelegramUserInfo = {
 };
 
 type TelegramSenderDisplayInfo = {
+  displayName: string;
+};
+
+type TelegramUserDisplayInfo = {
   displayName: string;
 };
 
@@ -253,6 +258,7 @@ export function toReadMessage(message: TelegramMessageStorageRow): TelegramReadM
     sender: telegramMessageSenderRef(message.senderType, message.senderId),
     senderDisplayName: null,
     senderType: message.senderType,
+    serviceAction: null,
     telegramMessageId: message.telegramMessageId,
     text: message.text,
     textEntities: telegramMessageTextEntities(message),
@@ -265,16 +271,16 @@ export async function toReadMessages(
   messages: TelegramMessageStorageRow[]
 ): Promise<TelegramReadMessage[]> {
   const senderInfoByKey = await readSenderDisplayInfo(database, messages);
+  const serviceUserInfoById = await readServiceUserDisplayInfo(database, messages);
 
   return messages.map((message) => {
     const readMessage = toReadMessage(message);
     const senderKey = senderDisplayKey(message.senderType, message.senderId);
-    if (senderKey === null) {
-      return readMessage;
-    }
     return {
       ...readMessage,
-      senderDisplayName: senderInfoByKey.get(senderKey)?.displayName ?? null
+      senderDisplayName:
+        senderKey === null ? null : (senderInfoByKey.get(senderKey)?.displayName ?? null),
+      serviceAction: telegramMessageServiceAction(message, serviceUserInfoById)
     };
   });
 }
@@ -610,6 +616,28 @@ function telegramMessageTextEntities(
   return extractFormattedTextLinkEntities(content?.text);
 }
 
+function telegramMessageServiceAction(
+  message: TelegramMessageStorageRow,
+  serviceUserInfoById: Map<string, TelegramUserDisplayInfo>
+): TelegramReadMessage['serviceAction'] {
+  const userId = telegramMessageServiceUserId(message);
+  if (userId === undefined) {
+    return null;
+  }
+  return {
+    kind: 'chatMemberLeft',
+    user: telegramUserRef(userId),
+    userDisplayName: serviceUserInfoById.get(userId)?.displayName ?? userId
+  };
+}
+
+function telegramMessageServiceUserId(message: TelegramMessageStorageRow): string | undefined {
+  const content = asPlainRecord(message.raw.content) ?? asPlainRecord(message.raw.new_content);
+  return content?._ === 'messageChatDeleteMember'
+    ? stringifyTelegramId(content.user_id)
+    : undefined;
+}
+
 async function readSenderDisplayInfo(
   database: AppDatabase,
   messages: TelegramMessageStorageRow[]
@@ -667,6 +695,35 @@ async function readSenderDisplayInfo(
   }
 
   return senderInfoByKey;
+}
+
+async function readServiceUserDisplayInfo(
+  database: AppDatabase,
+  messages: TelegramMessageStorageRow[]
+): Promise<Map<string, TelegramUserDisplayInfo>> {
+  const userIds = dedupeStrings(messages.map(telegramMessageServiceUserId).filter(isString));
+  if (userIds.length === 0) {
+    return new Map();
+  }
+
+  const users = await database
+    .select({
+      firstName: telegramUsers.firstName,
+      lastName: telegramUsers.lastName,
+      telegramUserId: telegramUsers.telegramUserId,
+      username: telegramUsers.username
+    })
+    .from(telegramUsers)
+    .where(inArray(telegramUsers.telegramUserId, userIds));
+
+  return new Map(
+    users.map((user) => [
+      user.telegramUserId,
+      {
+        displayName: userDisplayName(user)
+      }
+    ])
+  );
 }
 
 function senderDisplayKey(senderType: string | null, senderId: string | null): string | null {

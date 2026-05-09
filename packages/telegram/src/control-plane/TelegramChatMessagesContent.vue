@@ -12,7 +12,11 @@ import {
 
 import { useControlPlaneHost, type ControlPlaneHostEvent } from '@agentg/control-plane-sdk/host';
 import type { SlotContext } from '@agentg/control-plane-sdk/slots';
-import type { TelegramMessageTextEntity, TelegramReadMessage } from '../rpc/contracts.js';
+import type {
+  TelegramMessageServiceAction,
+  TelegramMessageTextEntity,
+  TelegramReadMessage
+} from '../rpc/contracts.js';
 
 const props = defineProps<{
   slotContext?: SlotContext | undefined;
@@ -40,7 +44,13 @@ type TimelineMessageItem = {
   view: MessageView;
 };
 
-type TimelineItem = TimelineDateItem | TimelineMessageItem;
+type TimelineServiceItem = {
+  id: string;
+  kind: 'service';
+  label: string;
+};
+
+type TimelineItem = TimelineDateItem | TimelineMessageItem | TimelineServiceItem;
 
 type MessageView = {
   avatar: string;
@@ -248,6 +258,7 @@ function applyUpdatedMessage(event: ControlPlaneHostEvent): void {
           ...message,
           contentType: update.contentType,
           editDate: update.editDate,
+          serviceAction: update.serviceAction,
           text: update.text,
           textEntities: update.textEntities
         }
@@ -358,9 +369,9 @@ function buildTimelineItems(input: TelegramReadMessage[]): TimelineItem[] {
   const items: TimelineItem[] = [];
   let currentDateKey = '';
   for (const message of input) {
-    const view = messageView(message);
-    if (view.dateKey !== currentDateKey) {
-      currentDateKey = view.dateKey;
+    const messageDateKey = dateKey(message.messageDate);
+    if (messageDateKey !== currentDateKey) {
+      currentDateKey = messageDateKey;
       items.push({
         dateKey: currentDateKey,
         id: `date:${currentDateKey}`,
@@ -368,11 +379,20 @@ function buildTimelineItems(input: TelegramReadMessage[]): TimelineItem[] {
         label: formatDateLabel(message.messageDate)
       });
     }
+    const serviceLabel = messageServiceLabel(message);
+    if (serviceLabel !== null) {
+      items.push({
+        id: `service:${message.id}`,
+        kind: 'service',
+        label: serviceLabel
+      });
+      continue;
+    }
     items.push({
       id: message.id,
       kind: 'message',
       message,
-      view
+      view: messageView(message)
     });
   }
   return items;
@@ -468,6 +488,7 @@ function normalizeMessage(value: Record<string, unknown> | undefined): TelegramR
     sender: normalizeSender(value?.sender),
     senderDisplayName: asNullableString(value?.senderDisplayName),
     senderType: asNullableString(value?.senderType),
+    serviceAction: normalizeServiceAction(value?.serviceAction),
     telegramMessageId,
     text: asNullableString(value?.text),
     textEntities: normalizeTextEntities(value?.textEntities),
@@ -480,6 +501,7 @@ function normalizeMessageUpdate(value: Record<string, unknown> | undefined): {
   contentType: string;
   editDate: string | null;
   messageId: string;
+  serviceAction: TelegramMessageServiceAction | null;
   text: string | null;
   textEntities: TelegramMessageTextEntity[];
 } | null {
@@ -494,6 +516,7 @@ function normalizeMessageUpdate(value: Record<string, unknown> | undefined): {
     contentType,
     editDate: asNullableString(value?.editDate),
     messageId,
+    serviceAction: normalizeServiceAction(value?.serviceAction),
     text: asNullableString(value?.text),
     textEntities: normalizeTextEntities(value?.textEntities)
   };
@@ -552,6 +575,27 @@ function normalizeReply(value: unknown): TelegramReadMessage['replyTo'] {
   };
 }
 
+function normalizeServiceAction(value: unknown): TelegramMessageServiceAction | null {
+  const action = asRecord(value);
+  if (action?.kind !== 'chatMemberLeft') {
+    return null;
+  }
+
+  const userId = asString(asRecord(action.user)?.id);
+  if (userId === undefined) {
+    return null;
+  }
+
+  return {
+    kind: 'chatMemberLeft',
+    user: {
+      _model: 'telegram.user',
+      id: userId
+    },
+    userDisplayName: asNullableString(action.userDisplayName) ?? userId
+  };
+}
+
 function normalizeSender(value: unknown): TelegramReadMessage['sender'] {
   const sender = asRecord(value);
   const model = asString(sender?._model);
@@ -597,6 +641,14 @@ function messageBody(message: TelegramReadMessage): string {
     return text;
   }
   return contentLabel(message.contentType) ?? 'Unsupported message';
+}
+
+function messageServiceLabel(message: TelegramReadMessage): string | null {
+  const action = message.serviceAction;
+  if (action?.kind !== 'chatMemberLeft') {
+    return null;
+  }
+  return `${action.userDisplayName} left the group`;
 }
 
 function messageTextSegments(message: TelegramReadMessage): MessageTextSegment[] {
@@ -863,8 +915,14 @@ function errorMessage(error: unknown): string {
           </button>
         </div>
 
+        <div v-else-if="item.kind === 'service'" class="telegram-chat-messages__service-row">
+          <div class="telegram-chat-messages__service-pill">
+            {{ item.label }}
+          </div>
+        </div>
+
         <div
-          v-else
+          v-else-if="item.kind === 'message'"
           :ref="(element) => setMessageElement(item.message.telegramMessageId, element)"
           class="telegram-chat-messages__message-row"
           :data-outgoing="item.message.isOutgoing ? 'true' : undefined"
@@ -986,6 +1044,14 @@ function errorMessage(error: unknown): string {
 
 .telegram-chat-messages__date-button[data-active='true'] {
   @apply bg-teal-700/80;
+}
+
+.telegram-chat-messages__service-row {
+  @apply my-3 flex justify-center;
+}
+
+.telegram-chat-messages__service-pill {
+  @apply rounded-full bg-emerald-900/35 px-4 py-1.5 text-sm font-semibold text-white shadow-sm backdrop-blur;
 }
 
 .telegram-chat-messages__message-row {

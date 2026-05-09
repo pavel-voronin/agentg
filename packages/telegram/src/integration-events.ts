@@ -14,6 +14,7 @@ import { createIntegrationEvent, type IntegrationEvent } from '@agentg/events/en
 import type {
   TelegramChatDirectoryEntry,
   TelegramChatFolder,
+  TelegramMessageServiceAction,
   TelegramMessageTextEntity
 } from './rpc/contracts.js';
 
@@ -58,6 +59,7 @@ export type TelegramEventSourceMessage = {
   isOutgoing: boolean;
   replyToChatId?: string;
   replyToMessageId?: string;
+  serviceAction?: TelegramEventSourceMessageServiceAction;
   text?: string;
   textEntities?: TelegramMessageTextEntity[];
   messageDate?: Date;
@@ -69,8 +71,15 @@ export type TelegramEventSourceMessageContentUpdate = {
   contentType: string;
   editDate?: Date;
   messageId: string;
+  serviceAction?: TelegramEventSourceMessageServiceAction;
   text?: string;
   textEntities?: TelegramMessageTextEntity[];
+};
+
+export type TelegramEventSourceMessageServiceAction = {
+  kind: 'chatMemberLeft';
+  userId: string;
+  userDisplayName?: string;
 };
 
 export type TelegramEventSourceMessageDelete = {
@@ -175,6 +184,7 @@ type TelegramEventMessage = TelegramMessageModelRef & {
   sender: TelegramSenderModelRef | null;
   senderDisplayName: string | null;
   senderType: string | null;
+  serviceAction: TelegramMessageServiceAction | null;
   telegramMessageId: string;
   text: string | null;
   textEntities: TelegramMessageTextEntity[];
@@ -185,6 +195,7 @@ type TelegramEventMessageUpdate = TelegramMessageModelRef & {
   chat: TelegramChatModelRef;
   contentType: string;
   editDate: string | null;
+  serviceAction: TelegramMessageServiceAction | null;
   telegramMessageId: string;
   text: string | null;
   textEntities: TelegramMessageTextEntity[];
@@ -312,6 +323,7 @@ function eventMessage(message: TelegramEventSourceMessage): TelegramEventMessage
     sender: telegramMessageSenderRef(message.senderType, message.senderId),
     senderDisplayName: null,
     senderType: message.senderType ?? null,
+    serviceAction: eventMessageServiceAction(message.serviceAction),
     telegramMessageId: message.messageId,
     text: message.text ?? null,
     textEntities: message.textEntities ?? [],
@@ -327,9 +339,23 @@ function eventMessageUpdate(
     chat: telegramChatRef(update.chatId),
     contentType: update.contentType,
     editDate: update.editDate?.toISOString() ?? null,
+    serviceAction: eventMessageServiceAction(update.serviceAction),
     telegramMessageId: update.messageId,
     text: update.text ?? null,
     textEntities: update.textEntities ?? []
+  };
+}
+
+function eventMessageServiceAction(
+  action: TelegramEventSourceMessageServiceAction | undefined
+): TelegramMessageServiceAction | null {
+  if (action === undefined) {
+    return null;
+  }
+  return {
+    kind: 'chatMemberLeft',
+    user: telegramUserRef(action.userId),
+    userDisplayName: action.userDisplayName ?? action.userId
   };
 }
 

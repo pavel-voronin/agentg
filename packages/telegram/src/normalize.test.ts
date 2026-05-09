@@ -75,6 +75,36 @@ describe('normalizeTelegramUpdate', () => {
     });
   });
 
+  it('normalizes chat member leave service messages', () => {
+    const normalized = normalizeTelegramUpdate({
+      _: 'updateNewMessage',
+      message: {
+        _: 'message',
+        chat_id: -100,
+        content: {
+          _: 'messageChatDeleteMember',
+          user_id: 927300
+        },
+        date: 1777130000,
+        id: 43,
+        sender_id: {
+          _: 'messageSenderUser',
+          user_id: 927300
+        }
+      }
+    });
+
+    expect(normalized?.message).toMatchObject({
+      chatId: '-100',
+      contentType: 'messageChatDeleteMember',
+      messageId: '43',
+      serviceAction: {
+        kind: 'chatMemberLeft',
+        userId: '927300'
+      }
+    });
+  });
+
   it('extracts link entities from Telegram formatted text', () => {
     expect(
       extractFormattedTextLinkEntities({

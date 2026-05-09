@@ -178,6 +178,46 @@ describe('Telegram integration events', () => {
     });
   });
 
+  it('publishes message service actions with user ModelRefs', () => {
+    const [event] = createTelegramIntegrationEvents(
+      {
+        message: {
+          chatId: 'chat-a',
+          contentType: 'messageChatDeleteMember',
+          isOutgoing: false,
+          messageId: '42',
+          serviceAction: {
+            kind: 'chatMemberLeft',
+            userDisplayName: 'Pavel',
+            userId: 'user-a'
+          }
+        }
+      },
+      {
+        chat: false,
+        chatFolders: false,
+        message: true,
+        user: false
+      }
+    );
+
+    expect(event).toMatchObject({
+      data: {
+        message: {
+          serviceAction: {
+            kind: 'chatMemberLeft',
+            user: {
+              _model: 'telegram.user',
+              id: 'user-a'
+            },
+            userDisplayName: 'Pavel'
+          }
+        }
+      },
+      type: 'telegram.message.created'
+    });
+  });
+
   it('publishes removed chat directory events separately from folders', () => {
     const events = createTelegramIntegrationEvents(
       {
