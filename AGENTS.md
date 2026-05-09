@@ -42,10 +42,29 @@
   hydrate the initial view. Do not expand initialization into a recurring or
   trigger-driven refresh mechanism.
 
+## Domain Boundary Rules
+
+- Never propose, list, or implement options that mix domain ownership.
+- Before presenting alternatives, discard any option that violates domain
+  boundaries. Do not show rejected boundary-violating options for context.
+- A domain must not reference another domain's content IDs, procedures, events,
+  view state, labels, tab names, layout positions, or implementation details.
+- Cross-domain UI composition is allowed only through neutral Control Plane SDK
+  or extension contracts. Domains may publish contributions; other domains may
+  render only generic contributions without knowing the contributing domain.
+- Existing domain coupling must not be extended. If a requested change touches
+  existing coupling, propose a replacement that removes or isolates the coupling
+  through a neutral contract.
+- If every apparent implementation path requires domain mixing, stop and re-plan
+  instead of offering it as an option.
+
 ## Communication Rules
 
 - When the user asks about an architectural decision, present viable options and
   mark one option as the preferred recommendation. The user makes the decision.
+- Do not present architecturally forbidden designs as viable options. When
+  listing alternatives, include only options that satisfy project rules and
+  domain boundaries.
 - Do not present an assistant recommendation as a final decision unless the user
   has explicitly selected it.
 - Once the user selects an option, treat that option as the current decision and
