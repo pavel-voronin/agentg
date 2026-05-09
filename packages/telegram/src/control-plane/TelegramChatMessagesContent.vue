@@ -38,6 +38,7 @@ type TimelineDateItem = {
 };
 
 type TimelineMessageItem = {
+  dateLabel: string;
   id: string;
   kind: 'message';
   message: TelegramReadMessage;
@@ -45,9 +46,11 @@ type TimelineMessageItem = {
 };
 
 type TimelineServiceItem = {
+  dateLabel: string;
   id: string;
   kind: 'service';
   label: string;
+  message: TelegramReadMessage;
 };
 
 type TimelineItem = TimelineDateItem | TimelineMessageItem | TimelineServiceItem;
@@ -87,7 +90,10 @@ type TemplateRef = ComponentPublicInstance | Element | null;
 
 const MESSAGE_PAGE_SIZE = 100;
 const LOAD_OLDER_EDGE_PX = 160;
-const SHOW_SCROLL_DOWN_PX = 180;
+const AUTO_SCROLL_BOTTOM_PX = 180;
+const SCROLL_BOTTOM_EPSILON_PX = 2;
+const DATE_ISLAND_HIDE_DELAY_MS = 1000;
+const DATE_ISLAND_SAMPLE_OFFSETS = [12, 40, 80] as const;
 const highlightDurationMs = 1600;
 
 const host = useControlPlaneHost();
@@ -98,14 +104,17 @@ const loadingOlder = ref(false);
 const reachedStart = ref(false);
 const lastError = ref<string | null>(null);
 const showScrollDown = ref(false);
+const floatingDateLabel = ref<string | null>(null);
+const floatingDateVisible = ref(false);
 const oldestPageMessageId = ref<string | null>(null);
-const selectedDateKey = ref<string | null>(null);
 const highlightedMessageId = ref<string | null>(null);
 const messageElements = new Map<string, HTMLElement>();
 
 let loadSequence = 0;
 let stopEvents: (() => void) | null = null;
 let highlightTimeout: ReturnType<typeof setTimeout> | null = null;
+let dateIslandHideTimeout: ReturnType<typeof setTimeout> | null = null;
+let dateIslandFrame: number | null = null;
 
 const selectedChatId = computed(() => {
   const value = props.slotContext?.selectedChatId;
@@ -144,6 +153,8 @@ onBeforeUnmount(() => {
   stopEvents?.();
   stopEvents = null;
   clearHighlightTimeout();
+  clearDateIslandTimeout();
+  cancelDateIslandFrame();
 });
 
 async function loadInitialMessages(chatId: string, sequence: number): Promise<void> {
@@ -211,6 +222,7 @@ async function loadOlderMessages(): Promise<void> {
     await nextTick();
     if (root !== null) {
       root.scrollTop = root.scrollHeight - previousScrollHeight + previousScrollTop;
+      updateScrollDownVisibility();
     }
   } catch (error) {
     lastError.value = errorMessage(error);
@@ -243,7 +255,9 @@ function applyCreatedMessage(event: ControlPlaneHostEvent): void {
   mergeMessages([message]);
   if (shouldStayAtBottom) {
     void nextTick(scrollToBottom);
+    return;
   }
+  void nextTick(updateScrollDownVisibility);
 }
 
 function applyUpdatedMessage(event: ControlPlaneHostEvent): void {
@@ -264,6 +278,7 @@ function applyUpdatedMessage(event: ControlPlaneHostEvent): void {
         }
       : message
   );
+  void nextTick(updateScrollDownVisibility);
 }
 
 function applyDeletedMessages(event: ControlPlaneHostEvent): void {
@@ -292,10 +307,12 @@ function applyDeletedMessages(event: ControlPlaneHostEvent): void {
         }
       : message
   );
+  void nextTick(updateScrollDownVisibility);
 }
 
 function onScroll(): void {
   updateScrollDownVisibility();
+  showFloatingDateIsland();
   const root = scrollRoot.value;
   if (root !== null && root.scrollTop <= LOAD_OLDER_EDGE_PX) {
     void loadOlderMessages();
@@ -361,34 +378,34 @@ function setMessageElement(messageId: string, value: TemplateRef): void {
   messageElements.set(messageId, element);
 }
 
-function selectDateSeparator(dateKey: string): void {
-  selectedDateKey.value = selectedDateKey.value === dateKey ? null : dateKey;
-}
-
 function buildTimelineItems(input: TelegramReadMessage[]): TimelineItem[] {
   const items: TimelineItem[] = [];
   let currentDateKey = '';
   for (const message of input) {
     const messageDateKey = dateKey(message.messageDate);
+    const messageDateLabel = formatDateLabel(message.messageDate);
     if (messageDateKey !== currentDateKey) {
       currentDateKey = messageDateKey;
       items.push({
         dateKey: currentDateKey,
         id: `date:${currentDateKey}`,
         kind: 'date',
-        label: formatDateLabel(message.messageDate)
+        label: messageDateLabel
       });
     }
     const serviceLabel = messageServiceLabel(message);
     if (serviceLabel !== null) {
       items.push({
+        dateLabel: messageDateLabel,
         id: `service:${message.id}`,
         kind: 'service',
-        label: serviceLabel
+        label: serviceLabel,
+        message
       });
       continue;
     }
     items.push({
+      dateLabel: messageDateLabel,
       id: message.id,
       kind: 'message',
       message,
@@ -442,10 +459,13 @@ function resetMessages(): void {
   reachedStart.value = false;
   lastError.value = null;
   showScrollDown.value = false;
+  floatingDateLabel.value = null;
+  floatingDateVisible.value = false;
   oldestPageMessageId.value = null;
-  selectedDateKey.value = null;
   highlightedMessageId.value = null;
   clearHighlightTimeout();
+  clearDateIslandTimeout();
+  cancelDateIslandFrame();
 }
 
 function readMessages(value: unknown): TelegramReadMessage[] {
@@ -827,7 +847,7 @@ function dateFromIso(value: string | null): Date | null {
 }
 
 function updateScrollDownVisibility(): void {
-  showScrollDown.value = !isNearBottom();
+  showScrollDown.value = !isAtBottom();
 }
 
 function isNearBottom(): boolean {
@@ -835,7 +855,59 @@ function isNearBottom(): boolean {
   if (root === null) {
     return true;
   }
-  return root.scrollHeight - root.scrollTop - root.clientHeight <= SHOW_SCROLL_DOWN_PX;
+  return root.scrollHeight - root.scrollTop - root.clientHeight <= AUTO_SCROLL_BOTTOM_PX;
+}
+
+function isAtBottom(): boolean {
+  const root = scrollRoot.value;
+  if (root === null) {
+    return true;
+  }
+  return root.scrollHeight - root.scrollTop - root.clientHeight <= SCROLL_BOTTOM_EPSILON_PX;
+}
+
+function showFloatingDateIsland(): void {
+  scheduleFloatingDateLabelUpdate();
+  floatingDateVisible.value = true;
+  clearDateIslandTimeout();
+  dateIslandHideTimeout = setTimeout(() => {
+    floatingDateVisible.value = false;
+    dateIslandHideTimeout = null;
+  }, DATE_ISLAND_HIDE_DELAY_MS);
+}
+
+function scheduleFloatingDateLabelUpdate(): void {
+  if (dateIslandFrame !== null) {
+    return;
+  }
+  dateIslandFrame = requestAnimationFrame(() => {
+    dateIslandFrame = null;
+    floatingDateLabel.value = visibleDateLabel();
+  });
+}
+
+function visibleDateLabel(): string | null {
+  const root = scrollRoot.value;
+  if (root === null) {
+    return null;
+  }
+
+  const rootRect = root.getBoundingClientRect();
+  const sampleX = rootRect.left + rootRect.width / 2;
+  for (const offset of DATE_ISLAND_SAMPLE_OFFSETS) {
+    const sampleY = Math.min(rootRect.bottom - 1, rootRect.top + offset);
+    const element = document.elementFromPoint(sampleX, sampleY);
+    const datedElement = element?.closest<HTMLElement>('[data-date-label]');
+    if (datedElement === undefined || datedElement === null || !root.contains(datedElement)) {
+      continue;
+    }
+    const label = datedElement.dataset.dateLabel;
+    if (label !== undefined && label.length > 0) {
+      return label;
+    }
+  }
+
+  return floatingDateLabel.value;
 }
 
 function clearHighlightTimeout(): void {
@@ -844,6 +916,22 @@ function clearHighlightTimeout(): void {
   }
   clearTimeout(highlightTimeout);
   highlightTimeout = null;
+}
+
+function clearDateIslandTimeout(): void {
+  if (dateIslandHideTimeout === null) {
+    return;
+  }
+  clearTimeout(dateIslandHideTimeout);
+  dateIslandHideTimeout = null;
+}
+
+function cancelDateIslandFrame(): void {
+  if (dateIslandFrame === null) {
+    return;
+  }
+  cancelAnimationFrame(dateIslandFrame);
+  dateIslandFrame = null;
 }
 
 function htmlElementFromRef(value: TemplateRef): HTMLElement | null {
@@ -904,18 +992,22 @@ function errorMessage(error: unknown): string {
       </div>
 
       <template v-for="item in timelineItems" :key="item.id">
-        <div v-if="item.kind === 'date'" class="telegram-chat-messages__date-row">
-          <button
-            type="button"
-            class="telegram-chat-messages__date-button"
-            :data-active="selectedDateKey === item.dateKey ? 'true' : undefined"
-            @click="selectDateSeparator(item.dateKey)"
-          >
+        <div
+          v-if="item.kind === 'date'"
+          class="telegram-chat-messages__date-row"
+          :data-date-label="item.label"
+        >
+          <div class="telegram-chat-messages__date-label">
             {{ item.label }}
-          </button>
+          </div>
         </div>
 
-        <div v-else-if="item.kind === 'service'" class="telegram-chat-messages__service-row">
+        <div
+          v-else-if="item.kind === 'service'"
+          :ref="(element) => setMessageElement(item.message.telegramMessageId, element)"
+          class="telegram-chat-messages__service-row"
+          :data-date-label="item.dateLabel"
+        >
           <div class="telegram-chat-messages__service-pill">
             {{ item.label }}
           </div>
@@ -925,6 +1017,7 @@ function errorMessage(error: unknown): string {
           v-else-if="item.kind === 'message'"
           :ref="(element) => setMessageElement(item.message.telegramMessageId, element)"
           class="telegram-chat-messages__message-row"
+          :data-date-label="item.dateLabel"
           :data-outgoing="item.message.isOutgoing ? 'true' : undefined"
           :data-highlighted="
             highlightedMessageId === item.message.telegramMessageId ? 'true' : undefined
@@ -984,6 +1077,14 @@ function errorMessage(error: unknown): string {
       </template>
     </div>
 
+    <div
+      v-if="floatingDateLabel !== null"
+      class="telegram-chat-messages__floating-date"
+      :data-visible="floatingDateVisible ? 'true' : undefined"
+    >
+      {{ floatingDateLabel }}
+    </div>
+
     <button
       type="button"
       class="telegram-chat-messages__scroll-down"
@@ -1035,15 +1136,19 @@ function errorMessage(error: unknown): string {
 }
 
 .telegram-chat-messages__date-row {
-  @apply sticky top-2 z-10 mb-3 mt-1 flex justify-center;
+  @apply mb-3 mt-1 flex justify-center;
 }
 
-.telegram-chat-messages__date-button {
-  @apply rounded-full bg-zinc-700/45 px-3 py-1 text-sm font-semibold text-white shadow-sm backdrop-blur hover:bg-zinc-700/60;
+.telegram-chat-messages__date-label {
+  @apply rounded-full bg-zinc-700/45 px-3 py-1 text-sm font-semibold text-white shadow-sm backdrop-blur;
 }
 
-.telegram-chat-messages__date-button[data-active='true'] {
-  @apply bg-teal-700/80;
+.telegram-chat-messages__floating-date {
+  @apply pointer-events-none absolute left-1/2 top-3 z-20 -translate-x-1/2 rounded-full bg-zinc-700/45 px-3 py-1 text-sm font-semibold text-white opacity-0 shadow-sm backdrop-blur transition-opacity duration-200;
+}
+
+.telegram-chat-messages__floating-date[data-visible='true'] {
+  @apply opacity-100;
 }
 
 .telegram-chat-messages__service-row {
