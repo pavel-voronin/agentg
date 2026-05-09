@@ -12,7 +12,7 @@ export type InternalTrpcStaticAssetConfig = {
 
 export type InternalTrpcHttpServerOptions<TRouter extends AnyRouter> =
   CreateHTTPHandlerOptions<TRouter> & {
-    staticAssets?: InternalTrpcStaticAssetConfig;
+    staticAssets?: InternalTrpcStaticAssetConfig | InternalTrpcStaticAssetConfig[];
   };
 
 export function createInternalTrpcHttpServer<TRouter extends AnyRouter>(
@@ -24,15 +24,18 @@ export function createInternalTrpcHttpServer<TRouter extends AnyRouter>(
   });
   const staticAssets =
     options.staticAssets === undefined
-      ? undefined
-      : {
-          rootDir: resolve(options.staticAssets.rootDir),
-          urlPrefix: normalizeUrlPrefix(options.staticAssets.urlPrefix)
-        };
+      ? []
+      : [options.staticAssets].flat().map((asset) => ({
+          rootDir: resolve(asset.rootDir),
+          urlPrefix: normalizeUrlPrefix(asset.urlPrefix)
+        }));
 
   return createServer((request, response) => {
-    if (staticAssets !== undefined && requestPath(request).startsWith(staticAssets.urlPrefix)) {
-      void handleStaticAssetRequest(staticAssets, request, response);
+    const asset = staticAssets.find((candidate) =>
+      requestPath(request).startsWith(candidate.urlPrefix)
+    );
+    if (asset !== undefined) {
+      void handleStaticAssetRequest(asset, request, response);
       return;
     }
     trpcHandler(request, response);
@@ -120,10 +123,21 @@ function contentType(filePath: string): string {
       return 'text/javascript; charset=utf-8';
     case '.json':
       return 'application/json; charset=utf-8';
+    case '.gif':
+      return 'image/gif';
+    case '.jpg':
+    case '.jpeg':
+      return 'image/jpeg';
+    case '.mp4':
+      return 'video/mp4';
+    case '.png':
+      return 'image/png';
     case '.svg':
       return 'image/svg+xml';
     case '.webp':
       return 'image/webp';
+    case '.zip':
+      return 'application/zip';
     default:
       return 'application/octet-stream';
   }
