@@ -124,13 +124,11 @@ describe('History tRPC foundation', () => {
       {
         data: {
           callId: successCallId,
-          output: {
-            value: 'ok'
-          },
           target: 'history.echo'
         }
       }
     ]);
+    expect(publishedEvents[2]?.data).not.toHaveProperty('output');
 
     publishedEvents.length = 0;
 

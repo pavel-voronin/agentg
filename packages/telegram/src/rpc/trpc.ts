@@ -141,7 +141,6 @@ const lifecycleMiddleware = telegramRpc.middleware(
         createRpcCallCompletedEvent({
           callId,
           input: eventInput,
-          output: result.data,
           startedAt,
           target
         })

@@ -44,13 +44,10 @@ export type RpcCallProgressEventInput = RpcCallEventBase & {
   progress: RpcProgressData;
 };
 
-export type RpcCallCompletedEventInput = RpcCallEventBase & {
-  output?: unknown;
-};
+export type RpcCallCompletedEventInput = RpcCallEventBase;
 
 export type RpcCallFailedEventInput = RpcCallEventBase & {
   error: RpcCallError;
-  output?: unknown;
 };
 
 export function createRpcCallStartedEvent(input: RpcCallStartedEventInput): IntegrationEvent {
@@ -94,7 +91,6 @@ export function createRpcCallCompletedEvent(input: RpcCallCompletedEventInput): 
       completedAt: occurredAt.toISOString(),
       target: input.target,
       ...(input.input === undefined ? {} : { input: toJsonValue(input.input) }),
-      ...(input.output === undefined ? {} : { output: toJsonValue(input.output) }),
       ...(input.startedAt === undefined ? {} : { startedAt: input.startedAt.toISOString() })
     },
     occurredAt,
@@ -112,7 +108,6 @@ export function createRpcCallFailedEvent(input: RpcCallFailedEventInput): Integr
       failedAt: occurredAt.toISOString(),
       target: input.target,
       ...(input.input === undefined ? {} : { input: toJsonValue(input.input) }),
-      ...(input.output === undefined ? {} : { output: toJsonValue(input.output) }),
       ...(input.startedAt === undefined ? {} : { startedAt: input.startedAt.toISOString() })
     },
     occurredAt,
