@@ -51,6 +51,8 @@ type WorkspaceTab = {
 };
 
 type ChatHeaderView = {
+  avatarUrl: string | null;
+  initials: string;
   subtitle: string;
   title: string;
 };
@@ -72,6 +74,7 @@ let primaryDebugRegistration: SlotDebugRegistration | null = null;
 const nestedSlotContext = computed(() => ({
   ...(props.slotContext ?? {}),
   closeSelectedChat,
+  selectedChatAvatarUrl: selectedChatAvatarUrl.value,
   selectedChatId: selectedChatId.value
 }));
 const chatNavigation = computed(() =>
@@ -148,10 +151,19 @@ const selectedChat = computed(() =>
     ? null
     : (directoryProjection.chats.value.find((chat) => chat.id === selectedChatId.value) ?? null)
 );
+const selectedChatAvatarUrl = computed(() =>
+  selectedChat.value === null
+    ? null
+    : providerFileUrl(
+        selectedChat.value.avatar.small?.url ?? selectedChat.value.avatar.big?.url ?? null
+      )
+);
 const selectedChatHeader = computed<ChatHeaderView | null>(() =>
   selectedChat.value === null
     ? null
     : {
+        avatarUrl: selectedChatAvatarUrl.value,
+        initials: chatInitials(selectedChat.value.title),
         subtitle: chatHeaderSubtitle(selectedChat.value),
         title: selectedChat.value.title
       }
@@ -255,6 +267,18 @@ function chatHeaderSubtitle(chat: TelegramDirectoryChat): string {
     return 'secret chat';
   }
   return chat.type;
+}
+
+function chatInitials(title: string): string {
+  const trimmed = title.trim();
+  return trimmed.length === 0 ? '?' : trimmed.slice(0, 1).toLocaleUpperCase();
+}
+
+function providerFileUrl(url: string | null): string | null {
+  if (url === null || !url.startsWith('/')) {
+    return null;
+  }
+  return `/control-plane/provider-files/telegram/${url.slice(1).split('/').map(encodeURIComponent).join('/')}`;
 }
 
 function chatsWithStats(
@@ -734,6 +758,15 @@ function isDefined<T>(value: T | undefined): value is T {
 
         <div v-else class="telegram-workspace__tab-layout">
           <div v-if="selectedChatHeader" class="telegram-workspace__chat-header">
+            <img
+              v-if="selectedChatHeader.avatarUrl"
+              class="telegram-workspace__chat-header-avatar"
+              :src="selectedChatHeader.avatarUrl"
+              alt=""
+            />
+            <div v-else class="telegram-workspace__chat-header-initials">
+              {{ selectedChatHeader.initials }}
+            </div>
             <div class="telegram-workspace__chat-header-main">
               <div class="telegram-workspace__chat-header-title">
                 {{ selectedChatHeader.title }}
@@ -833,8 +866,16 @@ function isDefined<T>(value: T | undefined): value is T {
   @apply flex shrink-0 items-center justify-between gap-3 border-b border-zinc-200 px-4 py-3;
 }
 
+.telegram-workspace__chat-header-avatar {
+  @apply h-10 w-10 shrink-0 rounded-full object-cover;
+}
+
+.telegram-workspace__chat-header-initials {
+  @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-teal-700 text-sm font-semibold text-white;
+}
+
 .telegram-workspace__chat-header-main {
-  @apply min-w-0;
+  @apply min-w-0 flex-1;
 }
 
 .telegram-workspace__chat-header-title {

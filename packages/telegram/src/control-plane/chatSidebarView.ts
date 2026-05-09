@@ -96,14 +96,28 @@ function chatFolderNavItems(source: ChatSidebarViewSource): ChatFolderNavItem[] 
 function chatListItemView(chat: ControlPlaneChat, selectedChatId: string | null): ChatListItemView {
   return {
     active: chat.id === selectedChatId,
+    avatarUrl: providerFileUrl(chat.avatar.small?.url ?? chat.avatar.big?.url ?? null),
     coverageIntervals: formatInteger(chat.coverageIntervals),
     icon: chatIcon(chat),
     id: chat.id,
+    initials: chatInitials(chat.title),
     pendingJobs: formatInteger(chat.pendingJobs),
     runningJobs: formatInteger(chat.runningJobs),
     targets: formatInteger(chat.targets),
     title: chat.title
   };
+}
+
+function chatInitials(title: string): string {
+  const trimmed = title.trim();
+  return trimmed.length === 0 ? '?' : trimmed.slice(0, 1).toLocaleUpperCase();
+}
+
+function providerFileUrl(url: string | null): string | null {
+  if (!url?.startsWith('/')) {
+    return null;
+  }
+  return `/control-plane/provider-files/telegram/${url.slice(1).split('/').map(encodeURIComponent).join('/')}`;
 }
 
 function chatIcon(chat: ControlPlaneChat): ChatIconKind | null {

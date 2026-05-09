@@ -8,6 +8,7 @@ import {
 import type { TelegramRpcRuntime } from '../runtime.js';
 import { rpc } from '../trpc.js';
 import { persistTelegramUpdate } from '../../store.js';
+import { publishTelegramFileQueueUpdated } from '../../telegram-file-worker.js';
 import {
   getLastMessageNoLaterThan,
   invokeTdlib,
@@ -86,6 +87,7 @@ export const fetchPage = mutation((runtime: TelegramRpcRuntime) =>
       }
 
       let storedMessages = 0;
+      let filesChanged = false;
       for (const message of concreteMessages) {
         const messageDate = tdMessageDate(message);
         if (messageDate === undefined || messageDate < startAt || messageDate >= endAt) {
@@ -97,10 +99,16 @@ export const fetchPage = mutation((runtime: TelegramRpcRuntime) =>
           continue;
         }
 
-        const result = await persistTelegramUpdate(runtime.database, normalized);
+        const result = await persistTelegramUpdate(runtime.database, normalized, {
+          fileCause: 'history_fetch'
+        });
         if (result.message) {
           storedMessages += 1;
         }
+        filesChanged ||= result.files;
+      }
+      if (filesChanged) {
+        await publishTelegramFileQueueUpdated(runtime.database, runtime.eventBus);
       }
 
       const nextCursorMessageId = oldestMessageIdOlderThan(concreteMessages, cursorMessageId);

@@ -1,3 +1,5 @@
+import type { TelegramFileRef } from '../rpc/contracts.js';
+
 export type ChatListMode = 'archive' | 'folder' | 'main';
 
 export type ChatPlacement =
@@ -16,6 +18,10 @@ export type ChatPlacement =
     };
 
 export type TelegramDirectoryChat = {
+  avatar: {
+    big: TelegramFileRef | null;
+    small: TelegramFileRef | null;
+  };
   id: string;
   isBot: boolean;
   lastMessageDate: number;
@@ -91,9 +97,11 @@ export type ChatIconKind = 'bot' | 'channel' | 'group' | 'secret';
 
 export type ChatListItemView = {
   active: boolean;
+  avatarUrl: string | null;
   coverageIntervals: string;
   icon: ChatIconKind | null;
   id: string;
+  initials: string;
   pendingJobs: string;
   runningJobs: string;
   targets: string;

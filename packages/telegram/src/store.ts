@@ -18,19 +18,29 @@ import type {
   NormalizedTelegramUser,
   RawTelegramEvent
 } from './normalize.js';
+import { syncTelegramFileSlots, type TelegramFileOwnerKey } from './telegram-file-store.js';
+import type { TelegramMediaDownloadPolicyCause } from './telegram-file-policy.js';
 
 export type TelegramPersistResult = {
   chat: boolean;
   chatFolders: boolean;
   event: boolean;
+  fileOwners: TelegramFileOwnerKey[];
+  files: boolean;
   message: boolean;
   user: boolean;
 };
 
 export async function persistTelegramUpdate(
   database: AppDatabase,
-  update: NormalizedTelegramUpdate
+  update: NormalizedTelegramUpdate,
+  options: { fileCause?: TelegramMediaDownloadPolicyCause } = {}
 ): Promise<TelegramPersistResult> {
+  const fileOwners =
+    options.fileCause === undefined
+      ? []
+      : await syncTelegramFileSlots(database, update, options.fileCause);
+
   return {
     chat: update.chat === undefined ? false : await upsertChat(database, update.chat),
     chatFolders:
@@ -38,6 +48,8 @@ export async function persistTelegramUpdate(
         ? false
         : await replaceChatFolders(database, update.chatFolders),
     event: update.event === undefined ? false : await insertRawEvent(database, update.event),
+    fileOwners,
+    files: fileOwners.length > 0,
     message:
       (update.message !== undefined && (await upsertMessage(database, update.message))) ||
       (update.contentUpdate !== undefined &&

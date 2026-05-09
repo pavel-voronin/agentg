@@ -21,6 +21,7 @@ export default defineConfig({
       entry: {
         'chat-messages': entry('./src/control-plane/TelegramChatMessagesContent.vue'),
         'dashboard-chats': entry('./src/control-plane/TelegramDashboardChatsContent.vue'),
+        'dashboard-file-queue': entry('./src/control-plane/TelegramFileQueueContent.vue'),
         status: entry('./src/control-plane/TelegramStatusContent.vue'),
         workspace: entry('./src/control-plane/TelegramWorkspaceContent.vue')
       },

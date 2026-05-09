@@ -29,7 +29,8 @@ import {
   stopTelegramTrpcServer,
   TELEGRAM_CONTROL_PLANE_ASSETS_ROOT
 } from './rpc/server.js';
-import { persistCurrentTelegramUser, persistTelegramUpdate, upsertChat } from './store.js';
+import { persistCurrentTelegramUser, persistTelegramUpdate } from './store.js';
+import { applyTelegramFileProgressUpdate } from './telegram-file-store.js';
 import {
   createTelegramClient,
   hasTelegramCredentials,
@@ -40,6 +41,12 @@ import {
   publishTdlibOperationEvents,
   publishTelegramOperationEvents
 } from './telegram-operation-events.js';
+import {
+  publishTelegramFileQueueUpdated,
+  publishTelegramFileOwnerUpdated,
+  startTelegramFileDownloadWorker,
+  type TelegramFileDownloadWorker
+} from './telegram-file-worker.js';
 
 export type TelegramIngestionOptions = {
   database: AppDatabase;
@@ -98,6 +105,7 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
   let controlPlaneAssets: ControlPlaneAssetVersionSubscription | undefined;
   let serviceDirectory: ReturnType<typeof createServiceDirectoryClient> | undefined;
   let tdlibStatusHeartbeat: ReturnType<typeof setInterval> | undefined;
+  let fileDownloadWorker: TelegramFileDownloadWorker | undefined;
   let client: TelegramClient | undefined;
   let tdlibStatus: TdlibStatusTracker | undefined;
   let startupComplete = false;
@@ -128,12 +136,20 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
     activeTdlibStatus.markConnectionState('connectionStateReady');
     tdlibStatusHeartbeat = startTdlibStatusHeartbeat(activeTdlibStatus);
     await syncInitialChats(options.database, activeClient, eventBus);
+    fileDownloadWorker = startTelegramFileDownloadWorker({
+      client: activeClient,
+      database: options.database,
+      eventBus,
+      filesDirectory: options.telegram.filesDirectory
+    });
+    await publishTelegramFileQueueUpdated(options.database, eventBus);
 
     telegramRpcServer = await startTelegramTrpcServer({
       bind: options.internalRpc,
       client: activeClient,
       database: options.database,
-      eventBus
+      eventBus,
+      filesDirectory: options.telegram.filesDirectory
     });
     serviceDirectory = createServiceDirectoryClient({
       eventBus,
@@ -176,6 +192,8 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
         clearInterval(tdlibStatusHeartbeat);
         tdlibStatusHeartbeat = undefined;
       }
+      fileDownloadWorker?.close();
+      fileDownloadWorker = undefined;
       activeTdlibStatus.markDisconnected();
       const activeTelegramRpcServer = telegramRpcServer;
       const telegramRpcClosed =
@@ -204,6 +222,7 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
         client,
         controlPlaneAssets,
         eventBus,
+        fileDownloadWorker,
         serviceDirectory,
         tdlibStatus,
         tdlibStatusHeartbeat,
@@ -218,6 +237,7 @@ async function cleanupTelegramStartupFailure(options: {
   client: TelegramClient | undefined;
   controlPlaneAssets: ControlPlaneAssetVersionSubscription | undefined;
   eventBus: EventBus;
+  fileDownloadWorker: TelegramFileDownloadWorker | undefined;
   serviceDirectory: ReturnType<typeof createServiceDirectoryClient> | undefined;
   tdlibStatus: TdlibStatusTracker | undefined;
   tdlibStatusHeartbeat: ReturnType<typeof setInterval> | undefined;
@@ -227,6 +247,7 @@ async function cleanupTelegramStartupFailure(options: {
   if (options.tdlibStatusHeartbeat !== undefined) {
     clearInterval(options.tdlibStatusHeartbeat);
   }
+  options.fileDownloadWorker?.close();
   await runShutdownStep('telegram.tdlib_status_startup_disconnect', () =>
     Promise.resolve(options.tdlibStatus?.markDisconnected())
   );
@@ -340,11 +361,20 @@ async function persistLiveUpdate(
   eventBus: EventBus
 ): Promise<void> {
   const normalized = normalizeTelegramUpdate(update);
+  const progressOwners = await applyTelegramFileProgressUpdate(database, update);
   if (normalized?.event === undefined) {
+    for (const owner of progressOwners) {
+      await publishTelegramFileOwnerUpdated(database, eventBus, owner);
+    }
+    if (progressOwners.length > 0) {
+      await publishTelegramFileQueueUpdated(database, eventBus);
+    }
     return;
   }
 
-  const result = await persistTelegramUpdate(database, normalized);
+  const result = await persistTelegramUpdate(database, normalized, {
+    fileCause: 'live_update'
+  });
   const chatDirectoryEvent =
     normalized.chat === undefined
       ? undefined
@@ -366,6 +396,14 @@ async function persistLiveUpdate(
     ...(chatDirectoryEvent === undefined ? {} : { chatDirectoryEvent })
   })) {
     eventBus.publish(event);
+  }
+
+  const visibleFileOwners = uniqueFileOwners([...result.fileOwners, ...progressOwners]);
+  for (const owner of visibleFileOwners) {
+    await publishTelegramFileOwnerUpdated(database, eventBus, owner);
+  }
+  if (result.files || progressOwners.length > 0) {
+    await publishTelegramFileQueueUpdated(database, eventBus);
   }
 
   if (stats.rawEvents > 0 && stats.rawEvents % 500 === 0) {
@@ -395,6 +433,12 @@ function createPersistenceStats(): PersistenceStats {
   };
 }
 
+function uniqueFileOwners<T extends { ownerId: string; ownerModel: string }>(owners: T[]): T[] {
+  return [
+    ...new Map(owners.map((owner) => [`${owner.ownerModel}:${owner.ownerId}`, owner])).values()
+  ];
+}
+
 function handleTdlibConnectionUpdate(update: unknown, status: TdlibStatusTracker): void {
   const connectionState = extractTdlibConnectionState(update);
   if (connectionState === undefined) {
@@ -417,7 +461,20 @@ async function syncInitialChats(
     const chat = normalizeChat(
       asTdObject(await invokeTdlib(eventBus, client, { _: 'getChat', chat_id: chatId }))
     );
-    if (chat !== undefined && (await upsertChat(database, chat))) {
+    if (
+      chat !== undefined &&
+      (
+        await persistTelegramUpdate(
+          database,
+          {
+            chat
+          },
+          {
+            fileCause: 'initialization'
+          }
+        )
+      ).chat
+    ) {
       storedChatCount += 1;
     }
   }

@@ -7,6 +7,7 @@ import {
 } from '@agentg/control-plane-sdk/host';
 
 import type { ChatPlacement, TelegramDirectoryChat, TelegramDirectoryFolder } from './views.js';
+import type { TelegramFileRef } from '../rpc/contracts.js';
 
 type TelegramDirectoryResult = {
   chats?: unknown;
@@ -122,6 +123,10 @@ function normalizeDirectoryChat(
     return undefined;
   }
   return {
+    avatar: {
+      big: normalizeFileRef(asRecord(asRecord(value?.avatar)?.big)),
+      small: normalizeFileRef(asRecord(asRecord(value?.avatar)?.small))
+    },
     id,
     isBot: value?.isBot === true,
     lastMessageDate: asNonNegativeInteger(value?.lastMessageDate),
@@ -130,6 +135,63 @@ function normalizeDirectoryChat(
     type: asString(value?.type) ?? '',
     updatedAt: asString(value?.updatedAt) ?? ''
   };
+}
+
+function normalizeFileRef(value: Record<string, unknown> | undefined): TelegramFileRef | null {
+  const id = asString(value?.id);
+  const owner = normalizeFileOwner(value?.owner);
+  const slotKey = asString(value?.slotKey);
+  const status = asString(value?.status);
+  const mediaKind = asString(value?.mediaKind);
+  const renderKind = asString(value?.renderKind);
+  const updatedAt = asString(value?.updatedAt);
+  if (
+    id === undefined ||
+    owner === null ||
+    slotKey === undefined ||
+    !isFileStatus(status) ||
+    !isFileMediaKind(mediaKind) ||
+    !isFileRenderKind(renderKind) ||
+    updatedAt === undefined
+  ) {
+    return null;
+  }
+  return {
+    _model: 'telegram.file',
+    byteSize: asNullableNonNegativeInteger(value?.byteSize),
+    canRequest: value?.canRequest === true,
+    downloadedByteSize: asNullableNonNegativeInteger(value?.downloadedByteSize),
+    downloadError: asNullableString(value?.downloadError),
+    durationSeconds: asNullableNonNegativeInteger(value?.durationSeconds),
+    fileName: asNullableString(value?.fileName),
+    height: asNullableNonNegativeInteger(value?.height),
+    id,
+    mediaKind,
+    mimeType: asNullableString(value?.mimeType),
+    owner,
+    renderKind,
+    slotKey,
+    status,
+    updatedAt,
+    url: asNullableString(value?.url),
+    width: asNullableNonNegativeInteger(value?.width)
+  };
+}
+
+function normalizeFileOwner(value: unknown): TelegramFileRef['owner'] | null {
+  const owner = asRecord(value);
+  const model = asString(owner?._model);
+  const id = asString(owner?.id);
+  if (id === undefined) {
+    return null;
+  }
+  if (model === 'telegram.chat') {
+    return { _model: 'telegram.chat', id };
+  }
+  if (model === 'telegram.message') {
+    return { _model: 'telegram.message', id };
+  }
+  return null;
 }
 
 function normalizeDirectoryFolder(
@@ -183,12 +245,40 @@ function asNullableString(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
+function asNullableNonNegativeInteger(value: unknown): number | null {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
+}
+
 function asNonNegativeInteger(value: unknown): number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : 0;
 }
 
 function isDefined<T>(value: T | undefined): value is T {
   return value !== undefined;
+}
+
+function isFileStatus(value: string | undefined): value is TelegramFileRef['status'] {
+  return (
+    value === 'known' ||
+    value === 'queued' ||
+    value === 'downloading' ||
+    value === 'ready' ||
+    value === 'failed'
+  );
+}
+
+function isFileMediaKind(value: string | undefined): value is TelegramFileRef['mediaKind'] {
+  return (
+    value === 'avatar' ||
+    value === 'document' ||
+    value === 'photo' ||
+    value === 'thumbnail' ||
+    value === 'video'
+  );
+}
+
+function isFileRenderKind(value: string | undefined): value is TelegramFileRef['renderKind'] {
+  return value === 'download' || value === 'image' || value === 'video';
 }
 
 function pushProjectionError(error: unknown): void {

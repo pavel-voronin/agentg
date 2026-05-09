@@ -19,6 +19,14 @@ export function createTelegramControlPlane(
         tags: ['control-plane.dashboard.tile']
       },
       {
+        contentId: 'telegram.dashboard.file-queue',
+        module: {
+          assetPath: 'dashboard-file-queue.js'
+        },
+        styleAssetPaths: providerStyleAssets,
+        tags: ['control-plane.dashboard.tile']
+      },
+      {
         contentId: 'telegram.chat.messages',
         metadata: {
           tab: {

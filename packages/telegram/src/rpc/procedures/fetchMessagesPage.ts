@@ -5,6 +5,7 @@ import { createTelegramMessagesObservedEvent } from '../../integration-events.js
 import { asTdObject, normalizeHistoricalMessage, type TdObject } from '../../normalize.js';
 import { telegramMessages } from '../../schema.js';
 import { persistTelegramUpdate } from '../../store.js';
+import { publishTelegramFileQueueUpdated } from '../../telegram-file-worker.js';
 import {
   telegramFetchMessagesPageInputSchema,
   telegramFetchMessagesPageOutputSchema,
@@ -80,11 +81,14 @@ export const fetchMessagesPage = mutation((runtime: TelegramRpcRuntime) =>
         cursorMessageId === undefined
           ? fetchedMessages
           : fetchedMessages.filter((message) => isOlderThanCursor(message, cursorMessageId));
-      const storedMessageIds = await persistMessages(runtime, pageMessages);
-      const messages = await readPersistedMessages(runtime, input.chatId, storedMessageIds);
+      const persisted = await persistMessages(runtime, pageMessages);
+      const messages = await readPersistedMessages(runtime, input.chatId, persisted.messageIds);
       const nextCursorMessageId = oldestMessageIdOlderThan(fetchedMessages, anchorMessageId);
       const reachedStart = nextCursorMessageId === undefined;
       const observedStartAt = observedIntervalStartAt(pageMessages, reachedStart);
+      if (persisted.filesChanged) {
+        await publishTelegramFileQueueUpdated(runtime.database, runtime.eventBus);
+      }
 
       publishMessagesObserved(runtime, {
         chatId: input.chatId,
@@ -92,7 +96,7 @@ export const fetchMessagesPage = mutation((runtime: TelegramRpcRuntime) =>
         fetchedMessages: pageMessages.length,
         reachedStart,
         startAt: observedStartAt,
-        storedMessages: storedMessageIds.length
+        storedMessages: persisted.messageIds.length
       });
 
       return {
@@ -146,7 +150,8 @@ async function readMessagePageEndAt(
 async function persistMessages(
   runtime: TelegramRpcRuntime,
   messages: TdObject[]
-): Promise<string[]> {
+): Promise<{ filesChanged: boolean; messageIds: string[] }> {
+  let filesChanged = false;
   const messageIds: string[] = [];
   for (const message of messages) {
     const normalized = normalizeHistoricalMessage(message);
@@ -154,10 +159,13 @@ async function persistMessages(
       continue;
     }
 
-    await persistTelegramUpdate(runtime.database, normalized);
+    const result = await persistTelegramUpdate(runtime.database, normalized, {
+      fileCause: 'operator_page'
+    });
+    filesChanged ||= result.files;
     messageIds.push(normalized.message.messageId);
   }
-  return messageIds;
+  return { filesChanged, messageIds };
 }
 
 async function readPersistedMessages(

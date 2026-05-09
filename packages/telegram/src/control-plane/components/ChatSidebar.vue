@@ -153,8 +153,14 @@ onBeforeUnmount(() => {
         >
           <div class="chat-sidebar__chat-main-row">
             <div class="chat-sidebar__chat-title-row">
+              <img
+                v-if="chat.avatarUrl"
+                class="chat-sidebar__chat-avatar"
+                :src="chat.avatarUrl"
+                alt=""
+              />
               <svg
-                v-if="chat.icon === 'bot'"
+                v-else-if="chat.icon === 'bot'"
                 class="chat-sidebar__chat-icon"
                 viewBox="0 0 20 20"
                 fill="none"
@@ -219,6 +225,9 @@ onBeforeUnmount(() => {
                 <path d="M5.5 9.5V7a3.5 3.5 0 0 1 7 0v2.5" />
                 <path d="M4.5 9.5h9v7h-9v-7Z" />
               </svg>
+              <div v-else class="chat-sidebar__chat-initials">
+                {{ chat.initials }}
+              </div>
               <div class="chat-sidebar__chat-title">{{ chat.title }}</div>
             </div>
           </div>
@@ -357,6 +366,14 @@ onBeforeUnmount(() => {
 
 .chat-sidebar__chat-icon {
   @apply h-3.5 w-3.5 shrink-0 text-zinc-700;
+}
+
+.chat-sidebar__chat-avatar {
+  @apply h-8 w-8 shrink-0 rounded-full object-cover;
+}
+
+.chat-sidebar__chat-initials {
+  @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-teal-700 text-xs font-semibold text-white;
 }
 
 .chat-sidebar__chat-title {

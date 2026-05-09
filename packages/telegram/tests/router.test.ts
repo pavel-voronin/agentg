@@ -83,7 +83,7 @@ describe('Telegram history router chat listing', () => {
       earliestMessageDate: null,
       messageCount: 0
     });
-    expect(database.selectCalls()).toBe(1);
+    expect(database.selectCalls()).toBe(2);
   });
 });
 
@@ -115,6 +115,12 @@ function thenableQuery(result: unknown[]) {
       return query;
     },
     groupBy() {
+      return query;
+    },
+    innerJoin() {
+      return query;
+    },
+    leftJoin() {
       return query;
     },
     limit() {

@@ -12,6 +12,7 @@ import {
 } from './model-refs.js';
 import { createIntegrationEvent, type IntegrationEvent } from '@agentg/events/envelope';
 import type {
+  TelegramReadMessage,
   TelegramChatDirectoryEntry,
   TelegramChatFolder,
   TelegramMessageServiceAction,
@@ -99,6 +100,20 @@ export type TelegramMessagesObservedEventSource = {
   storedMessages: number;
 };
 
+export type TelegramFileQueueStats = {
+  downloadingCount: number;
+  failedCount: number;
+  knownCount: number;
+  knownDownloadedBytes: number;
+  knownRemainingBytes: number;
+  knownTotalBytes: number;
+  queuedCount: number;
+  readyCount: number;
+  remainingCount: number;
+  totalCount: number;
+  unknownRemainingCount: number;
+};
+
 export type TelegramEventSourceChatFolder = {
   iconName?: string;
   id: number;
@@ -168,6 +183,27 @@ export function createTelegramIntegrationEvents(
   return events;
 }
 
+export function createTelegramFileQueueUpdatedEvent(
+  stats: TelegramFileQueueStats
+): IntegrationEvent {
+  return createIntegrationEvent({
+    data: {
+      downloadingCount: stats.downloadingCount,
+      failedCount: stats.failedCount,
+      knownCount: stats.knownCount,
+      knownDownloadedBytes: stats.knownDownloadedBytes,
+      knownRemainingBytes: stats.knownRemainingBytes,
+      knownTotalBytes: stats.knownTotalBytes,
+      queuedCount: stats.queuedCount,
+      readyCount: stats.readyCount,
+      remainingCount: stats.remainingCount,
+      totalCount: stats.totalCount,
+      unknownRemainingCount: stats.unknownRemainingCount
+    },
+    type: 'telegram.files.queue.updated'
+  });
+}
+
 export function createTelegramMessagesObservedEvent(
   source: TelegramMessagesObservedEventSource
 ): IntegrationEvent {
@@ -186,6 +222,33 @@ export function createTelegramMessagesObservedEvent(
       chatId: source.chatId
     },
     type: 'telegram.messages.observed'
+  });
+}
+
+export function createTelegramChatUpdatedEvent(chat: TelegramChatDirectoryEntry): IntegrationEvent {
+  return createIntegrationEvent({
+    data: {
+      chat
+    },
+    meta: {
+      chatId: chat.id
+    },
+    type: 'telegram.chat.updated'
+  });
+}
+
+export function createTelegramReadMessageUpdatedEvent(
+  message: TelegramReadMessage
+): IntegrationEvent {
+  return createIntegrationEvent({
+    data: {
+      message
+    },
+    meta: {
+      chatId: message.chat.id,
+      messageId: message.telegramMessageId
+    },
+    type: 'telegram.message.updated'
   });
 }
 
@@ -308,15 +371,7 @@ function chatDirectoryEvent(event: TelegramChatDirectoryEvent): IntegrationEvent
     });
   }
 
-  return createIntegrationEvent({
-    data: {
-      chat: event.chat
-    },
-    meta: {
-      chatId: event.chat.id
-    },
-    type: 'telegram.chat.updated'
-  });
+  return createTelegramChatUpdatedEvent(event.chat);
 }
 
 function eventUser(user: TelegramEventSourceUser): TelegramEventUser {

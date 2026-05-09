@@ -13,6 +13,7 @@ import {
 import { useControlPlaneHost, type ControlPlaneHostEvent } from '@agentg/control-plane-sdk/host';
 import type { SlotContext } from '@agentg/control-plane-sdk/slots';
 import type {
+  TelegramFileRef,
   TelegramMessageServiceAction,
   TelegramMessageTextEntity,
   TelegramReadMessage
@@ -29,6 +30,11 @@ type FetchMessagesPageResult = {
 
 type GetMessageResult = {
   message?: unknown;
+};
+
+type RequestFileResult = {
+  decision?: unknown;
+  file?: unknown;
 };
 
 type TimelineDateItem = {
@@ -58,15 +64,28 @@ type TimelineItem = TimelineDateItem | TimelineMessageItem | TimelineServiceItem
 
 type MessageView = {
   avatar: string;
+  avatarUrl: string | null;
   body: string;
   bodySegments: MessageTextSegment[];
   contentLabel: string | null;
   dateKey: string;
   isReplyLoaded: boolean;
+  mediaFiles: MediaFileView[];
   sender: string | null;
   time: string;
   replyTarget: MessageTarget | null;
   replyText: string | null;
+};
+
+type MediaFileView = {
+  file: TelegramFileRef;
+  id: string;
+  isInteractive: boolean;
+  label: string;
+  progress: string | null;
+  status: string;
+  thumbnailUrl: string | null;
+  url: string | null;
 };
 
 type MessageTarget = {
@@ -120,6 +139,10 @@ let dateIslandFrame: number | null = null;
 const selectedChatId = computed(() => {
   const value = props.slotContext?.selectedChatId;
   return typeof value === 'string' && value.trim().length > 0 ? value : null;
+});
+const selectedChatAvatarUrl = computed(() => {
+  const value = props.slotContext?.selectedChatAvatarUrl;
+  return typeof value === 'string' && value.length > 0 ? value : null;
 });
 const sortedMessages = computed(() => sortMessages(messages.value));
 const messagesByTelegramId = computed(() => {
@@ -273,6 +296,7 @@ function applyUpdatedMessage(event: ControlPlaneHostEvent): void {
           ...message,
           contentType: update.contentType,
           editDate: update.editDate,
+          media: update.mediaFiles === null ? message.media : { files: update.mediaFiles },
           serviceAction: update.serviceAction,
           text: update.text,
           textEntities: update.textEntities
@@ -424,11 +448,16 @@ function messageView(message: TelegramReadMessage): MessageView {
 
   return {
     avatar: avatarLabel(sender ?? message.sender?.id ?? message.chat.id),
+    avatarUrl: selectedChatAvatarUrl.value,
     body: messageBody(message),
     bodySegments: messageTextSegments(message),
-    contentLabel: message.text === null ? contentLabel(message.contentType) : null,
+    contentLabel:
+      message.text === null && message.media.files.length === 0
+        ? contentLabel(message.contentType)
+        : null,
     dateKey: dateKey(message.messageDate),
     isReplyLoaded: replyMessage !== null,
+    mediaFiles: mediaFileViews(message),
     replyTarget,
     replyText:
       replyTarget === null
@@ -504,6 +533,7 @@ function normalizeMessage(value: Record<string, unknown> | undefined): TelegramR
     id,
     isDeleted: value?.isDeleted === true,
     isOutgoing: value?.isOutgoing === true,
+    media: normalizeMessageMedia(value?.media),
     messageDate: asNullableString(value?.messageDate),
     replyTo: normalizeReply(value?.replyTo),
     sender: normalizeSender(value?.sender),
@@ -521,6 +551,7 @@ function normalizeMessageUpdate(value: Record<string, unknown> | undefined): {
   chatId: string;
   contentType: string;
   editDate: string | null;
+  mediaFiles: TelegramFileRef[] | null;
   messageId: string;
   serviceAction: TelegramMessageServiceAction | null;
   text: string | null;
@@ -536,11 +567,220 @@ function normalizeMessageUpdate(value: Record<string, unknown> | undefined): {
     chatId,
     contentType,
     editDate: asNullableString(value?.editDate),
+    mediaFiles: normalizeOptionalMessageMedia(value?.media),
     messageId,
     serviceAction: normalizeServiceAction(value?.serviceAction),
     text: asNullableString(value?.text),
     textEntities: normalizeTextEntities(value?.textEntities)
   };
+}
+
+async function requestMediaFile(file: TelegramFileRef): Promise<void> {
+  if (!file.canRequest) {
+    return;
+  }
+  try {
+    const result = await host.rpc<RequestFileResult>('telegram.requestFile', {
+      owner: file.owner,
+      slotKey: file.slotKey
+    });
+    const requestedFile = normalizeFileRef(asRecord(result.file));
+    if (requestedFile !== null) {
+      mergeMessageFile(requestedFile);
+    }
+    const decision = asRecord(result.decision);
+    if (decision?.action === 'deny') {
+      lastError.value = asString(decision.reason) ?? 'File request denied';
+    }
+  } catch (error) {
+    lastError.value = errorMessage(error);
+  }
+}
+
+function mergeMessageFile(file: TelegramFileRef): void {
+  if (file.owner._model !== 'telegram.message') {
+    return;
+  }
+  messages.value = messages.value.map((message) =>
+    message.id === file.owner.id
+      ? {
+          ...message,
+          media: {
+            files: upsertMessageFile(message.media.files, file)
+          }
+        }
+      : message
+  );
+}
+
+function upsertMessageFile(files: TelegramFileRef[], file: TelegramFileRef): TelegramFileRef[] {
+  return [...files.filter((item) => item.slotKey !== file.slotKey), file].sort(compareFileRefs);
+}
+
+function normalizeMessageMedia(value: unknown): TelegramReadMessage['media'] {
+  return {
+    files: normalizeFileRefs(asRecord(value)?.files)
+  };
+}
+
+function normalizeOptionalMessageMedia(value: unknown): TelegramFileRef[] | null {
+  if (value === undefined) {
+    return null;
+  }
+  return normalizeMessageMedia(value).files;
+}
+
+function normalizeFileRefs(value: unknown): TelegramFileRef[] {
+  return Array.isArray(value)
+    ? value
+        .map((item) => normalizeFileRef(asRecord(item)))
+        .filter(isDefined)
+        .sort(compareFileRefs)
+    : [];
+}
+
+function normalizeFileRef(value: Record<string, unknown> | undefined): TelegramFileRef | null {
+  const id = asString(value?.id);
+  const owner = normalizeFileOwner(value?.owner);
+  const slotKey = asString(value?.slotKey);
+  const status = asString(value?.status);
+  const mediaKind = asString(value?.mediaKind);
+  const renderKind = asString(value?.renderKind);
+  const updatedAt = asString(value?.updatedAt);
+  if (
+    id === undefined ||
+    owner === null ||
+    slotKey === undefined ||
+    !isFileStatus(status) ||
+    !isFileMediaKind(mediaKind) ||
+    !isFileRenderKind(renderKind) ||
+    updatedAt === undefined
+  ) {
+    return null;
+  }
+  return {
+    _model: 'telegram.file',
+    byteSize: asNullableNonNegativeInteger(value?.byteSize),
+    canRequest: value?.canRequest === true,
+    downloadedByteSize: asNullableNonNegativeInteger(value?.downloadedByteSize),
+    downloadError: asNullableString(value?.downloadError),
+    durationSeconds: asNullableNonNegativeInteger(value?.durationSeconds),
+    fileName: asNullableString(value?.fileName),
+    height: asNullableNonNegativeInteger(value?.height),
+    id,
+    mediaKind,
+    mimeType: asNullableString(value?.mimeType),
+    owner,
+    renderKind,
+    slotKey,
+    status,
+    updatedAt,
+    url: asNullableString(value?.url),
+    width: asNullableNonNegativeInteger(value?.width)
+  };
+}
+
+function normalizeFileOwner(value: unknown): TelegramFileRef['owner'] | null {
+  const owner = asRecord(value);
+  const model = asString(owner?._model);
+  const id = asString(owner?.id);
+  if (id === undefined) {
+    return null;
+  }
+  if (model === 'telegram.chat') {
+    return { _model: 'telegram.chat', id };
+  }
+  if (model === 'telegram.message') {
+    return { _model: 'telegram.message', id };
+  }
+  return null;
+}
+
+function mediaFileViews(message: TelegramReadMessage): MediaFileView[] {
+  const thumbnailUrl = providerFileUrl(
+    message.media.files.find((file) => file.mediaKind === 'thumbnail' && file.url !== null)?.url ??
+      null
+  );
+  const primaryFiles = message.media.files.filter((file) => file.mediaKind !== 'thumbnail');
+  const files = primaryFiles.length === 0 ? message.media.files : primaryFiles;
+  return files.map((file) => ({
+    file,
+    id: file.id,
+    isInteractive: file.canRequest,
+    label: fileLabel(file),
+    progress: fileProgress(file),
+    status: fileStatusLabel(file),
+    thumbnailUrl,
+    url: providerFileUrl(file.url)
+  }));
+}
+
+function fileLabel(file: TelegramFileRef): string {
+  if (file.fileName !== null) {
+    return file.fileName;
+  }
+  if (file.mediaKind === 'photo') {
+    return 'Photo';
+  }
+  if (file.mediaKind === 'video') {
+    return 'Video';
+  }
+  if (file.mediaKind === 'thumbnail') {
+    return 'Preview';
+  }
+  return 'File';
+}
+
+function fileStatusLabel(file: TelegramFileRef): string {
+  if (file.status === 'ready') {
+    return formatFileSize(file.byteSize);
+  }
+  if (file.status === 'queued') {
+    return 'Queued';
+  }
+  if (file.status === 'downloading') {
+    return 'Downloading';
+  }
+  if (file.status === 'failed') {
+    return file.downloadError ?? 'Download failed';
+  }
+  return file.canRequest ? 'Click to download' : 'Not downloaded';
+}
+
+function fileProgress(file: TelegramFileRef): string | null {
+  if (
+    file.status !== 'downloading' ||
+    file.byteSize === null ||
+    file.downloadedByteSize === null ||
+    file.byteSize <= 0
+  ) {
+    return null;
+  }
+  return `${String(Math.min(100, Math.floor((file.downloadedByteSize / file.byteSize) * 100)))}%`;
+}
+
+function formatFileSize(value: number | null): string {
+  if (value === null) {
+    return 'Ready';
+  }
+  if (value >= 1024 * 1024) {
+    return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+  }
+  if (value >= 1024) {
+    return `${Math.ceil(value / 1024).toString()} KB`;
+  }
+  return `${value.toString()} B`;
+}
+
+function providerFileUrl(url: string | null): string | null {
+  if (url === null || !url.startsWith('/')) {
+    return null;
+  }
+  return `/control-plane/provider-files/telegram/${url.slice(1).split('/').map(encodeURIComponent).join('/')}`;
+}
+
+function compareFileRefs(left: TelegramFileRef, right: TelegramFileRef): number {
+  return left.slotKey.localeCompare(right.slotKey);
 }
 
 function normalizeTextEntities(value: unknown): TelegramMessageTextEntity[] {
@@ -661,6 +901,9 @@ function messageBody(message: TelegramReadMessage): string {
   if (text !== undefined && text.length > 0) {
     return text;
   }
+  if (message.media.files.length > 0) {
+    return '';
+  }
   return contentLabel(message.contentType) ?? 'Unsupported message';
 }
 
@@ -674,6 +917,13 @@ function messageServiceLabel(message: TelegramReadMessage): string | null {
 
 function messageTextSegments(message: TelegramReadMessage): MessageTextSegment[] {
   const text = message.text;
+  if (
+    !message.isDeleted &&
+    (text === null || text.length === 0) &&
+    message.media.files.length > 0
+  ) {
+    return [];
+  }
   if (message.isDeleted || text === null || text.length === 0) {
     return [{ id: 'text:0', kind: 'text', text: messageBody(message) }];
   }
@@ -963,8 +1213,36 @@ function asNullableString(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
+function asNullableNonNegativeInteger(value: unknown): number | null {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
+}
+
 function isDefined<T>(value: T | null | undefined): value is T {
   return value !== null && value !== undefined;
+}
+
+function isFileStatus(value: string | undefined): value is TelegramFileRef['status'] {
+  return (
+    value === 'known' ||
+    value === 'queued' ||
+    value === 'downloading' ||
+    value === 'ready' ||
+    value === 'failed'
+  );
+}
+
+function isFileMediaKind(value: string | undefined): value is TelegramFileRef['mediaKind'] {
+  return (
+    value === 'avatar' ||
+    value === 'document' ||
+    value === 'photo' ||
+    value === 'thumbnail' ||
+    value === 'video'
+  );
+}
+
+function isFileRenderKind(value: string | undefined): value is TelegramFileRef['renderKind'] {
+  return value === 'download' || value === 'image' || value === 'video';
 }
 
 function errorMessage(error: unknown): string {
@@ -1024,7 +1302,13 @@ function errorMessage(error: unknown): string {
             highlightedMessageId === item.message.telegramMessageId ? 'true' : undefined
           "
         >
-          <div v-if="!item.message.isOutgoing" class="telegram-chat-messages__avatar">
+          <img
+            v-if="!item.message.isOutgoing && item.view.avatarUrl !== null"
+            class="telegram-chat-messages__avatar-image"
+            :src="item.view.avatarUrl"
+            alt=""
+          />
+          <div v-else-if="!item.message.isOutgoing" class="telegram-chat-messages__avatar">
             {{ item.view.avatar }}
           </div>
 
@@ -1053,7 +1337,59 @@ function errorMessage(error: unknown): string {
               {{ item.view.contentLabel }}
             </div>
 
-            <div class="telegram-chat-messages__message-body">
+            <div v-if="item.view.mediaFiles.length > 0" class="telegram-chat-messages__media-list">
+              <template v-for="media in item.view.mediaFiles" :key="media.id">
+                <img
+                  v-if="media.url !== null && media.file.renderKind === 'image'"
+                  class="telegram-chat-messages__media-image"
+                  :src="media.url"
+                  :alt="media.label"
+                />
+                <video
+                  v-else-if="media.url !== null && media.file.renderKind === 'video'"
+                  class="telegram-chat-messages__media-video"
+                  :src="media.url"
+                  controls
+                  playsinline
+                />
+                <a
+                  v-else-if="media.url !== null"
+                  class="telegram-chat-messages__media-download"
+                  :href="media.url"
+                  :download="media.label"
+                >
+                  <span class="telegram-chat-messages__media-title">{{ media.label }}</span>
+                  <span class="telegram-chat-messages__media-status">{{ media.status }}</span>
+                </a>
+                <button
+                  v-else
+                  type="button"
+                  class="telegram-chat-messages__media-request"
+                  :disabled="!media.isInteractive"
+                  @click="() => void requestMediaFile(media.file)"
+                >
+                  <img
+                    v-if="media.thumbnailUrl !== null"
+                    class="telegram-chat-messages__media-thumbnail"
+                    :src="media.thumbnailUrl"
+                    :alt="media.label"
+                  />
+                  <span class="telegram-chat-messages__media-title">{{ media.label }}</span>
+                  <span class="telegram-chat-messages__media-status">{{ media.status }}</span>
+                  <span
+                    v-if="media.progress !== null"
+                    class="telegram-chat-messages__media-progress"
+                  >
+                    {{ media.progress }}
+                  </span>
+                </button>
+              </template>
+            </div>
+
+            <div
+              v-if="item.view.bodySegments.length > 0"
+              class="telegram-chat-messages__message-body"
+            >
               <template v-for="segment in item.view.bodySegments" :key="segment.id">
                 <a
                   v-if="segment.kind === 'link'"
@@ -1176,6 +1512,10 @@ function errorMessage(error: unknown): string {
   @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-teal-700 text-sm font-semibold text-white shadow-sm;
 }
 
+.telegram-chat-messages__avatar-image {
+  @apply h-9 w-9 shrink-0 rounded-full object-cover shadow-sm;
+}
+
 .telegram-chat-messages__bubble {
   @apply max-w-[78%] rounded-2xl rounded-bl-md bg-white px-3.5 py-2 shadow-sm ring-1 ring-black/5 lg:max-w-[680px];
 }
@@ -1206,6 +1546,42 @@ function errorMessage(error: unknown): string {
 
 .telegram-chat-messages__content-label {
   @apply mb-1 w-fit rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-500;
+}
+
+.telegram-chat-messages__media-list {
+  @apply mb-1 grid max-w-full gap-2;
+}
+
+.telegram-chat-messages__media-image {
+  @apply max-h-[420px] max-w-full rounded-lg object-contain;
+}
+
+.telegram-chat-messages__media-video {
+  @apply max-h-[420px] max-w-full rounded-lg bg-black;
+}
+
+.telegram-chat-messages__media-download {
+  @apply grid min-w-52 gap-0.5 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-left hover:bg-zinc-100;
+}
+
+.telegram-chat-messages__media-request {
+  @apply grid min-w-52 gap-1 overflow-hidden rounded-lg border border-dashed border-zinc-300 bg-zinc-50 px-3 py-2 text-left hover:bg-zinc-100 disabled:cursor-default disabled:opacity-70 disabled:hover:bg-zinc-50;
+}
+
+.telegram-chat-messages__media-thumbnail {
+  @apply -mx-3 -mt-2 mb-1 max-h-64 w-[calc(100%+1.5rem)] object-cover;
+}
+
+.telegram-chat-messages__media-title {
+  @apply min-w-0 truncate text-sm font-semibold text-zinc-800;
+}
+
+.telegram-chat-messages__media-status {
+  @apply text-xs text-zinc-500;
+}
+
+.telegram-chat-messages__media-progress {
+  @apply h-5 w-fit rounded-full bg-teal-600 px-2 py-0.5 text-xs font-semibold text-white;
 }
 
 .telegram-chat-messages__message-body {

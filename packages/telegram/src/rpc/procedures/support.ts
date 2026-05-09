@@ -22,11 +22,16 @@ import {
   telegramUsers
 } from '../../schema.js';
 import { upsertChat } from '../../store.js';
+import {
+  readTelegramFileRefsForOwners,
+  type TelegramFileOwnerKey
+} from '../../telegram-file-store.js';
 import { invokeTdlibWithEvents } from '../../telegram-operation-events.js';
 import type {
   TelegramChatDirectoryEntry,
   TelegramChatPlacement,
   TelegramChatTypeCount,
+  TelegramFileRef,
   TelegramHistoryChat,
   TelegramReadMessage
 } from '../contracts.js';
@@ -239,7 +244,10 @@ export function readMessageSelection() {
   };
 }
 
-export function toReadMessage(message: TelegramMessageStorageRow): TelegramReadMessage {
+export function toReadMessage(
+  message: TelegramMessageStorageRow,
+  files: TelegramFileRef[] = []
+): TelegramReadMessage {
   const replyTo = telegramMessageReply(message);
 
   return {
@@ -253,6 +261,9 @@ export function toReadMessage(message: TelegramMessageStorageRow): TelegramReadM
     editDate: toNullableIsoString(message.editDate),
     isDeleted: message.isDeleted,
     isOutgoing: message.raw.is_outgoing === true,
+    media: {
+      files
+    },
     messageDate: toNullableIsoString(message.messageDate),
     replyTo,
     sender: telegramMessageSenderRef(message.senderType, message.senderId),
@@ -272,9 +283,30 @@ export async function toReadMessages(
 ): Promise<TelegramReadMessage[]> {
   const senderInfoByKey = await readSenderDisplayInfo(database, messages);
   const serviceUserInfoById = await readServiceUserDisplayInfo(database, messages);
+  const filesByOwner = await readTelegramFileRefsForOwners(
+    database,
+    messages.map((message) => ({
+      ownerId: telegramMessageRef({
+        chatId: message.telegramChatId,
+        messageId: message.telegramMessageId
+      }).id,
+      ownerModel: 'telegram.message'
+    }))
+  );
 
   return messages.map((message) => {
-    const readMessage = toReadMessage(message);
+    const readMessage = toReadMessage(
+      message,
+      filesByOwner.get(
+        ownerKey({
+          ownerId: telegramMessageRef({
+            chatId: message.telegramChatId,
+            messageId: message.telegramMessageId
+          }).id,
+          ownerModel: 'telegram.message'
+        })
+      ) ?? []
+    );
     const senderKey = senderDisplayKey(message.senderType, message.senderId);
     return {
       ...readMessage,
@@ -290,6 +322,13 @@ export async function toDirectoryEntries(
   chats: TelegramChatStorageRow[]
 ): Promise<TelegramChatDirectoryEntry[]> {
   const userIds = chats.map((chat) => telegramChatUserId(chat.raw)).filter(isDefined);
+  const filesByOwner = await readTelegramFileRefsForOwners(
+    database,
+    chats.map((chat) => ({
+      ownerId: chat.telegramChatId,
+      ownerModel: 'telegram.chat'
+    }))
+  );
   const users =
     userIds.length === 0
       ? []
@@ -305,7 +344,16 @@ export async function toDirectoryEntries(
 
   return chats.map((chat) => {
     const user = usersById.get(telegramChatUserId(chat.raw) ?? '');
-    return toDirectoryEntry(chat, user);
+    return toDirectoryEntry(
+      chat,
+      user,
+      filesByOwner.get(
+        ownerKey({
+          ownerId: chat.telegramChatId,
+          ownerModel: 'telegram.chat'
+        })
+      ) ?? []
+    );
   });
 }
 
@@ -401,10 +449,15 @@ export function isTdObject(value: TdObject | undefined): value is TdObject {
 
 function toDirectoryEntry(
   chat: TelegramChatStorageRow,
-  user: TelegramUserInfo | undefined
+  user: TelegramUserInfo | undefined,
+  files: TelegramFileRef[]
 ): TelegramChatDirectoryEntry {
   return {
     _model: 'telegram.chat',
+    avatar: {
+      big: files.find((file) => file.slotKey === 'avatar.big') ?? null,
+      small: files.find((file) => file.slotKey === 'avatar.small') ?? null
+    },
     id: chat.telegramChatId,
     isBot: user?.isBot === true,
     isSelf: user?.isSelf === true,
@@ -414,6 +467,10 @@ function toDirectoryEntry(
     type: chat.type,
     updatedAt: chat.updatedAt.toISOString()
   };
+}
+
+function ownerKey(owner: TelegramFileOwnerKey): string {
+  return `${owner.ownerModel}:${owner.ownerId}`;
 }
 
 function telegramChatPlacements(raw: JsonObject): TelegramChatPlacement[] {

@@ -1,5 +1,11 @@
 import { z } from 'zod';
 
+import {
+  telegramFileMediaKinds,
+  telegramFileRenderKinds,
+  telegramFileStatuses
+} from '../telegram-file-types.js';
+
 const nonEmptyStringSchema = z.string().trim().min(1);
 const nonNegativeIntegerSchema = z.number().int().nonnegative();
 const positiveIntegerSchema = z.number().int().positive();
@@ -47,22 +53,52 @@ export const telegramHistoryFetchPageResultSchema = z.discriminatedUnion('kind',
   })
 ]);
 
-export const telegramReadChatSchema = z.object({
-  _model: z.literal('telegram.chat'),
-  id: z.string(),
-  title: z.string(),
-  type: z.string(),
-  updatedAt: z.string()
-});
-
 export const telegramChatModelRefSchema = z.object({
   _model: z.literal('telegram.chat'),
+  id: z.string()
+});
+
+export const telegramMessageModelRefSchema = z.object({
+  _model: z.literal('telegram.message'),
   id: z.string()
 });
 
 export const telegramUserModelRefSchema = z.object({
   _model: z.literal('telegram.user'),
   id: z.string()
+});
+
+export const telegramFileRefSchema = z.object({
+  _model: z.literal('telegram.file'),
+  byteSize: nonNegativeIntegerSchema.nullable(),
+  canRequest: z.boolean(),
+  downloadedByteSize: nonNegativeIntegerSchema.nullable(),
+  downloadError: z.string().nullable(),
+  durationSeconds: nonNegativeIntegerSchema.nullable(),
+  fileName: z.string().nullable(),
+  height: nonNegativeIntegerSchema.nullable(),
+  id: z.string(),
+  mediaKind: z.enum(telegramFileMediaKinds),
+  mimeType: z.string().nullable(),
+  owner: z.union([telegramChatModelRefSchema, telegramMessageModelRefSchema]),
+  renderKind: z.enum(telegramFileRenderKinds),
+  slotKey: z.string(),
+  status: z.enum(telegramFileStatuses),
+  updatedAt: z.string(),
+  url: z.string().nullable(),
+  width: nonNegativeIntegerSchema.nullable()
+});
+
+export const telegramReadChatSchema = z.object({
+  _model: z.literal('telegram.chat'),
+  avatar: z.object({
+    big: telegramFileRefSchema.nullable(),
+    small: telegramFileRefSchema.nullable()
+  }),
+  id: z.string(),
+  title: z.string(),
+  type: z.string(),
+  updatedAt: z.string()
 });
 
 export const telegramMessageTextEntitySchema = z.object({
@@ -89,6 +125,9 @@ export const telegramReadMessageSchema = z.object({
   editDate: z.string().nullable(),
   isDeleted: z.boolean(),
   isOutgoing: z.boolean(),
+  media: z.object({
+    files: z.array(telegramFileRefSchema)
+  }),
   messageDate: z.string().nullable(),
   replyTo: z
     .object({
@@ -125,6 +164,49 @@ export const telegramGetMessageInputSchema = z.object({
 
 export const telegramGetMessageOutputSchema = z.object({
   message: telegramReadMessageSchema.nullable()
+});
+
+export const telegramRequestFileInputSchema = z.object({
+  owner: z.union([telegramChatModelRefSchema, telegramMessageModelRefSchema]),
+  slotKey: nonEmptyStringSchema
+});
+
+export const telegramRequestFileOutputSchema = z.object({
+  decision: z.discriminatedUnion('action', [
+    z.object({
+      action: z.literal('record'),
+      reason: z.string()
+    }),
+    z.object({
+      action: z.literal('enqueue'),
+      reason: z.string()
+    }),
+    z.object({
+      action: z.literal('deny'),
+      reason: z.string()
+    })
+  ]),
+  file: telegramFileRefSchema.nullable()
+});
+
+export const telegramFileQueueStatsSchema = z.object({
+  downloadingCount: nonNegativeIntegerSchema,
+  failedCount: nonNegativeIntegerSchema,
+  knownCount: nonNegativeIntegerSchema,
+  knownDownloadedBytes: nonNegativeIntegerSchema,
+  knownRemainingBytes: nonNegativeIntegerSchema,
+  knownTotalBytes: nonNegativeIntegerSchema,
+  queuedCount: nonNegativeIntegerSchema,
+  readyCount: nonNegativeIntegerSchema,
+  remainingCount: nonNegativeIntegerSchema,
+  totalCount: nonNegativeIntegerSchema,
+  unknownRemainingCount: nonNegativeIntegerSchema
+});
+
+export const telegramGetFileQueueStatsInputSchema = z.object({}).default({});
+
+export const telegramGetFileQueueStatsOutputSchema = z.object({
+  stats: telegramFileQueueStatsSchema
 });
 
 export const telegramListRecentMessagesInputSchema = z
@@ -240,11 +322,14 @@ export type TelegramHistoryListChatsRequest = z.infer<typeof telegramHistoryList
 export type TelegramHistoryFetchPageRequest = z.infer<typeof telegramHistoryFetchPageInputSchema>;
 export type TelegramHistoryFetchPageResult = z.infer<typeof telegramHistoryFetchPageResultSchema>;
 export type TelegramReadChat = z.infer<typeof telegramReadChatSchema>;
+export type TelegramFileRef = z.infer<typeof telegramFileRefSchema>;
 export type TelegramMessageTextEntity = z.infer<typeof telegramMessageTextEntitySchema>;
 export type TelegramMessageServiceAction = z.infer<typeof telegramMessageServiceActionSchema>;
 export type TelegramReadMessage = z.infer<typeof telegramReadMessageSchema>;
 export type TelegramGetChatInput = z.infer<typeof telegramGetChatInputSchema>;
 export type TelegramGetMessageInput = z.infer<typeof telegramGetMessageInputSchema>;
+export type TelegramRequestFileInput = z.infer<typeof telegramRequestFileInputSchema>;
+export type TelegramRequestFileOutput = z.infer<typeof telegramRequestFileOutputSchema>;
 export type TelegramListRecentMessagesInput = z.infer<typeof telegramListRecentMessagesInputSchema>;
 export type TelegramFetchMessagesPageInput = z.infer<typeof telegramFetchMessagesPageInputSchema>;
 export type TelegramFetchMessagesPageOutput = z.infer<typeof telegramFetchMessagesPageOutputSchema>;

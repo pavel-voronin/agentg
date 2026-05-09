@@ -23,6 +23,10 @@ describe('createTrpcGatewayTelegramClient', () => {
           return {
             chat: {
               _model: 'telegram.chat',
+              avatar: {
+                big: null,
+                small: null
+              },
               id: input.chatId,
               title: 'Saved Messages',
               type: 'private',
@@ -41,6 +45,10 @@ describe('createTrpcGatewayTelegramClient', () => {
       await expect(client.call('telegram.getChat', { chatId: 'chat-a' })).resolves.toEqual({
         chat: {
           _model: 'telegram.chat',
+          avatar: {
+            big: null,
+            small: null
+          },
           id: 'chat-a',
           title: 'Saved Messages',
           type: 'private',

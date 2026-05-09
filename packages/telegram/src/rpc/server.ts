@@ -15,6 +15,7 @@ export const TELEGRAM_CONTROL_PLANE_ASSETS_ROOT = fileURLToPath(
 export async function startTelegramTrpcServer(
   options: TelegramRpcRuntime & {
     bind: InternalTrpcBindConfig;
+    filesDirectory: string;
   }
 ): Promise<Server> {
   const server = createInternalTrpcHttpServer({
@@ -27,10 +28,16 @@ export async function startTelegramTrpcServer(
       database: options.database,
       eventBus: options.eventBus
     }),
-    staticAssets: {
-      rootDir: TELEGRAM_CONTROL_PLANE_ASSETS_ROOT,
-      urlPrefix: '/control-plane-assets/'
-    }
+    staticAssets: [
+      {
+        rootDir: TELEGRAM_CONTROL_PLANE_ASSETS_ROOT,
+        urlPrefix: '/control-plane-assets/'
+      },
+      {
+        rootDir: options.filesDirectory,
+        urlPrefix: '/telegram-files/'
+      }
+    ]
   });
   const address = formatInternalTrpcBindAddress(options.bind);
 

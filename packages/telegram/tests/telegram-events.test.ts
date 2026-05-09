@@ -1,10 +1,39 @@
 import {
+  createTelegramFileQueueUpdatedEvent,
   createTelegramIntegrationEvents,
   createTelegramMessagesObservedEvent
 } from '@agentg/telegram/integration-events';
 import { describe, expect, it } from 'vitest';
 
 describe('Telegram integration events', () => {
+  it('publishes file queue stats as a compact dashboard event', () => {
+    const event = createTelegramFileQueueUpdatedEvent({
+      downloadingCount: 2,
+      failedCount: 3,
+      knownCount: 4,
+      knownDownloadedBytes: 1024,
+      knownRemainingBytes: 2048,
+      knownTotalBytes: 3072,
+      queuedCount: 5,
+      readyCount: 6,
+      remainingCount: 7,
+      totalCount: 20,
+      unknownRemainingCount: 1
+    });
+
+    expect(event).toMatchObject({
+      data: {
+        downloadingCount: 2,
+        failedCount: 3,
+        knownRemainingBytes: 2048,
+        queuedCount: 5,
+        remainingCount: 7,
+        unknownRemainingCount: 1
+      },
+      type: 'telegram.files.queue.updated'
+    });
+  });
+
   it('publishes Telegram domain objects as ModelRefs', () => {
     const events = createTelegramIntegrationEvents(
       {
@@ -51,6 +80,10 @@ describe('Telegram integration events', () => {
         chatDirectoryEvent: {
           chat: {
             _model: 'telegram.chat',
+            avatar: {
+              big: null,
+              small: null
+            },
             id: 'chat-a',
             isBot: false,
             isSelf: false,

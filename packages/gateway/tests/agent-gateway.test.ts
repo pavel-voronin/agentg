@@ -34,6 +34,10 @@ describe('Agent Gateway external surface', () => {
           return {
             chat: {
               _model: 'telegram.chat',
+              avatar: {
+                big: null,
+                small: null
+              },
               id: input.chatId,
               title: 'Alice',
               type: 'private',
@@ -58,6 +62,10 @@ describe('Agent Gateway external surface', () => {
       ).resolves.toEqual({
         chat: {
           _model: 'telegram.chat',
+          avatar: {
+            big: null,
+            small: null
+          },
           id: 'chat-a',
           title: 'Alice',
           type: 'private',

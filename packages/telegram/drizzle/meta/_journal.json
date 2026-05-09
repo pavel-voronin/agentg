@@ -8,6 +8,20 @@
       "when": 1777701133488,
       "tag": "0000_unknown_lady_bullseye",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1778312400000,
+      "tag": "0001_telegram_files",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1778340900000,
+      "tag": "0002_telegram_file_assets",
+      "breakpoints": true
     }
   ]
 }

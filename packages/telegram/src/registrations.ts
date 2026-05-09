@@ -11,6 +11,7 @@ const TELEGRAM_DOMAIN_EVENT_TYPES = [
   'telegram.chat.removed',
   'telegram.chat.updated',
   'telegram.chat_folders.updated',
+  'telegram.files.queue.updated',
   'telegram.message.created',
   'telegram.message.deleted',
   'telegram.message.updated',
@@ -21,6 +22,7 @@ const TELEGRAM_DOMAIN_EVENT_TYPES = [
 
 const TELEGRAM_TDLIB_METHODS = [
   'close',
+  'downloadFile',
   'getChat',
   'getChatHistory',
   'getChatMessageByDate',
