@@ -23,6 +23,7 @@ describe('Telegram integration events', () => {
         message: {
           chatId: 'chat-a',
           contentType: 'messageText',
+          isOutgoing: false,
           messageDate: new Date('2026-05-05T00:00:00.000Z'),
           messageId: '42',
           senderId: 'user-a',

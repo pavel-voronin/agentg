@@ -5,7 +5,7 @@ import { telegramGetMessageInputSchema, telegramGetMessageOutputSchema } from '.
 import type { TelegramRpcRuntime } from '../runtime.js';
 import { rpc } from '../trpc.js';
 import { telegramMessages } from '../../schema.js';
-import { readMessageSelection, toReadMessage } from './support.js';
+import { readMessageSelection, toReadMessages } from './support.js';
 
 export const getMessage = query((runtime: TelegramRpcRuntime) =>
   rpc
@@ -22,9 +22,13 @@ export const getMessage = query((runtime: TelegramRpcRuntime) =>
           )
         )
         .limit(1);
+      const [readMessage] = await toReadMessages(
+        runtime.database,
+        message === undefined ? [] : [message]
+      );
 
       return {
-        message: message === undefined ? null : toReadMessage(message)
+        message: readMessage ?? null
       };
     })
 );

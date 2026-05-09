@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { normalizeHistoricalMessage, normalizeTelegramUpdate } from './normalize.js';
+import {
+  extractFormattedTextLinkEntities,
+  normalizeHistoricalMessage,
+  normalizeTelegramUpdate
+} from './normalize.js';
 
 describe('normalizeTelegramUpdate', () => {
   it('normalizes new text messages', () => {
@@ -69,6 +73,67 @@ describe('normalizeTelegramUpdate', () => {
       messageId: '42',
       text: 'edited'
     });
+  });
+
+  it('extracts link entities from Telegram formatted text', () => {
+    expect(
+      extractFormattedTextLinkEntities({
+        _: 'formattedText',
+        entities: [
+          {
+            _: 'textEntity',
+            length: 11,
+            offset: 6,
+            type: {
+              _: 'textEntityTypeUrl'
+            }
+          },
+          {
+            _: 'textEntity',
+            length: 4,
+            offset: 22,
+            type: {
+              _: 'textEntityTypeTextUrl',
+              url: 'https://docs.example/path'
+            }
+          }
+        ],
+        text: 'visit example.com and docs'
+      })
+    ).toEqual([
+      {
+        kind: 'url',
+        length: 11,
+        offset: 6,
+        url: 'https://example.com/'
+      },
+      {
+        kind: 'textUrl',
+        length: 4,
+        offset: 22,
+        url: 'https://docs.example/path'
+      }
+    ]);
+  });
+
+  it('filters unsafe formatted text link entities', () => {
+    expect(
+      extractFormattedTextLinkEntities({
+        _: 'formattedText',
+        entities: [
+          {
+            _: 'textEntity',
+            length: 4,
+            offset: 0,
+            type: {
+              _: 'textEntityTypeTextUrl',
+              url: 'javascript:alert(1)'
+            }
+          }
+        ],
+        text: 'docs'
+      })
+    ).toEqual([]);
   });
 
   it('normalizes deleted messages', () => {

@@ -65,6 +65,13 @@ export const telegramUserModelRefSchema = z.object({
   id: z.string()
 });
 
+export const telegramMessageTextEntitySchema = z.object({
+  kind: z.union([z.literal('url'), z.literal('textUrl')]),
+  length: positiveIntegerSchema,
+  offset: nonNegativeIntegerSchema,
+  url: z.string()
+});
+
 export const telegramReadMessageSchema = z.object({
   _model: z.literal('telegram.message'),
   id: z.string(),
@@ -73,11 +80,24 @@ export const telegramReadMessageSchema = z.object({
   deletedAt: z.string().nullable(),
   editDate: z.string().nullable(),
   isDeleted: z.boolean(),
+  isOutgoing: z.boolean(),
   messageDate: z.string().nullable(),
+  replyTo: z
+    .object({
+      chat: telegramChatModelRefSchema,
+      message: z.object({
+        _model: z.literal('telegram.message'),
+        id: z.string()
+      }),
+      telegramMessageId: z.string()
+    })
+    .nullable(),
   sender: z.union([telegramChatModelRefSchema, telegramUserModelRefSchema]).nullable(),
+  senderDisplayName: z.string().nullable(),
   senderType: z.string().nullable(),
   telegramMessageId: z.string(),
   text: z.string().nullable(),
+  textEntities: z.array(telegramMessageTextEntitySchema),
   updatedAt: z.string()
 });
 
@@ -100,6 +120,7 @@ export const telegramGetMessageOutputSchema = z.object({
 
 export const telegramListRecentMessagesInputSchema = z
   .object({
+    beforeMessageId: nonEmptyStringSchema.regex(/^[0-9]+$/).optional(),
     chatId: nonEmptyStringSchema.optional(),
     limit: positiveIntegerSchema.optional()
   })
@@ -199,6 +220,7 @@ export type TelegramHistoryListChatsRequest = z.infer<typeof telegramHistoryList
 export type TelegramHistoryFetchPageRequest = z.infer<typeof telegramHistoryFetchPageInputSchema>;
 export type TelegramHistoryFetchPageResult = z.infer<typeof telegramHistoryFetchPageResultSchema>;
 export type TelegramReadChat = z.infer<typeof telegramReadChatSchema>;
+export type TelegramMessageTextEntity = z.infer<typeof telegramMessageTextEntitySchema>;
 export type TelegramReadMessage = z.infer<typeof telegramReadMessageSchema>;
 export type TelegramGetChatInput = z.infer<typeof telegramGetChatInputSchema>;
 export type TelegramGetMessageInput = z.infer<typeof telegramGetMessageInputSchema>;

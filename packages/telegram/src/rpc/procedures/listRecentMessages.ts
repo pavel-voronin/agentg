@@ -8,7 +8,7 @@ import {
 import type { TelegramRpcRuntime } from '../runtime.js';
 import { rpc } from '../trpc.js';
 import { telegramMessages } from '../../schema.js';
-import { parseLimit, readMessageSelection, toReadMessage } from './support.js';
+import { andSql, parseLimit, readMessageSelection, toReadMessages } from './support.js';
 
 export const listRecentMessages = query((runtime: TelegramRpcRuntime) =>
   rpc
@@ -16,8 +16,12 @@ export const listRecentMessages = query((runtime: TelegramRpcRuntime) =>
     .output(telegramListRecentMessagesOutputSchema)
     .query(async ({ input }) => {
       const limit = parseLimit(input.limit, 50, 200);
-      const where =
-        input.chatId === undefined ? undefined : eq(telegramMessages.telegramChatId, input.chatId);
+      const where = andSql(
+        input.chatId === undefined ? undefined : eq(telegramMessages.telegramChatId, input.chatId),
+        input.beforeMessageId === undefined
+          ? undefined
+          : sql`${telegramMessages.telegramMessageId}::bigint < ${input.beforeMessageId}::bigint`
+      );
       const messages = await runtime.database
         .select(readMessageSelection())
         .from(telegramMessages)
@@ -29,7 +33,7 @@ export const listRecentMessages = query((runtime: TelegramRpcRuntime) =>
         .limit(limit);
 
       return {
-        messages: messages.map(toReadMessage)
+        messages: await toReadMessages(runtime.database, messages)
       };
     })
 );

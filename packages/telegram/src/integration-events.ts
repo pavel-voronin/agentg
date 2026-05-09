@@ -11,7 +11,11 @@ import {
   type TelegramUserModelRef
 } from './model-refs.js';
 import { createIntegrationEvent, type IntegrationEvent } from '@agentg/events/envelope';
-import type { TelegramChatDirectoryEntry, TelegramChatFolder } from './rpc/contracts.js';
+import type {
+  TelegramChatDirectoryEntry,
+  TelegramChatFolder,
+  TelegramMessageTextEntity
+} from './rpc/contracts.js';
 
 export type TelegramEventPersistResult = {
   chat: boolean;
@@ -51,7 +55,11 @@ export type TelegramEventSourceMessage = {
   senderId?: string;
   senderType?: string;
   contentType: string;
+  isOutgoing: boolean;
+  replyToChatId?: string;
+  replyToMessageId?: string;
   text?: string;
+  textEntities?: TelegramMessageTextEntity[];
   messageDate?: Date;
   editDate?: Date;
 };
@@ -62,6 +70,7 @@ export type TelegramEventSourceMessageContentUpdate = {
   editDate?: Date;
   messageId: string;
   text?: string;
+  textEntities?: TelegramMessageTextEntity[];
 };
 
 export type TelegramEventSourceMessageDelete = {
@@ -155,11 +164,21 @@ type TelegramEventMessage = TelegramMessageModelRef & {
   chat: TelegramChatModelRef;
   contentType: string;
   editDate: string | null;
+  isDeleted: boolean;
+  isOutgoing: boolean;
   messageDate: string | null;
+  replyTo: {
+    chat: TelegramChatModelRef;
+    message: TelegramMessageModelRef;
+    telegramMessageId: string;
+  } | null;
   sender: TelegramSenderModelRef | null;
+  senderDisplayName: string | null;
   senderType: string | null;
   telegramMessageId: string;
   text: string | null;
+  textEntities: TelegramMessageTextEntity[];
+  updatedAt: string;
 };
 
 type TelegramEventMessageUpdate = TelegramMessageModelRef & {
@@ -168,6 +187,7 @@ type TelegramEventMessageUpdate = TelegramMessageModelRef & {
   editDate: string | null;
   telegramMessageId: string;
   text: string | null;
+  textEntities: TelegramMessageTextEntity[];
 };
 
 type TelegramEventMessageDelete = {
@@ -275,11 +295,27 @@ function eventMessage(message: TelegramEventSourceMessage): TelegramEventMessage
     chat: telegramChatRef(message.chatId),
     contentType: message.contentType,
     editDate: message.editDate?.toISOString() ?? null,
+    isDeleted: false,
+    isOutgoing: message.isOutgoing,
     messageDate: message.messageDate?.toISOString() ?? null,
+    replyTo:
+      message.replyToMessageId === undefined
+        ? null
+        : {
+            chat: telegramChatRef(message.replyToChatId ?? message.chatId),
+            message: telegramMessageRef({
+              chatId: message.replyToChatId ?? message.chatId,
+              messageId: message.replyToMessageId
+            }),
+            telegramMessageId: message.replyToMessageId
+          },
     sender: telegramMessageSenderRef(message.senderType, message.senderId),
+    senderDisplayName: null,
     senderType: message.senderType ?? null,
     telegramMessageId: message.messageId,
-    text: message.text ?? null
+    text: message.text ?? null,
+    textEntities: message.textEntities ?? [],
+    updatedAt: new Date().toISOString()
   };
 }
 
@@ -292,7 +328,8 @@ function eventMessageUpdate(
     contentType: update.contentType,
     editDate: update.editDate?.toISOString() ?? null,
     telegramMessageId: update.messageId,
-    text: update.text ?? null
+    text: update.text ?? null,
+    textEntities: update.textEntities ?? []
   };
 }
 

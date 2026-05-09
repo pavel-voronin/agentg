@@ -8,7 +8,7 @@ import {
 import type { TelegramRpcRuntime } from '../runtime.js';
 import { rpc } from '../trpc.js';
 import { telegramMessages } from '../../schema.js';
-import { parseLimit, readMessageSelection, toReadMessage } from './support.js';
+import { parseLimit, readMessageSelection, toReadMessages } from './support.js';
 
 export const searchMessages = query((runtime: TelegramRpcRuntime) =>
   rpc
@@ -33,7 +33,7 @@ export const searchMessages = query((runtime: TelegramRpcRuntime) =>
         .limit(limit);
 
       return {
-        messages: messages.map(toReadMessage)
+        messages: await toReadMessages(runtime.database, messages)
       };
     })
 );

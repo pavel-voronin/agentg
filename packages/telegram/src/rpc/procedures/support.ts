@@ -7,7 +7,13 @@ import {
 import { and, asc, eq, ilike, inArray, sql, type SQL } from 'drizzle-orm';
 
 import type { TelegramDatabase as AppDatabase } from '../../database.js';
-import { asTdObject, normalizeChat, type JsonObject, type TdObject } from '../../normalize.js';
+import {
+  asTdObject,
+  extractFormattedTextLinkEntities,
+  normalizeChat,
+  type JsonObject,
+  type TdObject
+} from '../../normalize.js';
 import {
   telegramChatFolders,
   telegramChats,
@@ -48,6 +54,7 @@ type TelegramMessageStorageRow = {
   editDate: Date | null;
   isDeleted: boolean;
   messageDate: Date | null;
+  raw: JsonObject;
   senderId: string | null;
   senderType: string | null;
   telegramChatId: string;
@@ -60,6 +67,10 @@ type TelegramUserInfo = {
   isBot: boolean;
   isSelf: boolean;
   telegramUserId: string;
+};
+
+type TelegramSenderDisplayInfo = {
+  displayName: string;
 };
 
 export async function discoverHistoryChats(
@@ -213,6 +224,7 @@ export function readMessageSelection() {
     editDate: telegramMessages.editDate,
     isDeleted: telegramMessages.isDeleted,
     messageDate: telegramMessages.messageDate,
+    raw: telegramMessages.raw,
     senderId: telegramMessages.senderId,
     senderType: telegramMessages.senderType,
     telegramChatId: telegramMessages.telegramChatId,
@@ -223,6 +235,8 @@ export function readMessageSelection() {
 }
 
 export function toReadMessage(message: TelegramMessageStorageRow): TelegramReadMessage {
+  const replyTo = telegramMessageReply(message);
+
   return {
     ...telegramMessageRef({
       chatId: message.telegramChatId,
@@ -233,13 +247,36 @@ export function toReadMessage(message: TelegramMessageStorageRow): TelegramReadM
     deletedAt: toNullableIsoString(message.deletedAt),
     editDate: toNullableIsoString(message.editDate),
     isDeleted: message.isDeleted,
+    isOutgoing: message.raw.is_outgoing === true,
     messageDate: toNullableIsoString(message.messageDate),
+    replyTo,
     sender: telegramMessageSenderRef(message.senderType, message.senderId),
+    senderDisplayName: null,
     senderType: message.senderType,
     telegramMessageId: message.telegramMessageId,
     text: message.text,
+    textEntities: telegramMessageTextEntities(message),
     updatedAt: message.updatedAt.toISOString()
   };
+}
+
+export async function toReadMessages(
+  database: AppDatabase,
+  messages: TelegramMessageStorageRow[]
+): Promise<TelegramReadMessage[]> {
+  const senderInfoByKey = await readSenderDisplayInfo(database, messages);
+
+  return messages.map((message) => {
+    const readMessage = toReadMessage(message);
+    const senderKey = senderDisplayKey(message.senderType, message.senderId);
+    if (senderKey === null) {
+      return readMessage;
+    }
+    return {
+      ...readMessage,
+      senderDisplayName: senderInfoByKey.get(senderKey)?.displayName ?? null
+    };
+  });
 }
 
 export async function toDirectoryEntries(
@@ -541,8 +578,129 @@ function telegramChatLastMessageDate(raw: JsonObject): number {
 function telegramChatUserId(raw: JsonObject): string | undefined {
   const type = asPlainRecord(raw.type);
   const userId = type?.user_id ?? type?.userId;
-  if (typeof userId === 'number' || typeof userId === 'string') {
-    return String(userId);
+  return stringifyTelegramId(userId);
+}
+
+function telegramMessageReply(message: TelegramMessageStorageRow): TelegramReadMessage['replyTo'] {
+  const reply = asPlainRecord(message.raw.reply_to);
+  const messageId =
+    stringifyTelegramId(reply?.message_id) ??
+    stringifyTelegramId(reply?.messageId) ??
+    stringifyTelegramId(message.raw.reply_to_message_id) ??
+    stringifyTelegramId(message.raw.replyToMessageId);
+  if (messageId === undefined) {
+    return null;
+  }
+  const chatId =
+    stringifyTelegramId(reply?.chat_id) ??
+    stringifyTelegramId(reply?.chatId) ??
+    message.telegramChatId;
+
+  return {
+    chat: telegramChatRef(chatId),
+    message: telegramMessageRef({ chatId, messageId }),
+    telegramMessageId: messageId
+  };
+}
+
+function telegramMessageTextEntities(
+  message: TelegramMessageStorageRow
+): TelegramReadMessage['textEntities'] {
+  const content = asPlainRecord(message.raw.content) ?? asPlainRecord(message.raw.new_content);
+  return extractFormattedTextLinkEntities(content?.text);
+}
+
+async function readSenderDisplayInfo(
+  database: AppDatabase,
+  messages: TelegramMessageStorageRow[]
+): Promise<Map<string, TelegramSenderDisplayInfo>> {
+  const userIds = dedupeStrings(
+    messages
+      .filter((message) => message.senderType === 'messageSenderUser')
+      .map((message) => message.senderId)
+      .filter(isString)
+  );
+  const chatIds = dedupeStrings(
+    messages
+      .filter((message) => message.senderType === 'messageSenderChat')
+      .map((message) => message.senderId)
+      .filter(isString)
+  );
+  const senderInfoByKey = new Map<string, TelegramSenderDisplayInfo>();
+
+  if (userIds.length > 0) {
+    const users = await database
+      .select({
+        firstName: telegramUsers.firstName,
+        lastName: telegramUsers.lastName,
+        telegramUserId: telegramUsers.telegramUserId,
+        username: telegramUsers.username
+      })
+      .from(telegramUsers)
+      .where(inArray(telegramUsers.telegramUserId, userIds));
+    for (const user of users) {
+      const key = senderDisplayKey('messageSenderUser', user.telegramUserId);
+      if (key !== null) {
+        senderInfoByKey.set(key, {
+          displayName: userDisplayName(user)
+        });
+      }
+    }
+  }
+
+  if (chatIds.length > 0) {
+    const chats = await database
+      .select({
+        telegramChatId: telegramChats.telegramChatId,
+        title: telegramChats.title
+      })
+      .from(telegramChats)
+      .where(inArray(telegramChats.telegramChatId, chatIds));
+    for (const chat of chats) {
+      const key = senderDisplayKey('messageSenderChat', chat.telegramChatId);
+      if (key !== null) {
+        senderInfoByKey.set(key, {
+          displayName: chat.title
+        });
+      }
+    }
+  }
+
+  return senderInfoByKey;
+}
+
+function senderDisplayKey(senderType: string | null, senderId: string | null): string | null {
+  if (senderId === null || senderType === null) {
+    return null;
+  }
+  if (senderType === 'messageSenderUser') {
+    return `telegram.user:${senderId}`;
+  }
+  if (senderType === 'messageSenderChat') {
+    return `telegram.chat:${senderId}`;
+  }
+  return null;
+}
+
+function userDisplayName(user: {
+  firstName: string;
+  lastName: string;
+  telegramUserId: string;
+  username: string | null;
+}): string {
+  const name = [user.firstName, user.lastName].filter((part) => part.length > 0).join(' ');
+  if (name.length > 0) {
+    return name;
+  }
+  return user.username === null ? user.telegramUserId : `@${user.username}`;
+}
+
+function stringifyTelegramId(value: unknown): string | undefined {
+  if (typeof value === 'number' && Number.isSafeInteger(value)) {
+    return String(value);
+  }
+  if (typeof value === 'string' && value.length > 0) {
+    return value;
   }
   return undefined;
 }
@@ -612,6 +770,14 @@ function isTelegramId(value: unknown): value is number {
 
 function dedupeTelegramIds(ids: number[]): number[] {
   return [...new Set(ids)];
+}
+
+function dedupeStrings(values: string[]): string[] {
+  return [...new Set(values)];
+}
+
+function isString(value: string | null | undefined): value is string {
+  return typeof value === 'string';
 }
 
 function isDefined<T>(value: T | undefined): value is T {

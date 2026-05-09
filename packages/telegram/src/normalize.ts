@@ -50,13 +50,24 @@ export type NormalizedTelegramChatFolders = {
   raw: JsonObject;
 };
 
+export type NormalizedTelegramTextEntity = {
+  kind: 'textUrl' | 'url';
+  length: number;
+  offset: number;
+  url: string;
+};
+
 export type NormalizedTelegramMessage = {
   chatId: string;
   messageId: string;
   senderId?: string;
   senderType?: string;
   contentType: string;
+  isOutgoing: boolean;
+  replyToChatId?: string;
+  replyToMessageId?: string;
   text?: string;
+  textEntities: NormalizedTelegramTextEntity[];
   messageDate?: Date;
   editDate?: Date;
   raw: JsonObject;
@@ -69,6 +80,7 @@ export type NormalizedTelegramMessageContentUpdate = {
   messageId: string;
   raw: JsonObject;
   text?: string;
+  textEntities: NormalizedTelegramTextEntity[];
 };
 
 export type NormalizedTelegramMessageDelete = {
@@ -172,6 +184,7 @@ export function normalizeMessageContentUpdate(
   const content = asTdObject(update.new_content);
   const editDate = unixSecondsToDate(update.edit_date);
   const text = extractMessageText(content);
+  const textEntities = extractMessageTextEntities(content);
 
   return {
     chatId,
@@ -179,7 +192,8 @@ export function normalizeMessageContentUpdate(
     messageId,
     raw: toJsonObject(update),
     ...(editDate === undefined ? {} : { editDate }),
-    ...(text === undefined ? {} : { text })
+    ...(text === undefined ? {} : { text }),
+    textEntities
   };
 }
 
@@ -283,19 +297,26 @@ export function normalizeMessage(
 
   const editDate = unixSecondsToDate(message.edit_date);
   const messageDate = unixSecondsToDate(message.date);
+  const reply = extractReplyToMessage(message, chatId);
   const senderId = extractSenderId(sender);
   const text = extractMessageText(content);
+  const textEntities = extractMessageTextEntities(content);
 
   return {
     chatId,
     contentType: content?._ ?? 'unknown',
+    isOutgoing: message.is_outgoing === true,
     messageId,
     raw: toJsonObject(message),
     ...(editDate === undefined ? {} : { editDate }),
     ...(messageDate === undefined ? {} : { messageDate }),
+    ...(reply === undefined
+      ? {}
+      : { replyToChatId: reply.chatId, replyToMessageId: reply.messageId }),
     ...(sender?._ === undefined ? {} : { senderType: sender._ }),
     ...(senderId === undefined ? {} : { senderId }),
-    ...(text === undefined ? {} : { text })
+    ...(text === undefined ? {} : { text }),
+    textEntities
   };
 }
 
@@ -357,6 +378,121 @@ function extractMessageText(content: TdObject | undefined): string | undefined {
 
   const text = asRecord(content.text);
   return typeof text?.text === 'string' ? text.text : undefined;
+}
+
+function extractMessageTextEntities(content: TdObject | undefined): NormalizedTelegramTextEntity[] {
+  if (content?._ !== 'messageText') {
+    return [];
+  }
+  return extractFormattedTextLinkEntities(content.text);
+}
+
+export function extractFormattedTextLinkEntities(value: unknown): NormalizedTelegramTextEntity[] {
+  const formattedText = asRecord(value);
+  const text = typeof formattedText?.text === 'string' ? formattedText.text : '';
+  const rawEntities = Array.isArray(formattedText?.entities) ? formattedText.entities : [];
+  const entities = rawEntities
+    .map((entity) => normalizeTextLinkEntity(entity, text))
+    .filter((entity): entity is NormalizedTelegramTextEntity => entity !== undefined)
+    .sort(compareTextEntities);
+
+  const result: NormalizedTelegramTextEntity[] = [];
+  let consumedUntil = 0;
+  for (const entity of entities) {
+    if (entity.offset < consumedUntil) {
+      continue;
+    }
+    result.push(entity);
+    consumedUntil = entity.offset + entity.length;
+  }
+  return result;
+}
+
+function normalizeTextLinkEntity(
+  value: unknown,
+  text: string
+): NormalizedTelegramTextEntity | undefined {
+  const entity = asRecord(value);
+  const type = asRecord(entity?.type);
+  const offset = extractSafeInteger(entity?.offset);
+  const length = extractSafeInteger(entity?.length);
+  if (
+    offset === undefined ||
+    length === undefined ||
+    length <= 0 ||
+    offset < 0 ||
+    offset + length > text.length
+  ) {
+    return undefined;
+  }
+
+  if (type?._ === 'textEntityTypeUrl') {
+    const url = normalizeHttpUrl(text.slice(offset, offset + length), true);
+    return url === null ? undefined : { kind: 'url', length, offset, url };
+  }
+
+  if (type?._ === 'textEntityTypeTextUrl') {
+    const url = normalizeHttpUrl(type.url, false);
+    return url === null ? undefined : { kind: 'textUrl', length, offset, url };
+  }
+
+  return undefined;
+}
+
+function normalizeHttpUrl(value: unknown, allowMissingProtocol: boolean): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return null;
+  }
+
+  const directUrl = parseHttpUrl(trimmed);
+  if (directUrl !== null || !allowMissingProtocol) {
+    return directUrl;
+  }
+  return parseHttpUrl(`https://${trimmed}`);
+}
+
+function parseHttpUrl(value: string): string | null {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+function compareTextEntities(
+  left: NormalizedTelegramTextEntity,
+  right: NormalizedTelegramTextEntity
+): number {
+  if (left.offset !== right.offset) {
+    return left.offset - right.offset;
+  }
+  return right.length - left.length;
+}
+
+function extractReplyToMessage(
+  message: TdObject,
+  fallbackChatId: string
+): { chatId: string; messageId: string } | undefined {
+  const reply = asRecord(message.reply_to);
+  const messageId =
+    stringifyTelegramId(reply?.message_id) ??
+    stringifyTelegramId(reply?.messageId) ??
+    stringifyTelegramId(message.reply_to_message_id) ??
+    stringifyTelegramId(message.replyToMessageId);
+  if (messageId === undefined) {
+    return undefined;
+  }
+  return {
+    chatId:
+      stringifyTelegramId(reply?.chat_id) ?? stringifyTelegramId(reply?.chatId) ?? fallbackChatId,
+    messageId
+  };
 }
 
 function extractSenderId(sender: TdObject | undefined): string | undefined {
