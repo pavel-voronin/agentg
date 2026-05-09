@@ -83,6 +83,7 @@ type RpcResponse = {
 const CONTROL_PLANE_RPC_REQUEST_TIMEOUT_MS = 15000;
 const CONTROL_PLANE_CONTENT_CATALOG_PATH = '/control-plane/content-catalog';
 const CONTROL_PLANE_PROVIDER_ASSETS_PREFIX = '/control-plane/provider-assets/';
+const CONTROL_PLANE_PROVIDER_FILES_PREFIX = '/control-plane/provider-files/';
 const CONTROL_PLANE_RUNTIME_VUE_PATH = '/control-plane/runtime/vue.js';
 const nodeRequire = createRequire(import.meta.url);
 const vueRuntimeFilePaths = {
@@ -353,6 +354,10 @@ async function handleHttpRequest(
     await proxyProviderAsset(runtime, path, request, response);
     return;
   }
+  if (path.startsWith(CONTROL_PLANE_PROVIDER_FILES_PREFIX)) {
+    await proxyProviderFile(runtime, path, request, response);
+    return;
+  }
 
   const filePath = resolveStaticPath(staticRoot, path);
   if (filePath === null) {
@@ -375,6 +380,67 @@ async function handleHttpRequest(
     return;
   }
   response.end(body);
+}
+
+async function proxyProviderFile(
+  runtime: ControlPlaneRuntime,
+  path: string,
+  request: IncomingMessage,
+  response: ServerResponse
+): Promise<void> {
+  const serviceDirectory = runtime.serviceDirectory;
+  if (serviceDirectory === undefined) {
+    sendHttp(response, 404, 'text/plain; charset=utf-8', 'Not Found');
+    return;
+  }
+  const file = providerFileFromPath(path);
+  if (file === null) {
+    sendHttp(response, 404, 'text/plain; charset=utf-8', 'Not Found');
+    return;
+  }
+
+  const service = serviceDirectory.getSnapshot().services.find((item) => item.slug === file.slug);
+  if (service === undefined) {
+    sendHttp(response, 404, 'text/plain; charset=utf-8', 'Not Found');
+    return;
+  }
+
+  try {
+    const fetchOptions: RequestInit =
+      typeof request.headers.range === 'string'
+        ? {
+            headers: { range: request.headers.range },
+            method: request.method ?? 'GET'
+          }
+        : {
+            method: request.method ?? 'GET'
+          };
+    const upstream = await fetch(
+      providerRpcFileUrl(service.rpcUrl, file.providerPath),
+      fetchOptions
+    );
+    const body = Buffer.from(await upstream.arrayBuffer());
+    response.writeHead(upstream.status, {
+      'accept-ranges': upstream.headers.get('accept-ranges') ?? 'bytes',
+      'cache-control': upstream.headers.get('cache-control') ?? 'private, max-age=3600',
+      'content-length': body.byteLength,
+      'content-type': upstream.headers.get('content-type') ?? contentType(file.providerPath)
+    });
+    if (request.method === 'HEAD') {
+      response.end();
+      return;
+    }
+    response.end(body);
+  } catch (error) {
+    console.warn(
+      JSON.stringify({
+        error: error instanceof Error ? error.message : String(error),
+        event: 'control_plane.provider_file_proxy_failed',
+        provider: file.slug
+      })
+    );
+    sendHttp(response, 502, 'text/plain; charset=utf-8', 'Bad Gateway');
+  }
 }
 
 async function sendFile(
@@ -562,6 +628,33 @@ function providerAssetProxyUrl(slug: string, assetVersion: string, assetPath: st
   )}/${assetPath.split('/').map(encodeURIComponent).join('/')}`;
 }
 
+function providerFileFromPath(path: string): { providerPath: string; slug: string } | null {
+  const relativePath = path.slice(CONTROL_PLANE_PROVIDER_FILES_PREFIX.length);
+  const segments = relativePath.split('/');
+  if (segments.length < 2) {
+    return null;
+  }
+  const slug = decodeURIComponent(segments[0] ?? '');
+  const providerPath = `/${segments
+    .slice(1)
+    .map((segment) => decodeURIComponent(segment))
+    .join('/')}`;
+  if (!safeProviderAssetSegment(slug) || !safeProviderFilePath(providerPath)) {
+    return null;
+  }
+  return {
+    providerPath,
+    slug
+  };
+}
+
+function providerRpcFileUrl(rpcUrl: string, providerPath: string): string {
+  return `${rpcUrl.replace(/\/$/, '')}${providerPath
+    .split('/')
+    .map((segment, index) => (index === 0 ? '' : encodeURIComponent(segment)))
+    .join('/')}`;
+}
+
 function providerRpcAssetUrl(rpcUrl: string, assetPath: string): string {
   return `${rpcUrl.replace(/\/$/, '')}/control-plane-assets/${assetPath
     .split('/')
@@ -575,6 +668,15 @@ function safeProviderAssetPath(assetPath: string): boolean {
     !assetPath.startsWith('/') &&
     !assetPath.includes('..') &&
     !assetPath.includes('\\')
+  );
+}
+
+function safeProviderFilePath(providerPath: string): boolean {
+  return (
+    providerPath.startsWith('/') &&
+    providerPath.length > 1 &&
+    !providerPath.includes('..') &&
+    !providerPath.includes('\\')
   );
 }
 
@@ -685,10 +787,21 @@ function contentType(filePath: string): string {
       return 'text/javascript; charset=utf-8';
     case '.json':
       return 'application/json; charset=utf-8';
+    case '.gif':
+      return 'image/gif';
+    case '.jpg':
+    case '.jpeg':
+      return 'image/jpeg';
+    case '.mp4':
+      return 'video/mp4';
+    case '.png':
+      return 'image/png';
     case '.svg':
       return 'image/svg+xml';
     case '.webp':
       return 'image/webp';
+    case '.zip':
+      return 'application/zip';
     default:
       return 'application/octet-stream';
   }
