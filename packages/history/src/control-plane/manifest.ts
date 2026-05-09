@@ -22,7 +22,7 @@ export function createHistoryControlPlane(
         contentId: 'history.workspace',
         metadata: {
           tab: {
-            label: 'History',
+            label: 'History Coverage',
             order: 20
           }
         },

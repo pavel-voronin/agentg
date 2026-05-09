@@ -62,6 +62,8 @@ type BrowserGlobal = {
 
 const loadedStyleLinks = new Map<string, { link: BrowserLinkElement; url: string }>();
 const pendingStyleLoads = new Map<string, Promise<void>>();
+const styleLoadWarnings = new Set<string>();
+const styleLoadRetryDelaysMs = [100, 250, 500] as const;
 
 export function controlPlaneProviderManifestFromRegistration(
   domainId: string,
@@ -344,7 +346,25 @@ async function loadStyleUrls(urls: readonly string[]): Promise<void> {
   if (document === null) {
     return;
   }
-  await Promise.all(urls.map((url) => loadStyleUrl(document, url)));
+  await Promise.all(
+    urls.map((url) => loadStyleUrlWithRetry(document, url).catch(reportStyleLoadError))
+  );
+}
+
+async function loadStyleUrlWithRetry(document: BrowserDocument, url: string): Promise<void> {
+  let lastError: unknown = null;
+  for (const delayMs of [0, ...styleLoadRetryDelaysMs]) {
+    if (delayMs > 0) {
+      await waitForStyleRetry(delayMs);
+    }
+    try {
+      await loadStyleUrl(document, url);
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
 }
 
 function loadStyleUrl(document: BrowserDocument, url: string): Promise<void> {
@@ -371,17 +391,31 @@ function loadStyleUrl(document: BrowserDocument, url: string): Promise<void> {
       resolve();
     });
     link.addEventListener('error', () => {
+      link.remove();
       reject(new Error(`Style asset did not load: ${url}`));
     });
     document.head.append(link);
   });
-  pendingStyleLoads.set(
-    url,
-    styleLoad.finally(() => {
-      pendingStyleLoads.delete(url);
-    })
-  );
-  return styleLoad;
+  const trackedStyleLoad = styleLoad.finally(() => {
+    pendingStyleLoads.delete(url);
+  });
+  pendingStyleLoads.set(url, trackedStyleLoad);
+  return trackedStyleLoad;
+}
+
+function reportStyleLoadError(error: unknown): void {
+  const message = error instanceof Error ? error.message : String(error);
+  if (styleLoadWarnings.has(message)) {
+    return;
+  }
+  styleLoadWarnings.add(message);
+  console.warn(message);
+}
+
+function waitForStyleRetry(delayMs: number): Promise<void> {
+  return new Promise((resolve) => {
+    globalThis.setTimeout(resolve, delayMs);
+  });
 }
 
 function browserDocument(): BrowserDocument | null {

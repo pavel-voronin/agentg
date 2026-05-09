@@ -11,6 +11,7 @@ import {
   type SlotRenderState,
   useSlotRuntime
 } from '@agentg/control-plane-sdk/slots';
+import UiButton from '@agentg/control-plane-sdk/ui';
 
 import { chatSidebarView } from './chatSidebarView.js';
 import ChatSidebar from './components/ChatSidebar.vue';
@@ -741,15 +742,27 @@ function isDefined<T>(value: T | undefined): value is T {
                 {{ selectedChatHeader.subtitle }}
               </div>
             </div>
-            <button
-              type="button"
+            <UiButton
               class="telegram-workspace__chat-header-close"
               aria-label="Close chat"
+              size="icon-md"
               title="Close chat"
               @click="closeSelectedChat"
             >
-              x
-            </button>
+              <svg
+                class="telegram-workspace__chat-header-close-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M18 6 6 18" />
+                <path d="M6 6 18 18" />
+              </svg>
+            </UiButton>
           </div>
           <div class="telegram-workspace__tab-list" role="tablist" aria-label="Chat workspace">
             <button
@@ -833,7 +846,11 @@ function isDefined<T>(value: T | undefined): value is T {
 }
 
 .telegram-workspace__chat-header-close {
-  @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-lg leading-none text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900;
+  @apply shrink-0 text-zinc-600;
+}
+
+.telegram-workspace__chat-header-close-icon {
+  @apply h-4 w-4;
 }
 
 .telegram-workspace__tab-list {

@@ -1,5 +1,13 @@
 <script setup lang="ts">
-import { computed, markRaw, onErrorCaptured, shallowRef, watch, type Component } from 'vue';
+import {
+  computed,
+  markRaw,
+  onBeforeUnmount,
+  onErrorCaptured,
+  shallowRef,
+  watch,
+  type Component
+} from 'vue';
 
 import type {
   ContentDefinition,
@@ -14,6 +22,8 @@ type SlotRenderError = {
   info: string;
 };
 
+const LOADING_FEEDBACK_DELAY_MS = 160;
+
 const props = defineProps<{
   contentAttrs: Record<string, unknown>;
   context: SlotContext;
@@ -27,18 +37,27 @@ const emit = defineEmits<{
 const contentComponent = shallowRef<Component | null>(null);
 const loadError = shallowRef<unknown>(null);
 const loadingContentId = shallowRef<string | null>(null);
+const loadingFeedbackVisible = shallowRef(false);
+const renderedContent = shallowRef<ContentDefinition | null>(null);
 const renderedContentId = shallowRef<string | null>(null);
 const renderError = shallowRef<SlotRenderError | null>(null);
 
 let loadSequence = 0;
+let loadingFeedbackTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
 const resolvedContent = computed<ContentDefinition | null>(() =>
   props.item.kind === 'content' ? props.item.content : null
 );
-const itemAttrs = computed(() => ({
-  ...(resolvedContent.value?.props ?? {})
+const renderedItemAttrs = computed(() => ({
+  ...(renderedContent.value?.props ?? {})
 }));
 const hasContentAttrs = computed(() => Object.keys(props.contentAttrs).length > 0);
+const shouldRenderContent = computed(
+  () =>
+    contentComponent.value !== null &&
+    renderedContent.value !== null &&
+    (itemState.value.kind === 'component-ready' || !loadingFeedbackVisible.value)
+);
 const itemState = computed<SlotItemRenderState>(() => {
   if (props.item.kind === 'missing-content') {
     return {
@@ -91,20 +110,25 @@ watch(
   resolvedContent,
   async (content) => {
     const sequence = ++loadSequence;
+    clearLoadingFeedbackTimeout();
     loadError.value = null;
     loadingContentId.value = content?.contentId ?? null;
     renderError.value = null;
+
+    if (content === null) {
+      clearRenderedContent();
+      loadingFeedbackVisible.value = false;
+      return;
+    }
+
     const keepRenderedContent =
-      content !== null &&
       contentComponent.value !== null &&
       renderedContentId.value === content.contentId;
     if (!keepRenderedContent) {
-      contentComponent.value = null;
-      renderedContentId.value = null;
-    }
-
-    if (content === null) {
-      return;
+      scheduleLoadingFeedback(sequence);
+    } else {
+      renderedContent.value = content;
+      loadingFeedbackVisible.value = false;
     }
 
     try {
@@ -112,12 +136,18 @@ watch(
       if (sequence !== loadSequence) {
         return;
       }
+      clearLoadingFeedbackTimeout();
+      loadingFeedbackVisible.value = false;
+      renderedContent.value = content;
       contentComponent.value = markRaw(vueComponentFromModule(contentModule));
       renderedContentId.value = content.contentId;
     } catch (error) {
       if (sequence !== loadSequence) {
         return;
       }
+      clearLoadingFeedbackTimeout();
+      clearRenderedContent();
+      loadingFeedbackVisible.value = false;
       loadError.value = error;
     } finally {
       if (sequence === loadSequence) {
@@ -130,9 +160,19 @@ watch(
 
 watch(itemState, (state) => emit('stateChange', state), { immediate: true });
 
+onBeforeUnmount(() => {
+  clearLoadingFeedbackTimeout();
+});
+
 onErrorCaptured((error, _instance, info) => {
-  if (resolvedContent.value === null) {
+  const content = resolvedContent.value;
+  if (content === null) {
     return;
+  }
+  if (renderedContentId.value !== content.contentId) {
+    clearRenderedContent();
+    loadingFeedbackVisible.value = true;
+    return false;
   }
   renderError.value = {
     error,
@@ -186,6 +226,38 @@ function renderErrorMessage(error: SlotRenderError): string {
     : errorMessage(error.error);
 }
 
+function scheduleLoadingFeedback(sequence: number): void {
+  if (contentComponent.value === null) {
+    clearRenderedContent();
+    loadingFeedbackVisible.value = true;
+    return;
+  }
+
+  loadingFeedbackVisible.value = false;
+  loadingFeedbackTimeoutId = setTimeout(() => {
+    loadingFeedbackTimeoutId = null;
+    if (sequence !== loadSequence) {
+      return;
+    }
+    clearRenderedContent();
+    loadingFeedbackVisible.value = true;
+  }, LOADING_FEEDBACK_DELAY_MS);
+}
+
+function clearLoadingFeedbackTimeout(): void {
+  if (loadingFeedbackTimeoutId === null) {
+    return;
+  }
+  clearTimeout(loadingFeedbackTimeoutId);
+  loadingFeedbackTimeoutId = null;
+}
+
+function clearRenderedContent(): void {
+  contentComponent.value = null;
+  renderedContent.value = null;
+  renderedContentId.value = null;
+}
+
 function vueComponentFromModule(contentModule: unknown): Component {
   return (contentModule as ContentModule).default;
 }
@@ -197,12 +269,12 @@ function vueComponentFromModule(contentModule: unknown): Component {
     <div v-if="errorDetail" class="slot-outlet-item-error__detail">{{ errorDetail }}</div>
   </div>
   <div
-    v-else-if="itemState.kind === 'component-ready' && contentComponent"
+    v-else-if="shouldRenderContent && contentComponent"
     class="slot-outlet-item-content"
     :data-content-attrs="hasContentAttrs ? 'true' : undefined"
     v-bind="contentAttrs"
   >
-    <component :is="contentComponent" :slot-context="context" v-bind="itemAttrs" />
+    <component :is="contentComponent" :slot-context="context" v-bind="renderedItemAttrs" />
   </div>
   <div v-else class="slot-outlet-item-loading" v-bind="contentAttrs">
     Loading {{ itemState.kind === 'component-loading' ? itemState.contentId : 'content' }}.
