@@ -14,6 +14,8 @@ Owns:
 - Passing raw Telegram facts to storage.
 - Fetching and persisting historical Telegram pages requested by the History
   Sync domain.
+- Fetching and persisting operator-requested chat message pages for Control
+  Plane read-through views.
 
 Does not own:
 
@@ -33,6 +35,7 @@ Owns:
 - Composing history read models from History-owned state and Telegram-owned read
   models.
 - Publishing history lifecycle and coverage events.
+- Extending coverage from observed Telegram message-page events.
 
 Does not own:
 

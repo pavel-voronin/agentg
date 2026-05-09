@@ -35,6 +35,7 @@ describe('Telegram service manifest', () => {
       'telegram.message.created',
       'telegram.message.deleted',
       'telegram.message.updated',
+      'telegram.messages.observed',
       'telegram.status',
       'telegram.tdlib.close.completed',
       'telegram.tdlib.close.failed',

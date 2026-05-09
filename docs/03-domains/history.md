@@ -163,11 +163,17 @@ missing:
 
 ## Live Updates
 
-Live Telegram updates paint ordinary `HistoryCoverage`.
+Live Telegram updates and operator-requested Telegram message pages paint
+ordinary `HistoryCoverage`.
 
 A live update extends coverage when ingestion accepts it as part of the message
 history for a concrete chat. Updates about authorization, connection state,
 presence, or other non-message state do not paint history coverage.
+
+When the Control Plane chat view requests a Telegram message page, Telegram
+fetches the current page from TDLib, persists the messages, and publishes the
+observed page interval. History consumes that Telegram fact and extends ordinary
+coverage through the same coverage writer used by backfill and live updates.
 
 There is no separate live coverage entity. Ingestion can extend the currently
 covered tail for each known chat instead of creating one interval per accepted

@@ -6,7 +6,7 @@ import {
 } from '@agentg/infra/control-plane/assets';
 import { createServiceDirectoryClient } from '@agentg/service-directory/rpc';
 import type { EventBus, EventSubscription } from '@agentg/events/bus';
-import { createIntegrationEvent } from '@agentg/events/envelope';
+import { createIntegrationEvent, type IntegrationEvent } from '@agentg/events/envelope';
 import { createValidatedEventBus } from '@agentg/events/validated-bus';
 import { serviceManifestEventTypes } from '@agentg/rpc/call-event-types';
 
@@ -25,6 +25,7 @@ import {
 import { createHistoryServiceManifest } from './registrations.js';
 import { historyCoverageChangedData } from './events.js';
 import { addHistoryCoverageBatch } from './store.js';
+import { coverageIntervalsFromTelegramMessagesObserved } from './telegram-observed-coverage.js';
 import { createServiceDirectoryTelegramHistoryClient } from './telegram-client.js';
 
 export type HistoryServiceOptions = {
@@ -93,6 +94,7 @@ export async function runHistoryService(options: HistoryServiceOptions): Promise
     await serviceDirectory.refresh();
     subscriptions = subscribeHistoryService({
       controller,
+      database: options.database,
       eventBus,
       liveCoverageObserver
     });
@@ -256,6 +258,7 @@ function requestProcessShutdown(event: string, error: Error): void {
 
 function subscribeHistoryService(options: {
   controller: HistorySyncController;
+  database: AppDatabase;
   eventBus: EventBus;
   liveCoverageObserver: LiveCoverageObserver;
 }): EventSubscription[] {
@@ -281,6 +284,9 @@ function subscribeHistoryService(options: {
         void options.liveCoverageObserver.recordLiveMessage(chatId, messageDate);
       }
     }),
+    options.eventBus.subscribe('telegram.messages.observed', (event) => {
+      void addCoverageFromObservedMessages(options.database, options.eventBus, event);
+    }),
     options.eventBus.subscribe('telegram.status', (event) => {
       const data = asRecord(event.data);
       if (data?.connected === true) {
@@ -290,6 +296,34 @@ function subscribeHistoryService(options: {
       void options.liveCoverageObserver.markDisconnected();
     })
   ];
+}
+
+async function addCoverageFromObservedMessages(
+  database: AppDatabase,
+  eventBus: EventBus,
+  event: IntegrationEvent
+): Promise<void> {
+  const intervals = coverageIntervalsFromTelegramMessagesObserved(event);
+  if (intervals.length === 0) {
+    return;
+  }
+
+  try {
+    await addHistoryCoverageBatch(database, intervals);
+    eventBus.publish(
+      createIntegrationEvent({
+        data: historyCoverageChangedData(intervals),
+        type: 'history.coverage.changed'
+      })
+    );
+  } catch (error) {
+    console.warn(
+      JSON.stringify({
+        error: error instanceof Error ? error.message : String(error),
+        event: 'history.observed_messages_coverage_failed'
+      })
+    );
+  }
 }
 
 async function runShutdownStep(name: string, step: () => Promise<void>): Promise<boolean> {

@@ -1,4 +1,7 @@
-import { createTelegramIntegrationEvents } from '@agentg/telegram/integration-events';
+import {
+  createTelegramIntegrationEvents,
+  createTelegramMessagesObservedEvent
+} from '@agentg/telegram/integration-events';
 import { describe, expect, it } from 'vitest';
 
 describe('Telegram integration events', () => {
@@ -252,5 +255,36 @@ describe('Telegram integration events', () => {
         type: 'telegram.chat.removed'
       }
     ]);
+  });
+
+  it('publishes observed message page intervals as Telegram facts', () => {
+    const event = createTelegramMessagesObservedEvent({
+      chatId: 'chat-a',
+      endAt: new Date('2026-05-05T00:10:00.000Z'),
+      fetchedMessages: 25,
+      reachedStart: false,
+      startAt: new Date('2026-05-05T00:00:00.000Z'),
+      storedMessages: 25
+    });
+
+    expect(event).toMatchObject({
+      data: {
+        chat: {
+          _model: 'telegram.chat',
+          id: 'chat-a'
+        },
+        fetchedMessages: 25,
+        interval: {
+          endAt: '2026-05-05T00:10:00.000Z',
+          startAt: '2026-05-05T00:00:00.000Z'
+        },
+        reachedStart: false,
+        storedMessages: 25
+      },
+      meta: {
+        chatId: 'chat-a'
+      },
+      type: 'telegram.messages.observed'
+    });
   });
 });

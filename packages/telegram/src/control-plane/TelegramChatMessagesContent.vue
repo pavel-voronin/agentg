@@ -22,8 +22,9 @@ const props = defineProps<{
   slotContext?: SlotContext | undefined;
 }>();
 
-type ListRecentMessagesResult = {
+type FetchMessagesPageResult = {
   messages?: unknown;
+  reachedStart?: unknown;
 };
 
 type GetMessageResult = {
@@ -161,7 +162,7 @@ async function loadInitialMessages(chatId: string, sequence: number): Promise<vo
   loadingInitial.value = true;
   lastError.value = null;
   try {
-    const result = await host.rpc<ListRecentMessagesResult>('telegram.listRecentMessages', {
+    const result = await host.rpc<FetchMessagesPageResult>('telegram.fetchMessagesPage', {
       chatId,
       limit: MESSAGE_PAGE_SIZE
     });
@@ -174,7 +175,7 @@ async function loadInitialMessages(chatId: string, sequence: number): Promise<vo
     const sortedNextMessages = sortMessages(nextMessages);
     messages.value = sortedNextMessages;
     oldestPageMessageId.value = sortedNextMessages[0]?.telegramMessageId ?? null;
-    reachedStart.value = nextMessages.length < MESSAGE_PAGE_SIZE;
+    reachedStart.value = result.reachedStart === true;
     await nextTick();
     scrollToBottom();
   } catch (error) {
@@ -207,7 +208,7 @@ async function loadOlderMessages(): Promise<void> {
   loadingOlder.value = true;
   lastError.value = null;
   try {
-    const result = await host.rpc<ListRecentMessagesResult>('telegram.listRecentMessages', {
+    const result = await host.rpc<FetchMessagesPageResult>('telegram.fetchMessagesPage', {
       beforeMessageId,
       chatId,
       limit: MESSAGE_PAGE_SIZE
@@ -218,7 +219,7 @@ async function loadOlderMessages(): Promise<void> {
     const sortedNextMessages = sortMessages(nextMessages);
     mergeMessages(nextMessages);
     oldestPageMessageId.value = sortedNextMessages[0]?.telegramMessageId ?? beforeMessageId;
-    reachedStart.value = nextMessages.length < MESSAGE_PAGE_SIZE;
+    reachedStart.value = result.reachedStart === true;
     await nextTick();
     if (root !== null) {
       root.scrollTop = root.scrollHeight - previousScrollHeight + previousScrollTop;

@@ -139,6 +139,17 @@ export const telegramListRecentMessagesOutputSchema = z.object({
   messages: z.array(telegramReadMessageSchema)
 });
 
+export const telegramFetchMessagesPageInputSchema = z.object({
+  beforeMessageId: nonEmptyStringSchema.regex(/^[0-9]+$/).optional(),
+  chatId: nonEmptyStringSchema,
+  limit: positiveIntegerSchema.optional()
+});
+
+export const telegramFetchMessagesPageOutputSchema = z.object({
+  messages: z.array(telegramReadMessageSchema),
+  reachedStart: z.boolean()
+});
+
 export const telegramSearchMessagesInputSchema = z.object({
   chatId: nonEmptyStringSchema.optional(),
   limit: positiveIntegerSchema.optional(),
@@ -235,6 +246,8 @@ export type TelegramReadMessage = z.infer<typeof telegramReadMessageSchema>;
 export type TelegramGetChatInput = z.infer<typeof telegramGetChatInputSchema>;
 export type TelegramGetMessageInput = z.infer<typeof telegramGetMessageInputSchema>;
 export type TelegramListRecentMessagesInput = z.infer<typeof telegramListRecentMessagesInputSchema>;
+export type TelegramFetchMessagesPageInput = z.infer<typeof telegramFetchMessagesPageInputSchema>;
+export type TelegramFetchMessagesPageOutput = z.infer<typeof telegramFetchMessagesPageOutputSchema>;
 export type TelegramSearchMessagesInput = z.infer<typeof telegramSearchMessagesInputSchema>;
 export type TelegramChatPlacement = z.infer<typeof telegramChatPlacementSchema>;
 export type TelegramChatDirectoryEntry = z.infer<typeof telegramChatDirectoryEntrySchema>;

@@ -90,6 +90,15 @@ export type TelegramEventSourceMessageDelete = {
   messageIds: string[];
 };
 
+export type TelegramMessagesObservedEventSource = {
+  chatId: string;
+  endAt: Date;
+  fetchedMessages: number;
+  reachedStart: boolean;
+  startAt: Date | null;
+  storedMessages: number;
+};
+
 export type TelegramEventSourceChatFolder = {
   iconName?: string;
   id: number;
@@ -157,6 +166,27 @@ export function createTelegramIntegrationEvents(
   }
 
   return events;
+}
+
+export function createTelegramMessagesObservedEvent(
+  source: TelegramMessagesObservedEventSource
+): IntegrationEvent {
+  return createIntegrationEvent({
+    data: {
+      chat: telegramChatRef(source.chatId),
+      fetchedMessages: source.fetchedMessages,
+      interval: {
+        endAt: source.endAt.toISOString(),
+        startAt: source.startAt?.toISOString() ?? null
+      },
+      reachedStart: source.reachedStart,
+      storedMessages: source.storedMessages
+    },
+    meta: {
+      chatId: source.chatId
+    },
+    type: 'telegram.messages.observed'
+  });
 }
 
 type TelegramEventChatFolder = TelegramChatFolder;
