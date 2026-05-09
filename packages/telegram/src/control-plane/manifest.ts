@@ -12,7 +12,6 @@ export function createTelegramControlPlane(
     contents: [
       {
         contentId: 'telegram.dashboard.chats',
-        defaultSlotIds: ['control-plane.dashboard.tile.1'],
         module: {
           assetPath: 'dashboard-chats.js'
         },
@@ -21,7 +20,6 @@ export function createTelegramControlPlane(
       },
       {
         contentId: 'telegram.workspace',
-        defaultSlotIds: ['control-plane.workspace'],
         module: {
           assetPath: 'workspace.js'
         },
@@ -30,18 +28,11 @@ export function createTelegramControlPlane(
       },
       {
         contentId: 'telegram.status.tdlib',
-        defaultSlotIds: ['control-plane.header.status'],
         module: {
           assetPath: 'status.js'
         },
         styleAssetPaths: providerStyleAssets,
         tags: ['control-plane.header.status']
-      }
-    ],
-    defaultPlacements: [
-      {
-        contentId: 'events.stream.panel',
-        slotId: 'telegram.workspace.sidecar'
       }
     ]
   };

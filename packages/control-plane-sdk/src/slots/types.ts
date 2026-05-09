@@ -8,7 +8,6 @@ export type ContentModule = {
 
 export type ContentDefinition = {
   contentId: string;
-  defaultSlotIds?: readonly string[];
   domainId?: string;
   load: () => Promise<ContentModule>;
   props?: Record<string, unknown>;
@@ -18,7 +17,6 @@ export type ContentDefinition = {
 
 export type ContentProvider = {
   contents: readonly Omit<ContentDefinition, 'domainId'>[];
-  defaultPlacements?: readonly SlotLayoutPlacement[];
   domainId: string;
 };
 
@@ -29,33 +27,78 @@ export type SlotDefinition = {
   tags: readonly string[];
 };
 
-export type SlotLayoutEntry = {
+export type SlotLayoutItem = {
   contentId: string;
+};
+
+export type SlotLayoutEntry = {
+  items: readonly SlotLayoutItem[];
 };
 
 export type SlotLayout = Record<string, SlotLayoutEntry>;
 
-export type SlotLayoutPlacement = {
-  contentId: string;
-  slotId: string;
-};
-
-export type SlotResolution =
+export type SlotItemResolution =
   | {
       kind: 'content';
       content: ContentDefinition;
-    }
-  | {
-      kind: 'empty';
+      contentId: string;
+      index: number;
     }
   | {
       contentId: string;
+      index: number;
       kind: 'missing-content';
     }
   | {
       content: ContentDefinition;
+      contentId: string;
+      index: number;
       kind: 'incompatible';
       slotTags: readonly string[];
+    };
+
+export type SlotResolution =
+  | {
+      kind: 'empty';
+    }
+  | {
+      items: readonly SlotItemResolution[];
+      kind: 'contents';
+      overflowCount: number;
+    };
+
+export type SlotItemRenderState =
+  | {
+      contentId: string;
+      index: number;
+      kind: 'component-loading';
+    }
+  | {
+      contentId: string;
+      index: number;
+      kind: 'component-ready';
+    }
+  | {
+      contentId: string;
+      index: number;
+      kind: 'missing-content';
+    }
+  | {
+      contentId: string;
+      index: number;
+      kind: 'incompatible-content';
+    }
+  | {
+      contentId: string;
+      error: string;
+      index: number;
+      kind: 'component-load-error';
+    }
+  | {
+      contentId: string;
+      error: string;
+      index: number;
+      kind: 'component-render-error';
     };
 
 export type SlotRenderState =
@@ -63,30 +106,9 @@ export type SlotRenderState =
       kind: 'empty';
     }
   | {
-      contentId: string;
-      kind: 'component-loading';
-    }
-  | {
-      contentId: string;
-      kind: 'component-ready';
-    }
-  | {
-      contentId: string;
-      kind: 'missing-content';
-    }
-  | {
-      contentId: string;
-      kind: 'incompatible-content';
-    }
-  | {
-      contentId: string;
-      error: string;
-      kind: 'component-load-error';
-    }
-  | {
-      contentId: string;
-      error: string;
-      kind: 'component-render-error';
+      items: readonly SlotItemRenderState[];
+      kind: 'contents';
+      overflowCount: number;
     };
 
 export type SlotDebugEntry = {

@@ -1,8 +1,7 @@
-import type { ContentModule, ContentProvider, SlotLayoutPlacement } from './slots/types.js';
+import type { ContentModule, ContentProvider } from './slots/types.js';
 
 export type ControlPlaneContentRegistration = {
   contentId: string;
-  defaultSlotIds?: readonly string[];
   module: {
     assetPath: string;
   };
@@ -15,12 +14,10 @@ export type ControlPlaneProviderRegistration = {
   assetVersion: string;
   assetVersions?: Readonly<Record<string, string>>;
   contents: readonly ControlPlaneContentRegistration[];
-  defaultPlacements?: readonly SlotLayoutPlacement[];
 };
 
 export type ControlPlaneContentManifest = {
   contentId: string;
-  defaultSlotIds?: readonly string[];
   module: {
     url: string;
   };
@@ -32,7 +29,6 @@ export type ControlPlaneContentManifest = {
 export type ControlPlaneProviderManifest = {
   assetVersion: string;
   contents: readonly ControlPlaneContentManifest[];
-  defaultPlacements?: readonly SlotLayoutPlacement[];
   domainId: string;
 };
 
@@ -80,7 +76,6 @@ export function controlPlaneProviderManifestFromRegistration(
           assetVersionForPath(registration, content.module.assetPath)
         )
       },
-      ...(content.defaultSlotIds === undefined ? {} : { defaultSlotIds: content.defaultSlotIds }),
       ...(content.props === undefined ? {} : { props: content.props }),
       ...(content.styleAssetPaths === undefined
         ? {}
@@ -91,9 +86,6 @@ export function controlPlaneProviderManifestFromRegistration(
           }),
       tags: content.tags
     })),
-    ...(registration.defaultPlacements === undefined
-      ? {}
-      : { defaultPlacements: registration.defaultPlacements }),
     domainId
   };
 }
@@ -108,14 +100,10 @@ export function contentProviderFromControlPlaneManifest(
         await loadStyleUrls(content.styleUrls ?? []);
         return import(/* @vite-ignore */ content.module.url) as Promise<ContentModule>;
       },
-      ...(content.defaultSlotIds === undefined ? {} : { defaultSlotIds: content.defaultSlotIds }),
       ...(content.props === undefined ? {} : { props: content.props }),
       revision: remoteContentRevision(content),
       tags: content.tags
     })),
-    ...(manifest.defaultPlacements === undefined
-      ? {}
-      : { defaultPlacements: manifest.defaultPlacements }),
     domainId: manifest.domainId
   };
 }
@@ -157,15 +145,10 @@ export function parseControlPlaneProviderRegistration(
   if (contents === null) {
     return null;
   }
-  const defaultPlacements = optionalArrayOf(value.defaultPlacements, parsePlacement);
-  if (defaultPlacements === null) {
-    return null;
-  }
   return {
     assetVersion: value.assetVersion,
     ...(assetVersions === undefined ? {} : { assetVersions }),
-    contents,
-    ...(defaultPlacements === undefined ? {} : { defaultPlacements })
+    contents
   };
 }
 
@@ -197,14 +180,9 @@ function parseProviderManifest(value: unknown): ControlPlaneProviderManifest | n
   if (contents === null) {
     return null;
   }
-  const defaultPlacements = optionalArrayOf(value.defaultPlacements, parsePlacement);
-  if (defaultPlacements === null) {
-    return null;
-  }
   return {
     assetVersion: value.assetVersion,
     contents,
-    ...(defaultPlacements === undefined ? {} : { defaultPlacements }),
     domainId: value.domainId
   };
 }
@@ -217,14 +195,12 @@ function parseContentRegistration(value: unknown): ControlPlaneContentRegistrati
     return null;
   }
   const tags = arrayOf(value.tags, parseNonEmptyString);
-  const defaultSlotIds = optionalArrayOf(value.defaultSlotIds, parseNonEmptyString);
   const styleAssetPaths = optionalArrayOf(value.styleAssetPaths, parseSafeAssetPath);
-  if (tags === null || defaultSlotIds === null || styleAssetPaths === null) {
+  if (tags === null || styleAssetPaths === null) {
     return null;
   }
   return {
     contentId: value.contentId,
-    ...(defaultSlotIds === undefined ? {} : { defaultSlotIds }),
     module: {
       assetPath: value.module.assetPath
     },
@@ -242,30 +218,18 @@ function parseContentManifest(value: unknown): ControlPlaneContentManifest | nul
     return null;
   }
   const tags = arrayOf(value.tags, parseNonEmptyString);
-  const defaultSlotIds = optionalArrayOf(value.defaultSlotIds, parseNonEmptyString);
   const styleUrls = optionalArrayOf(value.styleUrls, parseNonEmptyString);
-  if (tags === null || defaultSlotIds === null || styleUrls === null) {
+  if (tags === null || styleUrls === null) {
     return null;
   }
   return {
     contentId: value.contentId,
-    ...(defaultSlotIds === undefined ? {} : { defaultSlotIds }),
     module: {
       url: value.module.url
     },
     ...(isRecord(value.props) ? { props: value.props } : {}),
     ...(styleUrls === undefined ? {} : { styleUrls }),
     tags
-  };
-}
-
-function parsePlacement(value: unknown): SlotLayoutPlacement | null {
-  if (!isRecord(value) || !isNonEmptyString(value.contentId) || !isNonEmptyString(value.slotId)) {
-    return null;
-  }
-  return {
-    contentId: value.contentId,
-    slotId: value.slotId
   };
 }
 

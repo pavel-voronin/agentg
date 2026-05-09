@@ -3,8 +3,8 @@ import { computed, onBeforeUnmount, onMounted, shallowRef, watch, type CSSProper
 
 import { useSlotRuntime } from './runtime.js';
 import type {
-  ContentDefinition,
   SlotDebugEntry,
+  SlotItemResolution,
   SlotRenderState,
   SlotResolution
 } from './types.js';
@@ -241,23 +241,15 @@ function clearActiveSlot(): void {
   pinnedId.value = null;
 }
 
-function contentForResolution(resolution: SlotResolution): ContentDefinition | null {
-  if (resolution.kind === 'content' || resolution.kind === 'incompatible') {
-    return resolution.content;
-  }
-  return null;
-}
-
 function contentLabel(resolution: SlotResolution): string {
   switch (resolution.kind) {
-    case 'content':
-      return resolution.content.contentId;
     case 'empty':
       return 'empty';
-    case 'incompatible':
-      return `${resolution.content.contentId} (incompatible)`;
-    case 'missing-content':
-      return `${resolution.contentId} (missing)`;
+    case 'contents': {
+      const overflowLabel =
+        resolution.overflowCount > 0 ? `, +${String(resolution.overflowCount)} hidden` : '';
+      return `${resolution.items.map(itemLabel).join(', ')}${overflowLabel}`;
+    }
   }
 }
 
@@ -266,18 +258,52 @@ function tagList(tags: readonly string[]): string {
 }
 
 function contentTagList(resolution: SlotResolution): string {
-  return tagList(contentForResolution(resolution)?.tags ?? []);
+  if (resolution.kind === 'empty') {
+    return 'none';
+  }
+  return tagList(
+    uniqueStrings(
+      resolution.items.flatMap((item) =>
+        item.kind === 'content' || item.kind === 'incompatible' ? item.content.tags : []
+      )
+    )
+  );
 }
 
 function stateError(state: SlotRenderState): string | null {
-  if (state.kind === 'component-load-error' || state.kind === 'component-render-error') {
-    return state.error;
+  if (state.kind === 'empty') {
+    return null;
   }
-  return null;
+  const errors = state.items.flatMap((item) =>
+    item.kind === 'component-load-error' || item.kind === 'component-render-error'
+      ? [`${item.contentId}: ${item.error}`]
+      : []
+  );
+  return errors.length > 0 ? errors.join('\n') : null;
 }
 
 function stateLabel(state: SlotRenderState): string {
-  return state.kind;
+  if (state.kind === 'empty') {
+    return 'empty';
+  }
+  const readyCount = state.items.filter((item) => item.kind === 'component-ready').length;
+  const overflowLabel = state.overflowCount > 0 ? `, ${String(state.overflowCount)} hidden` : '';
+  return `contents (${String(readyCount)}/${String(state.items.length)} ready${overflowLabel})`;
+}
+
+function itemLabel(item: SlotItemResolution): string {
+  switch (item.kind) {
+    case 'content':
+      return item.contentId;
+    case 'incompatible':
+      return `${item.contentId} (incompatible)`;
+    case 'missing-content':
+      return `${item.contentId} (missing)`;
+  }
+}
+
+function uniqueStrings(values: readonly string[]): string[] {
+  return [...new Set(values)];
 }
 
 function bindObservedTargets(): void {

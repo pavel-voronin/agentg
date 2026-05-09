@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   createContentCatalogIndex,
-  resolveSlotContent,
+  resolveSlotContents,
   tagsCompatible
 } from '@agentg/control-plane-sdk/slots';
 import type { ContentCatalog, SlotLayout } from '@agentg/control-plane-sdk/slots';
@@ -27,7 +27,7 @@ describe('slot resolver', () => {
   });
 
   it('leaves empty slots to their default content', () => {
-    const resolution = resolveSlotContent(
+    const resolution = resolveSlotContents(
       {
         slotId: 'control-plane.workspace',
         tags: ['control-plane.workspace']
@@ -42,11 +42,11 @@ describe('slot resolver', () => {
   it('resolves the layout content for a compatible slot', () => {
     const layout: SlotLayout = {
       'control-plane.workspace': {
-        contentId: 'alpha.workspace'
+        items: [{ contentId: 'alpha.workspace' }, { contentId: 'events.stream.panel' }]
       }
     };
 
-    const resolution = resolveSlotContent(
+    const resolution = resolveSlotContents(
       {
         slotId: 'control-plane.workspace',
         tags: ['control-plane.workspace']
@@ -55,17 +55,30 @@ describe('slot resolver', () => {
       createContentCatalogIndex(catalog)
     );
 
-    expect(resolution.kind).toBe('content');
+    expect(resolution).toMatchObject({
+      items: [
+        {
+          contentId: 'alpha.workspace',
+          kind: 'content'
+        },
+        {
+          contentId: 'events.stream.panel',
+          kind: 'content'
+        }
+      ],
+      kind: 'contents',
+      overflowCount: 0
+    });
   });
 
   it('reports missing content instead of falling back', () => {
     const layout: SlotLayout = {
       'control-plane.workspace': {
-        contentId: 'unknown.content'
+        items: [{ contentId: 'unknown.content' }]
       }
     };
 
-    const resolution = resolveSlotContent(
+    const resolution = resolveSlotContents(
       {
         slotId: 'control-plane.workspace',
         tags: ['control-plane.workspace']
@@ -74,20 +87,27 @@ describe('slot resolver', () => {
       createContentCatalogIndex(catalog)
     );
 
-    expect(resolution).toEqual({
-      contentId: 'unknown.content',
-      kind: 'missing-content'
+    expect(resolution).toMatchObject({
+      items: [
+        {
+          contentId: 'unknown.content',
+          index: 0,
+          kind: 'missing-content'
+        }
+      ],
+      kind: 'contents',
+      overflowCount: 0
     });
   });
 
   it('reports incompatible content instead of falling back', () => {
     const layout: SlotLayout = {
       'control-plane.dashboard': {
-        contentId: 'events.stream.panel'
+        items: [{ contentId: 'events.stream.panel' }]
       }
     };
 
-    const resolution = resolveSlotContent(
+    const resolution = resolveSlotContents(
       {
         slotId: 'control-plane.dashboard',
         tags: ['dashboard.metrics']
@@ -96,6 +116,46 @@ describe('slot resolver', () => {
       createContentCatalogIndex(catalog)
     );
 
-    expect(resolution.kind).toBe('incompatible');
+    expect(resolution).toMatchObject({
+      items: [
+        {
+          contentId: 'events.stream.panel',
+          index: 0,
+          kind: 'incompatible'
+        }
+      ],
+      kind: 'contents',
+      overflowCount: 0
+    });
+  });
+
+  it('limits resolved content by maxItems', () => {
+    const layout: SlotLayout = {
+      'control-plane.workspace': {
+        items: [{ contentId: 'alpha.workspace' }, { contentId: 'events.stream.panel' }]
+      }
+    };
+
+    const resolution = resolveSlotContents(
+      {
+        slotId: 'control-plane.workspace',
+        tags: ['control-plane.workspace']
+      },
+      layout,
+      createContentCatalogIndex(catalog),
+      { maxItems: 1 }
+    );
+
+    expect(resolution).toMatchObject({
+      items: [
+        {
+          contentId: 'alpha.workspace',
+          index: 0,
+          kind: 'content'
+        }
+      ],
+      kind: 'contents',
+      overflowCount: 1
+    });
   });
 });

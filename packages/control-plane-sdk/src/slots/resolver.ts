@@ -2,6 +2,7 @@ import type {
   ContentCatalog,
   ContentDefinition,
   SlotDefinition,
+  SlotItemResolution,
   SlotLayout,
   SlotResolution
 } from './types.js';
@@ -19,20 +20,40 @@ export function createContentCatalogIndex(
   return index;
 }
 
-export function resolveSlotContent(
+export function resolveSlotContents(
   slot: SlotDefinition,
   layout: SlotLayout,
-  catalog: ReadonlyMap<string, ContentDefinition>
+  catalog: ReadonlyMap<string, ContentDefinition>,
+  options: {
+    maxItems?: number | undefined;
+  } = {}
 ): SlotResolution {
   const layoutEntry = layout[slot.slotId];
-  if (layoutEntry === undefined) {
+  if (layoutEntry === undefined || layoutEntry.items.length === 0) {
     return { kind: 'empty' };
   }
 
-  const content = catalog.get(layoutEntry.contentId);
+  const maxItems = normalizeMaxItems(options.maxItems);
+  const items = maxItems === undefined ? layoutEntry.items : layoutEntry.items.slice(0, maxItems);
+  const overflowCount = layoutEntry.items.length - items.length;
+  return {
+    items: items.map((item, index) => resolveSlotItem(slot, item.contentId, index, catalog)),
+    kind: 'contents',
+    overflowCount
+  };
+}
+
+function resolveSlotItem(
+  slot: SlotDefinition,
+  contentId: string,
+  index: number,
+  catalog: ReadonlyMap<string, ContentDefinition>
+): SlotItemResolution {
+  const content = catalog.get(contentId);
   if (content === undefined) {
     return {
-      contentId: layoutEntry.contentId,
+      contentId,
+      index,
       kind: 'missing-content'
     };
   }
@@ -40,6 +61,8 @@ export function resolveSlotContent(
   if (!tagsCompatible(slot.tags, content.tags)) {
     return {
       content,
+      contentId,
+      index,
       kind: 'incompatible',
       slotTags: slot.tags
     };
@@ -47,6 +70,8 @@ export function resolveSlotContent(
 
   return {
     content,
+    contentId,
+    index,
     kind: 'content'
   };
 }
@@ -56,4 +81,11 @@ export function tagsCompatible(
   contentTags: readonly string[]
 ): boolean {
   return slotTags.some((slotTag) => contentTags.includes(slotTag));
+}
+
+function normalizeMaxItems(maxItems: number | undefined): number | undefined {
+  if (maxItems === undefined) {
+    return undefined;
+  }
+  return Math.max(0, Math.floor(maxItems));
 }

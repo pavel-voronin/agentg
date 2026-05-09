@@ -12,7 +12,6 @@ export function createHistoryControlPlane(
     contents: [
       {
         contentId: 'history.dashboard.current-job',
-        defaultSlotIds: ['control-plane.dashboard.tile.4'],
         module: {
           assetPath: 'dashboard-tile.js'
         },
@@ -21,7 +20,6 @@ export function createHistoryControlPlane(
       },
       {
         contentId: 'history.workspace',
-        defaultSlotIds: ['telegram.workspace.primary'],
         module: {
           assetPath: 'workspace.js'
         },

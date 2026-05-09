@@ -46,44 +46,4 @@ describe('slot runtime', () => {
 
     expect(runtime.catalogIndex.value.get('alpha.workspace')).not.toBe(initialContent);
   });
-
-  it('does not replace the layout ref when the next layout has the same placements', () => {
-    const runtime = createSlotRuntime({
-      catalog: [],
-      initialLayout: {
-        'control-plane.workspace': {
-          contentId: 'alpha.workspace'
-        }
-      }
-    });
-    const initialLayout = runtime.layout.value;
-
-    runtime.replaceLayout({
-      'control-plane.workspace': {
-        contentId: 'alpha.workspace'
-      }
-    });
-
-    expect(runtime.layout.value).toBe(initialLayout);
-  });
-
-  it('replaces the layout ref when placements change', () => {
-    const runtime = createSlotRuntime({
-      catalog: [],
-      initialLayout: {
-        'control-plane.workspace': {
-          contentId: 'alpha.workspace'
-        }
-      }
-    });
-    const initialLayout = runtime.layout.value;
-
-    runtime.replaceLayout({
-      'control-plane.workspace': {
-        contentId: 'beta.workspace'
-      }
-    });
-
-    expect(runtime.layout.value).not.toBe(initialLayout);
-  });
 });

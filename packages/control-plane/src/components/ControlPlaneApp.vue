@@ -20,23 +20,17 @@ import {
   contentCatalogFromProviders,
   loadRuntimeContentProviders
 } from '../composition/contentProviders.js';
-import {
-  defaultLayoutFromProviders,
-  readControlPlaneLayout,
-  writeControlPlaneLayout
-} from '../composition/slots/layout.js';
+import { controlPlaneSlotLayout } from '../composition/slots/manifest.js';
 import DashboardPanel from './DashboardPanel.vue';
 import ShellToggleButton from './ShellToggleButton.vue';
 
 const appShellStore = useAppShellStore();
 const host = useControlPlaneRuntime();
 const slotDebugEnabled = computed(() => appShellStore.slotDebugEnabled);
-const defaultLayout = defaultLayoutFromProviders(controlPlaneContentProviders);
 const slotRuntime = createSlotRuntime({
   catalog: controlPlaneContentCatalog,
   debugEnabled: slotDebugEnabled,
-  initialLayout: readControlPlaneLayout(defaultLayout),
-  onLayoutChange: writeControlPlaneLayout
+  initialLayout: controlPlaneSlotLayout
 });
 
 provideControlPlaneHost(host);
@@ -159,7 +153,6 @@ async function refreshRuntimeContentProviders(): Promise<void> {
   lastContentCatalogVersion = runtimeCatalog.version;
   const providers = [...controlPlaneContentProviders, ...runtimeCatalog.providers];
   slotRuntime.replaceCatalog(contentCatalogFromProviders(providers));
-  slotRuntime.replaceLayout(readControlPlaneLayout(defaultLayoutFromProviders(providers)));
 }
 
 function scheduleRuntimeContentProvidersRefresh(): void {
