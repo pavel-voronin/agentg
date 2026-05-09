@@ -432,7 +432,7 @@ function auditControlPlaneCompositionBoundaries(files) {
   }
 
   const layoutSource = readFileSync(
-    join(root, 'packages/control-plane/src/composition/slots/layout.ts'),
+    join(root, 'packages/control-plane/src/composition/slots/manifest.ts'),
     'utf8'
   );
   for (const token of ['telegram.', 'history.', 'summaries.']) {

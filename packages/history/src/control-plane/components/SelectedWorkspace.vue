@@ -10,7 +10,6 @@ defineProps<{
 }>();
 
 const emit = defineEmits<{
-  close: [];
   customTarget: [start: string, end: string];
   deleteTarget: [targetId: string];
   freeformScale: [];
@@ -31,7 +30,7 @@ function scaleButtonVariant(scale: TimelineScaleButtonView): 'neutral' | 'select
 </script>
 
 <template>
-  <section id="workspaceShell" class="selected-workspace" :data-framed="view.status !== 'empty'">
+  <section id="workspaceShell" class="selected-workspace">
     <div v-if="view.status === 'empty'" class="selected-workspace__empty-scroll">
       <div class="selected-workspace__empty-padding">
         <div class="selected-workspace__empty-card">
@@ -53,31 +52,6 @@ function scaleButtonVariant(scale: TimelineScaleButtonView): 'neutral' | 'select
     </div>
 
     <div v-else class="selected-workspace__content">
-      <div class="selected-workspace__header">
-        <div class="selected-workspace__header-row">
-          <div class="selected-workspace__header-main">
-            <div class="selected-workspace__chat-title">{{ view.chat.title }}</div>
-            <div class="selected-workspace__chat-meta">
-              <code class="selected-workspace__chat-id">{{ view.chat.id }}</code>
-              <span>{{ view.chat.type }}</span>
-              <span>{{ view.chat.messageCount }}</span>
-              <span v-if="view.chat.historyLabel">{{ view.chat.historyLabel }}</span>
-            </div>
-          </div>
-          <div class="selected-workspace__header-actions">
-            <UiButton
-              aria-label="Close chat"
-              title="Close chat"
-              class="selected-workspace__close-button"
-              size="icon-md"
-              @click="emit('close')"
-            >
-              ×
-            </UiButton>
-          </div>
-        </div>
-      </div>
-
       <div class="selected-workspace__body">
         <section class="selected-workspace__section">
           <div class="selected-workspace__section-header">
@@ -151,11 +125,7 @@ function scaleButtonVariant(scale: TimelineScaleButtonView): 'neutral' | 'select
 <style scoped>
 @reference "tailwindcss";
 .selected-workspace {
-  @apply flex min-h-0 flex-col overflow-hidden;
-}
-
-.selected-workspace[data-framed='true'] {
-  @apply rounded-lg border border-zinc-200 bg-white;
+  @apply flex h-full min-h-0 flex-col overflow-hidden bg-white;
 }
 
 .selected-workspace__empty-scroll {
@@ -184,38 +154,6 @@ function scaleButtonVariant(scale: TimelineScaleButtonView): 'neutral' | 'select
 
 .selected-workspace__content {
   @apply min-h-0 flex-1 overflow-auto;
-}
-
-.selected-workspace__header {
-  @apply border-b border-zinc-200 p-4;
-}
-
-.selected-workspace__header-row {
-  @apply flex flex-wrap items-stretch justify-between gap-3;
-}
-
-.selected-workspace__header-main {
-  @apply min-w-0;
-}
-
-.selected-workspace__chat-title {
-  @apply truncate text-base font-semibold;
-}
-
-.selected-workspace__chat-meta {
-  @apply mt-1 flex flex-wrap gap-2 text-xs text-zinc-500;
-}
-
-.selected-workspace__chat-id {
-  @apply rounded bg-zinc-100 px-1.5 py-0.5;
-}
-
-.selected-workspace__header-actions {
-  @apply flex shrink-0 items-center gap-2;
-}
-
-.selected-workspace__close-button {
-  @apply text-lg leading-none text-zinc-600;
 }
 
 .selected-workspace__body {

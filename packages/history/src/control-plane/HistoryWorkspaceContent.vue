@@ -35,7 +35,6 @@ let stopEvents: (() => void) | null = null;
 let loadSequence = 0;
 
 const selectedChatId = computed(() => contextString(props.slotContext, 'selectedChatId'));
-const closeSelectedChat = computed(() => contextFunction(props.slotContext, 'closeSelectedChat'));
 const view = computed(() =>
   selectedWorkspaceView({
     defaultViewportDays: defaultViewportDays.value,
@@ -85,10 +84,6 @@ async function loadSelectedState(chatId: string): Promise<void> {
   selectedHistoryStatus.value = selectedState.chat ? 'ready' : 'unavailable';
 }
 
-function closeChat(): void {
-  closeSelectedChat.value?.();
-}
-
 function addPresetTarget(preset: string): void {
   const chatId = selectedChatId.value;
   if (chatId === null) {
@@ -133,11 +128,6 @@ function readStoredViewportDays(): number {
 function contextString(context: SlotContext | undefined, key: string): string | null {
   const value = context?.[key];
   return typeof value === 'string' && value.trim().length > 0 ? value : null;
-}
-
-function contextFunction(context: SlotContext | undefined, key: string): (() => void) | null {
-  const value = context?.[key];
-  return typeof value === 'function' ? (value as () => void) : null;
 }
 
 function pushLocalError(error: unknown): void {
@@ -258,7 +248,6 @@ function removeUndefinedProperties(value: Record<string, unknown>): Record<strin
 <template>
   <SelectedWorkspace
     :view="view"
-    @close="closeChat"
     @custom-target="addCustomTarget"
     @delete-target="deleteTarget"
     @freeform-scale="clearTimelineScale"

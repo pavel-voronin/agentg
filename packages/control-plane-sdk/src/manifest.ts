@@ -2,6 +2,7 @@ import type { ContentModule, ContentProvider } from './slots/types.js';
 
 export type ControlPlaneContentRegistration = {
   contentId: string;
+  metadata?: Record<string, unknown>;
   module: {
     assetPath: string;
   };
@@ -18,6 +19,7 @@ export type ControlPlaneProviderRegistration = {
 
 export type ControlPlaneContentManifest = {
   contentId: string;
+  metadata?: Record<string, unknown>;
   module: {
     url: string;
   };
@@ -70,6 +72,7 @@ export function controlPlaneProviderManifestFromRegistration(
     assetVersion: registration.assetVersion,
     contents: registration.contents.map((content) => ({
       contentId: content.contentId,
+      ...(content.metadata === undefined ? {} : { metadata: content.metadata }),
       module: {
         url: resolveAssetUrl(
           content.module.assetPath,
@@ -100,6 +103,7 @@ export function contentProviderFromControlPlaneManifest(
         await loadStyleUrls(content.styleUrls ?? []);
         return import(/* @vite-ignore */ content.module.url) as Promise<ContentModule>;
       },
+      ...(content.metadata === undefined ? {} : { metadata: content.metadata }),
       ...(content.props === undefined ? {} : { props: content.props }),
       revision: remoteContentRevision(content),
       tags: content.tags
@@ -195,12 +199,14 @@ function parseContentRegistration(value: unknown): ControlPlaneContentRegistrati
     return null;
   }
   const tags = arrayOf(value.tags, parseNonEmptyString);
+  const metadata = optionalRecord(value.metadata);
   const styleAssetPaths = optionalArrayOf(value.styleAssetPaths, parseSafeAssetPath);
-  if (tags === null || styleAssetPaths === null) {
+  if (tags === null || metadata === null || styleAssetPaths === null) {
     return null;
   }
   return {
     contentId: value.contentId,
+    ...(metadata === undefined ? {} : { metadata }),
     module: {
       assetPath: value.module.assetPath
     },
@@ -218,12 +224,14 @@ function parseContentManifest(value: unknown): ControlPlaneContentManifest | nul
     return null;
   }
   const tags = arrayOf(value.tags, parseNonEmptyString);
+  const metadata = optionalRecord(value.metadata);
   const styleUrls = optionalArrayOf(value.styleUrls, parseNonEmptyString);
-  if (tags === null || styleUrls === null) {
+  if (tags === null || metadata === null || styleUrls === null) {
     return null;
   }
   return {
     contentId: value.contentId,
+    ...(metadata === undefined ? {} : { metadata }),
     module: {
       url: value.module.url
     },
@@ -289,6 +297,13 @@ function optionalRecordOf<T>(
     parsed[key] = parsedItem;
   }
   return parsed;
+}
+
+function optionalRecord(value: unknown): Record<string, unknown> | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  return isRecord(value) ? value : null;
 }
 
 function isNonEmptyString(value: unknown): value is string {

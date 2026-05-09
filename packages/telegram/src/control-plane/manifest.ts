@@ -19,6 +19,20 @@ export function createTelegramControlPlane(
         tags: ['control-plane.dashboard.tile']
       },
       {
+        contentId: 'telegram.chat.messages',
+        metadata: {
+          tab: {
+            label: 'Messages',
+            order: 10
+          }
+        },
+        module: {
+          assetPath: 'chat-messages.js'
+        },
+        styleAssetPaths: providerStyleAssets,
+        tags: ['telegram.workspace']
+      },
+      {
         contentId: 'telegram.workspace',
         module: {
           assetPath: 'workspace.js'

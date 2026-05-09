@@ -177,6 +177,12 @@ describe('Control Plane server boundary', () => {
             contents: [
               {
                 contentId: 'alpha.tile',
+                metadata: {
+                  tab: {
+                    label: 'Alpha',
+                    order: 10
+                  }
+                },
                 module: {
                   assetPath: 'tile.js'
                 },
@@ -221,6 +227,12 @@ describe('Control Plane server boundary', () => {
               contents: [
                 {
                   contentId: 'alpha.tile',
+                  metadata: {
+                    tab: {
+                      label: 'Alpha',
+                      order: 10
+                    }
+                  },
                   module: {
                     url: '/control-plane/provider-assets/alpha/tile-v1/tile.js'
                   },

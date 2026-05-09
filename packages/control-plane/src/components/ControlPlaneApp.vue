@@ -37,9 +37,7 @@ provideControlPlaneHost(host);
 provideSlotRuntime(slotRuntime);
 
 const appShell = computed(() => appShellView(appShellStore));
-const workspaceContext = computed(() => ({
-  eventsPanelCollapsed: appShell.value.eventsPanelCollapsed
-}));
+const workspaceContext = computed(() => ({}));
 
 type BrowserGlobal = {
   addEventListener: (type: string, listener: () => void) => void;
@@ -260,11 +258,22 @@ onBeforeUnmount(() => {
       <DashboardPanel />
     </section>
 
-    <main id="mainLayout" ref="mainLayout" class="control-plane-app__main-layout">
+    <main
+      id="mainLayout"
+      ref="mainLayout"
+      class="control-plane-app__main-layout"
+      :data-events-collapsed="appShell.eventsPanelCollapsed ? 'true' : undefined"
+    >
       <SlotOutlet
         :context="workspaceContext"
         slot-id="control-plane.workspace"
         :tags="['control-plane.workspace']"
+      />
+      <SlotOutlet
+        v-if="!appShell.eventsPanelCollapsed"
+        :context="{ idPrefix: 'events' }"
+        slot-id="control-plane.events.panel"
+        :tags="['control-plane.events']"
       />
     </main>
   </div>
@@ -334,7 +343,11 @@ onBeforeUnmount(() => {
 }
 
 .control-plane-app__main-layout {
-  @apply min-h-0 flex-1 overflow-hidden bg-zinc-100 p-4 pt-0;
+  @apply grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_420px] gap-4 overflow-hidden bg-zinc-100 p-4 pt-0;
+}
+
+.control-plane-app__main-layout[data-events-collapsed='true'] {
+  @apply grid-cols-[minmax(0,1fr)];
 }
 
 .control-plane-app__dashboard-preview {

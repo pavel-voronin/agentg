@@ -19,6 +19,7 @@ export default defineConfig({
     lib: {
       cssFileName: 'style',
       entry: {
+        'chat-messages': entry('./src/control-plane/TelegramChatMessagesContent.vue'),
         'dashboard-chats': entry('./src/control-plane/TelegramDashboardChatsContent.vue'),
         status: entry('./src/control-plane/TelegramStatusContent.vue'),
         workspace: entry('./src/control-plane/TelegramWorkspaceContent.vue')

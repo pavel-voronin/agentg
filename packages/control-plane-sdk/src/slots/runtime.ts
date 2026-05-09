@@ -122,6 +122,7 @@ function contentDefinitionsEqual(left: ContentDefinition, right: ContentDefiniti
     left.contentId === right.contentId &&
     left.domainId === right.domainId &&
     contentLoadEqual(left, right) &&
+    optionalRecordsEqual(left.metadata, right.metadata) &&
     optionalRecordsEqual(left.props, right.props) &&
     stringArraysEqual(left.tags, right.tags)
   );
@@ -151,9 +152,42 @@ function optionalRecordsEqual(
     leftEntries.length === rightEntries.length &&
     leftEntries.every(([key, value], index) => {
       const rightEntry = rightEntries[index];
-      return rightEntry?.[0] === key && value === rightEntry[1];
+      return rightEntry?.[0] === key && unknownValuesEqual(value, rightEntry[1]);
     })
   );
+}
+
+function unknownValuesEqual(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) {
+    return true;
+  }
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return (
+      Array.isArray(left) &&
+      Array.isArray(right) &&
+      left.length === right.length &&
+      left.every((value, index) => unknownValuesEqual(value, right[index]))
+    );
+  }
+  if (isRecord(left) || isRecord(right)) {
+    if (!isRecord(left) || !isRecord(right)) {
+      return false;
+    }
+    const leftEntries = Object.entries(left).sort(compareEntries);
+    const rightEntries = Object.entries(right).sort(compareEntries);
+    return (
+      leftEntries.length === rightEntries.length &&
+      leftEntries.every(([key, value], index) => {
+        const rightEntry = rightEntries[index];
+        return rightEntry?.[0] === key && unknownValuesEqual(value, rightEntry[1]);
+      })
+    );
+  }
+  return false;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }
 
 function compareEntries(

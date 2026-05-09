@@ -29,6 +29,19 @@ describe('slot resolver', () => {
   it('leaves empty slots to their default content', () => {
     const resolution = resolveSlotContents(
       {
+        slotId: 'control-plane.empty',
+        tags: ['control-plane.empty']
+      },
+      {},
+      createContentCatalogIndex(catalog)
+    );
+
+    expect(resolution).toEqual({ kind: 'empty' });
+  });
+
+  it('derives default slot content from compatible provider tags', () => {
+    const resolution = resolveSlotContents(
+      {
         slotId: 'control-plane.workspace',
         tags: ['control-plane.workspace']
       },
@@ -36,7 +49,20 @@ describe('slot resolver', () => {
       createContentCatalogIndex(catalog)
     );
 
-    expect(resolution).toEqual({ kind: 'empty' });
+    expect(resolution).toMatchObject({
+      items: [
+        {
+          contentId: 'alpha.workspace',
+          kind: 'content'
+        },
+        {
+          contentId: 'events.stream.panel',
+          kind: 'content'
+        }
+      ],
+      kind: 'contents',
+      overflowCount: 0
+    });
   });
 
   it('resolves the layout content for a compatible slot', () => {

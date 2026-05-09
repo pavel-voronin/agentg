@@ -5,11 +5,13 @@ import type { ContentCatalog, ContentDefinition } from '@agentg/control-plane-sd
 function contentDefinition(
   contentId: string,
   revision: string,
-  load: ContentDefinition['load']
+  load: ContentDefinition['load'],
+  metadata: ContentDefinition['metadata'] = undefined
 ): ContentDefinition {
   return {
     contentId,
     load,
+    ...(metadata === undefined ? {} : { metadata }),
     revision,
     tags: ['control-plane.workspace']
   };
@@ -45,5 +47,33 @@ describe('slot runtime', () => {
     runtime.replaceCatalog([contentDefinition('alpha.workspace', 'module-url-v2', nextLoad)]);
 
     expect(runtime.catalogIndex.value.get('alpha.workspace')).not.toBe(initialContent);
+  });
+
+  it('keeps stable content definitions when nested metadata does not change', () => {
+    const initialLoad = () => Promise.resolve({ default: {} });
+    const nextLoad = () => Promise.resolve({ default: {} });
+    const runtime = createSlotRuntime({
+      catalog: [
+        contentDefinition('alpha.workspace', 'module-url-v1', initialLoad, {
+          tab: {
+            label: 'Alpha',
+            order: 10
+          }
+        })
+      ],
+      initialLayout: {}
+    });
+    const initialContent = runtime.catalogIndex.value.get('alpha.workspace');
+
+    runtime.replaceCatalog([
+      contentDefinition('alpha.workspace', 'module-url-v1', nextLoad, {
+        tab: {
+          label: 'Alpha',
+          order: 10
+        }
+      })
+    ]);
+
+    expect(runtime.catalogIndex.value.get('alpha.workspace')).toBe(initialContent);
   });
 });

@@ -10,6 +10,7 @@ export type ContentDefinition = {
   contentId: string;
   domainId?: string;
   load: () => Promise<ContentModule>;
+  metadata?: Record<string, unknown>;
   props?: Record<string, unknown>;
   revision?: string;
   tags: readonly string[];

@@ -30,7 +30,7 @@ export function resolveSlotContents(
 ): SlotResolution {
   const layoutEntry = layout[slot.slotId];
   if (layoutEntry === undefined || layoutEntry.items.length === 0) {
-    return { kind: 'empty' };
+    return resolveCompatibleSlotContents(slot, catalog, options);
   }
 
   const maxItems = normalizeMaxItems(options.maxItems);
@@ -38,6 +38,34 @@ export function resolveSlotContents(
   const overflowCount = layoutEntry.items.length - items.length;
   return {
     items: items.map((item, index) => resolveSlotItem(slot, item.contentId, index, catalog)),
+    kind: 'contents',
+    overflowCount
+  };
+}
+
+function resolveCompatibleSlotContents(
+  slot: SlotDefinition,
+  catalog: ReadonlyMap<string, ContentDefinition>,
+  options: {
+    maxItems?: number | undefined;
+  }
+): SlotResolution {
+  const maxItems = normalizeMaxItems(options.maxItems);
+  const compatible = [...catalog.values()].filter((content) =>
+    tagsCompatible(slot.tags, content.tags)
+  );
+  const items = maxItems === undefined ? compatible : compatible.slice(0, maxItems);
+  const overflowCount = compatible.length - items.length;
+  if (items.length === 0) {
+    return { kind: 'empty' };
+  }
+  return {
+    items: items.map((content, index) => ({
+      content,
+      contentId: content.contentId,
+      index,
+      kind: 'content'
+    })),
     kind: 'contents',
     overflowCount
   };

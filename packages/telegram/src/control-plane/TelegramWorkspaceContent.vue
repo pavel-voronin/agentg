@@ -1,7 +1,16 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 
-import { SlotOutlet, type SlotContext } from '@agentg/control-plane-sdk/slots';
+import {
+  SlotOutletItem,
+  type SlotContext,
+  type SlotDebugRegistration,
+  type SlotItemResolution,
+  type SlotItemRenderState,
+  type SlotResolution,
+  type SlotRenderState,
+  useSlotRuntime
+} from '@agentg/control-plane-sdk/slots';
 
 import { chatSidebarView } from './chatSidebarView.js';
 import ChatSidebar from './components/ChatSidebar.vue';
@@ -34,16 +43,31 @@ type ChatListKind =
       kind: 'folder';
     };
 
+type WorkspaceTab = {
+  item: SlotItemResolution & { kind: 'content' };
+  label: string;
+  order: number;
+};
+
+type ChatHeaderView = {
+  subtitle: string;
+  title: string;
+};
+
 const DEFAULT_CHAT_LIMIT = 500;
 const telegramStoragePrefix = 'agentg.telegram.controlPlane';
 const directoryProjection = useTelegramDirectoryProjection();
 const historyStatsProjection = useTelegramHistoryStatsProjection();
+const slotRuntime = useSlotRuntime();
+const activePrimaryTabId = ref(readStorage(`${telegramStoragePrefix}.primaryTabId`) ?? '');
 const chatFilter = ref(readStorage(`${telegramStoragePrefix}.chatFilter`) ?? '');
 const chatFolderId = ref<number | null>(readStoredChatListSelection().folderId);
 const chatListMode = ref<ChatListMode>(readStoredChatListSelection().mode);
 const selectedChatId = ref(readStorage(`${telegramStoragePrefix}.selectedChatId`) ?? null);
+const primaryItemStates = shallowRef<ReadonlyMap<string, SlotItemRenderState>>(new Map());
+const emptyContentAttrs: Record<string, unknown> = {};
+let primaryDebugRegistration: SlotDebugRegistration | null = null;
 
-const eventsPanelCollapsed = computed(() => props.slotContext?.eventsPanelCollapsed === true);
 const nestedSlotContext = computed(() => ({
   ...(props.slotContext ?? {}),
   closeSelectedChat,
@@ -80,13 +104,57 @@ const chatSidebar = computed(() =>
 
 const primarySlot = {
   slotId: 'telegram.workspace.primary',
-  tags: ['telegram.workspace.content']
+  tags: ['telegram.workspace']
 };
 
-const sidecarSlot = {
-  slotId: 'telegram.workspace.sidecar',
-  tags: ['control-plane.events']
-};
+const primaryResolvedItems = computed<SlotItemResolution[]>(() =>
+  slotRuntime.compatibleContent(primarySlot.tags).map((content, index) => ({
+    content,
+    contentId: content.contentId,
+    index,
+    kind: 'content'
+  }))
+);
+const primaryResolution = computed<SlotResolution>(() =>
+  primaryResolvedItems.value.length === 0
+    ? { kind: 'empty' }
+    : {
+        items: primaryResolvedItems.value,
+        kind: 'contents',
+        overflowCount: 0
+      }
+);
+const primarySlotState = computed<SlotRenderState>(() => {
+  if (primaryResolution.value.kind === 'empty') {
+    return { kind: 'empty' };
+  }
+  return {
+    items: primaryResolution.value.items.map(
+      (item) => primaryItemStates.value.get(slotItemKey(item)) ?? initialItemState(item)
+    ),
+    kind: 'contents',
+    overflowCount: primaryResolution.value.overflowCount
+  };
+});
+const primaryTabs = computed(() =>
+  primaryResolvedItems.value.map(workspaceTabFromItem).filter(isDefined).sort(compareWorkspaceTabs)
+);
+const activePrimaryTab = computed(
+  () => primaryTabs.value.find((tab) => tab.item.contentId === activePrimaryTabId.value) ?? null
+);
+const selectedChat = computed(() =>
+  selectedChatId.value === null
+    ? null
+    : (directoryProjection.chats.value.find((chat) => chat.id === selectedChatId.value) ?? null)
+);
+const selectedChatHeader = computed<ChatHeaderView | null>(() =>
+  selectedChat.value === null
+    ? null
+    : {
+        subtitle: chatHeaderSubtitle(selectedChat.value),
+        title: selectedChat.value.title
+      }
+);
 
 watch(
   selectedChatId,
@@ -98,6 +166,55 @@ watch(
 
 watch(chatNavigation, ensureSelectedFolderExists, { immediate: true });
 
+watch(
+  primaryResolvedItems,
+  (items) => {
+    const nextKeys = new Set(items.map(slotItemKey));
+    primaryItemStates.value = new Map(
+      [...primaryItemStates.value.entries()].filter(([key]) => nextKeys.has(key))
+    );
+  },
+  { immediate: true }
+);
+
+watch(
+  primaryTabs,
+  (tabs) => {
+    if (tabs.length === 0) {
+      activePrimaryTabId.value = '';
+      writeStorage(`${telegramStoragePrefix}.primaryTabId`, '');
+      return;
+    }
+    if (!tabs.some((tab) => tab.item.contentId === activePrimaryTabId.value)) {
+      selectPrimaryTab(tabs[0].item.contentId);
+    }
+  },
+  { immediate: true }
+);
+
+watch(
+  () => ({
+    resolution: primaryResolution.value,
+    slotId: primarySlot.slotId,
+    state: primarySlotState.value,
+    tags: [...primarySlot.tags],
+    target: null
+  }),
+  (entry) => {
+    if (primaryDebugRegistration === null) {
+      primaryDebugRegistration = slotRuntime.registerDebugEntry(entry);
+      return;
+    }
+    primaryDebugRegistration.update(entry);
+  },
+  { immediate: true }
+);
+
+onBeforeUnmount(() => {
+  primaryDebugRegistration?.unregister();
+  primaryDebugRegistration = null;
+});
+
 function clearChatSearch(): void {
   chatFilter.value = '';
   writeStorage(`${telegramStoragePrefix}.chatFilter`, '');
@@ -106,6 +223,37 @@ function clearChatSearch(): void {
 function searchChats(value: string): void {
   chatFilter.value = value;
   writeStorage(`${telegramStoragePrefix}.chatFilter`, value);
+}
+
+function selectPrimaryTab(contentId: string): void {
+  if (!primaryTabs.value.some((tab) => tab.item.contentId === contentId)) {
+    return;
+  }
+  activePrimaryTabId.value = contentId;
+  writeStorage(`${telegramStoragePrefix}.primaryTabId`, contentId);
+}
+
+function setPrimaryItemState(item: SlotItemResolution, state: SlotItemRenderState): void {
+  primaryItemStates.value = new Map(primaryItemStates.value).set(slotItemKey(item), state);
+}
+
+function chatHeaderSubtitle(chat: TelegramDirectoryChat): string {
+  if (chat.isBot) {
+    return 'bot';
+  }
+  if (chat.type === 'private') {
+    return 'private chat';
+  }
+  if (chat.type === 'group') {
+    return 'group';
+  }
+  if (chat.type === 'channel') {
+    return 'channel';
+  }
+  if (chat.type === 'secret') {
+    return 'secret chat';
+  }
+  return chat.type;
 }
 
 function chatsWithStats(
@@ -480,6 +628,60 @@ function writeStoredChatListSelection(selection: {
   );
 }
 
+function workspaceTabFromItem(item: SlotItemResolution): WorkspaceTab | undefined {
+  if (item.kind !== 'content') {
+    return undefined;
+  }
+  const metadata = isPlainRecord(item.content.metadata) ? item.content.metadata : {};
+  const tab = isPlainRecord(metadata.tab) ? metadata.tab : undefined;
+  const label = typeof tab?.label === 'string' && tab.label.trim().length > 0 ? tab.label : '';
+  const order = typeof tab?.order === 'number' && Number.isFinite(tab.order) ? tab.order : null;
+  if (tab === undefined || label.length === 0 || order === null) {
+    return undefined;
+  }
+  return {
+    item,
+    label,
+    order
+  };
+}
+
+function compareWorkspaceTabs(left: WorkspaceTab, right: WorkspaceTab): number {
+  if (left.order !== right.order) {
+    return left.order - right.order;
+  }
+  return (
+    left.label.localeCompare(right.label) || left.item.contentId.localeCompare(right.item.contentId)
+  );
+}
+
+function initialItemState(item: SlotItemResolution): SlotItemRenderState {
+  switch (item.kind) {
+    case 'content':
+      return {
+        contentId: item.contentId,
+        index: item.index,
+        kind: 'component-loading'
+      };
+    case 'incompatible':
+      return {
+        contentId: item.contentId,
+        index: item.index,
+        kind: 'incompatible-content'
+      };
+    case 'missing-content':
+      return {
+        contentId: item.contentId,
+        index: item.index,
+        kind: 'missing-content'
+      };
+  }
+}
+
+function slotItemKey(item: SlotItemResolution): string {
+  return `${String(item.index)}:${item.contentId}`;
+}
+
 function compareBigIntDescending(left: bigint, right: bigint): number {
   if (left === right) {
     return 0;
@@ -508,43 +710,149 @@ function isDefined<T>(value: T | undefined): value is T {
 </script>
 
 <template>
-  <div
-    class="telegram-workspace"
-    :data-events-collapsed="eventsPanelCollapsed ? 'true' : undefined"
-  >
-    <ChatSidebar
-      :view="chatSidebar"
-      @archive-open="openArchiveChats"
-      @chat-open="(chatId) => void openChat(chatId).catch(pushLocalError)"
-      @chat-toggle="(chatId) => void toggleChat(chatId).catch(pushLocalError)"
-      @folder-open="openFolderChats"
-      @main-open="openMainChats"
-      @search-clear="clearChatSearch"
-      @search-input="searchChats"
-    />
+  <div class="telegram-workspace">
+    <section class="telegram-workspace__chat-interface">
+      <ChatSidebar
+        :view="chatSidebar"
+        @archive-open="openArchiveChats"
+        @chat-open="(chatId) => void openChat(chatId).catch(pushLocalError)"
+        @chat-toggle="(chatId) => void toggleChat(chatId).catch(pushLocalError)"
+        @folder-open="openFolderChats"
+        @main-open="openMainChats"
+        @search-clear="clearChatSearch"
+        @search-input="searchChats"
+      />
 
-    <SlotOutlet
-      :context="nestedSlotContext"
-      :slot-id="primarySlot.slotId"
-      :tags="primarySlot.tags"
-    />
+      <div class="telegram-workspace__primary-panel">
+        <div v-if="selectedChatId === null" class="telegram-workspace__empty-state">
+          <div class="telegram-workspace__empty-content">
+            <div class="telegram-workspace__empty-title">No chat selected</div>
+            <div class="telegram-workspace__empty-copy">Select a chat from the list.</div>
+          </div>
+        </div>
 
-    <SlotOutlet
-      v-if="!eventsPanelCollapsed"
-      :context="{ ...nestedSlotContext, idPrefix: 'events' }"
-      :slot-id="sidecarSlot.slotId"
-      :tags="sidecarSlot.tags"
-    />
+        <div v-else class="telegram-workspace__tab-layout">
+          <div v-if="selectedChatHeader" class="telegram-workspace__chat-header">
+            <div class="telegram-workspace__chat-header-main">
+              <div class="telegram-workspace__chat-header-title">
+                {{ selectedChatHeader.title }}
+              </div>
+              <div class="telegram-workspace__chat-header-subtitle">
+                {{ selectedChatHeader.subtitle }}
+              </div>
+            </div>
+            <button
+              type="button"
+              class="telegram-workspace__chat-header-close"
+              aria-label="Close chat"
+              title="Close chat"
+              @click="closeSelectedChat"
+            >
+              x
+            </button>
+          </div>
+          <div class="telegram-workspace__tab-list" role="tablist" aria-label="Chat workspace">
+            <button
+              v-for="tab in primaryTabs"
+              :key="tab.item.contentId"
+              type="button"
+              role="tab"
+              class="telegram-workspace__tab-button"
+              :aria-selected="tab.item.contentId === activePrimaryTabId"
+              :data-active="tab.item.contentId === activePrimaryTabId ? 'true' : undefined"
+              @click="selectPrimaryTab(tab.item.contentId)"
+            >
+              {{ tab.label }}
+            </button>
+          </div>
+
+          <div class="telegram-workspace__tab-body">
+            <SlotOutletItem
+              v-if="activePrimaryTab"
+              :content-attrs="emptyContentAttrs"
+              :context="nestedSlotContext"
+              :item="activePrimaryTab.item"
+              @state-change="(state) => setPrimaryItemState(activePrimaryTab.item, state)"
+            />
+            <div v-else class="telegram-workspace__tab-empty">No workspace tabs available.</div>
+          </div>
+        </div>
+      </div>
+    </section>
   </div>
 </template>
 
 <style scoped>
 @reference "tailwindcss";
 .telegram-workspace {
-  @apply grid h-full min-h-0 grid-cols-[380px_minmax(0,1fr)_420px] gap-4 overflow-hidden;
+  @apply h-full min-h-0 overflow-hidden;
 }
 
-.telegram-workspace[data-events-collapsed='true'] {
-  @apply grid-cols-[380px_minmax(0,1fr)];
+.telegram-workspace__chat-interface {
+  @apply grid h-full min-h-0 min-w-0 grid-cols-[380px_minmax(0,1fr)] overflow-hidden rounded-lg border border-zinc-200 bg-white;
+}
+
+.telegram-workspace__primary-panel {
+  @apply min-h-0 min-w-0 overflow-hidden border-l border-zinc-200 bg-white;
+}
+
+.telegram-workspace__empty-state {
+  @apply flex h-full min-h-0 items-center justify-center p-8 text-center;
+}
+
+.telegram-workspace__empty-content {
+  @apply max-w-sm;
+}
+
+.telegram-workspace__empty-title {
+  @apply text-base font-semibold text-zinc-900;
+}
+
+.telegram-workspace__empty-copy {
+  @apply mt-2 text-sm text-zinc-500;
+}
+
+.telegram-workspace__tab-layout {
+  @apply flex h-full min-h-0 flex-col bg-white;
+}
+
+.telegram-workspace__chat-header {
+  @apply flex shrink-0 items-center justify-between gap-3 border-b border-zinc-200 px-4 py-3;
+}
+
+.telegram-workspace__chat-header-main {
+  @apply min-w-0;
+}
+
+.telegram-workspace__chat-header-title {
+  @apply truncate text-base font-semibold text-zinc-900;
+}
+
+.telegram-workspace__chat-header-subtitle {
+  @apply mt-0.5 truncate text-xs text-zinc-500;
+}
+
+.telegram-workspace__chat-header-close {
+  @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-lg leading-none text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900;
+}
+
+.telegram-workspace__tab-list {
+  @apply flex shrink-0 gap-1 border-b border-zinc-200 px-4 pt-2;
+}
+
+.telegram-workspace__tab-button {
+  @apply border-b-2 border-transparent px-3 py-2 text-sm font-medium text-zinc-500 hover:text-zinc-900;
+}
+
+.telegram-workspace__tab-button[data-active='true'] {
+  @apply border-teal-600 text-teal-700;
+}
+
+.telegram-workspace__tab-body {
+  @apply min-h-0 flex-1 overflow-hidden;
+}
+
+.telegram-workspace__tab-empty {
+  @apply p-8 text-center text-sm text-zinc-500;
 }
 </style>

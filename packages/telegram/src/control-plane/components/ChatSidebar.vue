@@ -240,7 +240,7 @@ onBeforeUnmount(() => {
 <style scoped>
 @reference "tailwindcss";
 .chat-sidebar {
-  @apply flex min-h-0 flex-col overflow-hidden rounded-lg border border-zinc-200 bg-white;
+  @apply flex min-h-0 flex-col overflow-hidden bg-white;
 }
 
 .chat-sidebar__search-bar {

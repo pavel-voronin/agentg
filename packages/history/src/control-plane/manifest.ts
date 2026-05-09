@@ -20,11 +20,17 @@ export function createHistoryControlPlane(
       },
       {
         contentId: 'history.workspace',
+        metadata: {
+          tab: {
+            label: 'History',
+            order: 20
+          }
+        },
         module: {
           assetPath: 'workspace.js'
         },
         styleAssetPaths: providerStyleAssets,
-        tags: ['telegram.workspace.content']
+        tags: ['telegram.workspace']
       }
     ]
   };
