@@ -43,6 +43,12 @@ function scaleButtonVariant(scale: TimelineScaleButtonView): 'neutral' | 'select
       </div>
     </div>
 
+    <div
+      v-else-if="view.status === 'pending'"
+      aria-hidden="true"
+      class="selected-workspace__state-message"
+    ></div>
+
     <div v-else-if="view.status === 'loading'" class="selected-workspace__state-message">
       Loading selected chat.
     </div>

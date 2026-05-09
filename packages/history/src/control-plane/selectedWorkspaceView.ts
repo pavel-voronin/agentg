@@ -11,6 +11,7 @@ import {
 export type SelectedWorkspaceViewSource = {
   defaultViewportDays: number;
   selectedChatId: string | null;
+  selectedHistoryLoadingVisible: boolean;
   selectedHistoryState: SelectedHistoryState | null;
   selectedHistoryStatus: SelectedHistoryStatus;
   viewportDays: number | null;
@@ -21,7 +22,7 @@ export function selectedWorkspaceView(source: SelectedWorkspaceViewSource): Sele
     return { status: 'empty' };
   }
   if (source.selectedHistoryStatus === 'loading' || source.selectedHistoryStatus === 'idle') {
-    return { status: 'loading' };
+    return source.selectedHistoryLoadingVisible ? { status: 'loading' } : { status: 'pending' };
   }
   if (source.selectedHistoryStatus === 'unavailable' || !source.selectedHistoryState?.chat) {
     return { status: 'unavailable' };

@@ -25,20 +25,24 @@ const props = defineProps<{
   slotContext?: SlotContext | undefined;
 }>();
 
+const SELECTED_HISTORY_LOADING_FEEDBACK_DELAY_MS = 240;
 const historyStoragePrefix = 'agentg.history.controlPlane';
 const host = useControlPlaneHost();
 const selectedHistoryState = ref<SelectedHistoryState | null>(null);
+const selectedHistoryLoadingVisible = ref(false);
 const selectedHistoryStatus = ref<SelectedHistoryStatus>('idle');
 const defaultViewportDays = ref(readStoredViewportDays());
 const viewportDays = ref<number | null>(defaultViewportDays.value);
 let stopEvents: (() => void) | null = null;
 let loadSequence = 0;
+let loadingFeedbackTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
 const selectedChatId = computed(() => contextString(props.slotContext, 'selectedChatId'));
 const view = computed(() =>
   selectedWorkspaceView({
     defaultViewportDays: defaultViewportDays.value,
     selectedChatId: selectedChatId.value,
+    selectedHistoryLoadingVisible: selectedHistoryLoadingVisible.value,
     selectedHistoryState: selectedHistoryState.value,
     selectedHistoryStatus: selectedHistoryStatus.value,
     viewportDays: viewportDays.value
@@ -48,12 +52,16 @@ const view = computed(() =>
 watch(
   selectedChatId,
   (chatId) => {
+    clearLoadingFeedbackTimeout();
     selectedHistoryState.value = null;
+    selectedHistoryLoadingVisible.value = false;
     selectedHistoryStatus.value = chatId === null ? 'idle' : 'loading';
     viewportDays.value = defaultViewportDays.value;
-    if (chatId !== null) {
-      void loadSelectedState(chatId).catch(pushLocalError);
+    if (chatId === null) {
+      loadSequence += 1;
+      return;
     }
+    void loadSelectedState(chatId).catch(pushLocalError);
   },
   { immediate: true }
 );
@@ -68,6 +76,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  clearLoadingFeedbackTimeout();
   stopEvents?.();
   stopEvents = null;
 });
@@ -75,12 +84,15 @@ onBeforeUnmount(() => {
 async function loadSelectedState(chatId: string): Promise<void> {
   const sequence = ++loadSequence;
   selectedHistoryStatus.value = 'loading';
+  scheduleLoadingFeedback(sequence);
   const result = await host.rpc('history.getChatHistoryState', { chatId });
   if (sequence !== loadSequence || selectedChatId.value !== chatId) {
     return;
   }
+  clearLoadingFeedbackTimeout();
   const selectedState = normalizeSelectedHistoryState(result);
   selectedHistoryState.value = selectedState;
+  selectedHistoryLoadingVisible.value = false;
   selectedHistoryStatus.value = selectedState.chat ? 'ready' : 'unavailable';
 }
 
@@ -132,6 +144,25 @@ function contextString(context: SlotContext | undefined, key: string): string | 
 
 function pushLocalError(error: unknown): void {
   console.error(error);
+}
+
+function scheduleLoadingFeedback(sequence: number): void {
+  selectedHistoryLoadingVisible.value = false;
+  loadingFeedbackTimeoutId = setTimeout(() => {
+    loadingFeedbackTimeoutId = null;
+    if (sequence !== loadSequence) {
+      return;
+    }
+    selectedHistoryLoadingVisible.value = true;
+  }, SELECTED_HISTORY_LOADING_FEEDBACK_DELAY_MS);
+}
+
+function clearLoadingFeedbackTimeout(): void {
+  if (loadingFeedbackTimeoutId === null) {
+    return;
+  }
+  clearTimeout(loadingFeedbackTimeoutId);
+  loadingFeedbackTimeoutId = null;
 }
 
 function normalizeSelectedHistoryState(value: unknown): SelectedHistoryState {

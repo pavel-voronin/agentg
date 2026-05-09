@@ -96,6 +96,9 @@ export type SelectedWorkspaceView =
       status: 'empty';
     }
   | {
+      status: 'pending';
+    }
+  | {
       status: 'loading';
     }
   | {
