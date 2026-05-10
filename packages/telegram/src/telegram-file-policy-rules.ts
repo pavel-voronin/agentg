@@ -40,6 +40,12 @@ export const telegramAutomaticDownloadPolicyRules = [
     maxBytes: 5 * TELEGRAM_MEDIA_MEGABYTE,
     mediaKind: 'video',
     name: 'videos up to 5 MB'
+  },
+  {
+    causes: ['live_update', 'operator_page'],
+    maxBytes: 5 * TELEGRAM_MEDIA_MEGABYTE,
+    mediaKind: 'voice',
+    name: 'voice messages up to 5 MB'
   }
 ] as const satisfies readonly TelegramMediaDownloadPolicyRule[];
 
@@ -67,5 +73,11 @@ export const telegramExplicitDownloadPolicyRules = [
     maxBytes: null,
     mediaKind: 'document',
     name: 'requested documents'
+  },
+  {
+    causes: ['explicit_request'],
+    maxBytes: null,
+    mediaKind: 'voice',
+    name: 'requested voice messages'
   }
 ] as const satisfies readonly TelegramMediaDownloadPolicyRule[];

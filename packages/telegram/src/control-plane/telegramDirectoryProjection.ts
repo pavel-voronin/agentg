@@ -273,12 +273,13 @@ function isFileMediaKind(value: string | undefined): value is TelegramFileRef['m
     value === 'document' ||
     value === 'photo' ||
     value === 'thumbnail' ||
-    value === 'video'
+    value === 'video' ||
+    value === 'voice'
   );
 }
 
 function isFileRenderKind(value: string | undefined): value is TelegramFileRef['renderKind'] {
-  return value === 'download' || value === 'image' || value === 'video';
+  return value === 'audio' || value === 'download' || value === 'image' || value === 'video';
 }
 
 function pushProjectionError(error: unknown): void {

@@ -40,7 +40,7 @@ describe('Telegram file extraction', () => {
     ]);
   });
 
-  it('extracts photo, video, thumbnail, and document message slots', () => {
+  it('extracts photo, video, thumbnail, document, and voice message slots', () => {
     const photoUpdate = normalizeTelegramUpdate({
       _: 'updateNewMessage',
       message: message({
@@ -96,6 +96,21 @@ describe('Telegram file extraction', () => {
         id: 13
       })
     });
+    const voiceUpdate = normalizeTelegramUpdate({
+      _: 'updateNewMessage',
+      message: message({
+        content: {
+          _: 'messageVoiceNote',
+          voice_note: {
+            _: 'voiceNote',
+            duration: 17,
+            mime_type: 'audio/ogg',
+            voice: tdFile(5001, 120_000)
+          }
+        },
+        id: 14
+      })
+    });
 
     expect(extractTelegramFileSlots(photoUpdate ?? {}).map((slot) => slot.slotKey)).toEqual([
       'content.photo.0'
@@ -110,6 +125,15 @@ describe('Telegram file extraction', () => {
         mediaKind: 'document',
         renderKind: 'download',
         slotKey: 'content.document.file'
+      }
+    ]);
+    expect(extractTelegramFileSlots(voiceUpdate ?? {})).toMatchObject([
+      {
+        durationSeconds: 17,
+        mediaKind: 'voice',
+        mimeType: 'audio/ogg',
+        renderKind: 'audio',
+        slotKey: 'content.voice.file'
       }
     ]);
   });
@@ -167,6 +191,47 @@ describe('Telegram file policy', () => {
         current: null,
         slot: video,
         sourceFingerprint: 'video'
+      }).action
+    ).toBe('enqueue');
+  });
+
+  it('queues voice messages for Control Plane pages and explicit requests', () => {
+    const [voice] = extractTelegramFileSlots(
+      normalizeTelegramUpdate({
+        _: 'updateNewMessage',
+        message: message({
+          content: {
+            _: 'messageVoiceNote',
+            voice_note: {
+              _: 'voiceNote',
+              duration: 8,
+              mime_type: 'audio/ogg',
+              voice: tdFile(5501, 100_000)
+            }
+          },
+          id: 25
+        })
+      }) ?? {}
+    );
+
+    expect(voice).toBeDefined();
+    if (voice === undefined) {
+      throw new Error('expected voice slot');
+    }
+    expect(
+      decideTelegramFilePolicy({
+        cause: 'operator_page',
+        current: null,
+        slot: voice,
+        sourceFingerprint: 'voice'
+      }).action
+    ).toBe('enqueue');
+    expect(
+      decideTelegramFilePolicy({
+        cause: 'explicit_request',
+        current: null,
+        slot: voice,
+        sourceFingerprint: 'voice'
       }).action
     ).toBe('enqueue');
   });

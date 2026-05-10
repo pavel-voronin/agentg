@@ -96,6 +96,8 @@ function extractMessageFileSlots(
       return extractMessageVideoSlots(owner, content, 'video');
     case 'messageVideoNote':
       return extractMessageVideoNoteSlots(owner, content);
+    case 'messageVoiceNote':
+      return extractMessageVoiceNoteSlots(owner, content);
     case 'messageAnimation':
       return extractMessageVideoSlots(owner, content, 'animation');
     case 'messageDocument':
@@ -218,6 +220,29 @@ function extractMessageDocumentSlots(
     slots.push(thumbnail);
   }
   return slots;
+}
+
+function extractMessageVoiceNoteSlots(
+  owner: MessageOwner,
+  content: Record<string, unknown>
+): ExtractedTelegramFileSlot[] {
+  const voiceNote = asPlainRecord(content.voice_note);
+  const facts = tdFileFacts(voiceNote?.voice);
+  if (facts === null) {
+    return [];
+  }
+  return [
+    fileSlot({
+      durationSeconds: safeInteger(voiceNote?.duration),
+      facts,
+      mediaKind: 'voice',
+      mimeType: safeString(voiceNote?.mime_type) ?? 'audio/ogg',
+      owner: telegramMessageRef({ chatId: owner.chatId, messageId: owner.messageId }),
+      ownerId: owner.ownerId,
+      renderKind: 'audio',
+      slotKey: 'content.voice.file'
+    })
+  ];
 }
 
 function thumbnailSlot(

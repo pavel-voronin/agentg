@@ -78,6 +78,7 @@ type MessageView = {
 };
 
 type MediaFileView = {
+  duration: string | null;
   file: TelegramFileRef;
   id: string;
   isInteractive: boolean;
@@ -704,6 +705,7 @@ function mediaFileViews(message: TelegramReadMessage): MediaFileView[] {
   const primaryFiles = message.media.files.filter((file) => file.mediaKind !== 'thumbnail');
   const files = primaryFiles.length === 0 ? message.media.files : primaryFiles;
   return files.map((file) => ({
+    duration: formatDurationLabel(file.durationSeconds),
     file,
     id: file.id,
     isInteractive: file.canRequest,
@@ -724,6 +726,9 @@ function fileLabel(file: TelegramFileRef): string {
   }
   if (file.mediaKind === 'video') {
     return 'Video';
+  }
+  if (file.mediaKind === 'voice') {
+    return 'Voice message';
   }
   if (file.mediaKind === 'thumbnail') {
     return 'Preview';
@@ -770,6 +775,15 @@ function formatFileSize(value: number | null): string {
     return `${Math.ceil(value / 1024).toString()} KB`;
   }
   return `${value.toString()} B`;
+}
+
+function formatDurationLabel(value: number | null): string | null {
+  if (value === null) {
+    return null;
+  }
+  const minutes = Math.floor(value / 60);
+  const seconds = value % 60;
+  return `${minutes.toString()}:${seconds.toString().padStart(2, '0')}`;
 }
 
 function providerFileUrl(url: string | null): string | null {
@@ -1237,12 +1251,13 @@ function isFileMediaKind(value: string | undefined): value is TelegramFileRef['m
     value === 'document' ||
     value === 'photo' ||
     value === 'thumbnail' ||
-    value === 'video'
+    value === 'video' ||
+    value === 'voice'
   );
 }
 
 function isFileRenderKind(value: string | undefined): value is TelegramFileRef['renderKind'] {
-  return value === 'download' || value === 'image' || value === 'video';
+  return value === 'audio' || value === 'download' || value === 'image' || value === 'video';
 }
 
 function errorMessage(error: unknown): string {
@@ -1352,6 +1367,24 @@ function errorMessage(error: unknown): string {
                   controls
                   playsinline
                 />
+                <div
+                  v-else-if="media.url !== null && media.file.renderKind === 'audio'"
+                  class="telegram-chat-messages__voice"
+                >
+                  <span class="telegram-chat-messages__voice-title">{{ media.label }}</span>
+                  <audio
+                    class="telegram-chat-messages__voice-player"
+                    :src="media.url"
+                    controls
+                    preload="metadata"
+                  />
+                  <span
+                    v-if="media.duration !== null"
+                    class="telegram-chat-messages__voice-duration"
+                  >
+                    {{ media.duration }}
+                  </span>
+                </div>
                 <a
                   v-else-if="media.url !== null"
                   class="telegram-chat-messages__media-download"
@@ -1558,6 +1591,22 @@ function errorMessage(error: unknown): string {
 
 .telegram-chat-messages__media-video {
   @apply max-h-[420px] max-w-full rounded-lg bg-black;
+}
+
+.telegram-chat-messages__voice {
+  @apply grid min-w-0 max-w-full gap-1 rounded-2xl bg-white/70 px-3 py-2 ring-1 ring-black/5;
+}
+
+.telegram-chat-messages__voice-title {
+  @apply text-sm font-semibold text-teal-800;
+}
+
+.telegram-chat-messages__voice-player {
+  @apply h-9 w-56 max-w-full sm:w-64;
+}
+
+.telegram-chat-messages__voice-duration {
+  @apply text-xs font-medium text-zinc-500;
 }
 
 .telegram-chat-messages__media-download {

@@ -8,9 +8,10 @@ export const telegramFileMediaKinds = [
   'document',
   'photo',
   'thumbnail',
-  'video'
+  'video',
+  'voice'
 ] as const;
-export const telegramFileRenderKinds = ['download', 'image', 'video'] as const;
+export const telegramFileRenderKinds = ['audio', 'download', 'image', 'video'] as const;
 
 export type TelegramFileStatus = (typeof telegramFileStatuses)[number];
 export type TelegramFileMediaKind = (typeof telegramFileMediaKinds)[number];

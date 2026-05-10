@@ -1058,7 +1058,8 @@ function assertMediaKind(value: string): TelegramFileMediaKind {
     value === 'document' ||
     value === 'photo' ||
     value === 'thumbnail' ||
-    value === 'video'
+    value === 'video' ||
+    value === 'voice'
   ) {
     return value;
   }
@@ -1066,7 +1067,7 @@ function assertMediaKind(value: string): TelegramFileMediaKind {
 }
 
 function assertRenderKind(value: string): TelegramFileRenderKind {
-  if (value === 'download' || value === 'image' || value === 'video') {
+  if (value === 'audio' || value === 'download' || value === 'image' || value === 'video') {
     return value;
   }
   throw new Error(`Unsupported Telegram file render kind: ${value}`);
