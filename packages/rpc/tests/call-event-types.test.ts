@@ -11,13 +11,13 @@ import {
 
 describe('RPC call event types', () => {
   it('uses the domain as the first event type segment', () => {
-    expect(rpcCallEventType('history.getChatHistoryState', RPC_CALL_STARTED_EVENT_SUFFIX)).toBe(
-      'history.rpc.getChatHistoryState.started'
+    expect(
+      rpcCallEventType('history-sync.getChatHistorySyncState', RPC_CALL_STARTED_EVENT_SUFFIX)
+    ).toBe('history-sync.rpc.getChatHistorySyncState.started');
+    expect(rpcCallEventTarget('history-sync.rpc.getChatHistorySyncState.completed')).toBe(
+      'history-sync.getChatHistorySyncState'
     );
-    expect(rpcCallEventTarget('history.rpc.getChatHistoryState.completed')).toBe(
-      'history.getChatHistoryState'
-    );
-    expect(rpcCallEventTarget('rpc.history.getChatHistoryState.completed')).toBeNull();
+    expect(rpcCallEventTarget('rpc.history-sync.getChatHistorySyncState.completed')).toBeNull();
   });
 
   it('preserves nested procedure segments', () => {

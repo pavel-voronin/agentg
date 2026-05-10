@@ -25,7 +25,7 @@
 
 - Define MVP Telegram API subset.
 - Define how personal chats, groups, and channels are discovered and synchronized.
-- Define default history templates for private chats, groups, channels, and Saved Messages.
+- Define default history sync templates for private chats, groups, channels, and Saved Messages.
 - Define how replies and forwarded messages are represented in the first schema.
 - Define long-term Telegram API coverage strategy.
 - Define how service events, media, topics, and reactions are normalized after text-message ingestion works.

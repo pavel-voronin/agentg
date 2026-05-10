@@ -13,4 +13,4 @@ The first implementation proves that the system can authenticate, receive Telegr
 
 History Sync is a desired-state loop. Templates materialize concrete chat targets, target ranges project into bounded absolute intervals, and History Sync asks Telegram to ensure those intervals. Telegram stores coverage, computes missing intervals from its own coverage tables, and owns TDLib page continuity.
 
-See [History](../03-domains/history.md).
+See [History Sync](../03-domains/history-sync.md).

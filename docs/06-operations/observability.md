@@ -23,7 +23,7 @@ The system should support answering:
 
 - Is the Telegram session authenticated?
 - Which chats have been discovered?
-- Which history targets exist for a chat?
+- Which history sync targets exist for a chat?
 - Which target intervals are covered or missing for a chat?
 - Which Telegram coverage intervals and proof segments exist for a chat?
 - When was the last update received?
@@ -38,12 +38,12 @@ The system should support answering:
 RPC methods publish these live events by default:
 
 The event name is `{domain}.rpc.{procedure}.{lifecycle}`. For target
-`history.getChatHistoryState`, the lifecycle events are:
+`history-sync.getChatHistorySyncState`, the lifecycle events are:
 
-- `history.rpc.getChatHistoryState.started`
-- `history.rpc.getChatHistoryState.progress`
-- `history.rpc.getChatHistoryState.completed`
-- `history.rpc.getChatHistoryState.failed`
+- `history-sync.rpc.getChatHistorySyncState.started`
+- `history-sync.rpc.getChatHistorySyncState.progress`
+- `history-sync.rpc.getChatHistorySyncState.completed`
+- `history-sync.rpc.getChatHistorySyncState.failed`
 
 The `callId` is stored in `event.data.callId`. These events are ephemeral and
 should be used for live debugging, not recovery.
@@ -58,5 +58,5 @@ module work:
 - domain and module table prefixes match ownership
 - Gateway's external RPC and event surface remains covered
 - domain runtime code does not reintroduce `enriched`
-- History and Telegram do not expose local extension registries
+- History Sync and Telegram do not expose local extension registries
 - Service Directory server code does not call service RPC methods

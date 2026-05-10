@@ -20,7 +20,7 @@ Additional APIs should be documented only after this loop works reliably.
 1. AgenTG is a Telegram client service, not a Telegram bot.
 2. The normal Telegram client and AgenTG should observe the same visible text messages.
 3. New visible text messages should appear in Postgres shortly after Telegram receives them.
-4. Historical sync should converge requested history targets into covered timelines.
+4. Historical sync should converge requested history sync targets into covered timelines.
 5. Attachment payloads are lazy; attachment metadata is stored first.
 6. Telegram identifiers and semantics must remain available in storage.
 7. The first implementation should only depend on the Telegram client, the sidecar runtime, and Postgres.
@@ -41,8 +41,8 @@ The agent-facing integration adds a separate live boundary:
 TDLib sidecar
   -> Postgres
   -> NATS Core live integration events
-  <- tRPC history fetch calls from History
-  -> History service
+  <- tRPC history fetch calls from History Sync
+  -> History Sync service
   <- tRPC operator calls from Control Plane server
   -> Control Plane browser UI
   -> Agent Gateway WebSocket API
@@ -66,7 +66,7 @@ remains the external agent edge and also resolves its allowed internal RPC calls
 through Service Directory.
 Default operator layout is derived from domain-declared Control Plane content
 placements. The shell does not hard-code domain content IDs into its own layout.
-Telegram ingestion, History, and trusted modules run as independent
+Telegram ingestion, History Sync, and trusted modules run as independent
 services inside the same internal contour. They own their storage and tRPC
 surface, and join Service Directory with their procedures, events, and extension
 getter declarations. Gateway methods are managed directly in Gateway code.
@@ -77,7 +77,7 @@ content rather than shell-owned domain view models.
 
 The preferred starting runtime is TypeScript/Node.js, provided TDLib can be integrated reliably through its JSON/C interface or a maintained wrapper. If Node.js integration becomes the risky part of the project, re-plan the sidecar runtime before implementation continues.
 
-This first layer should prove authentication, update reception, chat discovery, history target materialization, Telegram coverage convergence, message persistence, and database inspectability for personal chats, groups, and channels. It should focus on text messages and text-bearing message content first.
+This first layer should prove authentication, update reception, chat discovery, history sync target materialization, Telegram coverage convergence, message persistence, and database inspectability for personal chats, groups, and channels. It should focus on text messages and text-bearing message content first.
 
 The first implementation should support history coverage as a desired-state capability. Product policy lives in History Sync templates and concrete chat targets. Telegram owns the operational coverage state that proves local Telegram message history has no enumeration gaps for covered intervals.
 

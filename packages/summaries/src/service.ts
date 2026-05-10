@@ -148,10 +148,10 @@ function subscribeSummariesService(
     eventBus.subscribe('telegram.history.coverage.changed', async (event) => {
       await handleSummariesEvent(runtime, event);
     }),
-    eventBus.subscribe('history.target.deleted', async (event) => {
+    eventBus.subscribe('history-sync.target.deleted', async (event) => {
       await handleSummariesEvent(runtime, event);
     }),
-    eventBus.subscribe('history.target.upserted', async (event) => {
+    eventBus.subscribe('history-sync.target.upserted', async (event) => {
       await handleSummariesEvent(runtime, event);
     })
   ];

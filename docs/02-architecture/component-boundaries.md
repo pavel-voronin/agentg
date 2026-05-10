@@ -12,7 +12,7 @@ Owns:
 - Fetching chat lists and historical messages.
 - Exposing a small internal tRPC API for Telegram client commands and reads.
 - Passing raw Telegram facts to storage.
-- Fetching and persisting historical Telegram pages requested by the History
+- Fetching and persisting historical Telegram pages requested by the History Sync
   Sync domain.
 - Computing and storing Telegram history coverage from fetched pages and live
   updates.
@@ -29,7 +29,7 @@ Does not own:
 
 Owns:
 
-- History templates and concrete chat targets.
+- History Sync templates and concrete chat targets.
 - Materializing templates into concrete chat targets.
 - Projecting target ranges into bounded absolute intervals.
 - Sync cadence and wake-up policy.
@@ -45,7 +45,7 @@ Does not own:
 - Telegram message normalization or Telegram-shaped current-state writes.
 - Telegram raw event storage.
 - Telegram history coverage tables, proof segments, or TDLib page cursors.
-- Parsing Telegram raw storage payloads for History read behavior.
+- Parsing Telegram raw storage payloads for History Sync read behavior.
 
 ## Control Plane
 

@@ -33,13 +33,13 @@ try {
   await waitForTcp('telegram RPC', '127.0.0.1', 18081);
 
   await startControlPlaneAssetWatcher(
-    'history Control Plane assets',
+    'history-sync Control Plane assets',
     'npm',
-    ['run', 'dev:history-control-plane'],
-    'packages/history/dist-control-plane/control-plane-assets.json'
+    ['run', 'dev:history-sync-control-plane'],
+    'packages/history-sync/dist-control-plane/control-plane-assets.json'
   );
-  startDevProcess('history', 'npm', ['run', 'dev:history']);
-  await waitForTcp('history RPC', '127.0.0.1', 18082);
+  startDevProcess('history-sync', 'npm', ['run', 'dev:history-sync']);
+  await waitForTcp('history-sync RPC', '127.0.0.1', 18082);
 
   startDevProcess('summaries', 'npm', ['run', 'dev:summaries']);
   await waitForTcp('summaries RPC', '127.0.0.1', 18083);

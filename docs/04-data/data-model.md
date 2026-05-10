@@ -394,22 +394,22 @@ The target retention policy is normalized-state first:
 - File bytes are not bulk-ingested by default. File metadata and Telegram file
   ids are durable; file downloads are request-driven.
 
-## History State
+## History Sync State
 
 History Sync remains a separate domain. It may reference Telegram projection
 tables through stable model refs, but it owns only desired sync policy:
 
-- `history_templates`
-- `history_targets`
+- `history_sync_templates`
+- `history_sync_targets`
 
-History does not own Telegram messages, chats, users, files, reactions, topics,
+History Sync does not own Telegram messages, chats, users, files, reactions, topics,
 TDLib state, page cursors, or history coverage. Telegram owns:
 
 - `telegram_history_coverage`
 - `telegram_history_coverage_proofs`
 
-See [History](../03-domains/history.md).
-See [History Schema](history-schema.md) for the table shape.
+See [History Sync](../03-domains/history-sync.md).
+See [History Sync Schema](history-sync-schema.md) for the table shape.
 
 ## Module-Owned State
 

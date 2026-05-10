@@ -57,7 +57,7 @@ The database package provides Postgres and Drizzle infrastructure only. Domains
 and modules own schemas and migrations in their own packages:
 
 - `@agentg/telegram`: `telegram_*`, journal `__drizzle_migrations_telegram`
-- `@agentg/history`: `history_*`, journal `__drizzle_migrations_history`
+- `@agentg/history-sync`: `history_sync_*`, journal `__drizzle_migrations_history_sync`
 - `@agentg/summaries`: `summaries_*`, journal
   `__drizzle_migrations_summaries`
 
@@ -98,10 +98,10 @@ readChatSummary: rpc
 RPC lifecycle events are published by default. Event names use
 `{domain}.rpc.{procedure}.{lifecycle}`, for example:
 
-- `history.rpc.getChatHistoryState.started`
-- `history.rpc.getChatHistoryState.progress`
-- `history.rpc.getChatHistoryState.completed`
-- `history.rpc.getChatHistoryState.failed`
+- `history-sync.rpc.getChatHistorySyncState.started`
+- `history-sync.rpc.getChatHistorySyncState.progress`
+- `history-sync.rpc.getChatHistorySyncState.completed`
+- `history-sync.rpc.getChatHistorySyncState.failed`
 
 Callers can pass call options through internal RPC context:
 
@@ -162,7 +162,7 @@ that need composed views own that composition flow explicitly.
 - domain and module table names must use their owner prefix
 - Gateway's external RPC and event surface stays covered by source and tests
 - domain runtime code cannot reintroduce `enriched`
-- History and Telegram cannot expose local extension registries
+- History Sync and Telegram cannot expose local extension registries
 - Service Directory server code cannot call service RPC methods
 
 The audit is part of `npm run check`.

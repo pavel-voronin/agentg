@@ -48,7 +48,7 @@ exposes only:
 
 It does not expose request/reply, responder, inbox, or service APIs. Source audit
 after the tRPC migration found no runtime use of NATS request/reply APIs in
-Telegram, History, Gateway, Control Plane, `@agentg/events`, `@agentg/rpc`,
+Telegram, History Sync, Gateway, Control Plane, `@agentg/events`, `@agentg/rpc`,
 or `@agentg/infra`.
 
 ## Current Subjects
@@ -70,16 +70,16 @@ Telegram publishes:
 - `telegram.tdlib.{method}.completed`
 - `telegram.tdlib.{method}.failed`
 
-History publishes:
+History Sync publishes:
 
-- `history.sync.requested`
-- `history.sync.accepted`
-- `history.sync.started`
-- `history.sync.completed`
-- `history.sync.failed`
-- `history.target.upserted`
-- `history.target.deleted`
-- `history.target.auto_deleted`
+- `history-sync.sync.requested`
+- `history-sync.sync.accepted`
+- `history-sync.sync.started`
+- `history-sync.sync.completed`
+- `history-sync.sync.failed`
+- `history-sync.target.upserted`
+- `history-sync.target.deleted`
+- `history-sync.target.auto_deleted`
 
 Summaries publishes:
 
@@ -94,14 +94,14 @@ RPC calls publish lifecycle events by default:
 - `{domain}.rpc.{procedure}.completed`
 - `{domain}.rpc.{procedure}.failed`
 
-For example, `history.getChatHistoryState` publishes
-`history.rpc.getChatHistoryState.started`,
-`history.rpc.getChatHistoryState.progress`,
-`history.rpc.getChatHistoryState.completed`, and
-`history.rpc.getChatHistoryState.failed`.
+For example, `history-sync.getChatHistorySyncState` publishes
+`history-sync.rpc.getChatHistorySyncState.started`,
+`history-sync.rpc.getChatHistorySyncState.progress`,
+`history-sync.rpc.getChatHistorySyncState.completed`, and
+`history-sync.rpc.getChatHistorySyncState.failed`.
 
-`history.sync.requested` is a notification that a sync wake-up was accepted at
-the History boundary. It is not consumed as a NATS command.
+`history-sync.sync.requested` is a notification that a sync wake-up was accepted at
+the History Sync boundary. It is not consumed as a NATS command.
 
 Service Directory publishes:
 
@@ -150,7 +150,7 @@ After reconnecting, consumers must rebuild state through these surfaces:
   internal tRPC.
 - Control Plane browser clients: Control Plane WebSocket RPC methods resolved
   through Service Directory and forwarded to the owning internal tRPC service.
-- History: its own Postgres tables plus Telegram read and history-fetch
+- History Sync: its own Postgres tables plus Telegram read and history-fetch
   tRPC.
 - Telegram ingestion: TDLib session state and Telegram-shaped Postgres storage.
 - Modules: their owned tables plus domain tRPC reads.
@@ -166,9 +166,9 @@ Internal RPC contracts are owned by the serving domain package:
   procedures used by typed internal callers. The
   Telegram schemas, router, server bind config, storage schema, ingestion,
   normalization, and TDLib plumbing remain package-internal.
-- History owns `@agentg/history/rpc`, whose only public export is
-  `createHistoryRpcClient`. The helper returns the explicit History procedures
-  used by typed internal callers. The History schemas, router, server bind config,
+- History Sync owns `@agentg/history-sync/rpc`, whose only public export is
+  `createHistorySyncRpcClient`. The helper returns the explicit History Sync procedures
+  used by typed internal callers. The History Sync schemas, router, server bind config,
   storage schema, commands, and domain types remain package-internal.
 - Modules own package-local RPC contracts. The pilot summaries module owns
   `@agentg/summaries/rpc`, whose only public export is
@@ -191,8 +191,8 @@ markers; `@agentg/infra` owns runtime config helpers.
 
 These subjects are intentionally removed:
 
-- `history.target.upsert.requested`
-- `history.target.delete.requested`
+- `history-sync.target.upsert.requested`
+- `history-sync.target.delete.requested`
 
-Target changes now go through History's domain-owned tRPC API. History
-publishes `history.target.upserted` and `history.target.deleted` after the write.
+Target changes now go through History Sync's domain-owned tRPC API. History Sync
+publishes `history-sync.target.upserted` and `history-sync.target.deleted` after the write.

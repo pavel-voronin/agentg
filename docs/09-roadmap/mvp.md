@@ -15,8 +15,8 @@ The system can connect to the user's Telegram account, read personal chats, grou
 - Authentication and session persistence.
 - Reading personal chats, groups, and channels.
 - Chat list synchronization.
-- History sync as a desired-state mechanism.
-- History templates and concrete chat targets.
+- History Sync as a desired-state mechanism.
+- History Sync templates and concrete chat targets.
 - Telegram-owned coverage intervals and proof segments.
 - Text messages and text-bearing message content.
 - Text visible to the user's normal Telegram client is the primary data target.
@@ -37,7 +37,7 @@ The system can connect to the user's Telegram account, read personal chats, grou
 - The system can ingest Telegram updates.
 - The system can authenticate and resume a Telegram user session.
 - Personal chats, groups, and channels can be discovered.
-- The system can materialize history targets for known chats.
+- The system can materialize history sync targets for known chats.
 - Telegram can record coverage intervals and compute missing intervals from
   Telegram-owned coverage.
 - Live updates and historical fetches both paint the same coverage timeline.
@@ -56,10 +56,10 @@ The first convincing success signal is database-visible Telegram parity:
 
 If Telegram shows a new message notification but AgenTG does not persist the corresponding message, Phase 1 is not working yet.
 
-## History Target
+## History Sync Target
 
-The ideal target is requested visible text history coverage: every text message, post caption, and text-bearing item covered by an active history target should eventually be represented in AgenTG storage.
+The ideal target is requested visible text history coverage: every text message, post caption, and text-bearing item covered by an active history sync target should eventually be represented in AgenTG storage.
 
 Attachments are not part of the initial bulk target. Store enough metadata to know that an attachment exists, but download or process attachment payloads only on request or in later dedicated pipelines.
 
-Full history, rolling recent windows, and targeted historical ranges are represented as history targets. Telegram computes missing intervals and page continuity when History Sync asks it to ensure a target interval.
+Full history, rolling recent windows, and targeted historical ranges are represented as history sync targets. Telegram computes missing intervals and page continuity when History Sync asks it to ensure a target interval.

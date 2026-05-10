@@ -4,7 +4,7 @@
 import { spawnSync } from 'node:child_process';
 
 const includeTelegram = process.env.COMPOSE_SMOKE_TELEGRAM === '1';
-const profiles = ['history', 'gateway', 'summaries', 'control-plane'];
+const profiles = ['history-sync', 'gateway', 'summaries', 'control-plane'];
 if (includeTelegram) {
   profiles.push('container-client');
 }
@@ -14,7 +14,7 @@ const services = [
   'postgres',
   'nats',
   'service-directory',
-  'history',
+  'history-sync',
   'gateway',
   'summaries',
   'control-plane',

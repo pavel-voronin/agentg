@@ -10,7 +10,7 @@ COPY packages/service-directory/package.json packages/service-directory/package.
 COPY packages/claude-plugin/package.json packages/claude-plugin/package.json
 COPY packages/control-plane/package.json packages/control-plane/package.json
 COPY packages/gateway/package.json packages/gateway/package.json
-COPY packages/history/package.json packages/history/package.json
+COPY packages/history-sync/package.json packages/history-sync/package.json
 COPY packages/summaries/package.json packages/summaries/package.json
 COPY packages/telegram/package.json packages/telegram/package.json
 RUN npm install
@@ -33,7 +33,7 @@ COPY packages/service-directory/package.json packages/service-directory/package.
 COPY packages/claude-plugin/package.json packages/claude-plugin/package.json
 COPY packages/control-plane/package.json packages/control-plane/package.json
 COPY packages/gateway/package.json packages/gateway/package.json
-COPY packages/history/package.json packages/history/package.json
+COPY packages/history-sync/package.json packages/history-sync/package.json
 COPY packages/summaries/package.json packages/summaries/package.json
 COPY packages/telegram/package.json packages/telegram/package.json
 RUN npm install --omit=dev && npm cache clean --force
@@ -42,8 +42,8 @@ COPY --from=build --chown=agentg:agentg /app/packages/control-plane/dist ./packa
 COPY --from=build --chown=agentg:agentg /app/packages/control-plane/dist-server ./packages/control-plane/dist-server
 COPY --from=build --chown=agentg:agentg /app/packages/service-directory/dist ./packages/service-directory/dist
 COPY --from=build --chown=agentg:agentg /app/packages/gateway/dist ./packages/gateway/dist
-COPY --from=build --chown=agentg:agentg /app/packages/history/dist ./packages/history/dist
-COPY --from=build --chown=agentg:agentg /app/packages/history/dist-control-plane ./packages/history/dist-control-plane
+COPY --from=build --chown=agentg:agentg /app/packages/history-sync/dist ./packages/history-sync/dist
+COPY --from=build --chown=agentg:agentg /app/packages/history-sync/dist-control-plane ./packages/history-sync/dist-control-plane
 COPY --from=build --chown=agentg:agentg /app/packages/summaries/dist ./packages/summaries/dist
 COPY --from=build --chown=agentg:agentg /app/packages/telegram/dist ./packages/telegram/dist
 COPY --from=build --chown=agentg:agentg /app/packages/telegram/dist-control-plane ./packages/telegram/dist-control-plane

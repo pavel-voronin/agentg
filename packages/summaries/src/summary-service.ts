@@ -36,9 +36,9 @@ function invalidationReason(eventType: string): string | undefined {
     case 'telegram.message.deleted':
       return 'telegram-message-changed';
     case 'telegram.history.coverage.changed':
-    case 'history.target.deleted':
-    case 'history.target.upserted':
-      return 'history-state-changed';
+    case 'history-sync.target.deleted':
+    case 'history-sync.target.upserted':
+      return 'history-sync-state-changed';
     default:
       return undefined;
   }
@@ -53,9 +53,9 @@ function chatIdFromEvent(event: IntegrationEvent): string | undefined {
       return chatIdFromTelegramMessageDelete(asRecord(event.data.delete));
     case 'telegram.history.coverage.changed':
       return chatIdFromTelegramCoverageEvent(event.data);
-    case 'history.target.deleted':
-    case 'history.target.upserted':
-      return chatIdFromHistoryEvent(event.data);
+    case 'history-sync.target.deleted':
+    case 'history-sync.target.upserted':
+      return chatIdFromHistorySyncEvent(event.data);
     default:
       return undefined;
   }
@@ -75,7 +75,7 @@ function chatIdFromTelegramMessageDelete(
   return chat?._model === 'telegram.chat' && typeof chat.id === 'string' ? chat.id : undefined;
 }
 
-function chatIdFromHistoryEvent(data: Record<string, unknown>): string | undefined {
+function chatIdFromHistorySyncEvent(data: Record<string, unknown>): string | undefined {
   const target = asRecord(data.target);
   if (typeof target?.chatId === 'string') {
     return target.chatId;

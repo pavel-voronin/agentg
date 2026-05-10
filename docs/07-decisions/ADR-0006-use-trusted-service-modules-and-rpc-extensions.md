@@ -147,7 +147,7 @@ Services know Service Directory URL, NATS URL, their own service URL, and their
 own manifest. Cross-service topology is read from the local Service Directory
 snapshot.
 
-Core services register as required: Telegram ingestion, History, Gateway,
+Core services register as required: Telegram ingestion, History Sync, Gateway,
 and Control Plane. Trusted modules that add optional product views register as
 not required unless their absence must stop the whole runtime.
 

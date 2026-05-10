@@ -12,11 +12,11 @@ currently needs.
 
 The current system is TypeScript-first:
 
-- Telegram ingestion, History, Gateway, and Control Plane server are all
+- Telegram ingestion, History Sync, Gateway, and Control Plane server are all
   TypeScript packages.
 - Existing external Gateway and Control Plane browser protocols already use JSON
   over WebSocket.
-- History behavior is already shaped around method-level command/read handlers.
+- History Sync behavior is already shaped around method-level command/read handlers.
 - The project does not currently need non-TypeScript service clients, gRPC
   streaming, or Protobuf compatibility guarantees.
 
@@ -102,7 +102,7 @@ Non-goals:
 Service discovery remains static.
 
 Inside Docker or a future orchestrator, services address each other through
-service DNS names such as `telegram` and `history`.
+service DNS names such as `telegram` and `history-sync`.
 
 In local development, services receive explicit URLs through environment
 variables. Existing `*_RPC_*` variable names may remain during the migration

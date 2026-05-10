@@ -52,7 +52,7 @@ function auditRawTrpcBuilderImports(files) {
 
 function auditCrossDomainSchemaImports(files) {
   const schemaImports = [
-    '@agentg/history/schema',
+    '@agentg/history-sync/schema',
     '@agentg/summaries/schema',
     '@agentg/telegram/schema'
   ];
@@ -78,8 +78,8 @@ function auditCrossDomainSchemaImports(files) {
 function auditTablePrefixes() {
   const schemas = [
     {
-      file: join(root, 'packages/history/src/schema.ts'),
-      prefix: 'history_'
+      file: join(root, 'packages/history-sync/src/schema.ts'),
+      prefix: 'history_sync_'
     },
     {
       file: join(root, 'packages/summaries/src/schema.ts'),
@@ -125,8 +125,8 @@ function auditGatewayExternalSurface() {
     '"capabilities.',
     "'extensions.compose'",
     '"extensions.compose"',
-    "'history.",
-    '"history.',
+    "'history-sync.",
+    '"history-sync.',
     "'telegram.getMessage'",
     '"telegram.getMessage"',
     "'telegram.listRecentMessages'",
@@ -168,7 +168,7 @@ function auditNoDomainEnrichedRuntime(files) {
     'packages/events/src/',
     'packages/rpc/src/',
     'packages/infra/src/',
-    'packages/history/src/',
+    'packages/history-sync/src/',
     'packages/telegram/src/',
     'packages/summaries/src/',
     'packages/gateway/src/'
@@ -209,7 +209,7 @@ function auditNoDomainEnrichedRuntime(files) {
 }
 
 function auditNoDomainExtensionEndpoints(files) {
-  const domainRpcPrefixes = ['packages/history/src/rpc/', 'packages/telegram/src/rpc/'];
+  const domainRpcPrefixes = ['packages/history-sync/src/rpc/', 'packages/telegram/src/rpc/'];
   const forbiddenTokens = ['registerExtension', 'listExtensions'];
 
   for (const file of files) {
@@ -263,7 +263,7 @@ function auditServiceDirectorySurface() {
 function auditServiceDirectoryBootstrap() {
   const requiredDependencies = [
     'packages/telegram/package.json',
-    'packages/history/package.json',
+    'packages/history-sync/package.json',
     'packages/gateway/package.json',
     'packages/control-plane/package.json'
   ];
@@ -281,11 +281,14 @@ function auditServiceDirectoryBootstrap() {
   }
   auditRequiredManifest('packages/telegram/src/registrations.ts', true);
 
-  const historyService = readFileSync(join(root, 'packages/history/src/service.ts'), 'utf8');
-  if (!historyService.includes('createServiceDirectoryClient')) {
-    failures.push('History must join Service Directory');
+  const historySyncService = readFileSync(
+    join(root, 'packages/history-sync/src/service.ts'),
+    'utf8'
+  );
+  if (!historySyncService.includes('createServiceDirectoryClient')) {
+    failures.push('History Sync must join Service Directory');
   }
-  auditRequiredManifest('packages/history/src/registrations.ts', true);
+  auditRequiredManifest('packages/history-sync/src/registrations.ts', true);
 
   const gatewaySource = readFileSync(join(root, 'packages/gateway/src/agent-gateway.ts'), 'utf8');
   if (!gatewaySource.includes('createGatewayServiceManifest')) {
@@ -304,9 +307,9 @@ function auditServiceDirectoryBootstrap() {
 
   auditRequiredManifest('packages/summaries/src/registrations.ts', false);
 
-  const historyConfig = readFileSync(join(root, 'packages/history/src/config.ts'), 'utf8');
-  if (historyConfig.includes('TELEGRAM_RPC_URL')) {
-    failures.push('History config must resolve Telegram through Service Directory');
+  const historySyncConfig = readFileSync(join(root, 'packages/history-sync/src/config.ts'), 'utf8');
+  if (historySyncConfig.includes('TELEGRAM_RPC_URL')) {
+    failures.push('History Sync config must resolve Telegram through Service Directory');
   }
 
   const gatewayConfig = readFileSync(join(root, 'packages/gateway/src/config.ts'), 'utf8');
@@ -318,7 +321,7 @@ function auditServiceDirectoryBootstrap() {
     join(root, 'packages/control-plane/src/server/config.ts'),
     'utf8'
   );
-  for (const token of ['HISTORY_RPC_URL', 'TELEGRAM_RPC_URL']) {
+  for (const token of ['HISTORY_SYNC_RPC_URL', 'TELEGRAM_RPC_URL']) {
     if (controlPlaneConfig.includes(token)) {
       failures.push(`Control Plane config must resolve ${token} through Service Directory`);
     }
@@ -418,8 +421,8 @@ function auditControlPlaneCompositionBoundaries(files) {
     'packages/control-plane/src/server/control-plane-read-model.ts',
     'packages/control-plane/src/stores/chat.ts',
     'packages/control-plane/src/stores/overview.ts',
-    'packages/control-plane/src/stores/selectedHistory.ts',
-    'packages/control-plane/src/stores/selectedHistoryEvents.ts',
+    'packages/control-plane/src/stores/selectedHistorySync.ts',
+    'packages/control-plane/src/stores/selectedHistorySyncEvents.ts',
     'packages/control-plane/src/view-models/chatSidebarView.ts',
     'packages/control-plane/src/view-models/dashboardView.ts',
     'packages/control-plane/src/view-models/selectedWorkspaceView.ts'
@@ -435,7 +438,7 @@ function auditControlPlaneCompositionBoundaries(files) {
     join(root, 'packages/control-plane/src/composition/slots/manifest.ts'),
     'utf8'
   );
-  for (const token of ['telegram.', 'history.', 'summaries.']) {
+  for (const token of ['telegram.', 'history-sync.', 'summaries.']) {
     if (layoutSource.includes(token)) {
       failures.push(`Control Plane default layout must be derived from providers: ${token}`);
     }
@@ -444,10 +447,11 @@ function auditControlPlaneCompositionBoundaries(files) {
   const forbiddenTokens = [
     'Telegram',
     'telegram',
-    'History',
-    'history',
+    'History Sync',
+    'history-sync',
+    'history-sync',
     '@agentg/telegram',
-    '@agentg/history'
+    '@agentg/history-sync'
   ];
   for (const file of listFiles(join(root, 'packages/control-plane'))) {
     const rel = toRel(file);
@@ -484,11 +488,11 @@ function auditControlPlaneCompositionBoundaries(files) {
 function auditControlPlaneSdkHasNoDomainKnowledge(files) {
   const forbiddenTokens = [
     'telegram.',
-    'history.',
+    'history-sync.',
     'summaries.',
     'controlPlane.',
     '@agentg/telegram',
-    '@agentg/history',
+    '@agentg/history-sync',
     '@agentg/summaries',
     '@agentg/control-plane'
   ];
@@ -511,7 +515,7 @@ function auditScopedVueComponentStyles(vueFiles, sourceFiles) {
   const auditedPrefixes = [
     'packages/control-plane/src/',
     'packages/control-plane-sdk/src/',
-    'packages/history/src/control-plane/',
+    'packages/history-sync/src/control-plane/',
     'packages/telegram/src/control-plane/'
   ];
 

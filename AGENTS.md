@@ -1,7 +1,7 @@
 # Project Rules
 
 - Use conventional commits.
-- Use only these commit scopes: `project`, `infra`, `telegram`, `history`,
+- Use only these commit scopes: `project`, `infra`, `telegram`, `history-sync`,
   `gateway`, `control-plane`, `summaries`, `extensions`, `storage`, `rpc`, and
   `events`.
 - Do not introduce technical debt, fallback paths, compatibility paths, legacy

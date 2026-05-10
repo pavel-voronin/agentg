@@ -88,7 +88,7 @@ services:
     profiles:
       - service-directory
       - container-client
-      - history
+      - history-sync
       - summaries
       - gateway
       - control-plane
@@ -138,7 +138,7 @@ services:
     depends_on:
       service-directory:
         condition: service_started
-      history:
+      history-sync:
         condition: service_started
       nats:
         condition: service_started
@@ -152,13 +152,13 @@ services:
       - '${CONTROL_PLANE_PORT:-8788}:${CONTROL_PLANE_PORT:-8788}'
     restart: 'no'
 
-  history:
+  history-sync:
     profiles:
-      - history
+      - history-sync
     build:
       context: .
       target: runtime
-    command: ['npm', '--workspace', '@agentg/history', 'run', 'start']
+    command: ['npm', '--workspace', '@agentg/history-sync', 'run', 'start']
     depends_on:
       service-directory:
         condition: service_started
@@ -172,9 +172,9 @@ services:
       HISTORY_SYNC_MESSAGE_LIMIT: ${HISTORY_SYNC_MESSAGE_LIMIT:-100}
       HISTORY_SYNC_REQUEST_DELAY_MS: ${HISTORY_SYNC_REQUEST_DELAY_MS:-1000}
       HISTORY_SYNC_WINDOW_DAYS: ${HISTORY_SYNC_WINDOW_DAYS:-31}
-      HISTORY_RPC_HOST: 0.0.0.0
-      HISTORY_RPC_PORT: 8080
-      HISTORY_RPC_URL: http://history:8080
+      HISTORY_SYNC_RPC_HOST: 0.0.0.0
+      HISTORY_SYNC_RPC_PORT: 8080
+      HISTORY_SYNC_RPC_URL: http://history-sync:8080
       NATS_URL: nats://nats:4222
       SERVICE_DIRECTORY_RPC_URL: http://service-directory:8080
     restart: 'no'
