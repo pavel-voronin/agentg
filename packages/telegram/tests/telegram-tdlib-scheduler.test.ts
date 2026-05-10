@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { telegramTdlibPriorities } from '../src/telegram-tdlib-priority.js';
 import { createTelegramTdlibScheduler } from '../src/telegram-tdlib-scheduler.js';
 
 describe('Telegram TDLib scheduler', () => {
@@ -25,10 +26,16 @@ describe('Telegram TDLib scheduler', () => {
       }
     );
 
-    const first = scheduler.invoke({ _: 'low-running' }, { priority: 'p4' });
+    const first = scheduler.invoke({ _: 'low-running' }, { priority: telegramTdlibPriorities.low });
     await waitUntil(() => calls.includes('low-running'));
-    const lowQueued = scheduler.invoke({ _: 'low-queued' }, { priority: 'p4' });
-    const highQueued = scheduler.invoke({ _: 'high-queued' }, { priority: 'p0' });
+    const lowQueued = scheduler.invoke(
+      { _: 'low-queued' },
+      { priority: telegramTdlibPriorities.low }
+    );
+    const highQueued = scheduler.invoke(
+      { _: 'high-queued' },
+      { priority: telegramTdlibPriorities.maximum }
+    );
 
     releaseRunning?.();
     await Promise.all([first, highQueued, lowQueued]);

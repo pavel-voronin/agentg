@@ -38,9 +38,15 @@ describe('Telegram service manifest', () => {
       'telegram.message.deleted',
       'telegram.message.updated',
       'telegram.status',
+      'telegram.tdlib.addFileToDownloads.completed',
+      'telegram.tdlib.addFileToDownloads.failed',
+      'telegram.tdlib.addFileToDownloads.started',
       'telegram.tdlib.close.completed',
       'telegram.tdlib.close.failed',
       'telegram.tdlib.close.started',
+      'telegram.tdlib.deleteFile.completed',
+      'telegram.tdlib.deleteFile.failed',
+      'telegram.tdlib.deleteFile.started',
       'telegram.tdlib.downloadFile.completed',
       'telegram.tdlib.downloadFile.failed',
       'telegram.tdlib.downloadFile.started',
@@ -56,21 +62,33 @@ describe('Telegram service manifest', () => {
       'telegram.tdlib.getChats.completed',
       'telegram.tdlib.getChats.failed',
       'telegram.tdlib.getChats.started',
+      'telegram.tdlib.getFile.completed',
+      'telegram.tdlib.getFile.failed',
+      'telegram.tdlib.getFile.started',
       'telegram.tdlib.getMe.completed',
       'telegram.tdlib.getMe.failed',
       'telegram.tdlib.getMe.started',
       'telegram.tdlib.loadChats.completed',
       'telegram.tdlib.loadChats.failed',
       'telegram.tdlib.loadChats.started',
+      'telegram.tdlib.removeFileFromDownloads.completed',
+      'telegram.tdlib.removeFileFromDownloads.failed',
+      'telegram.tdlib.removeFileFromDownloads.started',
       'telegram.user.updated'
     ]);
   });
 
   it('lists every lifecycle for every TDLib operation used by Telegram code', () => {
     expect(TELEGRAM_TDLIB_EVENT_TYPES).toEqual([
+      'telegram.tdlib.addFileToDownloads.completed',
+      'telegram.tdlib.addFileToDownloads.failed',
+      'telegram.tdlib.addFileToDownloads.started',
       'telegram.tdlib.close.completed',
       'telegram.tdlib.close.failed',
       'telegram.tdlib.close.started',
+      'telegram.tdlib.deleteFile.completed',
+      'telegram.tdlib.deleteFile.failed',
+      'telegram.tdlib.deleteFile.started',
       'telegram.tdlib.downloadFile.completed',
       'telegram.tdlib.downloadFile.failed',
       'telegram.tdlib.downloadFile.started',
@@ -86,12 +104,18 @@ describe('Telegram service manifest', () => {
       'telegram.tdlib.getChats.completed',
       'telegram.tdlib.getChats.failed',
       'telegram.tdlib.getChats.started',
+      'telegram.tdlib.getFile.completed',
+      'telegram.tdlib.getFile.failed',
+      'telegram.tdlib.getFile.started',
       'telegram.tdlib.getMe.completed',
       'telegram.tdlib.getMe.failed',
       'telegram.tdlib.getMe.started',
       'telegram.tdlib.loadChats.completed',
       'telegram.tdlib.loadChats.failed',
-      'telegram.tdlib.loadChats.started'
+      'telegram.tdlib.loadChats.started',
+      'telegram.tdlib.removeFileFromDownloads.completed',
+      'telegram.tdlib.removeFileFromDownloads.failed',
+      'telegram.tdlib.removeFileFromDownloads.started'
     ]);
   });
 });

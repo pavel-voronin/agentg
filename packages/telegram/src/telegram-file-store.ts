@@ -4,7 +4,12 @@ import type { JsonObject } from '@agentg/events/json';
 
 import type { TelegramDatabase as AppDatabase } from './database.js';
 import type { TelegramFileQueueStats } from './integration-events.js';
-import { telegramChatRef, telegramMessageRef, telegramMessageModelParts } from './model-refs.js';
+import {
+  TELEGRAM_MESSAGE_MODEL,
+  telegramChatRef,
+  telegramMessageRef,
+  telegramMessageModelParts
+} from './model-refs.js';
 import type { NormalizedTelegramUpdate } from './normalize.js';
 import { telegramFileAssets, telegramFileDownloadJobs, telegramFiles } from './schema.js';
 import {
@@ -46,12 +51,41 @@ export type TelegramFileDownloadRow = {
   latestTdlibFileId: number | null;
   mimeType: string | null;
   priority: number;
+  transport: TelegramFileDownloadTransport;
 };
 
 export type StoredCanonicalFile = {
   byteSize: number;
   relativePath: string;
   sha256: string;
+};
+
+export type TelegramCompletedFileAsset = {
+  assetKey: string;
+  localPath: string;
+  tdlibFileId: number;
+};
+
+export type TelegramFileDownloadTransport =
+  | {
+      chatId: number;
+      kind: 'message';
+      messageId: number;
+    }
+  | {
+      kind: 'file';
+    };
+
+export type TelegramFileProgressUpdateResult = {
+  completedAssets: TelegramCompletedFileAsset[];
+  owners: TelegramFileOwnerKey[];
+};
+
+export type TelegramFileProgressUpdate = {
+  downloadedByteSize: number;
+  isCompleted: boolean;
+  localPath: string | null;
+  tdlibFileId: number;
 };
 
 type TelegramFileAssetStatus = 'failed' | 'known' | 'ready';
@@ -109,28 +143,21 @@ export async function syncTelegramFileSlots(
 export async function applyTelegramFileProgressUpdate(
   database: AppDatabase,
   update: unknown
-): Promise<TelegramFileOwnerKey[]> {
-  const file = asPlainRecord(asPlainRecord(update)?.file);
-  const fileId = safeInteger(file?.id);
-  if (asPlainRecord(update)?._ !== 'updateFile' || fileId === null) {
-    return [];
-  }
-
-  const local = asPlainRecord(file?.local);
-  const downloadedByteSize = safeNonNegativeInteger(local?.downloaded_size);
-  if (downloadedByteSize === null) {
-    return [];
+): Promise<TelegramFileProgressUpdateResult> {
+  const progress = parseTelegramFileProgressUpdate(update);
+  if (progress === null) {
+    return emptyProgressUpdateResult();
   }
 
   const assets = await database
     .update(telegramFileAssets)
     .set({
-      downloadedByteSize,
+      downloadedByteSize: progress.downloadedByteSize,
       updatedAt: sql`now()`
     })
     .where(
       and(
-        eq(telegramFileAssets.latestTdlibFileId, fileId),
+        eq(telegramFileAssets.latestTdlibFileId, progress.tdlibFileId),
         sql`${telegramFileAssets.status} <> 'ready'`
       )
     )
@@ -138,10 +165,43 @@ export async function applyTelegramFileProgressUpdate(
       assetKey: telegramFileAssets.assetKey
     });
 
-  return readTelegramFileOwnersForAssets(
-    database,
-    assets.map((asset) => asset.assetKey)
-  );
+  const assetKeys = assets.map((asset) => asset.assetKey);
+  let completedAssets: TelegramCompletedFileAsset[] = [];
+  if (progress.isCompleted && progress.localPath !== null) {
+    const localPath = progress.localPath;
+    completedAssets = assetKeys.map((assetKey) => ({
+      assetKey,
+      localPath,
+      tdlibFileId: progress.tdlibFileId
+    }));
+  }
+  return {
+    completedAssets,
+    owners: await readTelegramFileOwnersForAssets(database, assetKeys)
+  };
+}
+
+export function parseTelegramFileProgressUpdate(
+  update: unknown
+): TelegramFileProgressUpdate | null {
+  const file = asPlainRecord(asPlainRecord(update)?.file);
+  const tdlibFileId = safeInteger(file?.id);
+  if (asPlainRecord(update)?._ !== 'updateFile' || tdlibFileId === null) {
+    return null;
+  }
+
+  const local = asPlainRecord(file?.local);
+  const downloadedByteSize = safeNonNegativeInteger(local?.downloaded_size);
+  if (downloadedByteSize === null) {
+    return null;
+  }
+  const localPath = safeString(local?.path);
+  return {
+    downloadedByteSize,
+    isCompleted: local?.is_downloading_completed === true && localPath !== null,
+    localPath,
+    tdlibFileId
+  };
 }
 
 export async function requestTelegramFile(
@@ -183,31 +243,24 @@ export async function requestTelegramFile(
   };
 }
 
-export async function requeueStaleTelegramFileDownloads(
+export async function readStaleTelegramFileDownloadRows(
   database: AppDatabase,
-  staleBefore: Date
-): Promise<TelegramFileOwnerKey[]> {
+  staleBefore: Date,
+  limit: number
+): Promise<TelegramFileDownloadRow[]> {
   const jobs = await database
-    .update(telegramFileDownloadJobs)
-    .set({
-      claimedAt: null,
-      status: 'queued',
-      updatedAt: sql`now()`
-    })
-    .where(
-      and(
-        eq(telegramFileDownloadJobs.status, 'downloading'),
-        sql`coalesce(${telegramFileDownloadJobs.claimedAt}, ${telegramFileDownloadJobs.updatedAt}) < ${staleBefore}`
-      )
-    )
-    .returning({
+    .select({
       assetKey: telegramFileDownloadJobs.assetKey
-    });
+    })
+    .from(telegramFileDownloadJobs)
+    .where(staleDownloadCondition(staleBefore))
+    .orderBy(telegramFileDownloadJobs.updatedAt)
+    .limit(limit);
 
-  return readTelegramFileOwnersForAssets(
-    database,
-    jobs.map((job) => job.assetKey)
+  const rows = await Promise.all(
+    jobs.map((job) => readTelegramFileDownloadRow(database, job.assetKey))
   );
+  return rows.filter((row): row is TelegramFileDownloadRow => row !== null);
 }
 
 export async function claimNextQueuedTelegramFileDownload(
@@ -277,6 +330,26 @@ export async function markTelegramFileDownloadReady(
     .where(eq(telegramFileDownloadJobs.assetKey, assetKey));
 }
 
+export async function markTelegramFileDownloadDispatched(
+  database: AppDatabase,
+  assetKey: string
+): Promise<void> {
+  await database
+    .update(telegramFileDownloadJobs)
+    .set({
+      claimedAt: sql`now()`,
+      lastError: null,
+      status: 'downloading',
+      updatedAt: sql`now()`
+    })
+    .where(
+      and(
+        eq(telegramFileDownloadJobs.assetKey, assetKey),
+        eq(telegramFileDownloadJobs.status, 'downloading')
+      )
+    );
+}
+
 export async function markTelegramFileDownloadFailed(
   database: AppDatabase,
   assetKey: string,
@@ -290,7 +363,9 @@ export async function markTelegramFileDownloadFailed(
       status: 'failed',
       updatedAt: sql`now()`
     })
-    .where(eq(telegramFileAssets.assetKey, assetKey));
+    .where(
+      and(eq(telegramFileAssets.assetKey, assetKey), sql`${telegramFileAssets.status} <> 'ready'`)
+    );
 
   await database
     .update(telegramFileDownloadJobs)
@@ -300,7 +375,12 @@ export async function markTelegramFileDownloadFailed(
       status: 'failed',
       updatedAt: sql`now()`
     })
-    .where(eq(telegramFileDownloadJobs.assetKey, assetKey));
+    .where(
+      and(
+        eq(telegramFileDownloadJobs.assetKey, assetKey),
+        sql`${telegramFileDownloadJobs.status} <> 'completed'`
+      )
+    );
 }
 
 export async function readTelegramFileOwnersForAsset(
@@ -647,18 +727,18 @@ async function enqueueTelegramFileAssetDownload(
 function downloadPriorityForCause(cause: TelegramMediaDownloadPolicyCause): number {
   switch (cause) {
     case 'explicit_request':
-      return telegramTdlibPriorities.p1;
+      return telegramTdlibPriorities.maximum;
     case 'operator_page':
-      return telegramTdlibPriorities.p2;
+      return telegramTdlibPriorities.high;
     case 'initialization':
     case 'live_update':
-      return telegramTdlibPriorities.p3;
+      return telegramTdlibPriorities.normal;
     case 'history_fetch':
-      return telegramTdlibPriorities.p4;
+      return telegramTdlibPriorities.low;
   }
 }
 
-async function readTelegramFileDownloadRow(
+export async function readTelegramFileDownloadRow(
   database: AppDatabase,
   assetKey: string
 ): Promise<TelegramFileDownloadRow | null> {
@@ -669,6 +749,8 @@ async function readTelegramFileDownloadRow(
       fileName: telegramFiles.fileName,
       latestTdlibFileId: telegramFileAssets.latestTdlibFileId,
       mimeType: telegramFiles.mimeType,
+      ownerId: telegramFiles.ownerId,
+      ownerModel: telegramFiles.ownerModel,
       priority: telegramFileDownloadJobs.priority
     })
     .from(telegramFileDownloadJobs)
@@ -678,9 +760,25 @@ async function readTelegramFileDownloadRow(
     )
     .leftJoin(telegramFiles, eq(telegramFiles.assetKey, telegramFileDownloadJobs.assetKey))
     .where(eq(telegramFileAssets.assetKey, assetKey))
+    .orderBy(
+      sql`case when ${telegramFiles.ownerModel} = ${TELEGRAM_MESSAGE_MODEL} then 0 else 1 end`,
+      telegramFiles.ownerModel,
+      telegramFiles.ownerId,
+      telegramFiles.slotKey
+    )
     .limit(1);
 
-  return row ?? null;
+  return row === undefined
+    ? null
+    : {
+        assetKey: row.assetKey,
+        byteSize: row.byteSize,
+        fileName: row.fileName,
+        latestTdlibFileId: row.latestTdlibFileId,
+        mimeType: row.mimeType,
+        priority: row.priority,
+        transport: telegramFileDownloadTransport(row.ownerModel, row.ownerId)
+      };
 }
 
 async function readTelegramFileRef(
@@ -857,6 +955,49 @@ function ownerKey(owner: TelegramFileOwnerKey): string {
   return `${owner.ownerModel}:${owner.ownerId}`;
 }
 
+function emptyProgressUpdateResult(): TelegramFileProgressUpdateResult {
+  return {
+    completedAssets: [],
+    owners: []
+  };
+}
+
+function staleDownloadCondition(staleBefore: Date) {
+  return and(
+    eq(telegramFileDownloadJobs.status, 'downloading'),
+    sql`coalesce(${telegramFileDownloadJobs.claimedAt}, ${telegramFileDownloadJobs.updatedAt}) < ${staleBefore}`
+  );
+}
+
+function telegramFileDownloadTransport(
+  ownerModel: string | null,
+  ownerId: string | null
+): TelegramFileDownloadTransport {
+  if (ownerModel !== TELEGRAM_MESSAGE_MODEL) {
+    return { kind: 'file' };
+  }
+  if (ownerId === null) {
+    throw new Error('Telegram message file download has no owner id');
+  }
+  const parts = telegramMessageModelParts(ownerId);
+  if (parts === null) {
+    throw new Error(`Telegram message file download has invalid owner id: ${ownerId}`);
+  }
+  return {
+    chatId: parseTdlibInteger(parts.chatId, 'chat id'),
+    kind: 'message',
+    messageId: parseTdlibInteger(parts.messageId, 'message id')
+  };
+}
+
+function parseTdlibInteger(value: string, label: string): number {
+  const parsed = Number(value);
+  if (Number.isSafeInteger(parsed)) {
+    return parsed;
+  }
+  throw new Error(`Telegram ${label} must be a safe integer: ${value}`);
+}
+
 function uniqueOwners(owners: TelegramFileOwnerKey[]): TelegramFileOwnerKey[] {
   return [...new Map(owners.map((owner) => [ownerKey(owner), owner])).values()];
 }
@@ -873,6 +1014,10 @@ function asPlainRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : undefined;
+}
+
+function safeString(value: unknown): string | null {
+  return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
 function safeInteger(value: unknown): number | null {

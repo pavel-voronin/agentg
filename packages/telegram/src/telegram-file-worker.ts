@@ -18,16 +18,20 @@ import { asTdObject, type TdObject } from './normalize.js';
 import { telegramMessages } from './schema.js';
 import {
   claimNextQueuedTelegramFileDownload,
+  markTelegramFileDownloadDispatched,
   markTelegramFileDownloadFailed,
   markTelegramFileDownloadReady,
   readTelegramFileOwnersForAsset,
   readTelegramFileQueueStats,
-  requeueStaleTelegramFileDownloads,
+  readStaleTelegramFileDownloadRows,
+  readTelegramFileDownloadRow,
   type StoredCanonicalFile,
+  type TelegramCompletedFileAsset,
   type TelegramFileDownloadRow,
   type TelegramFileOwnerKey
 } from './telegram-file-store.js';
 import { invokeTdlibWithEvents, type TdlibInvoker } from './telegram-operation-events.js';
+import { assertTelegramTdlibPriority, telegramTdlibPriorities } from './telegram-tdlib-priority.js';
 import { isTelegramTdlibUnderNavigationPressure } from './telegram-tdlib-scheduler.js';
 import {
   getDirectoryEntryByChatId,
@@ -37,6 +41,7 @@ import {
 
 export type TelegramFileDownloadWorker = {
   close(): void;
+  enqueueCompletedFile(file: TelegramCompletedFileAsset): void;
 };
 
 export type TelegramFileDownloadWorkerOptions = {
@@ -61,7 +66,10 @@ export function startTelegramFileDownloadWorker(
   options: TelegramFileDownloadWorkerOptions
 ): TelegramFileDownloadWorker {
   let closed = false;
+  let pending = false;
+  let running = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  const completedFiles = new Map<string, TelegramCompletedFileAsset>();
   const intervalMs = options.intervalMs ?? DEFAULT_WORKER_INTERVAL_MS;
   const failureBackoffMs = options.failureBackoffMs ?? DEFAULT_WORKER_FAILURE_BACKOFF_MS;
   const maxConcurrentDownloads = positiveInteger(
@@ -77,42 +85,100 @@ export function startTelegramFileDownloadWorker(
     if (closed) {
       return;
     }
+    if (running) {
+      pending = true;
+      return;
+    }
+    if (timer !== undefined) {
+      return;
+    }
     timer = setTimeout(() => {
-      void tick().then((result) => {
-        schedule(result.failedCount > 0 && result.readyCount === 0 ? failureBackoffMs : intervalMs);
-      }, logWorkerErrorAndSchedule);
+      timer = undefined;
+      runTick();
     }, delayMs);
     timer.unref();
   };
 
-  const logWorkerErrorAndSchedule = (error: unknown): void => {
+  const runTick = (): void => {
+    if (closed) {
+      return;
+    }
+    if (running) {
+      pending = true;
+      return;
+    }
+    running = true;
+    void tick().then(handleTickResult, handleTickError);
+  };
+
+  const handleTickResult = (result: TelegramFileDownloadBatchResult): void => {
+    running = false;
+    if (closed) {
+      return;
+    }
+    if (pending) {
+      pending = false;
+      schedule(0);
+      return;
+    }
+    schedule(result.failedCount > 0 && result.readyCount === 0 ? failureBackoffMs : intervalMs);
+  };
+
+  const handleTickError = (error: unknown): void => {
+    running = false;
     logWorkerError(error);
+    if (closed) {
+      return;
+    }
+    if (pending) {
+      pending = false;
+      schedule(0);
+      return;
+    }
     schedule(failureBackoffMs);
   };
 
   const tick = async (): Promise<TelegramFileDownloadBatchResult> => {
+    const canonicalized = await processCompletedFileBatch(options, completedFiles, maxFilesPerTick);
     if (isTelegramTdlibUnderNavigationPressure(options.client)) {
       return {
-        failedCount: 0,
-        processedCount: 0,
-        readyCount: 0
+        failedCount: canonicalized.failedCount,
+        processedCount: canonicalized.processedCount,
+        readyCount: canonicalized.readyCount
       };
     }
-    return processQueuedFileBatch(options, {
+    const queued = await processQueuedFileBatch(options, {
       maxConcurrentDownloads,
       maxFilesPerTick
     });
+    return {
+      failedCount: canonicalized.failedCount + queued.failedCount,
+      processedCount: canonicalized.processedCount + queued.processedCount,
+      readyCount: canonicalized.readyCount + queued.readyCount
+    };
   };
 
-  void tick().catch(logWorkerError).finally(schedule);
+  runTick();
 
   return {
     close(): void {
       closed = true;
+      pending = false;
       if (timer !== undefined) {
         clearTimeout(timer);
         timer = undefined;
       }
+    },
+    enqueueCompletedFile(file: TelegramCompletedFileAsset): void {
+      if (closed) {
+        return;
+      }
+      completedFiles.set(file.assetKey, file);
+      if (timer !== undefined && !running) {
+        clearTimeout(timer);
+        timer = undefined;
+      }
+      schedule(0);
     }
   };
 }
@@ -120,21 +186,13 @@ export function startTelegramFileDownloadWorker(
 export async function processNextQueuedFile(
   options: TelegramFileDownloadWorkerOptions
 ): Promise<boolean> {
-  await recoverStaleFileDownloads(options);
+  await reconcileStaleFileDownloads(options, 1);
   const row = await claimNextQueuedTelegramFileDownload(options.database);
   if (row === null) {
     return false;
   }
   await publishTelegramFileQueueUpdated(options.database, options.eventBus);
-
-  try {
-    const localPath = await downloadTdlibFile(options, row);
-    const stored = await storeCanonicalFile(options.filesDirectory, localPath, row);
-    await markTelegramFileDownloadReady(options.database, row.assetKey, stored);
-  } catch (error) {
-    await markTelegramFileDownloadFailed(options.database, row.assetKey, error);
-  }
-
+  await processClaimedFile(options, row);
   await publishTelegramFileAssetOwnersUpdated(options.database, options.eventBus, row.assetKey);
   await publishTelegramFileQueueUpdated(options.database, options.eventBus);
   return true;
@@ -153,12 +211,12 @@ export async function processQueuedFileBatch(
     maxFilesPerTick: number;
   }
 ): Promise<TelegramFileDownloadBatchResult> {
-  await recoverStaleFileDownloads(options);
   const rows: TelegramFileDownloadRow[] = [];
   const maxFilesPerTick = positiveInteger(
     limits.maxFilesPerTick,
     DEFAULT_WORKER_MAX_FILES_PER_TICK
   );
+  const reconciled = await reconcileStaleFileDownloads(options, maxFilesPerTick);
   const maxConcurrentDownloads = positiveInteger(
     limits.maxConcurrentDownloads,
     DEFAULT_WORKER_MAX_CONCURRENT_DOWNLOADS
@@ -177,9 +235,9 @@ export async function processQueuedFileBatch(
 
   if (rows.length === 0) {
     return {
-      failedCount: 0,
-      processedCount: 0,
-      readyCount: 0
+      failedCount: reconciled.failedCount,
+      processedCount: reconciled.processedCount,
+      readyCount: reconciled.readyCount
     };
   }
 
@@ -197,14 +255,15 @@ export async function processQueuedFileBatch(
   await publishTelegramFileQueueUpdated(options.database, options.eventBus);
 
   return {
-    failedCount: results.filter((result) => !result.ready).length,
-    processedCount: results.length,
-    readyCount: results.filter((result) => result.ready).length
+    failedCount: reconciled.failedCount + results.filter((result) => result.failed).length,
+    processedCount: reconciled.processedCount + results.length,
+    readyCount: reconciled.readyCount + results.filter((result) => result.ready).length
   };
 }
 
 type TelegramFileDownloadResult = {
   assetKey: string;
+  failed: boolean;
   ready: boolean;
 };
 
@@ -213,67 +272,216 @@ async function processClaimedFile(
   row: TelegramFileDownloadRow
 ): Promise<TelegramFileDownloadResult> {
   try {
-    const localPath = await downloadTdlibFile(options, row);
-    const stored = await storeCanonicalFile(options.filesDirectory, localPath, row);
-    await markTelegramFileDownloadReady(options.database, row.assetKey, stored);
+    const file = await dispatchTdlibFileDownload(options, row);
+    const completedFile = completedFileAssetFromTdlibFile(row.assetKey, file);
+    if (completedFile !== null) {
+      await canonicalizeCompletedTelegramFile(options, completedFile, false);
+      return {
+        assetKey: row.assetKey,
+        failed: false,
+        ready: true
+      };
+    }
+    await markTelegramFileDownloadDispatched(options.database, row.assetKey);
     return {
       assetKey: row.assetKey,
-      ready: true
+      failed: false,
+      ready: false
     };
   } catch (error) {
     await markTelegramFileDownloadFailed(options.database, row.assetKey, error);
     return {
       assetKey: row.assetKey,
+      failed: true,
       ready: false
     };
   }
 }
 
-async function recoverStaleFileDownloads(
-  options: TelegramFileDownloadWorkerOptions
-): Promise<void> {
+async function reconcileStaleFileDownloads(
+  options: TelegramFileDownloadWorkerOptions,
+  limit: number
+): Promise<TelegramFileDownloadBatchResult> {
   const staleBefore = new Date(Date.now() - DOWNLOAD_CLAIM_TIMEOUT_MS);
-  const owners = await requeueStaleTelegramFileDownloads(options.database, staleBefore);
-  if (owners.length === 0) {
-    return;
+  const rows = await readStaleTelegramFileDownloadRows(options.database, staleBefore, limit);
+  if (rows.length === 0) {
+    return emptyBatchResult();
   }
 
-  for (const owner of owners) {
-    await publishTelegramFileOwnerUpdated(options.database, options.eventBus, owner);
+  const results: TelegramFileDownloadResult[] = [];
+  for (const row of rows) {
+    results.push(await reconcileStaleFileDownload(options, row));
+  }
+  for (const assetKey of new Set(results.map((result) => result.assetKey))) {
+    await publishTelegramFileAssetOwnersUpdated(options.database, options.eventBus, assetKey);
   }
   await publishTelegramFileQueueUpdated(options.database, options.eventBus);
+  return {
+    failedCount: results.filter((result) => result.failed).length,
+    processedCount: results.length,
+    readyCount: results.filter((result) => result.ready).length
+  };
 }
 
-async function downloadTdlibFile(
+async function reconcileStaleFileDownload(
   options: TelegramFileDownloadWorkerOptions,
   row: TelegramFileDownloadRow
-): Promise<string> {
+): Promise<TelegramFileDownloadResult> {
+  try {
+    const file = await getTdlibFile(options, row);
+    const completedFile = completedFileAssetFromTdlibFile(row.assetKey, file);
+    if (completedFile !== null) {
+      await canonicalizeCompletedTelegramFile(options, completedFile, false);
+      return {
+        assetKey: row.assetKey,
+        failed: false,
+        ready: true
+      };
+    }
+    await dispatchTdlibFileDownload(options, row);
+    await markTelegramFileDownloadDispatched(options.database, row.assetKey);
+    return {
+      assetKey: row.assetKey,
+      failed: false,
+      ready: false
+    };
+  } catch (error) {
+    await markTelegramFileDownloadFailed(options.database, row.assetKey, error);
+    return {
+      assetKey: row.assetKey,
+      failed: true,
+      ready: false
+    };
+  }
+}
+
+async function dispatchTdlibFileDownload(
+  options: TelegramFileDownloadWorkerOptions,
+  row: TelegramFileDownloadRow
+): Promise<TdObject | undefined> {
   if (row.latestTdlibFileId === null) {
     throw new Error(`Telegram file asset has no TDLib file id: ${row.assetKey}`);
   }
 
-  const file = asTdObject(
+  return asTdObject(
     await invokeTdlibWithEvents(
       options.eventBus,
       options.client,
-      {
-        _: 'downloadFile',
-        file_id: row.latestTdlibFileId,
-        limit: 0,
-        offset: 0,
-        priority: 1,
-        synchronous: true
-      },
+      telegramFileDownloadRequest(row),
       {
         priority: row.priority
       }
     )
   );
-  const localPath = localFilePath(file);
-  if (localPath === null) {
-    throw new Error(`TDLib did not return a local path for file ${String(row.latestTdlibFileId)}`);
+}
+
+async function getTdlibFile(
+  options: TelegramFileDownloadWorkerOptions,
+  row: TelegramFileDownloadRow
+): Promise<TdObject | undefined> {
+  if (row.latestTdlibFileId === null) {
+    throw new Error(`Telegram file asset has no TDLib file id: ${row.assetKey}`);
   }
-  return localPath;
+  return asTdObject(
+    await invokeTdlibWithEvents(
+      options.eventBus,
+      options.client,
+      {
+        _: 'getFile',
+        file_id: row.latestTdlibFileId
+      },
+      {
+        priority: telegramTdlibPriorities.low
+      }
+    )
+  );
+}
+
+export function telegramFileDownloadRequest(row: TelegramFileDownloadRow): Record<string, unknown> {
+  if (row.latestTdlibFileId === null) {
+    throw new Error(`Telegram file asset has no TDLib file id: ${row.assetKey}`);
+  }
+  const priority = assertTelegramTdlibPriority(row.priority);
+  if (row.transport.kind === 'message') {
+    return {
+      _: 'addFileToDownloads',
+      chat_id: row.transport.chatId,
+      file_id: row.latestTdlibFileId,
+      message_id: row.transport.messageId,
+      priority
+    };
+  }
+  return {
+    _: 'downloadFile',
+    file_id: row.latestTdlibFileId,
+    limit: 0,
+    offset: 0,
+    priority,
+    synchronous: false
+  };
+}
+
+async function processCompletedFileBatch(
+  options: TelegramFileDownloadWorkerOptions,
+  completedFiles: Map<string, TelegramCompletedFileAsset>,
+  limit: number
+): Promise<TelegramFileDownloadBatchResult> {
+  const files = [...completedFiles.values()].slice(0, limit);
+  if (files.length === 0) {
+    return emptyBatchResult();
+  }
+  for (const file of files) {
+    completedFiles.delete(file.assetKey);
+  }
+
+  let failedCount = 0;
+  let readyCount = 0;
+  for (const file of files) {
+    try {
+      await canonicalizeCompletedTelegramFile(options, file);
+      readyCount += 1;
+    } catch {
+      failedCount += 1;
+    }
+  }
+
+  return {
+    failedCount,
+    processedCount: files.length,
+    readyCount
+  };
+}
+
+export async function canonicalizeCompletedTelegramFile(
+  options: TelegramFileDownloadWorkerOptions,
+  file: TelegramCompletedFileAsset,
+  publishUpdates = true
+): Promise<void> {
+  const row = await readTelegramFileDownloadRow(options.database, file.assetKey);
+  if (row === null) {
+    return;
+  }
+  if (row.latestTdlibFileId !== file.tdlibFileId) {
+    return;
+  }
+
+  try {
+    const stored = await storeCanonicalFile(options.filesDirectory, file.localPath, row);
+    await markTelegramFileDownloadReady(options.database, file.assetKey, stored);
+    await cleanupTdlibFile(options, row);
+  } catch (error) {
+    await markTelegramFileDownloadFailed(options.database, file.assetKey, error);
+    throw error;
+  } finally {
+    if (publishUpdates) {
+      await publishTelegramFileAssetOwnersUpdated(
+        options.database,
+        options.eventBus,
+        file.assetKey
+      );
+      await publishTelegramFileQueueUpdated(options.database, options.eventBus);
+    }
+  }
 }
 
 async function storeCanonicalFile(
@@ -362,6 +570,58 @@ export async function publishTelegramFileQueueUpdated(
   eventBus.publish(createTelegramFileQueueUpdatedEvent(await readTelegramFileQueueStats(database)));
 }
 
+function completedFileAssetFromTdlibFile(
+  assetKey: string,
+  file: TdObject | undefined
+): TelegramCompletedFileAsset | null {
+  const local = asPlainRecord(file?.local);
+  const path = localFilePath(file);
+  const fileId = typeof file?.id === 'number' && Number.isSafeInteger(file.id) ? file.id : null;
+  if (local?.is_downloading_completed === true && path !== null && fileId !== null) {
+    return {
+      assetKey,
+      localPath: path,
+      tdlibFileId: fileId
+    };
+  }
+  return null;
+}
+
+async function cleanupTdlibFile(
+  options: TelegramFileDownloadWorkerOptions,
+  row: TelegramFileDownloadRow
+): Promise<void> {
+  if (row.latestTdlibFileId === null) {
+    return;
+  }
+  const request =
+    row.transport.kind === 'message'
+      ? {
+          _: 'removeFileFromDownloads',
+          delete_from_cache: true,
+          file_id: row.latestTdlibFileId
+        }
+      : {
+          _: 'deleteFile',
+          file_id: row.latestTdlibFileId
+        };
+  try {
+    await invokeTdlibWithEvents(options.eventBus, options.client, request, {
+      priority: telegramTdlibPriorities.low
+    });
+  } catch (error) {
+    logTdlibCleanupError(row.assetKey, error);
+  }
+}
+
+function emptyBatchResult(): TelegramFileDownloadBatchResult {
+  return {
+    failedCount: 0,
+    processedCount: 0,
+    readyCount: 0
+  };
+}
+
 function localFilePath(file: TdObject | undefined): string | null {
   const local = asPlainRecord(file?.local);
   const path = local?.path;
@@ -415,6 +675,16 @@ function logWorkerError(error: unknown): void {
     JSON.stringify({
       error: error instanceof Error ? error.message : String(error),
       event: 'telegram.file_download_worker_failed'
+    })
+  );
+}
+
+function logTdlibCleanupError(assetKey: string, error: unknown): void {
+  console.warn(
+    JSON.stringify({
+      assetKey,
+      error: error instanceof Error ? error.message : String(error),
+      event: 'telegram.file_download_cleanup_failed'
     })
   );
 }

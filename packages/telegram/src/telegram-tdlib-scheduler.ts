@@ -95,7 +95,7 @@ export function createTelegramTdlibScheduler(
       return new Promise((resolve, reject) => {
         queue.push({
           options,
-          priority: resolveTelegramTdlibPriority(options.priority, 'p4'),
+          priority: resolveTelegramTdlibPriority(options.priority, telegramTdlibPriorities.low),
           reject,
           request,
           resolve,
@@ -114,7 +114,7 @@ export function isTelegramTdlibUnderNavigationPressure(client: TdlibInvoker): bo
   return (
     stats !== undefined &&
     (stats.runningCount >= DEFAULT_MAX_CONCURRENT_TDLIB_OPERATIONS ||
-      (stats.highestPendingPriority ?? 0) >= telegramTdlibPriorities.p0)
+      (stats.highestPendingPriority ?? 0) >= telegramTdlibPriorities.maximum)
   );
 }
 

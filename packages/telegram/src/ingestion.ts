@@ -43,6 +43,7 @@ import {
   publishTdlibOperationEvents,
   publishTelegramOperationEvents
 } from './telegram-operation-events.js';
+import { telegramTdlibPriorities } from './telegram-tdlib-priority.js';
 import {
   publishTelegramFileQueueUpdated,
   publishTelegramFileOwnerUpdated,
@@ -160,6 +161,7 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
         persistenceStats,
         eventBus,
         activeFileIndexer,
+        fileDownloadWorker,
         activeLiveCoverageObserver
       );
     });
@@ -401,7 +403,14 @@ async function persistAndLogAuthenticatedClient(
   client: TelegramTdlibScheduler,
   eventBus: EventBus
 ): Promise<void> {
-  const me = asTdObject(await invokeTdlib(eventBus, client, { _: 'getMe' }, { priority: 'p0' }));
+  const me = asTdObject(
+    await invokeTdlib(
+      eventBus,
+      client,
+      { _: 'getMe' },
+      { priority: telegramTdlibPriorities.maximum }
+    )
+  );
   const currentUser = normalizeUser(me, { isSelf: true });
   if (currentUser !== undefined) {
     await persistCurrentTelegramUser(database, currentUser);
@@ -416,7 +425,7 @@ async function persistAndLogAuthenticatedClient(
         chat_list: { _: 'chatListMain' },
         limit: 20
       },
-      { priority: 'p0' }
+      { priority: telegramTdlibPriorities.maximum }
     )
   );
 
@@ -435,15 +444,19 @@ async function persistLiveUpdate(
   stats: PersistenceStats,
   eventBus: EventBus,
   fileIndexer: TelegramFileIndexer,
+  fileDownloadWorker: TelegramFileDownloadWorker | undefined,
   liveCoverageObserver: TelegramLiveCoverageObserver
 ): Promise<void> {
   const normalized = normalizeTelegramUpdate(update);
-  const progressOwners = await applyTelegramFileProgressUpdate(database, update);
+  const progress = await applyTelegramFileProgressUpdate(database, update);
+  for (const completedFile of progress.completedAssets) {
+    fileDownloadWorker?.enqueueCompletedFile(completedFile);
+  }
   if (normalized?.event === undefined) {
-    for (const owner of progressOwners) {
+    for (const owner of progress.owners) {
       await publishTelegramFileOwnerUpdated(database, eventBus, owner);
     }
-    if (progressOwners.length > 0) {
+    if (progress.owners.length > 0) {
       await publishTelegramFileQueueUpdated(database, eventBus);
     }
     return;
@@ -478,10 +491,10 @@ async function persistLiveUpdate(
     eventBus.publish(event);
   }
 
-  for (const owner of progressOwners) {
+  for (const owner of progress.owners) {
     await publishTelegramFileOwnerUpdated(database, eventBus, owner);
   }
-  if (progressOwners.length > 0) {
+  if (progress.owners.length > 0) {
     await publishTelegramFileQueueUpdated(database, eventBus);
   }
 
@@ -548,7 +561,14 @@ async function syncInitialChats(
   for (const chatId of chatIds) {
     const chat = normalizeChat(
       asTdObject(
-        await invokeTdlib(eventBus, client, { _: 'getChat', chat_id: chatId }, { priority: 'p0' })
+        await invokeTdlib(
+          eventBus,
+          client,
+          { _: 'getChat', chat_id: chatId },
+          {
+            priority: telegramTdlibPriorities.maximum
+          }
+        )
       )
     );
     if (chat !== undefined) {
@@ -595,7 +615,7 @@ async function getChatIds(
           chat_list: toTdChatList(chatList),
           limit
         },
-        { priority: 'p0' }
+        { priority: telegramTdlibPriorities.maximum }
       )
     );
   } catch (error) {

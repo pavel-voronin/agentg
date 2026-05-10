@@ -8,7 +8,7 @@ import type { TelegramTdlibPriority } from './telegram-tdlib-priority.js';
 import type { TelegramTdlibQueueStats } from './telegram-tdlib-scheduler.js';
 
 export type TdlibInvokeOptions = {
-  priority?: TelegramTdlibPriority | number;
+  priority?: TelegramTdlibPriority;
 };
 
 export type TdlibInvoker = {

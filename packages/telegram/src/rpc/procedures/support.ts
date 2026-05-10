@@ -27,6 +27,7 @@ import {
   type TelegramFileOwnerKey
 } from '../../telegram-file-store.js';
 import { invokeTdlibWithEvents, type TdlibInvokeOptions } from '../../telegram-operation-events.js';
+import { telegramTdlibPriorities } from '../../telegram-tdlib-priority.js';
 import type {
   TelegramChatDirectoryEntry,
   TelegramChatPlacement,
@@ -558,7 +559,7 @@ async function loadAllChatsFromList(
           chat_list: toTdChatList(chatList),
           limit: batchSize
         },
-        { priority: 'p0' }
+        { priority: telegramTdlibPriorities.maximum }
       );
     } catch (error) {
       if (isTdlibNotFound(error)) {
@@ -587,7 +588,7 @@ async function getChatIds(
           chat_list: toTdChatList(chatList),
           limit
         },
-        { priority: 'p0' }
+        { priority: telegramTdlibPriorities.maximum }
       )
     );
   } catch (error) {
@@ -621,7 +622,14 @@ async function getChatOrUndefined(
 ): Promise<TdObject | undefined> {
   try {
     return asTdObject(
-      await invokeTdlib(eventBus, client, { _: 'getChat', chat_id: chatId }, { priority: 'p0' })
+      await invokeTdlib(
+        eventBus,
+        client,
+        { _: 'getChat', chat_id: chatId },
+        {
+          priority: telegramTdlibPriorities.maximum
+        }
+      )
     );
   } catch (error) {
     if (isTdlibNotFound(error)) {

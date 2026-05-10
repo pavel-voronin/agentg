@@ -50,7 +50,11 @@ export async function createTelegramClient(config: TelegramClientConfig): Promis
       application_version: '0.1.0',
       device_model: 'AgenTG Docker Client',
       system_language_code: 'en',
-      system_version: 'linux'
+      system_version: 'linux',
+      use_chat_info_database: true,
+      use_file_database: true,
+      use_message_database: true,
+      use_secret_chats: false
     }
   });
 }

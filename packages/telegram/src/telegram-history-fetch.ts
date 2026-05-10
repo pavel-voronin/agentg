@@ -43,6 +43,7 @@ import {
   tdMessageDate,
   tdMessageId
 } from './rpc/procedures/support.js';
+import { telegramTdlibPriorities, type TelegramTdlibPriority } from './telegram-tdlib-priority.js';
 
 export type TelegramHistoryPageCheckpointInput = {
   crossedStart: boolean;
@@ -71,7 +72,7 @@ const TELEGRAM_ENSURE_HISTORY_MAX_LIMIT = 100;
 export async function fetchTelegramHistoryPage(
   runtime: TelegramRpcRuntime,
   request: TelegramHistoryFetchPageRequest,
-  options: { priority: 'p2' | 'p4' } = { priority: 'p4' }
+  options: { priority: TelegramTdlibPriority } = { priority: telegramTdlibPriorities.low }
 ): Promise<TelegramHistoryFetchPageResult> {
   const chatId = parseTelegramChatId(request.chatId);
   const startAt = requireDate(request.startAt, 'telegram.history.fetch_page requires startAt');
@@ -298,7 +299,7 @@ export async function ensureTelegramHistoryCoverage(
           limit,
           startAt: interval.startAt.toISOString()
         },
-        { priority: 'p4' }
+        { priority: telegramTdlibPriorities.low }
       );
       pages += 1;
 

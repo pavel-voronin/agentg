@@ -21,14 +21,18 @@ const TELEGRAM_DOMAIN_EVENT_TYPES = [
 ] as const;
 
 const TELEGRAM_TDLIB_METHODS = [
+  'addFileToDownloads',
   'close',
+  'deleteFile',
   'downloadFile',
   'getChat',
   'getChatHistory',
   'getChatMessageByDate',
   'getChats',
+  'getFile',
   'getMe',
-  'loadChats'
+  'loadChats',
+  'removeFileFromDownloads'
 ] as const;
 
 const TELEGRAM_OPERATION_LIFECYCLES = ['completed', 'failed', 'started'] as const;

@@ -19,6 +19,7 @@ import {
 } from '../../telegram-history-coverage.js';
 import { countTelegramMessagesInIntervals } from '../../telegram-message-counts.js';
 import { TELEGRAM_HISTORY_PAST_BOUNDARY } from '../../telegram-history-time.js';
+import { telegramTdlibPriorities } from '../../telegram-tdlib-priority.js';
 import {
   telegramFetchMessagesPageInputSchema,
   telegramFetchMessagesPageOutputSchema,
@@ -91,7 +92,7 @@ export const fetchMessagesPage = mutation((runtime: TelegramRpcRuntime) =>
             only_local: false
           },
           {
-            priority: 'p2'
+            priority: telegramTdlibPriorities.high
           }
         )
       );
@@ -136,7 +137,7 @@ async function readLatestMessageId(
     chatId,
     pageEndAt,
     {
-      priority: 'p2'
+      priority: telegramTdlibPriorities.high
     }
   );
   return tdMessageId(anchor);
