@@ -7,8 +7,6 @@ import {
 import {
   historyDeleteTargetInputSchema,
   historyGetChatHistoryStateInputSchema,
-  historyGetChatStatsInputSchema,
-  historyListJobsInputSchema,
   historyRequestSyncInputSchema,
   historyUpsertTargetInputSchema
 } from './history-contracts.js';
@@ -22,8 +20,6 @@ type HistoryRpcClient = {
   close(): void;
   deleteTarget(input: unknown): Promise<unknown>;
   getChatHistoryState(input: unknown): Promise<unknown>;
-  getChatStats(input: unknown): Promise<unknown>;
-  listJobs(input?: unknown): Promise<unknown>;
   requestSync(input?: unknown): Promise<unknown>;
   upsertTarget(input: unknown): Promise<unknown>;
 };
@@ -57,22 +53,6 @@ export function createHistoryRpcClient(config: HistoryRpcClientConfig): HistoryR
       return callHistoryProcedure((signal) =>
         client.getChatHistoryState.query(
           historyGetChatHistoryStateInputSchema.parse(input),
-          internalRpcProcedureOptions(undefined, signal)
-        )
-      );
-    },
-    getChatStats(input) {
-      return callHistoryProcedure((signal) =>
-        client.getChatStats.query(
-          historyGetChatStatsInputSchema.parse(input),
-          internalRpcProcedureOptions(undefined, signal)
-        )
-      );
-    },
-    listJobs(input = {}) {
-      return callHistoryProcedure((signal) =>
-        client.listJobs.query(
-          historyListJobsInputSchema.parse(input),
           internalRpcProcedureOptions(undefined, signal)
         )
       );

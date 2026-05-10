@@ -3,55 +3,23 @@ import {
   orderIntervalsClosestToPresent,
   projectHistoryRange,
   splitIntervals,
-  subtractIntervals,
   type HistoryRangeProjectionContext
 } from './ranges.js';
-import { normalizeCoverageIntervals } from './coverage.js';
-import type {
-  BackfillJobInput,
-  HistoryCoverageInterval,
-  HistoryInterval,
-  HistoryTarget
-} from './types.js';
+import type { HistoryInterval, HistoryTarget } from './types.js';
 
-export type ReconcileChatOptions = HistoryRangeProjectionContext & {
+export type HistorySyncProjectionOptions = HistoryRangeProjectionContext & {
   chatId: string;
-  coverage: HistoryCoverageInterval[];
-  jobWindowMilliseconds?: number;
+  syncWindowMilliseconds?: number;
   targets: HistoryTarget[];
 };
 
-export function reconcileChat(options: ReconcileChatOptions): BackfillJobInput[] {
+export function projectSyncIntervalsForChat(
+  options: HistorySyncProjectionOptions
+): HistoryInterval[] {
   const desired = projectTargetsForChat(options.targets, options.chatId, options);
-  const coverage = normalizeCoverageIntervals(options.coverage).filter(
-    (interval) => interval.chatId === options.chatId
-  );
-  const missing = subtractIntervals(desired, coverage);
-  const intervals =
-    options.jobWindowMilliseconds === undefined
-      ? orderIntervalsClosestToPresent(missing)
-      : splitIntervals(missing, options.jobWindowMilliseconds);
-
-  return intervals.map((interval) => ({
-    ...interval,
-    chatId: options.chatId
-  }));
-}
-
-export function completedOneShotTargets(options: ReconcileChatOptions): HistoryTarget[] {
-  const coverage = normalizeCoverageIntervals(options.coverage).filter(
-    (interval) => interval.chatId === options.chatId
-  );
-
-  return options.targets
-    .filter((target) => target.chatId === options.chatId)
-    .filter(isOneShotHistoryTarget)
-    .filter((target) => {
-      const projected = projectHistoryRange(target.range, options);
-      return coverage.some(
-        (interval) => interval.startAt <= projected.startAt && interval.endAt >= projected.endAt
-      );
-    });
+  return options.syncWindowMilliseconds === undefined
+    ? orderIntervalsClosestToPresent(desired)
+    : splitIntervals(desired, options.syncWindowMilliseconds);
 }
 
 export function projectTargetsForChat(
@@ -66,7 +34,7 @@ export function projectTargetsForChat(
   );
 }
 
-function isOneShotHistoryTarget(target: HistoryTarget): boolean {
+export function isOneShotHistoryTarget(target: HistoryTarget): boolean {
   return (
     target.templateId === undefined &&
     target.range.start.kind === 'absolute' &&

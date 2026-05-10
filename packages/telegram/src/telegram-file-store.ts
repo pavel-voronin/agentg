@@ -55,7 +55,6 @@ export type StoredCanonicalFile = {
 };
 
 type TelegramFileAssetStatus = 'failed' | 'known' | 'ready';
-type TelegramFileDownloadJobStatus = 'completed' | 'downloading' | 'failed' | 'queued';
 
 type TelegramFileRefRow = {
   assetByteSize: number | null;

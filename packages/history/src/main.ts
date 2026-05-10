@@ -23,12 +23,12 @@ try {
 
   const eventBus = await createNatsEventBus(config.nats);
   await runHistoryService({
-    backfill: config.backfill,
     database,
     eventBus,
     internalRpc: config.internalRpc,
     serviceRpcUrl: config.serviceRpcUrl,
-    services: config.services
+    services: config.services,
+    sync: config.sync
   });
 } catch (error) {
   console.error(

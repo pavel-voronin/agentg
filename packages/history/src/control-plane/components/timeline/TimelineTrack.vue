@@ -52,14 +52,14 @@ function isTargetHighlightActive(segment: TimelineSegment): boolean {
 }
 
 function segmentHighlighted(segment: TimelineSegment): boolean {
-  if (segment.kind === 'coverage' || segment.kind === 'job') {
+  if (segment.kind === 'coverage') {
     return isHighlighted(segment.key);
   }
   return isTargetHighlightActive(segment);
 }
 
 function segmentRunning(segment: TimelineSegment): boolean {
-  return segment.kind === 'job' && segment.running;
+  return false;
 }
 
 function segmentStyle(segment: TimelineSegment): Record<string, string> {
@@ -151,18 +151,6 @@ defineExpose({
 
 .history-timeline-track__segment[data-kind='coverage'][data-highlighted='true'] {
   @apply z-[5] bg-emerald-600;
-}
-
-.history-timeline-track__segment[data-kind='job'] {
-  @apply z-[2] bg-violet-600/40;
-}
-
-.history-timeline-track__segment[data-kind='job'][data-running='true'] {
-  @apply bg-violet-600;
-}
-
-.history-timeline-track__segment[data-kind='job'][data-highlighted='true'] {
-  @apply shadow-[inset_0_0_0_2px_rgba(24,24,27,0.32)];
 }
 
 .history-timeline-track__segment[data-kind='target-highlight'] {

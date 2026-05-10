@@ -28,7 +28,6 @@ describe('timeline view model', () => {
           }
         ],
         desired: [],
-        jobs: [],
         missing: [],
         targets: []
       },
@@ -82,7 +81,6 @@ describe('timeline view model', () => {
           }
         ],
         desired: [],
-        jobs: [],
         missing: [],
         targets: []
       },

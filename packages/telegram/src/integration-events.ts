@@ -91,13 +91,14 @@ export type TelegramEventSourceMessageDelete = {
   messageIds: string[];
 };
 
-export type TelegramMessagesObservedEventSource = {
-  chatId: string;
-  endAt: Date;
-  fetchedMessages: number;
-  reachedStart: boolean;
-  startAt: Date | null;
-  storedMessages: number;
+export type TelegramHistoryCoverageChangedEventSource = {
+  intervals: {
+    chatId: string;
+    endAt: Date;
+    messageCount: number;
+    provedAt: Date;
+    startAt: Date;
+  }[];
 };
 
 export type TelegramFileQueueStats = {
@@ -204,24 +205,33 @@ export function createTelegramFileQueueUpdatedEvent(
   });
 }
 
-export function createTelegramMessagesObservedEvent(
-  source: TelegramMessagesObservedEventSource
+export function createTelegramHistoryCoverageChangedEvent(
+  source: TelegramHistoryCoverageChangedEventSource
 ): IntegrationEvent {
+  const intervals = source.intervals.map((interval) => ({
+    chat: telegramChatRef(interval.chatId),
+    endAt: interval.endAt.toISOString(),
+    messageCount: interval.messageCount,
+    provedAt: interval.provedAt.toISOString(),
+    startAt: interval.startAt.toISOString()
+  }));
+  const startAt = minIso(intervals.map((interval) => interval.startAt));
+  const endAt = maxIso(intervals.map((interval) => interval.endAt));
+
   return createIntegrationEvent({
     data: {
-      chat: telegramChatRef(source.chatId),
-      fetchedMessages: source.fetchedMessages,
-      interval: {
-        endAt: source.endAt.toISOString(),
-        startAt: source.startAt?.toISOString() ?? null
-      },
-      reachedStart: source.reachedStart,
-      storedMessages: source.storedMessages
+      ...(intervals.length === 1 && intervals[0] !== undefined ? { chat: intervals[0].chat } : {}),
+      chatCount: new Set(intervals.map((interval) => interval.chat.id)).size,
+      endAt,
+      intervals,
+      startAt
     },
     meta: {
-      chatId: source.chatId
+      ...(intervals.length === 1 && intervals[0] !== undefined
+        ? { chatId: intervals[0].chat.id }
+        : {})
     },
-    type: 'telegram.messages.observed'
+    type: 'telegram.history.coverage.changed'
   });
 }
 
@@ -454,4 +464,20 @@ function eventMessageDelete(update: TelegramEventSourceMessageDelete): TelegramE
       telegramMessageRef({ chatId: update.chatId, messageId })
     )
   };
+}
+
+function minIso(values: string[]): string {
+  const [first, ...rest] = values;
+  if (first === undefined) {
+    throw new Error('telegram.history.coverage.changed requires at least one interval');
+  }
+  return rest.reduce((minimum, value) => (value < minimum ? value : minimum), first);
+}
+
+function maxIso(values: string[]): string {
+  const [first, ...rest] = values;
+  if (first === undefined) {
+    throw new Error('telegram.history.coverage.changed requires at least one interval');
+  }
+  return rest.reduce((maximum, value) => (value > maximum ? value : maximum), first);
 }

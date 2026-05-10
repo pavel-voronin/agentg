@@ -6,16 +6,14 @@ import {
 } from '@agentg/infra/control-plane/assets';
 import { createServiceDirectoryClient } from '@agentg/service-directory/rpc';
 import type { EventBus, EventSubscription } from '@agentg/events/bus';
-import { createIntegrationEvent, type IntegrationEvent } from '@agentg/events/envelope';
 import { createValidatedEventBus } from '@agentg/events/validated-bus';
 import { serviceManifestEventTypes } from '@agentg/rpc/call-event-types';
 
 import {
   createHistorySyncController,
-  type BackfillOptions,
+  type HistorySyncControllerOptions,
   type HistorySyncController
 } from './controller.js';
-import { createLiveCoverageObserver, type LiveCoverageObserver } from './live-coverage.js';
 import type { InternalTrpcBindConfig } from './rpc/config.js';
 import {
   HISTORY_CONTROL_PLANE_ASSETS_ROOT,
@@ -23,13 +21,9 @@ import {
   stopHistoryTrpcServer
 } from './rpc/history-server.js';
 import { createHistoryServiceManifest } from './registrations.js';
-import { historyCoverageChangedData } from './events.js';
-import { addHistoryCoverageBatch } from './store.js';
-import { coverageIntervalsFromTelegramMessagesObserved } from './telegram-observed-coverage.js';
 import { createServiceDirectoryTelegramHistoryClient } from './telegram-client.js';
 
 export type HistoryServiceOptions = {
-  backfill: BackfillOptions;
   database: AppDatabase;
   eventBus: EventBus;
   internalRpc: InternalTrpcBindConfig;
@@ -39,9 +33,9 @@ export type HistoryServiceOptions = {
       url: string;
     };
   };
+  sync: HistorySyncControllerOptions;
 };
 
-const HISTORY_STATUS_TICK_MS = 5000;
 const HISTORY_SHUTDOWN_FORCE_EXIT_MS = 4500;
 const HISTORY_SHUTDOWN_STEP_TIMEOUT_MS = 2000;
 
@@ -49,7 +43,6 @@ export async function runHistoryService(options: HistoryServiceOptions): Promise
   let shuttingDown = false;
   let historyRpcServer: Awaited<ReturnType<typeof startHistoryTrpcServer>> | undefined;
   let controlPlaneAssets: ControlPlaneAssetVersionSubscription | undefined;
-  let liveCoverageTick: ReturnType<typeof setInterval> | undefined;
   const initialControlPlaneAssets = await readControlPlaneAssetVersions(
     HISTORY_CONTROL_PLANE_ASSETS_ROOT
   );
@@ -73,34 +66,17 @@ export async function runHistoryService(options: HistoryServiceOptions): Promise
   const controller = createHistorySyncController(
     options.database,
     telegram,
-    options.backfill,
+    options.sync,
     eventBus,
     () => shuttingDown
   );
-  const liveCoverageObserver = createLiveCoverageObserver({
-    addCoverageBatch: (intervals) => addHistoryCoverageBatch(options.database, intervals),
-    listChatIds: async () => (await telegram.listChats({ discover: false })).map((chat) => chat.id),
-    publishCoverageChanged: (intervals) => {
-      eventBus.publish(
-        createIntegrationEvent({
-          data: historyCoverageChangedData(intervals),
-          type: 'history.coverage.changed'
-        })
-      );
-    }
-  });
   let subscriptions: EventSubscription[] = [];
   try {
     await serviceDirectory.refresh();
     subscriptions = subscribeHistoryService({
       controller,
-      database: options.database,
-      eventBus,
-      liveCoverageObserver
+      eventBus
     });
-    liveCoverageTick = setInterval(() => {
-      void liveCoverageObserver.tick();
-    }, HISTORY_STATUS_TICK_MS);
     historyRpcServer = await startHistoryTrpcServer({
       bind: options.internalRpc,
       database: options.database,
@@ -140,8 +116,6 @@ export async function runHistoryService(options: HistoryServiceOptions): Promise
       controller,
       eventBus,
       historyRpcServer,
-      liveCoverageObserver,
-      liveCoverageTick,
       serviceDirectory,
       subscriptions,
       telegram
@@ -155,11 +129,6 @@ export async function runHistoryService(options: HistoryServiceOptions): Promise
     shuttingDown = true;
     controlPlaneAssets?.close();
     controlPlaneAssets = undefined;
-    if (liveCoverageTick !== undefined) {
-      clearInterval(liveCoverageTick);
-      liveCoverageTick = undefined;
-    }
-    await liveCoverageObserver.markDisconnected();
     for (const subscription of subscriptions) {
       subscription.unsubscribe();
     }
@@ -176,13 +145,12 @@ export async function runHistoryService(options: HistoryServiceOptions): Promise
     serviceDirectory.close();
     telegram.close?.();
     controller.stop();
-    const [historyStopped, liveCoverageStopped] = await Promise.all([
-      runShutdownStep('history.controller_wait', () => controller.wait()),
-      runShutdownStep('history.live_coverage_wait', () => liveCoverageObserver.wait())
-    ]);
+    const historyStopped = await runShutdownStep('history.controller_wait', () =>
+      controller.wait()
+    );
     const eventBusClosed = await runShutdownStep('history.event_bus_close', () => eventBus.close());
 
-    return historyRpcStopped && historyStopped && liveCoverageStopped && eventBusClosed;
+    return historyRpcStopped && historyStopped && eventBusClosed;
   });
 }
 
@@ -191,21 +159,11 @@ async function cleanupHistoryStartupFailure(options: {
   controller: HistorySyncController;
   eventBus: EventBus;
   historyRpcServer: Awaited<ReturnType<typeof startHistoryTrpcServer>> | undefined;
-  liveCoverageObserver: LiveCoverageObserver;
-  liveCoverageTick: ReturnType<typeof setInterval> | undefined;
   serviceDirectory: ReturnType<typeof createServiceDirectoryClient>;
   subscriptions: EventSubscription[];
   telegram: ReturnType<typeof createServiceDirectoryTelegramHistoryClient>;
 }): Promise<void> {
   options.controlPlaneAssets?.close();
-  if (options.liveCoverageTick !== undefined) {
-    clearInterval(options.liveCoverageTick);
-  }
-
-  await runShutdownStep('history.live_coverage_startup_disconnect', () =>
-    options.liveCoverageObserver.markDisconnected()
-  );
-
   for (const subscription of options.subscriptions) {
     try {
       subscription.unsubscribe();
@@ -238,9 +196,6 @@ async function cleanupHistoryStartupFailure(options: {
   );
   await Promise.all([
     runShutdownStep('history.controller_startup_wait', () => options.controller.wait()),
-    runShutdownStep('history.live_coverage_startup_wait', () =>
-      options.liveCoverageObserver.wait()
-    ),
     runShutdownStep('history.event_bus_startup_close', () => options.eventBus.close())
   ]);
 }
@@ -258,9 +213,7 @@ function requestProcessShutdown(event: string, error: Error): void {
 
 function subscribeHistoryService(options: {
   controller: HistorySyncController;
-  database: AppDatabase;
   eventBus: EventBus;
-  liveCoverageObserver: LiveCoverageObserver;
 }): EventSubscription[] {
   return [
     options.eventBus.subscribe('telegram.chat.updated', () => {
@@ -269,61 +222,10 @@ function subscribeHistoryService(options: {
     options.eventBus.subscribe('telegram.chat.removed', () => {
       options.controller.request('chat-removed');
     }),
-    options.eventBus.subscribe('telegram.message.created', (event) => {
-      const message = asRecord(asRecord(event.data)?.message);
-      const chat = asRecord(message?.chat);
-      const chatId =
-        chat?._model === 'telegram.chat' && typeof chat.id === 'string' ? chat.id : undefined;
-      const messageDate =
-        typeof message?.messageDate === 'string' ? new Date(message.messageDate) : undefined;
-      if (
-        chatId !== undefined &&
-        messageDate !== undefined &&
-        !Number.isNaN(messageDate.getTime())
-      ) {
-        void options.liveCoverageObserver.recordLiveMessage(chatId, messageDate);
-      }
-    }),
-    options.eventBus.subscribe('telegram.messages.observed', (event) => {
-      void addCoverageFromObservedMessages(options.database, options.eventBus, event);
-    }),
-    options.eventBus.subscribe('telegram.status', (event) => {
-      const data = asRecord(event.data);
-      if (data?.connected === true) {
-        void options.liveCoverageObserver.markConnected();
-        return;
-      }
-      void options.liveCoverageObserver.markDisconnected();
+    options.eventBus.subscribe('telegram.history.coverage.changed', () => {
+      options.controller.request('coverage-changed');
     })
   ];
-}
-
-async function addCoverageFromObservedMessages(
-  database: AppDatabase,
-  eventBus: EventBus,
-  event: IntegrationEvent
-): Promise<void> {
-  const intervals = coverageIntervalsFromTelegramMessagesObserved(event);
-  if (intervals.length === 0) {
-    return;
-  }
-
-  try {
-    await addHistoryCoverageBatch(database, intervals);
-    eventBus.publish(
-      createIntegrationEvent({
-        data: historyCoverageChangedData(intervals),
-        type: 'history.coverage.changed'
-      })
-    );
-  } catch (error) {
-    console.warn(
-      JSON.stringify({
-        error: error instanceof Error ? error.message : String(error),
-        event: 'history.observed_messages_coverage_failed'
-      })
-    );
-  }
 }
 
 async function runShutdownStep(name: string, step: () => Promise<void>): Promise<boolean> {
@@ -419,10 +321,4 @@ async function waitForShutdown(close: () => Promise<boolean>): Promise<void> {
     process.once('SIGINT', () => shutdown('SIGINT'));
     process.once('SIGTERM', () => shutdown('SIGTERM'));
   });
-}
-
-function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null
-    ? (value as Record<string, unknown>)
-    : undefined;
 }

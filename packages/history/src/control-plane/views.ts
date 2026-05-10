@@ -47,16 +47,6 @@ export type HistoryRange = {
   start: HistoryBoundary;
 };
 
-export type HistoryJob = {
-  cursor?: Record<string, unknown>;
-  endAt: string;
-  id: string;
-  startAt: string;
-  status: string;
-  telegramChatId?: string;
-  updatedAt: string;
-};
-
 export type HistoryTarget = {
   chatId: string;
   id: string;
@@ -69,7 +59,6 @@ export type SelectedHistoryState = {
   chat: SelectedHistoryChat | null;
   coverage: HistoryInterval[];
   desired: HistoryInterval[];
-  jobs: HistoryJob[];
   missing: HistoryInterval[];
   targets: HistoryTarget[];
 };

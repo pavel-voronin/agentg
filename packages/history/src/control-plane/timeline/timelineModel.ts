@@ -3,7 +3,6 @@ import { timelineDateLabel } from './timelineBounds.js';
 import { detailSection, groupHistoryDetailItems, historyDetailItems } from './timelineDetails.js';
 import {
   timelineCoverage,
-  timelineJobs,
   timelineTargets,
   visibleCoverageIntervals,
   visibleTargetDetails
@@ -11,7 +10,6 @@ import {
 import {
   coverageGapSegment,
   coverageTimelineSegment,
-  jobTimelineSegment,
   targetHighlightTimelineSegments,
   targetUnionTimelineSegments,
   timelineEmptyGaps
@@ -39,7 +37,6 @@ export function buildTimelineViewModel(options: {
   const segments: TimelineSegment[] = [
     ...targetUnionTimelineSegments(targetDetails, min, max),
     ...targetHighlightTimelineSegments(targetDetails, min, max),
-    ...timelineJobs(options.data).flatMap((job) => jobTimelineSegment(job, min, max)),
     ...visibleCoverageIntervals(timelineCoverage(options.data), min, max).map((interval) =>
       coverageTimelineSegment(interval, min, max)
     ),

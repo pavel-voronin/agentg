@@ -122,8 +122,7 @@ watch(
     }
 
     const keepRenderedContent =
-      contentComponent.value !== null &&
-      renderedContentId.value === content.contentId;
+      contentComponent.value !== null && renderedContentId.value === content.contentId;
     if (!keepRenderedContent) {
       scheduleLoadingFeedback(sequence);
     } else {

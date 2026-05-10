@@ -1,12 +1,21 @@
-import { normalizeCoverageIntervals } from './coverage.js';
+import type { EventBus } from '@agentg/events/bus';
+
+import { createTelegramHistoryCoverageChangedEvent } from './integration-events.js';
+import {
+  addTelegramHistoryCoverageBatch,
+  listTelegramHistoryChatIds,
+  normalizeCoverageSegments,
+  type TelegramHistoryCoverageInterval
+} from './telegram-history-coverage.js';
+import { countTelegramMessagesInIntervals } from './telegram-message-counts.js';
 import {
   ceilToTelegramSecond,
   floorToTelegramSecond,
   normalizeTelegramHistoryInterval
-} from './time.js';
-import type { HistoryCoverageInterval } from './types.js';
+} from './telegram-history-time.js';
+import type { TelegramDatabase as AppDatabase } from './database.js';
 
-export type LiveCoverageObserver = {
+export type TelegramLiveCoverageObserver = {
   markConnected(at?: Date): Promise<void>;
   markDisconnected(): Promise<void>;
   recordLiveMessage(chatId: string, messageDate: Date, observedUntil?: Date): Promise<void>;
@@ -14,16 +23,15 @@ export type LiveCoverageObserver = {
   wait(): Promise<void>;
 };
 
-export type LiveCoverageObserverOptions = {
-  addCoverageBatch: (intervals: HistoryCoverageInterval[]) => Promise<void>;
-  listChatIds: () => Promise<string[]>;
+export type TelegramLiveCoverageObserverOptions = {
+  database: AppDatabase;
+  eventBus: EventBus;
   now?: () => Date;
-  publishCoverageChanged?: (intervals: HistoryCoverageInterval[]) => void;
 };
 
-export function createLiveCoverageObserver(
-  options: LiveCoverageObserverOptions
-): LiveCoverageObserver {
+export function createTelegramLiveCoverageObserver(
+  options: TelegramLiveCoverageObserverOptions
+): TelegramLiveCoverageObserver {
   const now = options.now ?? (() => new Date());
   let connected = false;
   let connectedSince: Date | undefined;
@@ -45,7 +53,7 @@ export function createLiveCoverageObserver(
 
   const flushUntil = async (
     endAt: Date,
-    extraInterval?: HistoryCoverageInterval
+    extraInterval?: TelegramHistoryCoverageInterval
   ): Promise<void> => {
     if (!connected || connectedSince === undefined) {
       return;
@@ -53,7 +61,7 @@ export function createLiveCoverageObserver(
 
     const normalizedEndAt = ceilToTelegramSecond(endAt);
     const intervals = observedCoverageIntervals(
-      await options.listChatIds(),
+      await listTelegramHistoryChatIds(options.database),
       checkpoints,
       connectedSince,
       normalizedEndAt,
@@ -64,8 +72,19 @@ export function createLiveCoverageObserver(
       return;
     }
 
-    await options.addCoverageBatch(intervals);
-    options.publishCoverageChanged?.(intervals);
+    const result = await addTelegramHistoryCoverageBatch(options.database, intervals);
+    if (result.intervals.length > 0) {
+      const counts = await countTelegramMessagesInIntervals(options.database, result.intervals);
+      options.eventBus.publish(
+        createTelegramHistoryCoverageChangedEvent({
+          intervals: result.intervals.map((interval, index) => ({
+            ...interval,
+            messageCount: counts[index] ?? 0
+          }))
+        })
+      );
+    }
+
     for (const interval of intervals) {
       checkpoints.set(interval.chatId, interval.endAt);
     }
@@ -125,8 +144,8 @@ function observedCoverageIntervals(
   checkpoints: ReadonlyMap<string, Date>,
   connectedSince: Date,
   endAt: Date,
-  extraInterval?: HistoryCoverageInterval
-): HistoryCoverageInterval[] {
+  extraInterval?: TelegramHistoryCoverageInterval
+): TelegramHistoryCoverageInterval[] {
   const intervals = uniqueChatIds(chatIds).map((chatId) => {
     const checkpointAt = checkpoints.get(chatId) ?? connectedSince;
     return {
@@ -140,9 +159,12 @@ function observedCoverageIntervals(
     intervals.push(extraInterval);
   }
 
-  return normalizeCoverageIntervals(
+  return normalizeCoverageSegments(
     intervals
-      .map(normalizeTelegramHistoryInterval)
+      .map((interval) => ({
+        ...normalizeTelegramHistoryInterval(interval),
+        coveredAt: endAt
+      }))
       .filter((interval) => interval.startAt < interval.endAt)
   );
 }
@@ -151,11 +173,6 @@ function uniqueChatIds(chatIds: string[]): string[] {
   return [...new Set(chatIds)].sort();
 }
 
-function maxDate(first: Date, ...rest: Date[]): Date;
-function maxDate(...dates: Date[]): Date {
-  const [first, ...rest] = dates;
-  if (first === undefined) {
-    throw new Error('maxDate requires at least one date');
-  }
-  return rest.reduce((maximum, date) => (date > maximum ? date : maximum), first);
+function maxDate(first: Date, second: Date): Date {
+  return first > second ? first : second;
 }

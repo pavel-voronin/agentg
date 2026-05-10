@@ -1,10 +1,24 @@
 import { mutation } from '@agentg/rpc/surface';
 import { and, eq, inArray } from 'drizzle-orm';
 
-import { createTelegramMessagesObservedEvent } from '../../integration-events.js';
-import { asTdObject, normalizeHistoricalMessage, type TdObject } from '../../normalize.js';
+import { createTelegramHistoryCoverageChangedEvent } from '../../integration-events.js';
+import {
+  asTdObject,
+  normalizeHistoricalMessage,
+  type NormalizedTelegramUpdate,
+  type TdObject
+} from '../../normalize.js';
 import { telegramMessages } from '../../schema.js';
 import { persistTelegramUpdate } from '../../store.js';
+import {
+  normalizeCoverageWriteInput,
+  withTelegramHistoryCoverageLocks,
+  writeTelegramHistoryCoverageInTransaction,
+  type TelegramHistoryCoverageInterval,
+  type TelegramHistoryCoverageProofSegment
+} from '../../telegram-history-coverage.js';
+import { countTelegramMessagesInIntervals } from '../../telegram-message-counts.js';
+import { TELEGRAM_HISTORY_PAST_BOUNDARY } from '../../telegram-history-time.js';
 import {
   telegramFetchMessagesPageInputSchema,
   telegramFetchMessagesPageOutputSchema,
@@ -29,6 +43,10 @@ const TELEGRAM_MESSAGE_PAGE_LIMIT = 100;
 const TELEGRAM_MESSAGE_PAGE_MAX_LIMIT = 100;
 const TELEGRAM_SECOND_MS = 1000;
 
+type TelegramHistoryCoverageEventInterval = TelegramHistoryCoverageProofSegment & {
+  messageCount: number;
+};
+
 export const fetchMessagesPage = mutation((runtime: TelegramRpcRuntime) =>
   rpc
     .input(telegramFetchMessagesPageInputSchema)
@@ -49,13 +67,10 @@ export const fetchMessagesPage = mutation((runtime: TelegramRpcRuntime) =>
         cursorMessageId ?? (await readLatestMessageId(runtime, chatId, pageEndAt ?? new Date()));
 
       if (anchorMessageId === undefined) {
-        publishMessagesObserved(runtime, {
+        await addPageCoverage(runtime, {
           chatId: input.chatId,
           endAt: pageEndAt,
-          fetchedMessages: 0,
-          reachedStart: true,
-          startAt: null,
-          storedMessages: 0
+          startAt: TELEGRAM_HISTORY_PAST_BOUNDARY
         });
         return {
           messages: [],
@@ -87,20 +102,21 @@ export const fetchMessagesPage = mutation((runtime: TelegramRpcRuntime) =>
         cursorMessageId === undefined
           ? fetchedMessages
           : fetchedMessages.filter((message) => isOlderThanCursor(message, cursorMessageId));
-      const persisted = await persistMessages(runtime, pageMessages);
-      const messages = await readPersistedMessages(runtime, input.chatId, persisted.messageIds);
       const nextCursorMessageId = oldestMessageIdOlderThan(fetchedMessages, anchorMessageId);
       const reachedStart = nextCursorMessageId === undefined;
       const observedStartAt = observedIntervalStartAt(pageMessages, reachedStart);
-
-      publishMessagesObserved(runtime, {
-        chatId: input.chatId,
-        endAt: pageEndAt,
-        fetchedMessages: pageMessages.length,
-        reachedStart,
-        startAt: observedStartAt,
-        storedMessages: persisted.messageIds.length
+      const persisted = await persistMessagesAndCoverage(runtime, {
+        coverage:
+          pageEndAt === undefined || observedStartAt === undefined
+            ? undefined
+            : {
+                chatId: input.chatId,
+                endAt: pageEndAt,
+                startAt: observedStartAt ?? TELEGRAM_HISTORY_PAST_BOUNDARY
+              },
+        messages: pageMessages
       });
+      const messages = await readPersistedMessages(runtime, input.chatId, persisted.messageIds);
 
       return {
         messages,
@@ -153,22 +169,90 @@ async function readMessagePageEndAt(
     : nextTelegramSecond(message.messageDate);
 }
 
-async function persistMessages(
+async function persistMessagesAndCoverage(
   runtime: TelegramRpcRuntime,
-  messages: TdObject[]
-): Promise<{ messageIds: string[] }> {
-  const messageIds: string[] = [];
-  for (const message of messages) {
-    const normalized = normalizeHistoricalMessage(message);
-    if (normalized?.message === undefined) {
-      continue;
-    }
-
-    await persistTelegramUpdate(runtime.database, normalized);
-    runtime.fileIndexer.enqueue(normalized, 'operator_page');
-    messageIds.push(normalized.message.messageId);
+  input: {
+    coverage: TelegramHistoryCoverageInterval | undefined;
+    messages: TdObject[];
   }
-  return { messageIds };
+): Promise<{ coverageIntervals: TelegramHistoryCoverageEventInterval[]; messageIds: string[] }> {
+  const coverageIntervals =
+    input.coverage === undefined ? [] : normalizeCoverageWriteInput([input.coverage], new Date());
+  const messageIds: string[] = [];
+  const normalizedMessages = input.messages.map(normalizeHistoricalMessage).filter(
+    (
+      update
+    ): update is NormalizedTelegramUpdate & {
+      message: NonNullable<NormalizedTelegramUpdate['message']>;
+    } => update?.message !== undefined
+  );
+
+  await withTelegramHistoryCoverageLocks(
+    input.coverage === undefined ? [] : [input.coverage.chatId],
+    async () =>
+      runtime.database.transaction(async (transaction) => {
+        for (const normalized of normalizedMessages) {
+          const result = await persistTelegramUpdate(transaction, normalized);
+          if (result.message) {
+            messageIds.push(normalized.message.messageId);
+          }
+        }
+
+        if (coverageIntervals.length > 0) {
+          await writeTelegramHistoryCoverageInTransaction(transaction, coverageIntervals);
+        }
+      })
+  );
+
+  for (const normalized of normalizedMessages) {
+    runtime.fileIndexer.enqueue(normalized, 'operator_page');
+  }
+  const coverageEventIntervals = await addCoverageMessageCounts(runtime, coverageIntervals);
+  if (coverageIntervals.length > 0) {
+    runtime.eventBus.publish(
+      createTelegramHistoryCoverageChangedEvent({
+        intervals: coverageEventIntervals
+      })
+    );
+  }
+
+  return { coverageIntervals: coverageEventIntervals, messageIds };
+}
+
+async function addCoverageMessageCounts(
+  runtime: TelegramRpcRuntime,
+  intervals: TelegramHistoryCoverageProofSegment[]
+): Promise<TelegramHistoryCoverageEventInterval[]> {
+  const counts =
+    intervals.length === 0
+      ? []
+      : await countTelegramMessagesInIntervals(runtime.database, intervals);
+  return intervals.map((interval, index) => ({
+    ...interval,
+    messageCount: counts[index] ?? 0
+  }));
+}
+
+async function addPageCoverage(
+  runtime: TelegramRpcRuntime,
+  interval: {
+    chatId: string;
+    endAt: Date | undefined;
+    startAt: Date;
+  }
+): Promise<void> {
+  if (interval.endAt === undefined || interval.startAt >= interval.endAt) {
+    return;
+  }
+
+  await persistMessagesAndCoverage(runtime, {
+    coverage: {
+      chatId: interval.chatId,
+      endAt: interval.endAt,
+      startAt: interval.startAt
+    },
+    messages: []
+  });
 }
 
 async function readPersistedMessages(
@@ -196,36 +280,6 @@ async function readPersistedMessages(
     .filter(isDefined);
 
   return toReadMessages(runtime.database, orderedRows);
-}
-
-function publishMessagesObserved(
-  runtime: TelegramRpcRuntime,
-  observation: {
-    chatId: string;
-    endAt: Date | undefined;
-    fetchedMessages: number;
-    reachedStart: boolean;
-    startAt: Date | null | undefined;
-    storedMessages: number;
-  }
-): void {
-  if (observation.endAt === undefined || observation.startAt === undefined) {
-    return;
-  }
-  if (observation.startAt !== null && observation.startAt >= observation.endAt) {
-    return;
-  }
-
-  runtime.eventBus.publish(
-    createTelegramMessagesObservedEvent({
-      chatId: observation.chatId,
-      endAt: observation.endAt,
-      fetchedMessages: observation.fetchedMessages,
-      reachedStart: observation.reachedStart,
-      startAt: observation.startAt,
-      storedMessages: observation.storedMessages
-    })
-  );
 }
 
 function observedIntervalStartAt(

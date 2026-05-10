@@ -8,15 +8,8 @@ import {
 } from '../../ranges.js';
 import type { TelegramReadClient } from '../../telegram-client.js';
 import { floorToTelegramSecond, normalizeTelegramHistoryInterval } from '../../time.js';
-import type {
-  HistoryCoverageInterval,
-  HistoryInterval,
-  HistoryRange,
-  HistoryTarget
-} from '../../types.js';
+import type { HistoryInterval, HistoryRange, HistoryTarget } from '../../types.js';
 import type { HistoryRuntime } from '../runtime.js';
-
-export const activeBackfillJobStatuses = ['pending', 'running'];
 
 export type HistoryTargetResponse = {
   chatId: string;
@@ -91,54 +84,21 @@ export function isTelegramHistoryPastCovered(interval: HistoryInterval): boolean
   return interval.startAt.getTime() <= TELEGRAM_HISTORY_PAST_BOUNDARY.getTime();
 }
 
-export function clipIntervalsForDisplay(
-  intervals: HistoryInterval[],
+export function clipIntervalsForDisplay<T extends HistoryInterval>(
+  intervals: T[],
   startAt: Date | undefined
-): HistoryInterval[] {
+): T[] {
   if (startAt === undefined) {
     return intervals;
   }
 
   return intervals
     .map((interval) => ({
+      ...interval,
       endAt: interval.endAt,
       startAt: interval.startAt < startAt ? startAt : interval.startAt
     }))
     .filter((interval) => interval.startAt < interval.endAt);
-}
-
-export function countBy<T>(items: T[], key: (item: T) => string): Record<string, number> {
-  const counts: Record<string, number> = {};
-  for (const item of items) {
-    const value = key(item);
-    counts[value] = (counts[value] ?? 0) + 1;
-  }
-  return counts;
-}
-
-export function groupBy<T>(items: T[], key: (item: T) => string): Map<string, T[]> {
-  const groups = new Map<string, T[]>();
-  for (const item of items) {
-    const value = key(item);
-    groups.set(value, [...(groups.get(value) ?? []), item]);
-  }
-  return groups;
-}
-
-export function minOptionalDate(values: Date[]): string | null {
-  if (values.length === 0) {
-    return null;
-  }
-
-  return values.reduce((minimum, value) => (value < minimum ? value : minimum)).toISOString();
-}
-
-export function maxOptionalDate(values: Date[]): string | null {
-  if (values.length === 0) {
-    return null;
-  }
-
-  return values.reduce((maximum, value) => (value > maximum ? value : maximum)).toISOString();
 }
 
 export function requireTelegramReadClient(runtime: HistoryRuntime): TelegramReadClient {
@@ -156,15 +116,4 @@ export function parseOptionalDate(value: string | null): Date | undefined {
 
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? undefined : date;
-}
-
-export function historyCoverageIntervals(
-  intervals: { endAt: Date; startAt: Date }[],
-  chatId: string
-): HistoryCoverageInterval[] {
-  return intervals.map((interval) => ({
-    chatId,
-    endAt: interval.endAt,
-    startAt: interval.startAt
-  }));
 }

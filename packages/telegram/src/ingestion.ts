@@ -53,6 +53,10 @@ import {
   createTelegramTdlibScheduler,
   type TelegramTdlibScheduler
 } from './telegram-tdlib-scheduler.js';
+import {
+  createTelegramLiveCoverageObserver,
+  type TelegramLiveCoverageObserver
+} from './telegram-live-coverage.js';
 
 export type TelegramIngestionOptions = {
   database: AppDatabase;
@@ -113,6 +117,8 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
   let tdlibStatusHeartbeat: ReturnType<typeof setInterval> | undefined;
   let fileIndexer: TelegramFileIndexer | undefined;
   let fileDownloadWorker: TelegramFileDownloadWorker | undefined;
+  let liveCoverageObserver: TelegramLiveCoverageObserver | undefined;
+  let liveCoverageTick: ReturnType<typeof setInterval> | undefined;
   let tdlibScheduler: TelegramTdlibScheduler | undefined;
   let client: TelegramClient | undefined;
   let tdlibStatus: TdlibStatusTracker | undefined;
@@ -135,6 +141,11 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
     const persistenceStats = createPersistenceStats();
     tdlibStatus = createTdlibStatusTracker(eventBus);
     const activeTdlibStatus = tdlibStatus;
+    liveCoverageObserver = createTelegramLiveCoverageObserver({
+      database: options.database,
+      eventBus
+    });
+    const activeLiveCoverageObserver = liveCoverageObserver;
 
     activeClient.on('error', (error: unknown) => {
       console.error(JSON.stringify({ event: 'telegram.error', error: String(error) }));
@@ -142,12 +153,14 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
     activeClient.on('update', (update: unknown) => {
       logSafeTelegramUpdate(update);
       handleTdlibConnectionUpdate(update, activeTdlibStatus);
+      markLiveCoverageConnection(update, activeLiveCoverageObserver);
       void persistLiveUpdate(
         options.database,
         update,
         persistenceStats,
         eventBus,
-        activeFileIndexer
+        activeFileIndexer,
+        activeLiveCoverageObserver
       );
     });
 
@@ -155,7 +168,11 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
     await persistAndLogAuthenticatedClient(options.database, activeTdlibScheduler, eventBus);
     activeTdlibStatus.markAuthenticated(true);
     activeTdlibStatus.markConnectionState('connectionStateReady');
+    await activeLiveCoverageObserver.markConnected();
     tdlibStatusHeartbeat = startTdlibStatusHeartbeat(activeTdlibStatus);
+    liveCoverageTick = setInterval(() => {
+      void activeLiveCoverageObserver.tick();
+    }, TDLIB_STATUS_HEARTBEAT_MS);
     await syncInitialChats(options.database, activeTdlibScheduler, eventBus, activeFileIndexer);
     fileDownloadWorker = startTelegramFileDownloadWorker({
       client: activeTdlibScheduler,
@@ -214,12 +231,17 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
         clearInterval(tdlibStatusHeartbeat);
         tdlibStatusHeartbeat = undefined;
       }
+      if (liveCoverageTick !== undefined) {
+        clearInterval(liveCoverageTick);
+        liveCoverageTick = undefined;
+      }
       fileDownloadWorker?.close();
       fileDownloadWorker = undefined;
       fileIndexer?.close();
       fileIndexer = undefined;
       activeTdlibScheduler.close();
       tdlibScheduler = undefined;
+      await activeLiveCoverageObserver.markDisconnected();
       activeTdlibStatus.markDisconnected();
       const activeTelegramRpcServer = telegramRpcServer;
       const telegramRpcClosed =
@@ -236,11 +258,12 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
       const tdlibClosed = await runShutdownStep('telegram.tdlib.close', () =>
         publishTdlibOperationEvents(eventBus, 'close', {}, () => activeClient.close())
       );
-      const eventBusClosed = await runShutdownStep('telegram.event_bus_close', () =>
-        eventBus.close()
-      );
+      const [liveCoverageStopped, eventBusClosed] = await Promise.all([
+        runShutdownStep('telegram.live_coverage_wait', () => activeLiveCoverageObserver.wait()),
+        runShutdownStep('telegram.event_bus_close', () => eventBus.close())
+      ]);
 
-      return telegramRpcClosed && tdlibClosed && eventBusClosed;
+      return telegramRpcClosed && tdlibClosed && liveCoverageStopped && eventBusClosed;
     });
   } catch (error) {
     if (!startupComplete) {
@@ -250,6 +273,8 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
         eventBus,
         fileIndexer,
         fileDownloadWorker,
+        liveCoverageObserver,
+        liveCoverageTick,
         serviceDirectory,
         tdlibStatus,
         tdlibScheduler,
@@ -267,6 +292,8 @@ async function cleanupTelegramStartupFailure(options: {
   eventBus: EventBus;
   fileIndexer: TelegramFileIndexer | undefined;
   fileDownloadWorker: TelegramFileDownloadWorker | undefined;
+  liveCoverageObserver: TelegramLiveCoverageObserver | undefined;
+  liveCoverageTick: ReturnType<typeof setInterval> | undefined;
   serviceDirectory: ReturnType<typeof createServiceDirectoryClient> | undefined;
   tdlibStatus: TdlibStatusTracker | undefined;
   tdlibScheduler: TelegramTdlibScheduler | undefined;
@@ -277,9 +304,15 @@ async function cleanupTelegramStartupFailure(options: {
   if (options.tdlibStatusHeartbeat !== undefined) {
     clearInterval(options.tdlibStatusHeartbeat);
   }
+  if (options.liveCoverageTick !== undefined) {
+    clearInterval(options.liveCoverageTick);
+  }
   options.fileDownloadWorker?.close();
   options.fileIndexer?.close();
   options.tdlibScheduler?.close();
+  await runShutdownStep('telegram.live_coverage_startup_disconnect', () =>
+    Promise.resolve(options.liveCoverageObserver?.markDisconnected())
+  );
   await runShutdownStep('telegram.tdlib_status_startup_disconnect', () =>
     Promise.resolve(options.tdlibStatus?.markDisconnected())
   );
@@ -300,7 +333,12 @@ async function cleanupTelegramStartupFailure(options: {
       publishTdlibOperationEvents(options.eventBus, 'close', {}, () => client.close())
     );
   }
-  await runShutdownStep('telegram.event_bus_startup_close', () => options.eventBus.close());
+  await Promise.all([
+    runShutdownStep('telegram.live_coverage_startup_wait', () =>
+      Promise.resolve(options.liveCoverageObserver?.wait())
+    ),
+    runShutdownStep('telegram.event_bus_startup_close', () => options.eventBus.close())
+  ]);
 }
 
 function requestProcessShutdown(event: string, error: Error): void {
@@ -396,7 +434,8 @@ async function persistLiveUpdate(
   update: unknown,
   stats: PersistenceStats,
   eventBus: EventBus,
-  fileIndexer: TelegramFileIndexer
+  fileIndexer: TelegramFileIndexer,
+  liveCoverageObserver: TelegramLiveCoverageObserver
 ): Promise<void> {
   const normalized = normalizeTelegramUpdate(update);
   const progressOwners = await applyTelegramFileProgressUpdate(database, update);
@@ -424,6 +463,10 @@ async function persistLiveUpdate(
   }
   if (result.message) {
     stats.messages += 1;
+    const messageDate = normalized.message?.messageDate;
+    if (normalized.message !== undefined && messageDate !== undefined) {
+      void liveCoverageObserver.recordLiveMessage(normalized.message.chatId, messageDate);
+    }
   }
   if (result.user) {
     stats.users += 1;
@@ -476,6 +519,20 @@ function handleTdlibConnectionUpdate(update: unknown, status: TdlibStatusTracker
   }
 
   status.markConnectionState(connectionState);
+}
+
+function markLiveCoverageConnection(update: unknown, observer: TelegramLiveCoverageObserver): void {
+  const connectionState = extractTdlibConnectionState(update);
+  if (connectionState === undefined) {
+    return;
+  }
+
+  if (isTdlibLiveCoverageConnectionState(connectionState)) {
+    void observer.markConnected();
+    return;
+  }
+
+  void observer.markDisconnected();
 }
 
 async function syncInitialChats(

@@ -48,6 +48,12 @@ export default tseslint.config(
   },
   {
     files: ['eslint.config.js', 'scripts/*.mjs'],
-    extends: [tseslint.configs.disableTypeChecked]
+    extends: [tseslint.configs.disableTypeChecked],
+    languageOptions: {
+      globals: {
+        fetch: 'readonly',
+        URL: 'readonly'
+      }
+    }
   }
 );

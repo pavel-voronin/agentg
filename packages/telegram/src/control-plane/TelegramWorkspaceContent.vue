@@ -17,12 +17,10 @@ import { chatSidebarView } from './chatSidebarView.js';
 import ChatSidebar from './components/ChatSidebar.vue';
 import { readStorage, writeStorage } from './storage.js';
 import { useTelegramDirectoryProjection } from './telegramDirectoryProjection.js';
-import { useTelegramHistoryStatsProjection } from './telegramHistoryStatsProjection.js';
 import type {
   ChatListMode,
   ChatNavigation,
   ChatPlacement,
-  ChatStats,
   ControlPlaneChat,
   TelegramDirectoryChat,
   TelegramDirectoryFolder
@@ -60,7 +58,6 @@ type ChatHeaderView = {
 const DEFAULT_CHAT_LIMIT = 500;
 const telegramStoragePrefix = 'agentg.telegram.controlPlane';
 const directoryProjection = useTelegramDirectoryProjection();
-const historyStatsProjection = useTelegramHistoryStatsProjection();
 const slotRuntime = useSlotRuntime();
 const activePrimaryTabId = ref(readStorage(`${telegramStoragePrefix}.primaryTabId`) ?? '');
 const chatFilter = ref(readStorage(`${telegramStoragePrefix}.chatFilter`) ?? '');
@@ -90,9 +87,7 @@ const visibleDirectoryChats = computed(() => {
 
   return limitChats(matchingChats, DEFAULT_CHAT_LIMIT, selectedChatId.value ?? undefined);
 });
-const chats = computed<ControlPlaneChat[]>(() =>
-  chatsWithStats(visibleDirectoryChats.value, historyStatsProjection.statsByChat.value)
-);
+const chats = computed<ControlPlaneChat[]>(() => controlPlaneChats(visibleDirectoryChats.value));
 const chatSidebar = computed(() =>
   chatSidebarView(
     {
@@ -281,23 +276,11 @@ function providerFileUrl(url: string | null): string | null {
   return `/control-plane/provider-files/telegram/${url.slice(1).split('/').map(encodeURIComponent).join('/')}`;
 }
 
-function chatsWithStats(
-  visibleChats: TelegramDirectoryChat[],
-  statsByChat: ReadonlyMap<string, ChatStats>
-): ControlPlaneChat[] {
-  return visibleChats.map((chat) => {
-    const stats = statsByChat.get(chat.id) ?? emptyChatStats(chat.id);
-    return {
-      ...chat,
-      _model: 'telegram.chat',
-      coverageIntervals: stats.coverageIntervals,
-      coverageNewestAt: stats.coverageNewestAt,
-      coverageOldestAt: stats.coverageOldestAt,
-      pendingJobs: stats.pendingJobs,
-      runningJobs: stats.runningJobs,
-      targets: stats.targets
-    };
-  });
+function controlPlaneChats(visibleChats: TelegramDirectoryChat[]): ControlPlaneChat[] {
+  return visibleChats.map((chat) => ({
+    ...chat,
+    _model: 'telegram.chat'
+  }));
 }
 
 async function openChat(chatId: string): Promise<void> {
@@ -602,18 +585,6 @@ function selectChatList(selection: { folderId: number | null; mode: ChatListMode
     chatFolderId.value = selection.folderId;
     writeStoredChatListSelection(selection);
   }
-}
-
-function emptyChatStats(chatId: string): ChatStats {
-  return {
-    chatId,
-    coverageIntervals: 0,
-    coverageNewestAt: null,
-    coverageOldestAt: null,
-    pendingJobs: 0,
-    runningJobs: 0,
-    targets: 0
-  };
 }
 
 function readStoredChatListSelection(): { folderId: number | null; mode: ChatListMode } {

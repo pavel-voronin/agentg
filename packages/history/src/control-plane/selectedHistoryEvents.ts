@@ -2,7 +2,6 @@ import type {
   ControlPlaneEvent,
   HistoryBoundary,
   HistoryInterval,
-  HistoryJob,
   HistoryRange,
   HistoryTarget,
   SelectedHistoryState
@@ -14,11 +13,6 @@ type DatedInterval = {
   startAt: Date;
 };
 
-type TimelineJobEvent = {
-  chatId: string;
-  job: HistoryJob;
-};
-
 const TELEGRAM_HISTORY_TICK_MS = 1000;
 
 export function applyHistoryTimelineEvent(
@@ -26,7 +20,7 @@ export function applyHistoryTimelineEvent(
   event: ControlPlaneEvent
 ): boolean {
   const type = event.type;
-  if (type === 'history.coverage.changed') {
+  if (type === 'telegram.history.coverage.changed') {
     return applyCoverageChanged(state, event);
   }
   if (type === 'history.target.upserted') {
@@ -34,18 +28,6 @@ export function applyHistoryTimelineEvent(
   }
   if (type === 'history.target.deleted' || type === 'history.target.auto_deleted') {
     return applyTargetDeleted(state, event);
-  }
-  if (type === 'history.job.created') {
-    return applyJobCreated(state, event);
-  }
-  if (type === 'history.job.started' || type === 'history.job.progress') {
-    return applyJobRunning(state, event);
-  }
-  if (type === 'history.job.completed') {
-    return applyJobCompleted(state, event);
-  }
-  if (type === 'history.job.failed') {
-    return applyJobFailed(state, event);
   }
   return false;
 }
@@ -111,67 +93,6 @@ function applyTargetDeleted(state: SelectedHistoryState, event: ControlPlaneEven
   return true;
 }
 
-function applyJobRunning(state: SelectedHistoryState, event: ControlPlaneEvent): boolean {
-  const jobEvent = historyJobFromEvent(event, 'running');
-  if (jobEvent === null) {
-    return false;
-  }
-  if (jobEvent.chatId !== selectedChatId(state)) {
-    return false;
-  }
-
-  state.jobs = upsertJob(state.jobs, jobEvent.job);
-  return true;
-}
-
-function applyJobCreated(state: SelectedHistoryState, event: ControlPlaneEvent): boolean {
-  const jobEvent = historyJobFromEvent(event, 'pending');
-  if (jobEvent === null) {
-    return false;
-  }
-  if (jobEvent.chatId !== selectedChatId(state)) {
-    return false;
-  }
-
-  state.jobs = upsertJob(state.jobs, jobEvent.job);
-  return true;
-}
-
-function applyJobCompleted(state: SelectedHistoryState, event: ControlPlaneEvent): boolean {
-  const jobEvent = historyJobFromEvent(event, 'running');
-  if (jobEvent === null) {
-    return false;
-  }
-  if (jobEvent.chatId !== selectedChatId(state)) {
-    return false;
-  }
-
-  const data = asRecord(event.data);
-  const before = state.jobs.length;
-  const countChanged = applyCompletedJobCoverageCount(state, jobEvent.job, event);
-  state.jobs = state.jobs.filter((job) => job.id !== jobEvent.job.id);
-  const beginningChanged = applyHistoryBeginningReached(state, data);
-  return countChanged || state.jobs.length !== before || beginningChanged;
-}
-
-function applyJobFailed(state: SelectedHistoryState, event: ControlPlaneEvent): boolean {
-  const jobEvent = historyJobFromEvent(event, 'pending');
-  if (jobEvent === null) {
-    return false;
-  }
-  if (jobEvent.chatId !== selectedChatId(state)) {
-    return false;
-  }
-
-  const existing = state.jobs.find((job) => job.id === jobEvent.job.id);
-  state.jobs = upsertJob(state.jobs, {
-    ...(existing ?? jobEvent.job),
-    status: 'pending',
-    updatedAt: jobEvent.job.updatedAt
-  });
-  return true;
-}
-
 function recomputeTimelineCoverage(state: SelectedHistoryState): void {
   const displayStartAt = displayStartDate(state);
   const coverage = clipIntervalsForDisplay(mergeCoverageIntervals(state.coverage), displayStartAt);
@@ -185,78 +106,12 @@ function recomputeTimelineCoverage(state: SelectedHistoryState): void {
   state.missing = subtractIntervals(desired, coverage);
 }
 
-function applyCompletedJobCoverageCount(
-  state: SelectedHistoryState,
-  job: HistoryJob,
-  event: ControlPlaneEvent
-): boolean {
-  const messageCount = nonNegativeInteger(asRecord(event.data)?.storedMessages);
-  if (messageCount === undefined) {
-    return false;
-  }
-
-  let changed = false;
-  state.coverage = state.coverage.map((interval) => {
-    if (!containsInterval(interval, job)) {
-      return interval;
-    }
-    const nextMessageCount = sameInterval(interval, job)
-      ? messageCount
-      : (interval.messageCount ?? 0) + messageCount;
-    if (interval.messageCount === nextMessageCount) {
-      return interval;
-    }
-    changed = true;
-    return {
-      ...interval,
-      messageCount: nextMessageCount
-    };
-  });
-  return changed;
-}
-
-function applyHistoryBeginningReached(
-  state: SelectedHistoryState,
-  data: Record<string, unknown> | undefined
-): boolean {
-  if (data?.reachedBeginning !== true || state.chat === null) {
-    return false;
-  }
-
-  let changed = false;
-  if (!state.chat.historyBeginningReached) {
-    state.chat.historyBeginningReached = true;
-    changed = true;
-  }
-
-  const historyStartAt = normalizedDateString(data.historyStartAt);
-  if (
-    historyStartAt !== undefined &&
-    shouldReplaceHistoryStart(state.chat.historyStartAt, historyStartAt)
-  ) {
-    state.chat.historyStartAt = historyStartAt;
-    recomputeTimelineCoverage(state);
-    changed = true;
-  }
-
-  return changed;
-}
-
-function shouldReplaceHistoryStart(current: string | null, next: string): boolean {
-  if (current === null) {
-    return true;
-  }
-  const currentTime = Date.parse(current);
-  const nextTime = Date.parse(next);
-  return !Number.isFinite(currentTime) || (Number.isFinite(nextTime) && nextTime < currentTime);
-}
-
 function coverageEventIntervals(event: ControlPlaneEvent): (HistoryInterval & {
   chatId: string;
 })[] {
   const data = asRecord(event.data);
   return asRecords(data?.intervals).flatMap((interval) => {
-    const chatId = asString(interval.chatId);
+    const chatId = asString(asRecord(interval.chat)?.id) ?? asString(interval.chatId);
     const normalized = normalizeHistoryInterval(interval);
     return chatId === undefined || normalized === null ? [] : [{ ...normalized, chatId }];
   });
@@ -280,43 +135,6 @@ function historyTargetFromEvent(event: ControlPlaneEvent): HistoryTarget | null 
     projected,
     range,
     ...(templateId === undefined ? {} : { templateId })
-  };
-}
-
-function historyJobFromEvent(
-  event: ControlPlaneEvent,
-  status: 'pending' | 'running'
-): TimelineJobEvent | null {
-  const data = asRecord(event.data);
-  const chatId = asString(data?.chatId);
-  const id = asString(data?.jobId);
-  const startAt = asString(data?.jobStart);
-  const endAt = asString(data?.jobEnd);
-
-  if (
-    chatId === undefined ||
-    id === undefined ||
-    startAt === undefined ||
-    endAt === undefined ||
-    !isValidInterval(startAt, endAt)
-  ) {
-    return null;
-  }
-
-  const cursorMessageId = data?.cursorMessageId;
-  return {
-    chatId,
-    job: {
-      ...(typeof cursorMessageId === 'number' && Number.isSafeInteger(cursorMessageId)
-        ? { cursor: { messageId: cursorMessageId } }
-        : {}),
-      endAt,
-      id,
-      startAt,
-      status,
-      telegramChatId: chatId,
-      updatedAt: eventOccurredAt(event)
-    }
   };
 }
 
@@ -501,23 +319,8 @@ function intervalToState(interval: DatedInterval): HistoryInterval {
   };
 }
 
-function upsertJob(jobs: HistoryJob[], nextJob: HistoryJob): HistoryJob[] {
-  const existing = jobs.find((job) => job.id === nextJob.id);
-  const merged: HistoryJob = existing === undefined ? nextJob : { ...existing, ...nextJob };
-
-  return [...jobs.filter((job) => job.id !== nextJob.id), merged].sort(compareJobs);
-}
-
 function compareTargets(left: HistoryTarget, right: HistoryTarget): number {
   return left.id.localeCompare(right.id);
-}
-
-function compareJobs(left: HistoryJob, right: HistoryJob): number {
-  const endDifference = Date.parse(right.endAt) - Date.parse(left.endAt);
-  if (endDifference !== 0) {
-    return endDifference;
-  }
-  return Date.parse(right.startAt) - Date.parse(left.startAt);
 }
 
 function compareIntervals(left: DatedInterval, right: DatedInterval): number {
@@ -537,46 +340,10 @@ function selectedChatId(state: SelectedHistoryState): string | null {
   return state.chat?.id ?? null;
 }
 
-function eventOccurredAt(event: ControlPlaneEvent): string {
-  if (event.occurredAt instanceof Date) {
-    return event.occurredAt.toISOString();
-  }
-  if (typeof event.occurredAt === 'string' && event.occurredAt.length > 0) {
-    return event.occurredAt;
-  }
-  return '';
-}
-
 function isValidInterval(startAt: string, endAt: string): boolean {
   const start = Date.parse(startAt);
   const end = Date.parse(endAt);
   return Number.isFinite(start) && Number.isFinite(end) && start < end;
-}
-
-function sameInterval(left: HistoryInterval, right: HistoryInterval): boolean {
-  return (
-    Date.parse(left.startAt) === Date.parse(right.startAt) &&
-    Date.parse(left.endAt) === Date.parse(right.endAt)
-  );
-}
-
-function containsInterval(container: HistoryInterval, interval: HistoryInterval): boolean {
-  return (
-    Date.parse(container.startAt) <= Date.parse(interval.startAt) &&
-    Date.parse(container.endAt) >= Date.parse(interval.endAt)
-  );
-}
-
-function nonNegativeInteger(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
-}
-
-function normalizedDateString(value: unknown): string | undefined {
-  if (typeof value !== 'string' || value.length === 0) {
-    return undefined;
-  }
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
 }
 
 function setMergedMessageCount(

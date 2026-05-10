@@ -29,7 +29,6 @@ import {
 } from './telegram-file-store.js';
 import { invokeTdlibWithEvents, type TdlibInvoker } from './telegram-operation-events.js';
 import { isTelegramTdlibUnderNavigationPressure } from './telegram-tdlib-scheduler.js';
-import { telegramTdlibPriorities } from './telegram-tdlib-priority.js';
 import {
   getDirectoryEntryByChatId,
   readMessageSelection,
@@ -266,7 +265,7 @@ async function downloadTdlibFile(
         synchronous: true
       },
       {
-        priority: row.priority ?? telegramTdlibPriorities.p4
+        priority: row.priority
       }
     )
   );

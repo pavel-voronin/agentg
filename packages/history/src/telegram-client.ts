@@ -45,6 +45,34 @@ export type TelegramHistoryFetchPageResult =
       storedMessages: number;
     };
 
+export type TelegramHistoryInterval = {
+  endAt: string;
+  startAt: string;
+};
+
+export type TelegramHistoryCoverageSegment = TelegramHistoryInterval & {
+  coveredAt: string;
+};
+
+export type TelegramHistoryCoverageProofSegment = TelegramHistoryInterval & {
+  provedAt: string;
+};
+
+export type TelegramGetHistoryCoverageResult = {
+  coverage: TelegramHistoryCoverageSegment[];
+  proofs: TelegramHistoryCoverageProofSegment[];
+};
+
+export type TelegramEnsureHistoryCoverageResult = {
+  alreadyCovered: boolean;
+  coveredIntervals: TelegramHistoryInterval[];
+  fetchedMessages: number;
+  pages: number;
+  reachedBeginning: boolean;
+  remainingIntervals: TelegramHistoryInterval[];
+  storedMessages: number;
+};
+
 export type TelegramMessageInterval = {
   endAt: string;
   startAt: string;
@@ -156,6 +184,10 @@ export type TelegramReadClient = {
     request: { chatId: string },
     options?: InternalRpcCallOptions
   ): Promise<TelegramChatHistoryFacts>;
+  getHistoryCoverage(
+    request: { chatId: string },
+    options?: InternalRpcCallOptions
+  ): Promise<TelegramGetHistoryCoverageResult>;
   getMessage(
     request: {
       chatId: string;
@@ -186,6 +218,17 @@ export type TelegramReadClient = {
 
 export type TelegramHistoryClient = {
   close?(): void;
+  ensureHistoryCoverage(
+    request: {
+      chatId: string;
+      endAt: string;
+      limit?: number;
+      maxPages?: number;
+      requestDelayMs?: number;
+      startAt: string;
+    },
+    options?: InternalRpcCallOptions
+  ): Promise<TelegramEnsureHistoryCoverageResult>;
   fetchPage(
     request: TelegramHistoryFetchPageRequest,
     options?: InternalRpcCallOptions
@@ -218,6 +261,12 @@ export function createTrpcTelegramHistoryClient(
         counts: number[];
       }>;
     },
+    ensureHistoryCoverage(request, callOptions) {
+      return telegram.ensureHistoryCoverage(
+        request,
+        callOptions
+      ) as Promise<TelegramEnsureHistoryCoverageResult>;
+    },
     fetchPage(request, callOptions) {
       return telegram.fetchPage(request, callOptions) as Promise<TelegramHistoryFetchPageResult>;
     },
@@ -229,6 +278,12 @@ export function createTrpcTelegramHistoryClient(
         request,
         callOptions
       ) as Promise<TelegramChatHistoryFacts>;
+    },
+    getHistoryCoverage(request, callOptions) {
+      return telegram.getHistoryCoverage(
+        request,
+        callOptions
+      ) as Promise<TelegramGetHistoryCoverageResult>;
     },
     getMessage(request, callOptions) {
       return telegram.getMessage(request, callOptions) as Promise<{
@@ -275,6 +330,12 @@ export function createServiceDirectoryTelegramHistoryClient(
         callOptions
       ) as Promise<{ counts: number[] }>;
     },
+    ensureHistoryCoverage(request, callOptions) {
+      return clientFor('telegram.ensureHistoryCoverage').ensureHistoryCoverage(
+        request,
+        callOptions
+      ) as Promise<TelegramEnsureHistoryCoverageResult>;
+    },
     fetchPage(request, callOptions) {
       return clientFor('telegram.fetchPage').fetchPage(
         request,
@@ -291,6 +352,12 @@ export function createServiceDirectoryTelegramHistoryClient(
         request,
         callOptions
       ) as Promise<TelegramChatHistoryFacts>;
+    },
+    getHistoryCoverage(request, callOptions) {
+      return clientFor('telegram.getHistoryCoverage').getHistoryCoverage(
+        request,
+        callOptions
+      ) as Promise<TelegramGetHistoryCoverageResult>;
     },
     getMessage(request, callOptions) {
       return clientFor('telegram.getMessage').getMessage(request, callOptions) as Promise<{

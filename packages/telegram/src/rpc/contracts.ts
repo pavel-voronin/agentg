@@ -30,19 +30,27 @@ export const telegramHistoryFetchPageInputSchema = z.object({
   startAt: z.string().min(1)
 });
 
+export const telegramHistoryIntervalSchema = z.object({
+  endAt: z.string().min(1),
+  startAt: z.string().min(1)
+});
+
 export const telegramHistoryFetchPageResultSchema = z.discriminatedUnion('kind', [
   z.object({
+    coveredInterval: telegramHistoryIntervalSchema.optional(),
     fetchedMessages: z.literal(0),
     kind: z.literal('no_messages_before_end'),
     storedMessages: z.literal(0)
   }),
   z.object({
     anchorMessageDate: z.string(),
+    coveredInterval: telegramHistoryIntervalSchema.optional(),
     fetchedMessages: z.literal(0),
     kind: z.literal('anchor_before_start'),
     storedMessages: z.literal(0)
   }),
   z.object({
+    coveredInterval: telegramHistoryIntervalSchema.optional(),
     crossedStart: z.boolean(),
     fetchedMessages: z.number().int().nonnegative(),
     kind: z.literal('page'),
@@ -317,10 +325,47 @@ export const telegramCountMessagesInIntervalsOutputSchema = z.object({
   counts: z.array(nonNegativeIntegerSchema)
 });
 
+export const telegramHistoryCoverageSegmentSchema = telegramHistoryIntervalSchema.extend({
+  coveredAt: z.string().min(1)
+});
+
+export const telegramHistoryCoverageProofSegmentSchema = telegramHistoryIntervalSchema.extend({
+  provedAt: z.string().min(1)
+});
+
+export const telegramGetHistoryCoverageInputSchema = z.object({
+  chatId: nonEmptyStringSchema
+});
+
+export const telegramGetHistoryCoverageOutputSchema = z.object({
+  coverage: z.array(telegramHistoryCoverageSegmentSchema),
+  proofs: z.array(telegramHistoryCoverageProofSegmentSchema)
+});
+
+export const telegramEnsureHistoryCoverageInputSchema = z.object({
+  chatId: nonEmptyStringSchema,
+  endAt: nonEmptyStringSchema,
+  limit: positiveIntegerSchema.optional(),
+  maxPages: positiveIntegerSchema.optional(),
+  requestDelayMs: nonNegativeIntegerSchema.optional(),
+  startAt: nonEmptyStringSchema
+});
+
+export const telegramEnsureHistoryCoverageOutputSchema = z.object({
+  alreadyCovered: z.boolean(),
+  coveredIntervals: z.array(telegramHistoryIntervalSchema),
+  fetchedMessages: nonNegativeIntegerSchema,
+  pages: nonNegativeIntegerSchema,
+  remainingIntervals: z.array(telegramHistoryIntervalSchema),
+  reachedBeginning: z.boolean(),
+  storedMessages: nonNegativeIntegerSchema
+});
+
 export type TelegramHistoryChat = z.infer<typeof telegramHistoryChatSchema>;
 export type TelegramHistoryListChatsRequest = z.infer<typeof telegramHistoryListChatsInputSchema>;
 export type TelegramHistoryFetchPageRequest = z.infer<typeof telegramHistoryFetchPageInputSchema>;
 export type TelegramHistoryFetchPageResult = z.infer<typeof telegramHistoryFetchPageResultSchema>;
+export type TelegramHistoryInterval = z.infer<typeof telegramHistoryIntervalSchema>;
 export type TelegramReadChat = z.infer<typeof telegramReadChatSchema>;
 export type TelegramFileRef = z.infer<typeof telegramFileRefSchema>;
 export type TelegramMessageTextEntity = z.infer<typeof telegramMessageTextEntitySchema>;
@@ -351,4 +396,18 @@ export type TelegramCountMessagesInIntervalsInput = z.infer<
 >;
 export type TelegramCountMessagesInIntervalsOutput = z.infer<
   typeof telegramCountMessagesInIntervalsOutputSchema
+>;
+export type TelegramHistoryCoverageSegment = z.infer<typeof telegramHistoryCoverageSegmentSchema>;
+export type TelegramHistoryCoverageProofSegment = z.infer<
+  typeof telegramHistoryCoverageProofSegmentSchema
+>;
+export type TelegramGetHistoryCoverageInput = z.infer<typeof telegramGetHistoryCoverageInputSchema>;
+export type TelegramGetHistoryCoverageOutput = z.infer<
+  typeof telegramGetHistoryCoverageOutputSchema
+>;
+export type TelegramEnsureHistoryCoverageInput = z.infer<
+  typeof telegramEnsureHistoryCoverageInputSchema
+>;
+export type TelegramEnsureHistoryCoverageOutput = z.infer<
+  typeof telegramEnsureHistoryCoverageOutputSchema
 >;

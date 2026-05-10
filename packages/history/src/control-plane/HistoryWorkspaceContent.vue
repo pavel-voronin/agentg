@@ -13,7 +13,6 @@ import {
   type ControlPlaneEvent,
   type HistoryBoundary,
   type HistoryInterval,
-  type HistoryJob,
   type HistoryRange,
   type HistoryTarget,
   type SelectedHistoryChat,
@@ -172,7 +171,6 @@ function normalizeSelectedHistoryState(value: unknown): SelectedHistoryState {
     chat,
     coverage: asArray(input?.coverage).map(normalizeHistoryInterval),
     desired: asArray(input?.desired).map(normalizeHistoryInterval),
-    jobs: asArray(input?.jobs).map(normalizeHistoryJob),
     missing: asArray(input?.missing).map(normalizeHistoryInterval),
     targets: asArray(input?.targets).map(normalizeHistoryTarget)
   };
@@ -203,20 +201,6 @@ function normalizeHistoryInterval(value: unknown): HistoryInterval {
       input?.messageCount === undefined ? undefined : asNonNegativeInteger(input.messageCount),
     startAt: asString(input?.startAt) ?? ''
   }) as HistoryInterval;
-}
-
-function normalizeHistoryJob(value: unknown): HistoryJob {
-  const input = asRecord(value);
-  const cursor = asRecord(input?.cursor);
-  return removeUndefinedProperties({
-    ...(cursor === undefined ? {} : { cursor }),
-    endAt: asString(input?.endAt) ?? '',
-    id: asString(input?.id) ?? '',
-    startAt: asString(input?.startAt) ?? '',
-    status: asString(input?.status) ?? '',
-    telegramChatId: asString(input?.telegramChatId),
-    updatedAt: asString(input?.updatedAt) ?? ''
-  }) as HistoryJob;
 }
 
 function normalizeHistoryTarget(value: unknown): HistoryTarget {

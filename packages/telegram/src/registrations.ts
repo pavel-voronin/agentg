@@ -12,10 +12,10 @@ const TELEGRAM_DOMAIN_EVENT_TYPES = [
   'telegram.chat.updated',
   'telegram.chat_folders.updated',
   'telegram.files.queue.updated',
+  'telegram.history.coverage.changed',
   'telegram.message.created',
   'telegram.message.deleted',
   'telegram.message.updated',
-  'telegram.messages.observed',
   'telegram.status',
   'telegram.user.updated'
 ] as const;

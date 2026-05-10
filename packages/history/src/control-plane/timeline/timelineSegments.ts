@@ -2,24 +2,15 @@ import type { SelectedHistoryState } from '../views.js';
 import { timelinePosition } from './timelineBounds.js';
 import { formatDate } from './timelineFormatters.js';
 import {
-  jobKey,
   mergeHistoryDetailsForDisplay,
   normalizeIntervals,
   timelineCoverage,
-  timelineJobs,
-  toDates,
-  visibleCoverageIntervals,
-  visibleJobDetails
+  visibleCoverageIntervals
 } from './timelineIntervals.js';
-import {
-  coverageSegmentTooltip,
-  jobSegmentTooltip,
-  timelineHoverItem
-} from './timelineTooltips.js';
+import { coverageSegmentTooltip, timelineHoverItem } from './timelineTooltips.js';
 import type {
   TimelineCoverageInterval,
   TimelineHistoryDetail,
-  TimelineJob,
   TimelineSegment
 } from './timelineTypes.js';
 
@@ -54,23 +45,6 @@ export function coverageTimelineSegment(
     kind: 'coverage',
     position
   };
-}
-
-export function jobTimelineSegment(job: TimelineJob, min: Date, max: Date): TimelineSegment[] {
-  const interval = toDates(job);
-  if (!interval || interval.endAt <= min || interval.startAt >= max) return [];
-  const position = timelinePosition(interval, min, max, 0.25);
-  const tooltip = jobSegmentTooltip(job, interval);
-  return [
-    {
-      ariaLabel: `${tooltip.range}, ${tooltip.count ?? ''}`,
-      hover: timelineHoverItem('job', jobKey(job), tooltip),
-      key: jobKey(job),
-      kind: 'job',
-      position,
-      running: job.status === 'running'
-    }
-  ];
 }
 
 export function targetHighlightTimelineSegments(
@@ -110,11 +84,7 @@ export function timelineEmptyGaps(
   min: Date,
   max: Date
 ): { endAt: Date; startAt: Date }[] {
-  const blocks = [
-    ...visibleCoverageIntervals(timelineCoverage(data), min, max),
-    ...targetDetails,
-    ...visibleJobDetails(timelineJobs(data), min, max)
-  ];
+  const blocks = [...visibleCoverageIntervals(timelineCoverage(data), min, max), ...targetDetails];
   const normalized = normalizeIntervals(blocks);
   const gaps: { endAt: Date; startAt: Date }[] = [];
   for (let index = 1; index < normalized.length; index += 1) {

@@ -87,6 +87,9 @@ type WheelGesture = {
   timeoutId: ReturnType<typeof setTimeout> | undefined;
 };
 
+const TIMELINE_COVERAGE_SELECTOR = '[data-kind="coverage"]';
+const TIMELINE_GAP_SELECTOR = '[data-gap-start][data-gap-end]';
+
 export function useTimelineInteraction(options: TimelineInteractionOptions) {
   const coverageTableOpen = ref(false);
   const highlightedKeys = ref<string[]>([]);
@@ -224,7 +227,7 @@ export function useTimelineInteraction(options: TimelineInteractionOptions) {
   function onTrackPointerDown(event: Event): void {
     const pointer = pointerEvent(event);
     if (pointer.button !== 0) return;
-    if (!pointer.altKey && hasClosest(pointer.target, '.segment-coverage')) {
+    if (!pointer.altKey && hasClosest(pointer.target, TIMELINE_COVERAGE_SELECTOR)) {
       return;
     }
     const model = view.value;
@@ -235,7 +238,7 @@ export function useTimelineInteraction(options: TimelineInteractionOptions) {
     const rect = currentTrack.getBoundingClientRect();
     const startX = clamp(pointer.clientX - rect.left, 0, rect.width);
     const gap = pointer.target as ElementLike | null;
-    const gapElement = gap?.closest?.('.coverage-gap') as {
+    const gapElement = gap?.closest?.(TIMELINE_GAP_SELECTOR) as {
       getAttribute?: (name: string) => string | null;
     } | null;
     selection.value = {

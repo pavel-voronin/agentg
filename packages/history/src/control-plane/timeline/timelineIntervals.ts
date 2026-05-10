@@ -3,17 +3,12 @@ import type {
   TimelineCoverageInterval,
   TimelineHistoryDetail,
   TimelineInterval,
-  TimelineJob,
   TimelineRawInterval,
   TimelineTarget
 } from './timelineTypes.js';
 
 export function coverageIntervalKey(interval: TimelineInterval): string {
   return `${interval.startAt.toISOString()}|${interval.endAt.toISOString()}`;
-}
-
-export function jobKey(job: TimelineJob): string {
-  return String(job.id ?? '');
 }
 
 export function mergeHistoryDetailsForDisplay(
@@ -66,10 +61,6 @@ export function timelineCoverage(data: SelectedHistoryState): TimelineRawInterva
   return data.coverage;
 }
 
-export function timelineJobs(data: SelectedHistoryState): TimelineJob[] {
-  return data.jobs;
-}
-
 export function timelineTargets(data: SelectedHistoryState): TimelineTarget[] {
   return data.targets;
 }
@@ -111,26 +102,6 @@ function setMergedMessageCount(
     return;
   }
   interval.messageCount = count;
-}
-
-export function visibleJobDetails(
-  jobs: TimelineJob[],
-  min: Date,
-  max: Date
-): TimelineHistoryDetail[] {
-  return jobs.flatMap((job) => {
-    const interval = toDates(job);
-    if (!interval || interval.endAt <= min || interval.startAt >= max) return [];
-    return [
-      {
-        endAt: interval.endAt,
-        item: job,
-        key: jobKey(job),
-        startAt: interval.startAt,
-        type: 'job' as const
-      }
-    ];
-  });
 }
 
 export function visibleTargetDetails(

@@ -41,14 +41,6 @@ function isHighlighted(key: string): boolean {
               <th class="history-details-table__heading">Target id</th>
               <th class="history-details-table__delete-head"></th>
             </tr>
-            <tr v-else-if="section.type === 'job'">
-              <th class="history-details-table__heading">Start</th>
-              <th class="history-details-table__heading">End</th>
-              <th class="history-details-table__heading">Duration</th>
-              <th class="history-details-table__heading">Status</th>
-              <th class="history-details-table__heading">id</th>
-              <th class="history-details-table__heading">cursor</th>
-            </tr>
             <tr v-else>
               <th class="history-details-table__heading">Start</th>
               <th class="history-details-table__heading">End</th>
@@ -98,16 +90,6 @@ function isHighlighted(key: string): boolean {
                   >
                     Delete
                   </UiButton>
-                </td>
-              </template>
-
-              <template v-else-if="detail.type === 'job'">
-                <td class="history-details-table__cell">{{ detail.status }}</td>
-                <td class="history-details-table__cell">
-                  <code class="history-details-table__code">{{ detail.id }}</code>
-                </td>
-                <td class="history-details-table__cell">
-                  <code v-if="detail.cursor">yes</code>
                 </td>
               </template>
 

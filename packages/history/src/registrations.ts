@@ -12,13 +12,6 @@ export function createHistoryServiceManifest(config: {
       config.controlPlaneAssetVersions
     ),
     events: [
-      'history.coverage.changed',
-      'history.job.completed',
-      'history.job.created',
-      'history.job.failed',
-      'history.job.progress',
-      'history.job.started',
-      'history.reconcile.completed',
       'history.sync.accepted',
       'history.sync.completed',
       'history.sync.failed',

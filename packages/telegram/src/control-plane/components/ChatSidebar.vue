@@ -231,11 +231,6 @@ onBeforeUnmount(() => {
               <div class="chat-sidebar__chat-title">{{ chat.title }}</div>
             </div>
           </div>
-          <div class="chat-sidebar__chat-stats">
-            <span>targets {{ chat.targets }}</span>
-            <span>coverage {{ chat.coverageIntervals }}</span>
-            <span>jobs {{ chat.pendingJobs }}/{{ chat.runningJobs }}</span>
-          </div>
         </button>
 
         <div v-if="view.emptyMessage" class="chat-sidebar__empty-message">
@@ -378,10 +373,6 @@ onBeforeUnmount(() => {
 
 .chat-sidebar__chat-title {
   @apply min-w-0 truncate font-semibold;
-}
-
-.chat-sidebar__chat-stats {
-  @apply mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-500;
 }
 
 .chat-sidebar__empty-message {

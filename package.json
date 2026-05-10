@@ -40,7 +40,6 @@
     "db:migrate": "npm --workspace @agentg/telegram run db:migrate && npm --workspace @agentg/history run db:migrate && npm --workspace @agentg/summaries run db:migrate",
     "db:ps": "docker compose ps postgres",
     "db:logs": "docker compose logs --tail=50 postgres",
-    "backfill:status": "bash scripts/backfill-status.sh",
     "infra:up": "docker compose up -d postgres nats --quiet-pull",
     "compose:history": "docker compose --profile history up --build history",
     "compose:control-plane": "docker compose --profile control-plane up --build control-plane",

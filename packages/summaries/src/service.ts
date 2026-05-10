@@ -145,7 +145,7 @@ function subscribeSummariesService(
     eventBus.subscribe('telegram.message.deleted', async (event) => {
       await handleSummariesEvent(runtime, event);
     }),
-    eventBus.subscribe('history.coverage.changed', async (event) => {
+    eventBus.subscribe('telegram.history.coverage.changed', async (event) => {
       await handleSummariesEvent(runtime, event);
     }),
     eventBus.subscribe('history.target.deleted', async (event) => {

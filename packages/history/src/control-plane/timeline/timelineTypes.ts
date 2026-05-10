@@ -33,7 +33,7 @@ export type TimelineHoverItem = {
   toNote?: string;
 };
 
-export type TimelineDetailType = 'coverage' | 'job' | 'target';
+export type TimelineDetailType = 'coverage' | 'target';
 
 export type TimelineDetail = {
   count?: string;
@@ -43,7 +43,7 @@ export type TimelineDetail = {
   endNote?: string;
   endValue: string;
   id?: string;
-  item: TimelineCoverageInterval | TimelineJob | TimelineTarget;
+  item: TimelineCoverageInterval | TimelineTarget;
   key: string;
   startNote?: string;
   startValue: string;
@@ -74,14 +74,6 @@ export type TimelineSegment =
       key: string;
       position: TimelinePosition;
       startIso: string;
-    }
-  | {
-      kind: 'job';
-      ariaLabel: string;
-      hover: TimelineHoverItem;
-      key: string;
-      position: TimelinePosition;
-      running: boolean;
     }
   | {
       kind: 'target-highlight';
@@ -142,12 +134,6 @@ export type TimelineRange = {
   start?: TimelineBoundary;
 };
 
-export type TimelineJob = TimelineRawInterval & {
-  cursor?: unknown;
-  id?: number | string;
-  status?: string;
-};
-
 export type TimelineHistoryDetailCommon = {
   endAt: Date;
   key: string;
@@ -158,10 +144,6 @@ export type TimelineHistoryDetail =
   | (TimelineHistoryDetailCommon & {
       item: TimelineCoverageInterval;
       type: 'coverage';
-    })
-  | (TimelineHistoryDetailCommon & {
-      item: TimelineJob;
-      type: 'job';
     })
   | (TimelineHistoryDetailCommon & {
       item: TimelineTarget;

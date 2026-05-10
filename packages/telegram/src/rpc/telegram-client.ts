@@ -7,7 +7,9 @@ import {
 
 import {
   telegramCountMessagesInIntervalsInputSchema,
+  telegramEnsureHistoryCoverageInputSchema,
   telegramGetChatHistoryFactsInputSchema,
+  telegramGetHistoryCoverageInputSchema,
   telegramGetChatInputSchema,
   telegramGetMessageInputSchema,
   telegramHistoryFetchPageInputSchema,
@@ -29,9 +31,11 @@ type TelegramRpcClientOptions = {
 type TelegramRpcClient = {
   close(): void;
   countMessagesInIntervals(input: unknown, options?: InternalRpcCallOptions): Promise<unknown>;
+  ensureHistoryCoverage(input: unknown, options?: InternalRpcCallOptions): Promise<unknown>;
   fetchPage(input: unknown, options?: InternalRpcCallOptions): Promise<unknown>;
   getChat(input: unknown, options?: InternalRpcCallOptions): Promise<unknown>;
   getChatHistoryFacts(input: unknown, options?: InternalRpcCallOptions): Promise<unknown>;
+  getHistoryCoverage(input: unknown, options?: InternalRpcCallOptions): Promise<unknown>;
   getMessage(input: unknown, options?: InternalRpcCallOptions): Promise<unknown>;
   listChatDirectory(input?: unknown, options?: InternalRpcCallOptions): Promise<unknown>;
   listChats(input?: unknown, options?: InternalRpcCallOptions): Promise<unknown>;
@@ -70,6 +74,16 @@ export function createTelegramRpcClient(
         timeoutMs
       );
     },
+    ensureHistoryCoverage(input, callOptions) {
+      return callTelegramProcedure(
+        (signal) =>
+          client.ensureHistoryCoverage.mutate(
+            telegramEnsureHistoryCoverageInputSchema.parse(input),
+            internalRpcProcedureOptions(callOptions, signal)
+          ),
+        timeoutMs
+      );
+    },
     fetchPage(input, callOptions) {
       return callTelegramProcedure(
         (signal) =>
@@ -95,6 +109,16 @@ export function createTelegramRpcClient(
         (signal) =>
           client.getChatHistoryFacts.query(
             telegramGetChatHistoryFactsInputSchema.parse(input),
+            internalRpcProcedureOptions(callOptions, signal)
+          ),
+        timeoutMs
+      );
+    },
+    getHistoryCoverage(input, callOptions) {
+      return callTelegramProcedure(
+        (signal) =>
+          client.getHistoryCoverage.query(
+            telegramGetHistoryCoverageInputSchema.parse(input),
             internalRpcProcedureOptions(callOptions, signal)
           ),
         timeoutMs

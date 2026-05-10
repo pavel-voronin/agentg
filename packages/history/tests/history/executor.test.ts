@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { HistoryDatabase as AppDatabase } from '../../src/database.js';
 import { runHistorySync } from '../../src/executor.js';
 import { expressionBoundary, historyRange } from '../../src/ranges.js';
-import { historyBackfillJobs, historyTargets, historyTemplates } from '../../src/schema.js';
+import { historyTargets, historyTemplates } from '../../src/schema.js';
 import type { TelegramHistoryClient } from '../../src/telegram-client.js';
 import type { HistoryTarget } from '../../src/types.js';
 
@@ -20,7 +20,8 @@ describe('history sync executor', () => {
     ]);
     const listChats = vi.fn(() => Promise.resolve([]));
     const client = {
-      fetchPage: vi.fn(),
+      ensureHistoryCoverage: vi.fn(),
+      getHistoryCoverage: vi.fn(),
       listChats
     } as unknown as TelegramHistoryClient;
     const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => undefined);
@@ -29,12 +30,12 @@ describe('history sync executor', () => {
       await runHistorySync(database as unknown as AppDatabase, client, {
         chatLoadBatchSize: 100,
         discoverChats: false,
-        jobWindowDays: 30,
         messageLimit: 100,
         publishEvent: (event) => {
           publishedEvents.push(event);
         },
-        requestDelayMs: 0
+        requestDelayMs: 0,
+        syncWindowDays: 30
       });
     } finally {
       consoleLog.mockRestore();
@@ -137,9 +138,6 @@ function createFakeHistoryDatabase(targets: HistoryTarget[]) {
     }
     if (table === historyTargets) {
       return currentTargets;
-    }
-    if (table === historyBackfillJobs) {
-      return [];
     }
     throw new Error('Unexpected history test table selection');
   }

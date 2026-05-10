@@ -3,38 +3,31 @@ import { createIntegrationEvent, type IntegrationEvent } from '@agentg/events/en
 import type { JsonObject } from '@agentg/events/json';
 
 import { TELEGRAM_HISTORY_PAST_BOUNDARY } from './constants.js';
-import { historyCoverageChangedData, historyJobEventData } from './events.js';
-import { checkpointBackfillPage } from './jobs.js';
 import { materializeTemplatesForChat } from './materialization.js';
-import { completedOneShotTargets, reconcileChat } from './reconciler.js';
+import { isOneShotHistoryTarget, projectSyncIntervalsForChat } from './reconciler.js';
 import {
-  checkpointBackfillJob,
-  claimNextBackfillJob,
-  completeBackfillJob,
-  createBackfillJobs,
   deleteHistoryTarget,
-  listHistoryCoverage,
   listHistoryTargets,
   listHistoryTemplates,
-  resetBackfillJob,
-  resetRunningBackfillJobs,
   upsertHistoryTargets
 } from './store.js';
 import type { TelegramHistoryClient } from './telegram-client.js';
-import type { BackfillJob, HistoryTarget, TelegramChatForHistory } from './types.js';
+import type { HistoryInterval, HistoryTarget, TelegramChatForHistory } from './types.js';
 
 export type HistorySyncOptions = {
   chatLoadBatchSize: number;
   discoverChats?: boolean;
-  jobWindowDays: number;
   messageLimit: number;
   publishEvent?: (event: IntegrationEvent) => void;
   requestDelayMs: number;
+  syncWindowDays: number;
 };
 
-type BackfillJobExecutionResult = {
+type SyncRequestResult = {
+  coveredIntervals: number;
   fetchedMessages: number;
-  historyStartAt?: string;
+  pages: number;
+  remainingIntervals: number;
   reachedBeginning: boolean;
   storedMessages: number;
 };
@@ -45,22 +38,31 @@ export async function runHistorySync(
   options: HistorySyncOptions
 ): Promise<void> {
   const safeOptions = normalizeHistorySyncOptions(options);
-  const reconcileNow = truncateToTelegramSecond(new Date());
+  const syncNow = truncateToTelegramSecond(new Date());
   emitHistoryEvent(safeOptions, 'history.sync.started', {
-    now: reconcileNow.toISOString()
+    now: syncNow.toISOString()
   });
+
   const chats = await client.listChats({
     discover: safeOptions.discoverChats === true,
     loadBatchSize: safeOptions.chatLoadBatchSize
   });
   const targets = await materializeHistoryTargets(database, chats, safeOptions);
+  const result = await requestTelegramCoverageForTargets(
+    client,
+    database,
+    targets,
+    syncNow,
+    safeOptions
+  );
 
-  await resetRunningBackfillJobs(database);
-  const createdJobs = await reconcileHistoryTargets(database, targets, reconcileNow, safeOptions);
-  await executePendingBackfillJobs(database, client, reconcileNow, safeOptions);
   emitHistoryEvent(safeOptions, 'history.sync.completed', {
     chats: chats.length,
-    createdJobs,
+    coveredIntervals: result.coveredIntervals,
+    fetchedMessages: result.fetchedMessages,
+    pages: result.pages,
+    remainingIntervals: result.remainingIntervals,
+    storedMessages: result.storedMessages,
     targets: targets.length
   });
 }
@@ -109,306 +111,126 @@ async function deleteTargetsForUnlistedChats(
   return activeTargets;
 }
 
-async function reconcileHistoryTargets(
+async function requestTelegramCoverageForTargets(
+  client: TelegramHistoryClient,
   database: AppDatabase,
   targets: HistoryTarget[],
   now: Date,
   options: HistorySyncOptions
-): Promise<number> {
-  let createdJobs = 0;
-  const chatIds = [...new Set(targets.map((target) => target.chatId))];
-  let activeTargets = targets;
+): Promise<SyncRequestResult> {
+  const chatIds = [...new Set(targets.map((target) => target.chatId))].sort();
+  const result: SyncRequestResult = {
+    coveredIntervals: 0,
+    fetchedMessages: 0,
+    pages: 0,
+    remainingIntervals: 0,
+    reachedBeginning: false,
+    storedMessages: 0
+  };
 
   for (const chatId of chatIds) {
-    const coverage = await listHistoryCoverage(database, chatId);
-    const completedTargets = completedOneShotTargets({
+    const intervals = projectSyncIntervalsForChat({
       chatId,
-      coverage,
-      jobWindowMilliseconds: options.jobWindowDays * 24 * 60 * 60 * 1000,
       literals: {
         past: TELEGRAM_HISTORY_PAST_BOUNDARY
       },
       now,
-      targets: activeTargets
-    });
-    for (const target of completedTargets) {
-      const deleted = await deleteHistoryTarget(database, target.id);
-      if (deleted !== undefined) {
-        activeTargets = activeTargets.filter((existing) => existing.id !== target.id);
-        emitHistoryEvent(options, 'history.target.auto_deleted', {
-          chatId: target.chatId,
-          targetId: target.id
-        });
-      }
-    }
-    const jobs = reconcileChat({
-      chatId,
-      coverage,
-      jobWindowMilliseconds: options.jobWindowDays * 24 * 60 * 60 * 1000,
-      literals: {
-        past: TELEGRAM_HISTORY_PAST_BOUNDARY
-      },
-      now,
-      targets: activeTargets
+      syncWindowMilliseconds: options.syncWindowDays * 24 * 60 * 60 * 1000,
+      targets
     });
 
-    const newJobs = await createBackfillJobs(database, jobs.slice(0, 1));
-    for (const job of newJobs) {
-      emitHistoryEvent(options, 'history.job.created', historyJobEventData(job));
+    for (const interval of intervals.slice(0, 1)) {
+      const syncResult = await requestTelegramCoverage(client, chatId, interval, options);
+      result.coveredIntervals += syncResult.coveredIntervals.length;
+      result.fetchedMessages += syncResult.fetchedMessages;
+      result.pages += syncResult.pages;
+      result.remainingIntervals += syncResult.remainingIntervals.length;
+      result.reachedBeginning ||= syncResult.reachedBeginning;
+      result.storedMessages += syncResult.storedMessages;
     }
-    createdJobs += newJobs.length;
+
+    await deleteCompletedOneShotTargets(database, client, targets, chatId, now, options);
   }
 
-  emitHistoryEvent(options, 'history.reconcile.completed', {
-    chats: chatIds.length,
-    createdJobs
-  });
+  console.log(
+    JSON.stringify({
+      event: 'history.sync_pass_complete',
+      ...result
+    })
+  );
 
-  return createdJobs;
+  return result;
 }
 
-async function executePendingBackfillJobs(
+async function requestTelegramCoverage(
+  client: TelegramHistoryClient,
+  chatId: string,
+  interval: HistoryInterval,
+  options: Pick<HistorySyncOptions, 'messageLimit' | 'requestDelayMs'>
+) {
+  return client.ensureHistoryCoverage({
+    chatId,
+    endAt: interval.endAt.toISOString(),
+    limit: options.messageLimit,
+    maxPages: 1,
+    requestDelayMs: options.requestDelayMs,
+    startAt: interval.startAt.toISOString()
+  });
+}
+
+async function deleteCompletedOneShotTargets(
   database: AppDatabase,
   client: TelegramHistoryClient,
+  targets: HistoryTarget[],
+  chatId: string,
   now: Date,
-  options: HistorySyncOptions
+  options: Pick<HistorySyncOptions, 'publishEvent'>
 ): Promise<void> {
-  for (;;) {
-    const job = await claimNextBackfillJob(database);
-    if (job === undefined) {
-      const targets = await listHistoryTargets(database);
-      const createdJobs = await reconcileHistoryTargets(database, targets, now, options);
-      if (createdJobs === 0) {
-        console.log(JSON.stringify({ event: 'history.complete' }));
-        return;
-      }
+  for (const target of targets.filter((candidate) => candidate.chatId === chatId)) {
+    if (!isOneShotHistoryTarget(target)) {
       continue;
     }
 
-    const coverage = await listHistoryCoverage(database, job.chatId);
-    if (
-      coverage.some((interval) => interval.startAt <= job.startAt && interval.endAt >= job.endAt)
-    ) {
-      await completeBackfillJob(database, job, {
-        chatId: job.chatId,
-        endAt: job.endAt,
-        startAt: job.startAt
-      });
-      emitCompletedJob(options, job, {
-        fetchedMessages: 0,
-        reachedBeginning: false
-      });
+    const projected = projectSyncIntervalsForChat({
+      chatId,
+      literals: {
+        past: TELEGRAM_HISTORY_PAST_BOUNDARY
+      },
+      now,
+      targets: [target]
+    })[0];
+    if (projected === undefined) {
       continue;
     }
 
-    try {
-      emitHistoryEvent(options, 'history.job.started', {
-        chatId: job.chatId,
-        jobEnd: job.endAt.toISOString(),
-        jobId: job.id,
-        jobStart: job.startAt.toISOString()
-      });
-      const result = await executeBackfillJob(database, client, job, options);
-      emitCompletedJob(options, job, result);
+    const coverage = await client.getHistoryCoverage({ chatId });
+    const targetCovered = coverage.coverage.some((interval) => {
+      const startAt = new Date(interval.startAt);
+      const endAt = new Date(interval.endAt);
+      return startAt <= projected.startAt && endAt >= projected.endAt;
+    });
+    if (!targetCovered) {
+      continue;
+    }
 
-      console.log(
-        JSON.stringify({
-          event: 'history.backfill_job_complete',
-          chatId: job.chatId,
-          fetchedMessages: result.fetchedMessages,
-          jobEnd: job.endAt.toISOString(),
-          jobStart: job.startAt.toISOString(),
-          reachedBeginning: result.reachedBeginning,
-          storedMessages: result.storedMessages
-        })
-      );
-    } catch (error) {
-      await resetBackfillJob(database, job);
-      emitHistoryEvent(options, 'history.job.failed', {
-        chatId: job.chatId,
-        error: error instanceof Error ? error.message : String(error),
-        jobEnd: job.endAt.toISOString(),
-        jobId: job.id,
-        jobStart: job.startAt.toISOString()
+    const deleted = await deleteHistoryTarget(database, target.id);
+    if (deleted !== undefined) {
+      emitHistoryEvent(options, 'history.target.auto_deleted', {
+        chatId: target.chatId,
+        targetId: target.id
       });
-      throw error;
     }
   }
-}
-
-function emitCompletedJob(
-  options: Pick<HistorySyncOptions, 'publishEvent'>,
-  job: BackfillJob,
-  result: Partial<BackfillJobExecutionResult>
-): void {
-  emitHistoryEvent(options, 'history.job.completed', {
-    chatId: job.chatId,
-    ...(result.fetchedMessages === undefined ? {} : { fetchedMessages: result.fetchedMessages }),
-    ...(result.historyStartAt === undefined ? {} : { historyStartAt: result.historyStartAt }),
-    jobEnd: job.endAt.toISOString(),
-    jobId: job.id,
-    jobStart: job.startAt.toISOString(),
-    ...(result.reachedBeginning === undefined ? {} : { reachedBeginning: result.reachedBeginning }),
-    ...(result.storedMessages === undefined ? {} : { storedMessages: result.storedMessages })
-  });
-}
-
-async function executeBackfillJob(
-  database: AppDatabase,
-  client: TelegramHistoryClient,
-  job: BackfillJob,
-  options: Pick<HistorySyncOptions, 'messageLimit' | 'publishEvent' | 'requestDelayMs'>
-): Promise<BackfillJobExecutionResult> {
-  let remainingEndAt = job.endAt;
-  let cursorMessageId = readCursorMessageId(job.cursor);
-  let fetchedMessages = 0;
-  let historyStartAt: Date | undefined;
-  let storedMessages = 0;
-
-  for (;;) {
-    await delay(options.requestDelayMs);
-
-    const page = await client.fetchPage({
-      chatId: job.chatId,
-      ...(cursorMessageId === undefined ? {} : { cursorMessageId }),
-      endAt: remainingEndAt.toISOString(),
-      limit: options.messageLimit,
-      startAt: job.startAt.toISOString()
-    });
-
-    if (page.kind === 'no_messages_before_end') {
-      await completeJobWithCoverage(database, job, options, {
-        endAt: remainingEndAt,
-        startAt: TELEGRAM_HISTORY_PAST_BOUNDARY
-      });
-      return {
-        fetchedMessages,
-        ...(historyStartAt === undefined ? {} : { historyStartAt: historyStartAt.toISOString() }),
-        reachedBeginning: true,
-        storedMessages
-      };
-    }
-
-    if (page.kind === 'anchor_before_start') {
-      await completeJobWithCoverage(database, job, options, {
-        endAt: remainingEndAt,
-        startAt: job.startAt
-      });
-      return {
-        fetchedMessages,
-        reachedBeginning: false,
-        storedMessages
-      };
-    }
-
-    fetchedMessages += page.fetchedMessages;
-    storedMessages += page.storedMessages;
-
-    const nextCursor = page.nextCursorMessageId;
-    const oldestFetchedMessageDate =
-      page.oldestFetchedMessageDate === undefined
-        ? undefined
-        : new Date(page.oldestFetchedMessageDate);
-    if (oldestFetchedMessageDate !== undefined) {
-      historyStartAt = minDate(historyStartAt, oldestFetchedMessageDate);
-    }
-    const checkpoint = checkpointBackfillPage(job, {
-      crossedStart: page.crossedStart,
-      ...(oldestFetchedMessageDate === undefined ? {} : { oldestFetchedMessageDate }),
-      reachedBeginning: page.reachedBeginning,
-      remainingEndAt
-    });
-    await checkpointBackfillJob(database, job, {
-      complete: checkpoint.complete,
-      ...(checkpoint.coveredInterval === undefined
-        ? {}
-        : { coveredInterval: checkpoint.coveredInterval }),
-      ...(checkpoint.complete || nextCursor === undefined
-        ? {}
-        : { cursor: { messageId: nextCursor } }),
-      ...(checkpoint.complete ? {} : { remainingEndAt: checkpoint.remainingEndAt })
-    });
-
-    if (checkpoint.coveredInterval !== undefined) {
-      emitCoverageChanged(options, checkpoint.coveredInterval);
-    }
-
-    if (nextCursor === undefined) {
-      return {
-        fetchedMessages,
-        ...(page.reachedBeginning && historyStartAt !== undefined
-          ? { historyStartAt: historyStartAt.toISOString() }
-          : {}),
-        reachedBeginning: page.reachedBeginning,
-        storedMessages
-      };
-    }
-
-    if (checkpoint.complete) {
-      return {
-        fetchedMessages,
-        ...(page.reachedBeginning && historyStartAt !== undefined
-          ? { historyStartAt: historyStartAt.toISOString() }
-          : {}),
-        reachedBeginning: page.reachedBeginning,
-        storedMessages
-      };
-    }
-
-    cursorMessageId = nextCursor;
-    remainingEndAt = checkpoint.remainingEndAt;
-    emitHistoryEvent(options, 'history.job.progress', {
-      chatId: job.chatId,
-      cursorMessageId,
-      fetchedMessages,
-      jobEnd: remainingEndAt.toISOString(),
-      jobId: job.id,
-      jobStart: job.startAt.toISOString(),
-      storedMessages
-    });
-  }
-}
-
-async function completeJobWithCoverage(
-  database: AppDatabase,
-  job: BackfillJob,
-  options: Pick<HistorySyncOptions, 'publishEvent'>,
-  interval: {
-    endAt: Date;
-    startAt: Date;
-  }
-): Promise<void> {
-  const coveredInterval = {
-    chatId: job.chatId,
-    endAt: interval.endAt,
-    startAt: interval.startAt
-  };
-  await checkpointBackfillJob(database, job, {
-    complete: true,
-    coveredInterval
-  });
-  emitCoverageChanged(options, coveredInterval);
-}
-
-function emitCoverageChanged(
-  options: Pick<HistorySyncOptions, 'publishEvent'>,
-  interval: {
-    chatId: string;
-    endAt: Date;
-    startAt: Date;
-  }
-): void {
-  emitHistoryEvent(options, 'history.coverage.changed', historyCoverageChangedData([interval]));
 }
 
 function normalizeHistorySyncOptions(options: HistorySyncOptions): HistorySyncOptions {
   return {
     chatLoadBatchSize: Math.max(1, options.chatLoadBatchSize),
     discoverChats: options.discoverChats ?? true,
-    jobWindowDays: Math.max(1, options.jobWindowDays),
     messageLimit: Math.min(100, Math.max(1, options.messageLimit)),
     ...(options.publishEvent === undefined ? {} : { publishEvent: options.publishEvent }),
-    requestDelayMs: Math.max(0, options.requestDelayMs)
+    requestDelayMs: Math.max(0, options.requestDelayMs),
+    syncWindowDays: Math.max(1, options.syncWindowDays)
   };
 }
 
@@ -427,24 +249,4 @@ function emitHistoryEvent(
 
 function truncateToTelegramSecond(date: Date): Date {
   return new Date(Math.floor(date.getTime() / 1000) * 1000);
-}
-
-function minDate(current: Date | undefined, next: Date): Date {
-  return current === undefined || next < current ? next : current;
-}
-
-function readCursorMessageId(cursor: unknown): number | undefined {
-  const record =
-    typeof cursor === 'object' && cursor !== null ? (cursor as Record<string, unknown>) : undefined;
-  return typeof record?.messageId === 'number' ? record.messageId : undefined;
-}
-
-async function delay(milliseconds: number): Promise<void> {
-  if (milliseconds <= 0) {
-    return;
-  }
-
-  await new Promise((resolve) => {
-    setTimeout(resolve, milliseconds);
-  });
 }

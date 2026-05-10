@@ -53,20 +53,9 @@ export type ChatFolder = {
   title: string;
 };
 
-export type ChatStats = {
-  chatId: string;
-  coverageIntervals: number;
-  coverageNewestAt: string | null;
-  coverageOldestAt: string | null;
-  pendingJobs: number;
-  runningJobs: number;
-  targets: number;
+export type ControlPlaneChat = TelegramDirectoryChat & {
+  _model: 'telegram.chat';
 };
-
-export type ControlPlaneChat = TelegramDirectoryChat &
-  Omit<ChatStats, 'chatId'> & {
-    _model: 'telegram.chat';
-  };
 
 export type ChatFolderNavItem = {
   active: boolean;
@@ -98,13 +87,9 @@ export type ChatIconKind = 'bot' | 'channel' | 'group' | 'secret';
 export type ChatListItemView = {
   active: boolean;
   avatarUrl: string | null;
-  coverageIntervals: string;
   icon: ChatIconKind | null;
   id: string;
   initials: string;
-  pendingJobs: string;
-  runningJobs: string;
-  targets: string;
   title: string;
 };
 

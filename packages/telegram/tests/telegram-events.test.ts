@@ -1,7 +1,7 @@
 import {
   createTelegramFileQueueUpdatedEvent,
-  createTelegramIntegrationEvents,
-  createTelegramMessagesObservedEvent
+  createTelegramHistoryCoverageChangedEvent,
+  createTelegramIntegrationEvents
 } from '@agentg/telegram/integration-events';
 import { describe, expect, it } from 'vitest';
 
@@ -290,34 +290,39 @@ describe('Telegram integration events', () => {
     ]);
   });
 
-  it('publishes observed message page intervals as Telegram facts', () => {
-    const event = createTelegramMessagesObservedEvent({
-      chatId: 'chat-a',
-      endAt: new Date('2026-05-05T00:10:00.000Z'),
-      fetchedMessages: 25,
-      reachedStart: false,
-      startAt: new Date('2026-05-05T00:00:00.000Z'),
-      storedMessages: 25
+  it('publishes history coverage intervals as Telegram facts', () => {
+    const event = createTelegramHistoryCoverageChangedEvent({
+      intervals: [
+        {
+          chatId: 'chat-a',
+          endAt: new Date('2026-05-05T00:10:00.000Z'),
+          messageCount: 12,
+          provedAt: new Date('2026-05-05T00:10:05.000Z'),
+          startAt: new Date('2026-05-05T00:00:00.000Z')
+        }
+      ]
     });
 
     expect(event).toMatchObject({
       data: {
-        chat: {
-          _model: 'telegram.chat',
-          id: 'chat-a'
-        },
-        fetchedMessages: 25,
-        interval: {
-          endAt: '2026-05-05T00:10:00.000Z',
-          startAt: '2026-05-05T00:00:00.000Z'
-        },
-        reachedStart: false,
-        storedMessages: 25
+        chatCount: 1,
+        intervals: [
+          {
+            chat: {
+              _model: 'telegram.chat',
+              id: 'chat-a'
+            },
+            endAt: '2026-05-05T00:10:00.000Z',
+            messageCount: 12,
+            provedAt: '2026-05-05T00:10:05.000Z',
+            startAt: '2026-05-05T00:00:00.000Z'
+          }
+        ]
       },
       meta: {
         chatId: 'chat-a'
       },
-      type: 'telegram.messages.observed'
+      type: 'telegram.history.coverage.changed'
     });
   });
 });

@@ -75,8 +75,8 @@ describe('Agent Gateway external surface', () => {
       await expect(request(client, 'telegram.searchMessages', {})).rejects.toThrow(
         'Unknown method: telegram.searchMessages'
       );
-      await expect(request(client, 'history.getChatStats', {})).rejects.toThrow(
-        'Unknown method: history.getChatStats'
+      await expect(request(client, 'history.getChatHistoryState', {})).rejects.toThrow(
+        'Unknown method: history.getChatHistoryState'
       );
       await expect(request(client, 'capabilities.list', {})).rejects.toThrow(
         'Unknown method: capabilities.list'

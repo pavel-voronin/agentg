@@ -1,11 +1,9 @@
-import { jobKey } from './timelineIntervals.js';
 import { formatDuration, formatInteger, formatTimelineDate } from './timelineFormatters.js';
 import type {
   TimelineBoundary,
   TimelineDetailType,
   TimelineHoverItem,
   TimelineInterval,
-  TimelineJob,
   TimelineTarget,
   TimelineTooltip
 } from './timelineTypes.js';
@@ -26,17 +24,6 @@ export function coverageSegmentTooltip(
     kind: 'Coverage',
     range: `${formatTimelineDate(startAt)} -> ${formatTimelineDate(endAt)}`,
     to: formatTimelineDate(endAt)
-  };
-}
-
-export function jobSegmentTooltip(job: TimelineJob, interval: TimelineInterval): TimelineTooltip {
-  return {
-    count: `${job.status ?? ''} job #${jobKey(job)}`,
-    duration: formatDuration(interval.endAt.getTime() - interval.startAt.getTime()),
-    from: formatTimelineDate(interval.startAt),
-    kind: 'Job',
-    range: `${formatTimelineDate(interval.startAt)} -> ${formatTimelineDate(interval.endAt)}`,
-    to: formatTimelineDate(interval.endAt)
   };
 }
 
@@ -79,7 +66,7 @@ export function timelineHoverItem(
 ): TimelineHoverItem {
   return {
     duration: tooltip.duration,
-    extra: kind === 'coverage' || kind === 'job' ? (tooltip.count ?? '') : '',
+    extra: kind === 'coverage' ? (tooltip.count ?? '') : '',
     from: tooltip.from,
     key,
     kind,

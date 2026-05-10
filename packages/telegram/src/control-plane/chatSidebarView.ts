@@ -97,13 +97,9 @@ function chatListItemView(chat: ControlPlaneChat, selectedChatId: string | null)
   return {
     active: chat.id === selectedChatId,
     avatarUrl: providerFileUrl(chat.avatar.small?.url ?? chat.avatar.big?.url ?? null),
-    coverageIntervals: formatInteger(chat.coverageIntervals),
     icon: chatIcon(chat),
     id: chat.id,
     initials: chatInitials(chat.title),
-    pendingJobs: formatInteger(chat.pendingJobs),
-    runningJobs: formatInteger(chat.runningJobs),
-    targets: formatInteger(chat.targets),
     title: chat.title
   };
 }

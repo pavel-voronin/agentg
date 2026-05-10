@@ -6,7 +6,7 @@ function contentDefinition(
   contentId: string,
   revision: string,
   load: ContentDefinition['load'],
-  metadata: ContentDefinition['metadata'] = undefined
+  metadata?: ContentDefinition['metadata']
 ): ContentDefinition {
   return {
     contentId,

@@ -11,7 +11,7 @@ export function createHistoryControlPlane(
     assetVersions,
     contents: [
       {
-        contentId: 'history.dashboard.current-job',
+        contentId: 'history.dashboard.coverage-updates',
         module: {
           assetPath: 'dashboard-tile.js'
         },

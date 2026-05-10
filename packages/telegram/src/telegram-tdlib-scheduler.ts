@@ -56,7 +56,14 @@ export function createTelegramTdlibScheduler(
       runningCount += 1;
       void client
         .invoke(operation.request, operation.options)
-        .then(operation.resolve, operation.reject)
+        .then(
+          (value) => {
+            operation.resolve(value);
+          },
+          (error: unknown) => {
+            operation.reject(error);
+          }
+        )
         .finally(() => {
           runningCount -= 1;
           drain();

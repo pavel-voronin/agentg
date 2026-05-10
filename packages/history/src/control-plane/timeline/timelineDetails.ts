@@ -1,18 +1,14 @@
 import type { SelectedHistoryState } from '../views.js';
 import { formatDuration, formatInteger, formatTimelineDate } from './timelineFormatters.js';
 import {
-  jobKey,
   targetKey,
   timelineCoverage,
-  timelineJobs,
   timelineTargets,
   visibleCoverageIntervals,
-  visibleJobDetails,
   visibleTargetDetails
 } from './timelineIntervals.js';
 import {
   coverageSegmentTooltip,
-  jobSegmentTooltip,
   targetBoundaryDisplay,
   targetSegmentTooltip,
   timelineHoverItem
@@ -29,7 +25,7 @@ export function detailSection(section: {
   items: TimelineHistoryDetail[];
   type: TimelineDetailType;
 }): TimelineDetailSection {
-  const title = section.type === 'target' ? 'Target' : section.type === 'job' ? 'Jobs' : 'Coverage';
+  const title = section.type === 'target' ? 'Target' : 'Coverage';
   return {
     items: section.items.map(timelineDetail),
     title,
@@ -64,7 +60,6 @@ export function historyDetailItems(
 ): TimelineHistoryDetail[] {
   return [
     ...visibleTargetDetails(timelineTargets(data), min, max),
-    ...visibleJobDetails(timelineJobs(data), min, max),
     ...visibleCoverageIntervals(timelineCoverage(data), min, max).map((interval) => ({
       endAt: interval.endAt,
       item: interval,
@@ -90,16 +85,11 @@ export function historyItemsAtTime(
 export function timelineDetailHoverItem(detail: TimelineDetail): TimelineHoverItem {
   return {
     duration: detail.duration,
-    extra:
-      detail.type === 'coverage'
-        ? (detail.count ?? '')
-        : detail.type === 'job'
-          ? (detail.status ?? '')
-          : '',
+    extra: detail.type === 'coverage' ? (detail.count ?? '') : '',
     from: detail.startValue,
     key: detail.key,
     kind: detail.type,
-    label: detail.type === 'target' ? 'Target' : detail.type === 'job' ? 'Job' : 'Coverage',
+    label: detail.type === 'target' ? 'Target' : 'Coverage',
     to: detail.endValue,
     ...(detail.startNote === undefined ? {} : { fromNote: detail.startNote }),
     ...(detail.endNote === undefined ? {} : { toNote: detail.endNote })
@@ -123,24 +113,20 @@ function compareHistoryHoverItems(left: TimelineHoverItem, right: TimelineHoverI
 
 function historyDetailTypeOrder(type: TimelineDetailType): number {
   if (type === 'target') return 0;
-  if (type === 'job') return 1;
-  return 2;
+  return 1;
 }
 
 function historyHoverItem(detail: TimelineHistoryDetail): TimelineHoverItem {
   const tooltip =
     detail.type === 'coverage'
       ? coverageSegmentTooltip(detail.item, detail.item)
-      : detail.type === 'target'
-        ? targetSegmentTooltip(detail.item, detail)
-        : jobSegmentTooltip(detail.item, detail);
+      : targetSegmentTooltip(detail.item, detail);
   return timelineHoverItem(detail.type, detail.key, tooltip);
 }
 
 function historyHoverTypeOrder(kind: TimelineDetailType): number {
   if (kind === 'coverage') return 0;
-  if (kind === 'target') return 1;
-  return 2;
+  return 1;
 }
 
 function timelineDetail(detail: TimelineHistoryDetail): TimelineDetail {
@@ -161,22 +147,6 @@ function timelineDetail(detail: TimelineHistoryDetail): TimelineDetail {
       ...(end.note === undefined ? {} : { endNote: end.note }),
       ...(start.note === undefined ? {} : { startNote: start.note }),
       templateId: target.templateId ?? '-',
-      type: detail.type
-    };
-  }
-  if (detail.type === 'job') {
-    const job = detail.item;
-    return {
-      cursor: job.cursor !== undefined && job.cursor !== null,
-      duration,
-      endAt: detail.endAt,
-      endValue: formatTimelineDate(detail.endAt),
-      id: jobKey(job),
-      item: job,
-      key: detail.key,
-      startValue: formatTimelineDate(detail.startAt),
-      startAt: detail.startAt,
-      status: job.status ?? '',
       type: detail.type
     };
   }

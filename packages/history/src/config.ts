@@ -10,7 +10,7 @@ import {
 loadNearestDotenv();
 
 export type HistoryServiceConfig = {
-  backfill: {
+  sync: {
     chatLoadBatchSize: number;
     messageLimit: number;
     requestDelayMs: number;
@@ -38,15 +38,19 @@ export function loadHistoryServiceConfig(
   });
 
   return {
-    backfill: {
+    sync: {
       chatLoadBatchSize:
-        parseOptionalInteger(env.BACKFILL_CHAT_LOAD_BATCH_SIZE, 'BACKFILL_CHAT_LOAD_BATCH_SIZE') ??
-        100,
+        parseOptionalInteger(
+          env.HISTORY_SYNC_CHAT_LOAD_BATCH_SIZE,
+          'HISTORY_SYNC_CHAT_LOAD_BATCH_SIZE'
+        ) ?? 100,
       messageLimit:
-        parseOptionalInteger(env.BACKFILL_MESSAGE_LIMIT, 'BACKFILL_MESSAGE_LIMIT') ?? 100,
+        parseOptionalInteger(env.HISTORY_SYNC_MESSAGE_LIMIT, 'HISTORY_SYNC_MESSAGE_LIMIT') ?? 100,
       requestDelayMs:
-        parseOptionalInteger(env.BACKFILL_REQUEST_DELAY_MS, 'BACKFILL_REQUEST_DELAY_MS') ?? 1000,
-      windowDays: parseOptionalInteger(env.BACKFILL_WINDOW_DAYS, 'BACKFILL_WINDOW_DAYS') ?? 31
+        parseOptionalInteger(env.HISTORY_SYNC_REQUEST_DELAY_MS, 'HISTORY_SYNC_REQUEST_DELAY_MS') ??
+        1000,
+      windowDays:
+        parseOptionalInteger(env.HISTORY_SYNC_WINDOW_DAYS, 'HISTORY_SYNC_WINDOW_DAYS') ?? 31
     },
     databaseUrl: env.DATABASE_URL ?? 'postgres://agentg:agentg@localhost:5432/agentg',
     nats: {

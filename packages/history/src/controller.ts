@@ -5,7 +5,7 @@ import { createIntegrationEvent } from '@agentg/events/envelope';
 import { runHistorySync } from './executor.js';
 import type { TelegramHistoryClient } from './telegram-client.js';
 
-export type BackfillOptions = {
+export type HistorySyncControllerOptions = {
   chatLoadBatchSize: number;
   messageLimit: number;
   requestDelayMs: number;
@@ -23,7 +23,7 @@ const HISTORY_RETRY_DELAY_MS = 5000;
 export function createHistorySyncController(
   database: AppDatabase,
   client: TelegramHistoryClient,
-  options: BackfillOptions,
+  options: HistorySyncControllerOptions,
   eventBus: EventBus,
   isShuttingDown: () => boolean
 ): HistorySyncController {
@@ -120,7 +120,7 @@ export function createHistorySyncController(
 async function runHistorySyncPass(
   database: AppDatabase,
   client: TelegramHistoryClient,
-  options: BackfillOptions,
+  options: HistorySyncControllerOptions,
   eventBus: EventBus,
   passOptions: {
     discoverChats: boolean;
@@ -129,12 +129,12 @@ async function runHistorySyncPass(
   await runHistorySync(database, client, {
     chatLoadBatchSize: options.chatLoadBatchSize,
     discoverChats: passOptions.discoverChats,
-    jobWindowDays: options.windowDays,
     messageLimit: options.messageLimit,
     publishEvent: (event) => {
       eventBus.publish(event);
     },
-    requestDelayMs: options.requestDelayMs
+    requestDelayMs: options.requestDelayMs,
+    syncWindowDays: options.windowDays
   });
 }
 
