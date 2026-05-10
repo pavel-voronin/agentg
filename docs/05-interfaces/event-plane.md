@@ -115,8 +115,6 @@ History Sync subscribes to Telegram events:
   have changed.
 - `telegram.chat.removed` removes concrete targets for chats no longer listed by
   Telegram.
-- `telegram.history.coverage.changed` wakes sync so completed one-shot targets
-  can be removed and remaining requested intervals can continue converging.
 
 Gateway subscribes only to `telegram.login.completed` and forwards that event to
 external agent WebSocket clients. All other events remain internal unless a

@@ -213,7 +213,7 @@ function requestProcessShutdown(event: string, error: Error): void {
   process.kill(process.pid, 'SIGTERM');
 }
 
-function subscribeHistorySyncService(options: {
+export function subscribeHistorySyncService(options: {
   controller: HistorySyncController;
   eventBus: EventBus;
 }): EventSubscription[] {
@@ -223,9 +223,6 @@ function subscribeHistorySyncService(options: {
     }),
     options.eventBus.subscribe('telegram.chat.removed', () => {
       options.controller.request('chat-removed');
-    }),
-    options.eventBus.subscribe('telegram.history.coverage.changed', () => {
-      options.controller.request('coverage-changed');
     })
   ];
 }
