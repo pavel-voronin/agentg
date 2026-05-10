@@ -9,6 +9,11 @@
 - Do not keep alternative architecture artifacts or documentation for replaced
   behavior. Current architecture docs must describe only the current target
   architecture.
+- The repository must have at most one active working plan. The only allowed
+  active plan file is `PLAN.md` at the repository root. Before creating or
+  replacing a working plan, remove obsolete active plan files elsewhere in the
+  repository. `PLAN.md` is a temporary execution artifact, not long-term
+  architecture documentation.
 - If a change appears to require a temporary compatibility layer, legacy branch,
   fallback behavior, or transitional duplicate implementation, stop and re-plan
   the change instead of implementing it.
