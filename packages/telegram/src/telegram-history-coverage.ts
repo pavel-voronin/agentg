@@ -24,6 +24,23 @@ export type TelegramHistoryCoverageWriteResult = {
   intervals: TelegramHistoryCoverageWriteSegment[];
 };
 
+export type TelegramHistoryCoverageMergePlan = {
+  deleteIds: number[];
+  inserts: TelegramHistoryCoverageSegment[];
+  updates: {
+    id: number;
+    segment: TelegramHistoryCoverageSegment;
+  }[];
+};
+
+type TelegramHistoryCoverageStorageRow = {
+  coveredAt: Date;
+  endAt: Date;
+  id: number;
+  startAt: Date;
+  telegramChatId: string;
+};
+
 const coverageLocks = new Map<string, Promise<void>>();
 const TELEGRAM_HISTORY_COVERAGE_BATCH_CHUNK_SIZE = 5000;
 
@@ -251,11 +268,67 @@ async function mergeOperationalCoverageInTransaction(
       }))
     ]);
 
-    await deleteCoverageRows(
+    await applyCoverageMergePlan(
       database,
-      overlappingRows.map((row) => row.id)
+      planTelegramHistoryCoverageMerge(overlappingRows, mergedSegments)
     );
-    await insertCoverageSegments(database, mergedSegments);
+  }
+}
+
+export function planTelegramHistoryCoverageMerge(
+  existingRows: TelegramHistoryCoverageStorageRow[],
+  mergedSegments: TelegramHistoryCoverageSegment[]
+): TelegramHistoryCoverageMergePlan {
+  const reusableRows = [...existingRows].sort(compareCoverageRowStart);
+  const updates: TelegramHistoryCoverageMergePlan['updates'] = [];
+  const updateCount = Math.min(reusableRows.length, mergedSegments.length);
+
+  for (let index = 0; index < updateCount; index += 1) {
+    const row = reusableRows[index];
+    const segment = mergedSegments[index];
+    if (row === undefined || segment === undefined || coverageRowMatchesSegment(row, segment)) {
+      continue;
+    }
+    updates.push({
+      id: row.id,
+      segment
+    });
+  }
+
+  const inserts = mergedSegments.slice(reusableRows.length);
+  const deleteIds = reusableRows.slice(mergedSegments.length).map((row) => row.id);
+
+  return {
+    deleteIds,
+    inserts,
+    updates
+  };
+}
+
+async function applyCoverageMergePlan(
+  database: AppDatabase,
+  plan: TelegramHistoryCoverageMergePlan
+): Promise<void> {
+  await updateCoverageRows(database, plan.updates);
+  await insertCoverageSegments(database, plan.inserts);
+  await deleteCoverageRows(database, plan.deleteIds);
+}
+
+async function updateCoverageRows(
+  database: AppDatabase,
+  updates: TelegramHistoryCoverageMergePlan['updates']
+): Promise<void> {
+  for (const update of updates) {
+    await database
+      .update(telegramHistoryCoverage)
+      .set({
+        coveredAt: update.segment.coveredAt,
+        endAt: update.segment.endAt,
+        startAt: update.segment.startAt,
+        telegramChatId: update.segment.chatId,
+        updatedAt: sql`now()`
+      })
+      .where(eq(telegramHistoryCoverage.id, update.id));
   }
 }
 
@@ -376,6 +449,26 @@ function compareIntervalStart(
 ): number {
   const startDifference = first.startAt.getTime() - second.startAt.getTime();
   return startDifference === 0 ? first.endAt.getTime() - second.endAt.getTime() : startDifference;
+}
+
+function compareCoverageRowStart(
+  first: TelegramHistoryCoverageStorageRow,
+  second: TelegramHistoryCoverageStorageRow
+): number {
+  const intervalDifference = compareIntervalStart(first, second);
+  return intervalDifference === 0 ? first.id - second.id : intervalDifference;
+}
+
+function coverageRowMatchesSegment(
+  row: TelegramHistoryCoverageStorageRow,
+  segment: TelegramHistoryCoverageSegment
+): boolean {
+  return (
+    row.telegramChatId === segment.chatId &&
+    row.startAt.getTime() === segment.startAt.getTime() &&
+    row.endAt.getTime() === segment.endAt.getTime() &&
+    row.coveredAt.getTime() === segment.coveredAt.getTime()
+  );
 }
 
 function minDate(first: Date, second: Date): Date {

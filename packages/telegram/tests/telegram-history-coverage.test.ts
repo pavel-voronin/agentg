@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   normalizeCoverageSegments,
+  planTelegramHistoryCoverageMerge,
   subtractTelegramHistoryIntervals
 } from '../src/telegram-history-coverage.js';
 
@@ -28,6 +29,89 @@ describe('Telegram history coverage', () => {
       )
     ).toEqual([interval('2026-05-01T01:00:00.000Z', '2026-05-01T03:00:00.000Z')]);
   });
+
+  it('updates an existing coverage row when live coverage extends it', () => {
+    const segment = coverage(
+      'chat-a',
+      '2026-05-01T00:00:00.000Z',
+      '2026-05-01T02:00:00.000Z',
+      '10:05'
+    );
+
+    expect(
+      planTelegramHistoryCoverageMerge(
+        [
+          coverageRow(10, 'chat-a', '2026-05-01T00:00:00.000Z', '2026-05-01T01:00:00.000Z', '10:00')
+        ],
+        [segment]
+      )
+    ).toEqual({
+      deleteIds: [],
+      inserts: [],
+      updates: [
+        {
+          id: 10,
+          segment
+        }
+      ]
+    });
+  });
+
+  it('reuses one coverage row and deletes only surplus rows when segments collapse', () => {
+    const segment = coverage(
+      'chat-a',
+      '2026-05-01T00:00:00.000Z',
+      '2026-05-01T03:00:00.000Z',
+      '10:10'
+    );
+
+    expect(
+      planTelegramHistoryCoverageMerge(
+        [
+          coverageRow(
+            10,
+            'chat-a',
+            '2026-05-01T00:00:00.000Z',
+            '2026-05-01T01:00:00.000Z',
+            '10:00'
+          ),
+          coverageRow(11, 'chat-a', '2026-05-01T02:00:00.000Z', '2026-05-01T03:00:00.000Z', '10:05')
+        ],
+        [segment]
+      )
+    ).toEqual({
+      deleteIds: [11],
+      inserts: [],
+      updates: [
+        {
+          id: 10,
+          segment
+        }
+      ]
+    });
+  });
+
+  it('does not update a coverage row that already matches the merged segment', () => {
+    const segment = coverage(
+      'chat-a',
+      '2026-05-01T00:00:00.000Z',
+      '2026-05-01T02:00:00.000Z',
+      '10:05'
+    );
+
+    expect(
+      planTelegramHistoryCoverageMerge(
+        [
+          coverageRow(10, 'chat-a', '2026-05-01T00:00:00.000Z', '2026-05-01T02:00:00.000Z', '10:05')
+        ],
+        [segment]
+      )
+    ).toEqual({
+      deleteIds: [],
+      inserts: [],
+      updates: []
+    });
+  });
 });
 
 function interval(startAt: string, endAt: string) {
@@ -42,6 +126,21 @@ function coverage(chatId: string, startAt: string, endAt: string, coveredAt: str
     ...interval(startAt, endAt),
     chatId,
     coveredAt: provedAt(coveredAt)
+  };
+}
+
+function coverageRow(
+  id: number,
+  chatId: string,
+  startAt: string,
+  endAt: string,
+  coveredAt: string
+) {
+  return {
+    ...interval(startAt, endAt),
+    coveredAt: provedAt(coveredAt),
+    id,
+    telegramChatId: chatId
   };
 }
 
