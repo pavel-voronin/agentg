@@ -329,17 +329,12 @@ export const telegramHistoryCoverageSegmentSchema = telegramHistoryIntervalSchem
   coveredAt: z.string().min(1)
 });
 
-export const telegramHistoryCoverageProofSegmentSchema = telegramHistoryIntervalSchema.extend({
-  provedAt: z.string().min(1)
-});
-
 export const telegramGetHistoryCoverageInputSchema = z.object({
   chatId: nonEmptyStringSchema
 });
 
 export const telegramGetHistoryCoverageOutputSchema = z.object({
-  coverage: z.array(telegramHistoryCoverageSegmentSchema),
-  proofs: z.array(telegramHistoryCoverageProofSegmentSchema)
+  coverage: z.array(telegramHistoryCoverageSegmentSchema)
 });
 
 export const telegramEnsureHistoryCoverageInputSchema = z.object({
@@ -398,9 +393,6 @@ export type TelegramCountMessagesInIntervalsOutput = z.infer<
   typeof telegramCountMessagesInIntervalsOutputSchema
 >;
 export type TelegramHistoryCoverageSegment = z.infer<typeof telegramHistoryCoverageSegmentSchema>;
-export type TelegramHistoryCoverageProofSegment = z.infer<
-  typeof telegramHistoryCoverageProofSegmentSchema
->;
 export type TelegramGetHistoryCoverageInput = z.infer<typeof telegramGetHistoryCoverageInputSchema>;
 export type TelegramGetHistoryCoverageOutput = z.infer<
   typeof telegramGetHistoryCoverageOutputSchema

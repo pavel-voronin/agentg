@@ -72,7 +72,6 @@ are coalesced rather than duplicated. Storage enforces uniqueness for
 Telegram owns:
 
 - `telegram_history_coverage`
-- `telegram_history_coverage_proofs`
 
 History Sync reads Telegram coverage through Telegram RPC when it needs an
-operator read model. It does not write these tables.
+operator read model. It does not write this table.

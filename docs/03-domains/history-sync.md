@@ -72,7 +72,7 @@ History Sync does not own:
 - Telegram messages, chats, users, files, or TDLib state
 - Telegram history coverage tables
 - TDLib page cursors
-- proof that a fetched Telegram page has no enumeration gaps
+- Telegram coverage convergence decisions
 
 ## Invariants
 

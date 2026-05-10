@@ -17,7 +17,7 @@ The system can connect to the user's Telegram account, read personal chats, grou
 - Chat list synchronization.
 - History Sync as a desired-state mechanism.
 - History Sync templates and concrete chat targets.
-- Telegram-owned coverage intervals and proof segments.
+- Telegram-owned coverage intervals.
 - Text messages and text-bearing message content.
 - Text visible to the user's normal Telegram client is the primary data target.
 - Replies and reply references where available.

@@ -54,13 +54,8 @@ export type TelegramHistoryCoverageSegment = TelegramHistoryInterval & {
   coveredAt: string;
 };
 
-export type TelegramHistoryCoverageProofSegment = TelegramHistoryInterval & {
-  provedAt: string;
-};
-
 export type TelegramGetHistoryCoverageResult = {
   coverage: TelegramHistoryCoverageSegment[];
-  proofs: TelegramHistoryCoverageProofSegment[];
 };
 
 export type TelegramEnsureHistoryCoverageResult = {

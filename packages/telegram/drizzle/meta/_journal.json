@@ -29,6 +29,13 @@
       "when": 1778370000000,
       "tag": "0003_telegram_history_coverage",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1778373600000,
+      "tag": "0004_drop_telegram_history_coverage_proofs",
+      "breakpoints": true
     }
   ]
 }

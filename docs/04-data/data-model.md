@@ -406,8 +406,6 @@ History Sync does not own Telegram messages, chats, users, files, reactions, top
 TDLib state, page cursors, or history coverage. Telegram owns:
 
 - `telegram_history_coverage`
-- `telegram_history_coverage_proofs`
-
 See [History Sync](../03-domains/history-sync.md).
 See [History Sync Schema](history-sync-schema.md) for the table shape.
 

@@ -1,7 +1,7 @@
 import { and, asc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
 
 import type { TelegramDatabase as AppDatabase } from './database.js';
-import { telegramChats, telegramHistoryCoverage, telegramHistoryCoverageProofs } from './schema.js';
+import { telegramChats, telegramHistoryCoverage } from './schema.js';
 import {
   normalizeTelegramHistoryInterval,
   TELEGRAM_HISTORY_TICK_MS,
@@ -16,12 +16,12 @@ export type TelegramHistoryCoverageSegment = TelegramHistoryCoverageInterval & {
   coveredAt: Date;
 };
 
-export type TelegramHistoryCoverageProofSegment = TelegramHistoryCoverageInterval & {
+export type TelegramHistoryCoverageWriteSegment = TelegramHistoryCoverageInterval & {
   provedAt: Date;
 };
 
 export type TelegramHistoryCoverageWriteResult = {
-  intervals: TelegramHistoryCoverageProofSegment[];
+  intervals: TelegramHistoryCoverageWriteSegment[];
 };
 
 const coverageLocks = new Map<string, Promise<void>>();
@@ -64,31 +64,6 @@ export async function listTelegramHistoryCoverage(
   );
 }
 
-export async function listTelegramHistoryCoverageProofs(
-  database: AppDatabase,
-  chatId: string
-): Promise<TelegramHistoryCoverageProofSegment[]> {
-  const rows = await database
-    .select({
-      endAt: telegramHistoryCoverageProofs.endAt,
-      provedAt: telegramHistoryCoverageProofs.provedAt,
-      startAt: telegramHistoryCoverageProofs.startAt,
-      telegramChatId: telegramHistoryCoverageProofs.telegramChatId
-    })
-    .from(telegramHistoryCoverageProofs)
-    .where(eq(telegramHistoryCoverageProofs.telegramChatId, chatId))
-    .orderBy(asc(telegramHistoryCoverageProofs.startAt));
-
-  return normalizeProofSegments(
-    rows.map((row) => ({
-      chatId: row.telegramChatId,
-      endAt: row.endAt,
-      provedAt: row.provedAt,
-      startAt: row.startAt
-    }))
-  );
-}
-
 export async function addTelegramHistoryCoverage(
   database: AppDatabase,
   interval: TelegramHistoryCoverageInterval,
@@ -102,40 +77,39 @@ export async function addTelegramHistoryCoverageBatch(
   intervals: TelegramHistoryCoverageInterval[],
   options: { provedAt?: Date } = {}
 ): Promise<TelegramHistoryCoverageWriteResult> {
-  const proofSegments = normalizeCoverageWriteInput(intervals, options.provedAt ?? new Date());
-  if (proofSegments.length === 0) {
+  const coverageSegments = normalizeCoverageWriteInput(intervals, options.provedAt ?? new Date());
+  if (coverageSegments.length === 0) {
     return { intervals: [] };
   }
 
   await withTelegramHistoryCoverageLocks(
-    uniqueSortedStrings(proofSegments.map((row) => row.chatId)),
+    uniqueSortedStrings(coverageSegments.map((row) => row.chatId)),
     async () =>
       database.transaction(async (transaction) => {
-        await writeTelegramHistoryCoverageInTransaction(transaction, proofSegments);
+        await writeTelegramHistoryCoverageInTransaction(transaction, coverageSegments);
       })
   );
 
-  return { intervals: proofSegments };
+  return { intervals: coverageSegments };
 }
 
 export async function writeTelegramHistoryCoverageInTransaction(
   database: AppDatabase,
-  proofSegments: TelegramHistoryCoverageProofSegment[]
+  coverageSegments: TelegramHistoryCoverageWriteSegment[]
 ): Promise<void> {
-  const normalizedProofs = normalizeProofSegments(proofSegments);
-  if (normalizedProofs.length === 0) {
+  const normalizedSegments = normalizeCoverageWriteSegments(coverageSegments);
+  if (normalizedSegments.length === 0) {
     return;
   }
 
-  await mergeOperationalCoverageInTransaction(database, normalizedProofs);
-  await repaintCoverageProofsInTransaction(database, normalizedProofs);
+  await mergeOperationalCoverageInTransaction(database, normalizedSegments);
 }
 
 export function normalizeCoverageWriteInput(
   intervals: TelegramHistoryCoverageInterval[],
   provedAt: Date
-): TelegramHistoryCoverageProofSegment[] {
-  return normalizeProofSegments(
+): TelegramHistoryCoverageWriteSegment[] {
+  return normalizeCoverageWriteSegments(
     intervals.map((interval) => ({
       ...interval,
       provedAt
@@ -152,49 +126,13 @@ export function normalizeCoverageSegments(
     .flatMap(([chatId, chatSegments]) => mergeCoverageSegmentsForChat(chatId, chatSegments));
 }
 
-export function normalizeProofSegments(
-  segments: TelegramHistoryCoverageProofSegment[]
-): TelegramHistoryCoverageProofSegment[] {
+function normalizeCoverageWriteSegments(
+  segments: TelegramHistoryCoverageWriteSegment[]
+): TelegramHistoryCoverageWriteSegment[] {
   const byChat = groupBy(segments, (segment) => segment.chatId);
   return [...byChat.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
-    .flatMap(([chatId, chatSegments]) => mergeProofSegmentsForChat(chatId, chatSegments));
-}
-
-export function repaintTelegramHistoryCoverageProofs(
-  existingSegments: TelegramHistoryCoverageProofSegment[],
-  newSegments: TelegramHistoryCoverageProofSegment[]
-): TelegramHistoryCoverageProofSegment[] {
-  let result = normalizeProofSegments(existingSegments);
-
-  for (const segment of normalizeProofSegments(newSegments)) {
-    const next: TelegramHistoryCoverageProofSegment[] = [];
-
-    for (const existing of result) {
-      if (existing.chatId !== segment.chatId || !intervalsOverlap(existing, segment)) {
-        next.push(existing);
-        continue;
-      }
-
-      if (existing.startAt < segment.startAt) {
-        next.push({
-          ...existing,
-          endAt: segment.startAt
-        });
-      }
-      if (existing.endAt > segment.endAt) {
-        next.push({
-          ...existing,
-          startAt: segment.endAt
-        });
-      }
-    }
-
-    next.push(segment);
-    result = normalizeProofSegments(next);
-  }
-
-  return result;
+    .flatMap(([chatId, chatSegments]) => mergeCoverageWriteSegmentsForChat(chatId, chatSegments));
 }
 
 export function subtractTelegramHistoryIntervals(
@@ -269,9 +207,9 @@ export async function withTelegramHistoryCoverageLocks<T>(
 
 async function mergeOperationalCoverageInTransaction(
   database: AppDatabase,
-  proofSegments: TelegramHistoryCoverageProofSegment[]
+  coverageSegments: TelegramHistoryCoverageWriteSegment[]
 ): Promise<void> {
-  const intervalsByChat = groupBy(proofSegments, (segment) => segment.chatId);
+  const intervalsByChat = groupBy(coverageSegments, (segment) => segment.chatId);
 
   for (const [chatId, chatSegments] of intervalsByChat.entries()) {
     const searchStartAt = new Date(
@@ -321,56 +259,6 @@ async function mergeOperationalCoverageInTransaction(
   }
 }
 
-async function repaintCoverageProofsInTransaction(
-  database: AppDatabase,
-  proofSegments: TelegramHistoryCoverageProofSegment[]
-): Promise<void> {
-  const intervalsByChat = groupBy(proofSegments, (segment) => segment.chatId);
-
-  for (const [chatId, chatSegments] of intervalsByChat.entries()) {
-    const searchStartAt = new Date(
-      minDateFromList(chatSegments.map((segment) => segment.startAt)).getTime() -
-        TELEGRAM_HISTORY_TICK_MS
-    );
-    const searchEndAt = new Date(
-      maxDateFromList(chatSegments.map((segment) => segment.endAt)).getTime() +
-        TELEGRAM_HISTORY_TICK_MS
-    );
-    const existingRows = await database
-      .select({
-        endAt: telegramHistoryCoverageProofs.endAt,
-        id: telegramHistoryCoverageProofs.id,
-        provedAt: telegramHistoryCoverageProofs.provedAt,
-        startAt: telegramHistoryCoverageProofs.startAt,
-        telegramChatId: telegramHistoryCoverageProofs.telegramChatId
-      })
-      .from(telegramHistoryCoverageProofs)
-      .where(
-        and(
-          eq(telegramHistoryCoverageProofs.telegramChatId, chatId),
-          lte(telegramHistoryCoverageProofs.startAt, searchEndAt),
-          gte(telegramHistoryCoverageProofs.endAt, searchStartAt)
-        )
-      );
-
-    const repainted = repaintTelegramHistoryCoverageProofs(
-      existingRows.map((row) => ({
-        chatId: row.telegramChatId,
-        endAt: row.endAt,
-        provedAt: row.provedAt,
-        startAt: row.startAt
-      })),
-      chatSegments
-    );
-
-    await deleteCoverageProofRows(
-      database,
-      existingRows.map((row) => row.id)
-    );
-    await insertCoverageProofSegments(database, repainted);
-  }
-}
-
 async function deleteCoverageRows(database: AppDatabase, ids: number[]): Promise<void> {
   for (const chunk of chunks(ids, TELEGRAM_HISTORY_COVERAGE_BATCH_CHUNK_SIZE)) {
     if (chunk.length > 0) {
@@ -391,35 +279,6 @@ async function insertCoverageSegments(
         values.map((segment) => ({
           coveredAt: segment.coveredAt,
           endAt: segment.endAt,
-          startAt: segment.startAt,
-          telegramChatId: segment.chatId,
-          updatedAt: sql`now()`
-        }))
-      );
-    }
-  }
-}
-
-async function deleteCoverageProofRows(database: AppDatabase, ids: number[]): Promise<void> {
-  for (const chunk of chunks(ids, TELEGRAM_HISTORY_COVERAGE_BATCH_CHUNK_SIZE)) {
-    if (chunk.length > 0) {
-      await database
-        .delete(telegramHistoryCoverageProofs)
-        .where(inArray(telegramHistoryCoverageProofs.id, chunk));
-    }
-  }
-}
-
-async function insertCoverageProofSegments(
-  database: AppDatabase,
-  segments: TelegramHistoryCoverageProofSegment[]
-): Promise<void> {
-  for (const values of chunks(segments, TELEGRAM_HISTORY_COVERAGE_BATCH_CHUNK_SIZE)) {
-    if (values.length > 0) {
-      await database.insert(telegramHistoryCoverageProofs).values(
-        values.map((segment) => ({
-          endAt: segment.endAt,
-          provedAt: segment.provedAt,
           startAt: segment.startAt,
           telegramChatId: segment.chatId,
           updatedAt: sql`now()`
@@ -460,15 +319,15 @@ function mergeCoverageSegmentsForChat(
   return merged;
 }
 
-function mergeProofSegmentsForChat(
+function mergeCoverageWriteSegmentsForChat(
   chatId: string,
-  segments: TelegramHistoryCoverageProofSegment[]
-): TelegramHistoryCoverageProofSegment[] {
+  segments: TelegramHistoryCoverageWriteSegment[]
+): TelegramHistoryCoverageWriteSegment[] {
   const sorted = segments
     .map((segment) => normalizeTelegramHistoryInterval(segment))
     .filter((segment) => segment.startAt < segment.endAt)
     .sort(compareIntervalStart);
-  const merged: TelegramHistoryCoverageProofSegment[] = [];
+  const merged: TelegramHistoryCoverageWriteSegment[] = [];
 
   for (const segment of sorted) {
     const last = merged.at(-1);
@@ -509,13 +368,6 @@ function mergeIntervals(intervals: TelegramHistoryInterval[]): TelegramHistoryIn
   }
 
   return merged;
-}
-
-function intervalsOverlap(
-  first: TelegramHistoryInterval,
-  second: TelegramHistoryInterval
-): boolean {
-  return first.startAt < second.endAt && first.endAt > second.startAt;
 }
 
 function compareIntervalStart(

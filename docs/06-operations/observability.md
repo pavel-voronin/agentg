@@ -25,7 +25,7 @@ The system should support answering:
 - Which chats have been discovered?
 - Which history sync targets exist for a chat?
 - Which target intervals are covered or missing for a chat?
-- Which Telegram coverage intervals and proof segments exist for a chat?
+- Which Telegram coverage intervals exist for a chat?
 - When was the last update received?
 - Was a specific Telegram message persisted?
 - Which raw event produced a specific current message record?

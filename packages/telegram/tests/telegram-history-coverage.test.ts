@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import {
   normalizeCoverageSegments,
-  repaintTelegramHistoryCoverageProofs,
   subtractTelegramHistoryIntervals
 } from '../src/telegram-history-coverage.js';
 
@@ -15,19 +14,6 @@ describe('Telegram history coverage', () => {
       ])
     ).toEqual([
       coverage('chat-a', '2026-05-01T00:00:00.000Z', '2026-05-01T02:00:00.000Z', '10:05')
-    ]);
-  });
-
-  it('repaints proof segments by splitting old segments around the new proof', () => {
-    expect(
-      repaintTelegramHistoryCoverageProofs(
-        [proof('chat-a', '2026-05-01T00:00:00.000Z', '2026-05-01T04:00:00.000Z', '10:00')],
-        [proof('chat-a', '2026-05-01T01:00:00.000Z', '2026-05-01T03:00:00.000Z', '10:10')]
-      )
-    ).toEqual([
-      proof('chat-a', '2026-05-01T00:00:00.000Z', '2026-05-01T01:00:00.000Z', '10:00'),
-      proof('chat-a', '2026-05-01T01:00:00.000Z', '2026-05-01T03:00:00.000Z', '10:10'),
-      proof('chat-a', '2026-05-01T03:00:00.000Z', '2026-05-01T04:00:00.000Z', '10:00')
     ]);
   });
 
@@ -56,14 +42,6 @@ function coverage(chatId: string, startAt: string, endAt: string, coveredAt: str
     ...interval(startAt, endAt),
     chatId,
     coveredAt: provedAt(coveredAt)
-  };
-}
-
-function proof(chatId: string, startAt: string, endAt: string, proved: string) {
-  return {
-    ...interval(startAt, endAt),
-    chatId,
-    provedAt: provedAt(proved)
   };
 }
 

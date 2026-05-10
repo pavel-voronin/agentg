@@ -44,7 +44,7 @@ Does not own:
 - Telegram login, sessions, or TDLib state.
 - Telegram message normalization or Telegram-shaped current-state writes.
 - Telegram raw event storage.
-- Telegram history coverage tables, proof segments, or TDLib page cursors.
+- Telegram history coverage tables or TDLib page cursors.
 - Parsing Telegram raw storage payloads for History Sync read behavior.
 
 ## Control Plane

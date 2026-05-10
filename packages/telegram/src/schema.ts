@@ -102,29 +102,6 @@ export const telegramHistoryCoverage = pgTable(
   ]
 );
 
-export const telegramHistoryCoverageProofs = pgTable(
-  'telegram_history_coverage_proofs',
-  {
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-    endAt: timestamp('end_at', { withTimezone: true }).notNull(),
-    id: bigserial('id', { mode: 'number' }).primaryKey(),
-    provedAt: timestamp('proved_at', { withTimezone: true }).notNull(),
-    startAt: timestamp('start_at', { withTimezone: true }).notNull(),
-    telegramChatId: text('telegram_chat_id').notNull(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
-  },
-  (table) => [
-    index('telegram_history_coverage_proofs_chat_interval_idx').on(
-      table.telegramChatId,
-      table.startAt
-    ),
-    index('telegram_history_coverage_proofs_chat_proved_idx').on(
-      table.telegramChatId,
-      table.provedAt
-    )
-  ]
-);
-
 export const telegramFileAssets = pgTable(
   'telegram_file_assets',
   {

@@ -15,7 +15,7 @@ import {
   withTelegramHistoryCoverageLocks,
   writeTelegramHistoryCoverageInTransaction,
   type TelegramHistoryCoverageInterval,
-  type TelegramHistoryCoverageProofSegment
+  type TelegramHistoryCoverageWriteSegment
 } from '../../telegram-history-coverage.js';
 import { countTelegramMessagesInIntervals } from '../../telegram-message-counts.js';
 import { TELEGRAM_HISTORY_PAST_BOUNDARY } from '../../telegram-history-time.js';
@@ -43,7 +43,7 @@ const TELEGRAM_MESSAGE_PAGE_LIMIT = 100;
 const TELEGRAM_MESSAGE_PAGE_MAX_LIMIT = 100;
 const TELEGRAM_SECOND_MS = 1000;
 
-type TelegramHistoryCoverageEventInterval = TelegramHistoryCoverageProofSegment & {
+type TelegramHistoryCoverageEventInterval = TelegramHistoryCoverageWriteSegment & {
   messageCount: number;
 };
 
@@ -221,7 +221,7 @@ async function persistMessagesAndCoverage(
 
 async function addCoverageMessageCounts(
   runtime: TelegramRpcRuntime,
-  intervals: TelegramHistoryCoverageProofSegment[]
+  intervals: TelegramHistoryCoverageWriteSegment[]
 ): Promise<TelegramHistoryCoverageEventInterval[]> {
   const counts =
     intervals.length === 0

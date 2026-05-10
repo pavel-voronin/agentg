@@ -1,9 +1,6 @@
 import { query } from '@agentg/rpc/surface';
 
-import {
-  listTelegramHistoryCoverage,
-  listTelegramHistoryCoverageProofs
-} from '../../telegram-history-coverage.js';
+import { listTelegramHistoryCoverage } from '../../telegram-history-coverage.js';
 import {
   telegramGetHistoryCoverageInputSchema,
   telegramGetHistoryCoverageOutputSchema
@@ -16,20 +13,12 @@ export const getHistoryCoverage = query((runtime: TelegramRpcRuntime) =>
     .input(telegramGetHistoryCoverageInputSchema)
     .output(telegramGetHistoryCoverageOutputSchema)
     .query(async ({ input }) => {
-      const [coverage, proofs] = await Promise.all([
-        listTelegramHistoryCoverage(runtime.database, input.chatId),
-        listTelegramHistoryCoverageProofs(runtime.database, input.chatId)
-      ]);
+      const coverage = await listTelegramHistoryCoverage(runtime.database, input.chatId);
 
       return {
         coverage: coverage.map((interval) => ({
           coveredAt: interval.coveredAt.toISOString(),
           endAt: interval.endAt.toISOString(),
-          startAt: interval.startAt.toISOString()
-        })),
-        proofs: proofs.map((interval) => ({
-          endAt: interval.endAt.toISOString(),
-          provedAt: interval.provedAt.toISOString(),
           startAt: interval.startAt.toISOString()
         }))
       };
