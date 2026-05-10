@@ -396,16 +396,17 @@ The target retention policy is normalized-state first:
 
 ## History State
 
-History sync remains a separate domain. It may reference Telegram projection
-tables through stable model refs, but it owns:
+History Sync remains a separate domain. It may reference Telegram projection
+tables through stable model refs, but it owns only desired sync policy:
 
 - `history_templates`
 - `history_targets`
-- `history_coverage`
-- `history_backfill_jobs`
 
 History does not own Telegram messages, chats, users, files, reactions, topics,
-or TDLib state.
+TDLib state, page cursors, or history coverage. Telegram owns:
+
+- `telegram_history_coverage`
+- `telegram_history_coverage_proofs`
 
 See [History](../03-domains/history.md).
 See [History Schema](history-schema.md) for the table shape.

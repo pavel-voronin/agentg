@@ -2,15 +2,13 @@
 
 ## Status
 
-Accepted. Supersedes
-[ADR-0004](ADR-0004-use-grpc-protobuf-for-internal-domain-rpc.md).
+Accepted.
 
 ## Context
 
-AgenTG moved toward explicit domain-owned access surfaces through the internal
-domain RPC migration. ADR-0004 selected gRPC with Protobuf for that boundary.
-The implementation proved that the domain separation is useful, but the selected
-transport and schema tooling are heavier than the project currently needs.
+AgenTG uses explicit domain-owned access surfaces. The domain separation is
+useful, but generated transport and schema tooling are heavier than the project
+currently needs.
 
 The current system is TypeScript-first:
 
@@ -46,8 +44,8 @@ This means:
   protocol for now.
 - Internal service URLs remain explicit configuration. No dynamic service
   discovery is introduced.
-- gRPC, Protobuf source files, generated Protobuf TypeScript, and the
-  `@agentg/proto` workspace package are migration debt to remove.
+- gRPC, Protobuf source files, generated Protobuf TypeScript, and a shared
+  Protobuf workspace are not part of the target implementation.
 
 ## Terms
 
@@ -71,7 +69,7 @@ Benefits:
 - Domain contracts stay with the domain that owns the behavior.
 - TypeScript clients get end-to-end type safety without Protobuf code generation.
 - Input and output validation are explicit at the procedure boundary.
-- The repo no longer needs generated Protobuf code or gRPC adapter mappings.
+- The repo does not need generated Protobuf code or gRPC adapter mappings.
 - Internal RPC remains simpler to debug and evolve while the system is
   TypeScript-only.
 - Gateway and Control Plane can keep their current external protocols while their
@@ -86,8 +84,8 @@ Costs:
   private domain code.
 - Output validation must be a project rule; inferred return types alone are not
   enough for runtime contract discipline.
-- Existing gRPC documentation, tests, dependencies, and generated code must be
-  removed deliberately.
+- Reintroducing a generated transport layer would need a separate architecture
+  decision.
 
 Non-goals:
 
@@ -116,7 +114,8 @@ Every internal RPC call may carry a correlation id. Correlation ids are for
 logging and debugging only; they are not business ids and do not imply
 idempotency.
 
-## Migration
+## Documentation
 
-The staged migration is tracked in
-[Internal Domain tRPC Migration](../09-roadmap/internal-domain-trpc-migration.md).
+Current internal RPC ownership is documented in
+[Event Plane](../05-interfaces/event-plane.md) and
+[Local Development](../06-operations/local-dev.md).

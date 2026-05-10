@@ -5,9 +5,10 @@
 - updates ingested per chat
 - normalization failures
 - live update lag
-- history target coverage per chat
+- Telegram history coverage per chat
 - missing history intervals per chat
-- backfill job queue depth and age
+- History Sync pass duration and requested interval counts
+- Telegram history coverage ensure page counts and remaining interval counts
 - failed TDLib requests
 - Postgres write latency
 - duplicate event count
@@ -23,8 +24,8 @@ The system should support answering:
 - Is the Telegram session authenticated?
 - Which chats have been discovered?
 - Which history targets exist for a chat?
-- Which intervals are covered or missing for a chat?
-- Which backfill jobs are running?
+- Which target intervals are covered or missing for a chat?
+- Which Telegram coverage intervals and proof segments exist for a chat?
 - When was the last update received?
 - Was a specific Telegram message persisted?
 - Which raw event produced a specific current message record?

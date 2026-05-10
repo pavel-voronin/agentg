@@ -52,9 +52,9 @@ TDLib sidecar
 NATS Core is used as an internal, non-durable event bus. Addressed internal
 domain reads and commands use tRPC. Postgres remains the source of recovery
 and replayable Telegram facts.
-History is a separate process from Telegram ingestion: it owns targets,
-coverage, and backfill jobs, while Telegram ingestion owns TDLib and
-Telegram-shaped persistence.
+History Sync is a separate process from Telegram ingestion: it owns templates,
+targets, and sync cadence. Telegram ingestion owns TDLib, Telegram-shaped
+persistence, page continuity, and Telegram history coverage.
 Control Plane is a separate operator boundary: the browser UI calls Control
 Plane server, and Control Plane server resolves internal domain RPC through
 Service Directory before making tRPC calls. The browser UI is composed from
@@ -75,10 +75,10 @@ reading the local Service Directory snapshot and calling the registered getter
 RPC methods. Operator UI composition uses domain-provided Control Plane slot
 content rather than shell-owned domain view models.
 
-The preferred starting runtime is TypeScript/Node.js, provided TDLib can be integrated reliably through its JSON/C interface or a maintained wrapper. Go or Rust remain fallback choices if the Node.js integration becomes the risky part of the project.
+The preferred starting runtime is TypeScript/Node.js, provided TDLib can be integrated reliably through its JSON/C interface or a maintained wrapper. If Node.js integration becomes the risky part of the project, re-plan the sidecar runtime before implementation continues.
 
-This first layer should prove authentication, update reception, chat discovery, history target reconciliation, message persistence, and database inspectability for personal chats, groups, and channels. It should focus on text messages and text-bearing message content first.
+This first layer should prove authentication, update reception, chat discovery, history target materialization, Telegram coverage convergence, message persistence, and database inspectability for personal chats, groups, and channels. It should focus on text messages and text-bearing message content first.
 
-The first implementation should support history coverage as a desired-state capability. Product policy should live in history templates and concrete chat targets, not in a global backfill scheduler.
+The first implementation should support history coverage as a desired-state capability. Product policy lives in History Sync templates and concrete chat targets. Telegram owns the operational coverage state that proves local Telegram message history has no enumeration gaps for covered intervals.
 
 The product preference is complete visible text coverage: if the user can see text content in the normal Telegram client, AgenTG should aim to persist it. Attachment payloads can remain lazy and request-driven.

@@ -14,6 +14,8 @@ Owns:
 - Passing raw Telegram facts to storage.
 - Fetching and persisting historical Telegram pages requested by the History
   Sync domain.
+- Computing and storing Telegram history coverage from fetched pages and live
+  updates.
 - Fetching and persisting operator-requested chat message pages for Control
   Plane read-through views.
 
@@ -23,25 +25,26 @@ Does not own:
 - Bulk attachment processing.
 - Long-running data analysis.
 
-## History
+## History Sync
 
 Owns:
 
-- History templates, concrete chat targets, coverage intervals, and backfill
-  job state.
-- Reconciling desired history coverage against existing coverage.
-- Scheduling and checkpointing backfill jobs.
-- Requesting Telegram history pages through the Telegram internal tRPC surface.
-- Composing history read models from History-owned state and Telegram-owned read
-  models.
-- Publishing history lifecycle and coverage events.
-- Extending coverage from observed Telegram message-page events.
+- History templates and concrete chat targets.
+- Materializing templates into concrete chat targets.
+- Projecting target ranges into bounded absolute intervals.
+- Sync cadence and wake-up policy.
+- Asking Telegram to ensure coverage for absolute intervals through the
+  Telegram internal tRPC surface.
+- Composing operator read models from History Sync target state and
+  Telegram-owned coverage/read state.
+- Publishing history sync and target lifecycle events.
 
 Does not own:
 
 - Telegram login, sessions, or TDLib state.
 - Telegram message normalization or Telegram-shaped current-state writes.
 - Telegram raw event storage.
+- Telegram history coverage tables, proof segments, or TDLib page cursors.
 - Parsing Telegram raw storage payloads for History read behavior.
 
 ## Control Plane
@@ -57,7 +60,7 @@ Does not own:
 
 - Agent-facing API compatibility.
 - Domain Control Plane content components, view models, or UI state.
-- History targets, coverage, or backfill job writes.
+- History Sync target writes or Telegram history coverage writes.
 - Telegram login, sessions, TDLib state, or Telegram-shaped persistence.
 
 ## Control Plane SDK
@@ -86,7 +89,7 @@ Does not own:
 
 - Operator UI traffic.
 - Internal orchestration between domains.
-- History targets, coverage, or backfill job writes.
+- History Sync target writes or Telegram history coverage writes.
 - Module-owned tRPC implementation.
 
 ## Trusted Modules
@@ -120,7 +123,7 @@ Owns:
 Does not own:
 
 - Telegram-shaped message storage.
-- History targets, coverage, or backfill jobs.
+- History Sync targets or Telegram history coverage.
 - Telegram chat base models or any domain-owned base result.
 
 ## Storage Layer

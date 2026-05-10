@@ -16,7 +16,7 @@ Every event published to NATS uses the integration event envelope:
 ```json
 {
   "id": "evt_...",
-  "type": "history.coverage.changed",
+  "type": "telegram.history.coverage.changed",
   "occurredAt": "2026-05-01T00:00:00.000Z",
   "data": {},
   "meta": {}
@@ -65,6 +65,7 @@ Telegram publishes:
 - `telegram.message.updated`
 - `telegram.message.deleted`
 - `telegram.user.updated`
+- `telegram.history.coverage.changed`
 - `telegram.tdlib.{method}.started`
 - `telegram.tdlib.{method}.completed`
 - `telegram.tdlib.{method}.failed`
@@ -76,13 +77,6 @@ History publishes:
 - `history.sync.started`
 - `history.sync.completed`
 - `history.sync.failed`
-- `history.reconcile.completed`
-- `history.job.created`
-- `history.job.started`
-- `history.job.progress`
-- `history.job.completed`
-- `history.job.failed`
-- `history.coverage.changed`
 - `history.target.upserted`
 - `history.target.deleted`
 - `history.target.auto_deleted`
@@ -121,12 +115,14 @@ client treats it as a fatal topology failure and starts graceful shutdown.
 
 ## Consumers
 
-History subscribes to Telegram events:
+History Sync subscribes to Telegram events:
 
 - `telegram.chat.updated` wakes reconciliation because the known chat set may
   have changed.
-- `telegram.message.created` updates live coverage for message-history updates.
-- `telegram.status` opens and closes the live coverage session.
+- `telegram.chat.removed` removes concrete targets for chats no longer listed by
+  Telegram.
+- `telegram.history.coverage.changed` wakes sync so completed one-shot targets
+  can be removed and remaining requested intervals can continue converging.
 
 Gateway subscribes only to `telegram.login.completed` and forwards that event to
 external agent WebSocket clients. All other events remain internal unless a
@@ -135,9 +131,9 @@ Gateway API change explicitly exposes them.
 Control Plane server subscribes to `>` and forwards live integration events to
 browser clients.
 
-Summaries subscribes to Telegram message events and History state-change events
-to invalidate private summary state. It recovers durable state through
-`summaries_*` tables and does not treat NATS as a replay log.
+Summaries subscribes to Telegram message and coverage events plus History Sync
+target events to invalidate private summary state. It recovers durable state
+through `summaries_*` tables and does not treat NATS as a replay log.
 
 Telegram event `data` embeds Telegram domain objects as inline ModelRefs.
 Stable Telegram chat references use `{ "_model": "telegram.chat", "id": "..." }`.

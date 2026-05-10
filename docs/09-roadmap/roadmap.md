@@ -6,25 +6,22 @@
 - Implement TDLib sidecar boundary.
 - Authenticate as the Telegram user and persist the session.
 - Discover personal chats, groups, channels, and Saved Messages.
-- Implement history templates, concrete targets, coverage intervals, and reconciliation into backfill jobs.
+- Implement History Sync templates, concrete targets, target range projection,
+  and Telegram-owned coverage convergence.
 - Store raw events in Postgres.
 - Build basic normalized message state for text-oriented messages.
 - Store attachment metadata without bulk-downloading payloads.
 - Preserve Telegram-specific data model and identifiers.
 - Make stored data inspectable directly through Postgres.
 
-## After Phase 1
+## Architecture References
 
-The current architecture migration is tracked separately because it changes
-internal domain boundaries rather than product scope.
+Current architecture is documented in:
 
-- [Internal Domain tRPC Migration](internal-domain-trpc-migration.md)
-- [Domain Boundary Hardening Plan](domain-boundary-hardening-plan.md)
-- [Extension Registry And Direct RPC Migration](extension-registry-direct-rpc-migration.md)
-- [Module Runtime And Extensions Plan](module-runtime-and-extensions-plan.md) is
-  historical context superseded by the extension-registry migration.
-- [Internal Domain RPC Migration](internal-domain-rpc-migration.md) is historical
-  gRPC/Protobuf context superseded by the tRPC migration plan.
+- [Component Boundaries](../02-architecture/component-boundaries.md)
+- [Data Flow](../02-architecture/data-flow.md)
+- [Module Runtime And Extensions](../02-architecture/module-runtime-and-extensions.md)
+- [Event Plane](../05-interfaces/event-plane.md)
+- [Local Development](../06-operations/local-dev.md)
 
-Do not advance between migration stages without re-planning the stage and meeting
-its Definition of Done.
+Roadmap entries must describe only the active target architecture.

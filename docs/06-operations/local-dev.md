@@ -26,17 +26,18 @@ History, and Summaries.
 
 `npm run dev:telegram` runs the `@agentg/telegram` ingestion package. It owns the
 TDLib session, receives live Telegram updates, writes Telegram-shaped records to
-Postgres, publishes live integration events to NATS, and serves the narrow
-Telegram history fetch RPC surface used by History. It joins Service
-Directory with its advertised RPC URL, procedures, and events.
+Postgres, computes Telegram history coverage from fetched and received messages,
+publishes live integration events to NATS, and serves the Telegram history fetch
+and coverage RPC surface used by History Sync. It joins Service Directory with
+its advertised RPC URL, procedures, and events.
 
 `npm run dev:history` runs the `@agentg/history` package. It owns
-history templates, concrete chat targets, coverage intervals, backfill jobs, and
-the history sync lifecycle. It joins Service Directory and resolves Telegram
-through the local Service Directory snapshot before internal tRPC calls.
+history templates, concrete chat targets, range projection, and the history sync
+lifecycle. It joins Service Directory and resolves Telegram through the local
+Service Directory snapshot before internal tRPC calls.
 
 `npm run dev:summaries` runs the `@agentg/summaries` pilot module. It owns
-`summaries_*` tables, subscribes to Telegram and History events for summary
+`summaries_*` tables, subscribes to Telegram and History Sync events for summary
 invalidation, exposes `summaries.*` tRPC methods, and joins Service Directory
 with its procedures, events, and `summaries.chatSummary` extension declaration.
 

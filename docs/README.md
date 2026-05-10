@@ -50,5 +50,5 @@ AgenTG should behave as a real Telegram client service first. It should ingest a
 Short formula:
 
 ```text
-Telegram user-client -> history coverage -> Postgres
+History Sync target policy -> Telegram coverage convergence -> Postgres
 ```

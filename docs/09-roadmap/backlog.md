@@ -4,7 +4,7 @@
 
 - Decide codebase layout.
 - Validate TypeScript/Node.js as the first TDLib sidecar runtime.
-- Keep Go or Rust as fallback options if Node.js TDLib integration is operationally weak.
+- Revisit the TDLib sidecar runtime if Node.js integration becomes operationally weak.
 - Decide local development stack.
 - Define Telegram Client Core boundary in code.
 - Decide how closely internal schemas should track TDLib objects versus stable internal Telegram-shaped records.
@@ -16,7 +16,8 @@
 - Draft SQL schema for messages.
 - Draft SQL schema for chats.
 - Draft SQL schema for users or sender records.
-- Draft SQL schema for history templates, targets, coverage intervals, and backfill jobs.
+- Draft SQL schema for History Sync templates and targets.
+- Draft SQL schema for Telegram history coverage intervals and proof segments.
 - Draft SQL schemas for participants, files, reactions, and topics after the first text-message loop works.
 - Decide retention defaults.
 

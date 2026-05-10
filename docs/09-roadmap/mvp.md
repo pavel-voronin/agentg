@@ -16,7 +16,8 @@ The system can connect to the user's Telegram account, read personal chats, grou
 - Reading personal chats, groups, and channels.
 - Chat list synchronization.
 - History sync as a desired-state mechanism.
-- History templates, concrete chat targets, coverage intervals, and backfill jobs.
+- History templates and concrete chat targets.
+- Telegram-owned coverage intervals and proof segments.
 - Text messages and text-bearing message content.
 - Text visible to the user's normal Telegram client is the primary data target.
 - Replies and reply references where available.
@@ -37,7 +38,8 @@ The system can connect to the user's Telegram account, read personal chats, grou
 - The system can authenticate and resume a Telegram user session.
 - Personal chats, groups, and channels can be discovered.
 - The system can materialize history targets for known chats.
-- The system can record coverage intervals and derive backfill jobs for missing intervals.
+- Telegram can record coverage intervals and compute missing intervals from
+  Telegram-owned coverage.
 - Live updates and historical fetches both paint the same coverage timeline.
 - Incoming text-oriented messages are written to Postgres.
 - Replies preserve enough references to reconstruct local context.
@@ -60,4 +62,4 @@ The ideal target is requested visible text history coverage: every text message,
 
 Attachments are not part of the initial bulk target. Store enough metadata to know that an attachment exists, but download or process attachment payloads only on request or in later dedicated pipelines.
 
-Full history, rolling recent windows, and targeted historical ranges are represented as history targets. Backfill jobs are only execution details derived from target minus coverage.
+Full history, rolling recent windows, and targeted historical ranges are represented as history targets. Telegram computes missing intervals and page continuity when History Sync asks it to ensure a target interval.

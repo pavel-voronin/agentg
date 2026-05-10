@@ -4,9 +4,9 @@
 
 - [Telegram Client](telegram-client.md): implement the user-client, Telegram event model, and Telegram API surface.
 - [Ingestion](ingestion.md): get Telegram events and historical fetch results into durable Telegram-shaped storage.
-- [History](history.md): manage templates, concrete chat targets, timeline coverage, reconciliation, and backfill jobs.
-- Telegram Storage: persist raw events and current Telegram message state in Postgres.
-- History Storage: persist templates, targets, coverage, and backfill queue state in Postgres.
+- [History Sync](history.md): manage templates, concrete chat targets, range projection, and sync cadence.
+- Telegram Storage: persist raw events, current Telegram message state, and Telegram history coverage in Postgres.
+- History Sync Storage: persist templates and concrete chat targets in Postgres.
 - Summaries: persist summary runs, results, source references, and invalidation
   state in Postgres.
 
@@ -24,6 +24,7 @@ The system should separate:
 - Telegram client session
 - raw event log
 - current message state
-- history targets and coverage
+- History Sync targets
+- Telegram history coverage
 - module-owned derived state
 - attachment metadata
