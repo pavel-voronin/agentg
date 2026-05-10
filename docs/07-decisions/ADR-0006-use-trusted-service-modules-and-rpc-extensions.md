@@ -48,15 +48,15 @@ service joins with a manifest:
 
 ```json
 {
-  "slug": "summaries",
-  "rpcUrl": "http://summaries:8080",
+  "slug": "analysis",
+  "rpcUrl": "http://analysis:8080",
   "required": false,
-  "procedures": ["summaries.requestSummary", "summaries.chatSummary"],
-  "events": ["summaries.summary.completed"],
+  "procedures": ["analysis.requestReport", "analysis.chatInsights"],
+  "events": ["analysis.report.completed"],
   "extensions": [
     {
       "target": "telegram.chat",
-      "extension": "summaries.chatSummary"
+      "extension": "analysis.chatInsights"
     }
   ]
 }
@@ -99,7 +99,7 @@ or module persists its own state when persistence is part of its own behavior.
 Module means a trusted internal service that can own storage, expose RPC
 methods, publish and consume NATS events, and register extensions.
 
-Slug means the short stable module identifier, for example `summaries`.
+Slug means the short stable module identifier, for example `analysis`.
 
 Extension means a module-owned getter RPC method registered against a target
 model or procedure name.
@@ -152,11 +152,11 @@ and Control Plane. Trusted modules that add optional product views register as
 not required unless their absence must stop the whole runtime.
 
 Inside Docker Compose, a module service name should match its slug. A module
-with slug `summaries` is addressed as `http://summaries:<port>` inside the
+with slug `analysis` is addressed as `http://analysis:<port>` inside the
 Compose network.
 
 Module tables should use the owning slug as a prefix, for example
-`summaries_runs` or `summaries_chat_summaries`.
+`analysis_runs` or `analysis_chat_insights`.
 
 Services renew their Service Directory lease periodically. Service Directory
 removes stale services and their extension declarations from its snapshot.

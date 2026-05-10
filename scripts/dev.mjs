@@ -41,9 +41,6 @@ try {
   startDevProcess('history-sync', 'npm', ['run', 'dev:history-sync']);
   await waitForTcp('history-sync RPC', '127.0.0.1', 18082);
 
-  startDevProcess('summaries', 'npm', ['run', 'dev:summaries']);
-  await waitForTcp('summaries RPC', '127.0.0.1', 18083);
-
   startDevProcess('gateway', 'npm', ['run', 'dev:gateway']);
   await waitForTcp('gateway', '127.0.0.1', 8787);
 

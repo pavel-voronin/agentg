@@ -4,7 +4,7 @@
 import { spawnSync } from 'node:child_process';
 
 const includeTelegram = process.env.COMPOSE_SMOKE_TELEGRAM === '1';
-const profiles = ['history-sync', 'gateway', 'summaries', 'control-plane'];
+const profiles = ['history-sync', 'gateway', 'control-plane'];
 if (includeTelegram) {
   profiles.push('container-client');
 }
@@ -16,7 +16,6 @@ const services = [
   'service-directory',
   'history-sync',
   'gateway',
-  'summaries',
   'control-plane',
   ...(includeTelegram ? ['telegram'] : [])
 ];
@@ -35,7 +34,7 @@ try {
     'run',
     '--rm',
     '--no-deps',
-    'summaries',
+    'gateway',
     'node',
     '--input-type=module',
     '--eval',
@@ -82,7 +81,6 @@ function runNpm(args) {
 
 function smokeDriver(checkTelegram) {
   return `
-import { createTRPCUntypedClient, httpBatchLink } from '@trpc/client';
 import { createServiceDirectoryClient } from '@agentg/service-directory/rpc';
 
 function sleep(ms) {
@@ -107,68 +105,36 @@ async function fetchUntilReady(url, service, acceptedStatuses, attempts = 30) {
   throw new Error(service + ' did not become ready: ' + (lastError instanceof Error ? lastError.message : String(lastError)));
 }
 
-async function waitForExtensionRegistration(client, target, extension, attempts = 20) {
+async function waitForServiceRegistrations(client, expectedSlugs, attempts = 20) {
   let snapshot;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     snapshot = await client.refresh();
-    if (snapshot.extensions.some((item) => item.target === target && item.extension === extension)) {
+    const activeSlugs = new Set(snapshot.services.map((service) => service.slug));
+    if (expectedSlugs.every((slug) => activeSlugs.has(slug))) {
       return snapshot;
     }
     await sleep(2_000);
   }
 
-  throw new Error(extension + ' is not registered for ' + target + ': ' + JSON.stringify(snapshot));
+  throw new Error('Expected services are not registered: ' + JSON.stringify({
+    expectedSlugs,
+    snapshot
+  }));
 }
 
-const extensionTarget = 'telegram.chat';
-const extensionMethod = 'summaries.chatSummary';
-const base = {
-  chat: {
-    _model: extensionTarget,
-    id: 'compose-smoke-chat',
-    title: 'Compose Smoke Chat',
-    type: 'private'
-  }
-};
 const serviceDirectoryClient = createServiceDirectoryClient({
   url: 'http://service-directory:8080'
 });
-const serviceDirectory = await waitForExtensionRegistration(
+const expectedServices = [
+  'control-plane',
+  'gateway',
+  'history-sync',
+  ...(checkTelegram ? ['telegram'] : [])
+];
+const serviceDirectory = await waitForServiceRegistrations(
   serviceDirectoryClient,
-  extensionTarget,
-  extensionMethod
+  expectedServices
 );
-const summariesRpcUrl = serviceDirectoryClient.resolveProcedure('summaries.requestSummary').rpcUrl;
-
-const summariesClient = createTRPCUntypedClient({
-  links: [httpBatchLink({ url: summariesRpcUrl })]
-});
-const now = new Date().toISOString();
-const summaryRequest = await summariesClient.mutation('requestSummary', {
-  chatId: base.chat.id,
-  reason: 'compose-smoke',
-  sourceMessages: [
-    { messageId: 'compose-smoke-1', messageDate: now, text: 'First message for compose smoke' },
-    { messageId: 'compose-smoke-2', messageDate: now, text: 'Second message for compose smoke' }
-  ]
-});
-const summaryExtension = await summariesClient.query('chatSummary', base.chat);
-if (summaryExtension.summary?.chatId !== base.chat.id || summaryExtension.stale !== false) {
-  throw new Error(extensionMethod + ' did not return a fresh summary: ' + JSON.stringify(summaryExtension));
-}
-const composed = {
-  base,
-  extensions: [
-    {
-      extension: extensionMethod,
-      model: {
-        _model: base.chat._model,
-        id: base.chat.id
-      },
-      result: summaryExtension
-    }
-  ]
-};
 
 const controlPlaneResponse = await fetchUntilReady('http://control-plane:8788/', 'control-plane', [200]);
 
@@ -182,9 +148,7 @@ console.log(JSON.stringify({
     contentType: controlPlaneResponse.headers.get('content-type'),
     status: controlPlaneResponse.status
   },
-  composed,
-  serviceDirectory,
-  summaryRequest
+  serviceDirectory
 }, null, 2));
 serviceDirectoryClient.close();
 `;

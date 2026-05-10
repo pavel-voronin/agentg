@@ -160,7 +160,7 @@ count excludes `telegram_schema_versions`, `telegram_projection_gaps`, and
 | `telegram_file_download_jobs` | Per-asset request-driven download queue state. |
 | `telegram_files` | Owner-slot metadata linking chats/messages to file assets. |
 | `telegram_message_contents` | Constructor-level message content and normalized domain payload for rare or wide content variants. |
-| `telegram_message_interactions` | Views, reply counters, mentions, unread state, fact checks, and interaction summaries. |
+| `telegram_message_interactions` | Views, reply counters, mentions, unread state, fact checks, and interaction rollups. |
 | `telegram_message_media` | Message-media links and typed media metadata for photos, videos, audio, documents, notes, stickers, and paid media. |
 | `telegram_message_relations` | Replies, forwards, imports, thread links, origin links, and other message-to-object edges. |
 | `telegram_message_state` | Send state, scheduling, pins, deletions, suggested posts, business state, and live location state. |
@@ -414,11 +414,5 @@ See [History Sync Schema](history-sync-schema.md) for the table shape.
 ## Module-Owned State
 
 Additional trusted modules own their tables and migrations. The table prefix
-must match the module slug. The current pilot module owns:
-
-- `summaries_runs`
-- `summaries_results`
-- `summaries_source_refs`
-- `summaries_invalidations`
-
-Other domains and modules must not read or write those tables directly.
+must match the module slug. Other domains and modules must not read or write
+module-owned tables directly.

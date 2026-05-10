@@ -11,7 +11,6 @@ COPY packages/claude-plugin/package.json packages/claude-plugin/package.json
 COPY packages/control-plane/package.json packages/control-plane/package.json
 COPY packages/gateway/package.json packages/gateway/package.json
 COPY packages/history-sync/package.json packages/history-sync/package.json
-COPY packages/summaries/package.json packages/summaries/package.json
 COPY packages/telegram/package.json packages/telegram/package.json
 RUN npm install
 
@@ -34,7 +33,6 @@ COPY packages/claude-plugin/package.json packages/claude-plugin/package.json
 COPY packages/control-plane/package.json packages/control-plane/package.json
 COPY packages/gateway/package.json packages/gateway/package.json
 COPY packages/history-sync/package.json packages/history-sync/package.json
-COPY packages/summaries/package.json packages/summaries/package.json
 COPY packages/telegram/package.json packages/telegram/package.json
 RUN npm install --omit=dev && npm cache clean --force
 COPY --from=build --chown=agentg:agentg /app/packages/database/dist ./packages/database/dist
@@ -44,7 +42,6 @@ COPY --from=build --chown=agentg:agentg /app/packages/service-directory/dist ./p
 COPY --from=build --chown=agentg:agentg /app/packages/gateway/dist ./packages/gateway/dist
 COPY --from=build --chown=agentg:agentg /app/packages/history-sync/dist ./packages/history-sync/dist
 COPY --from=build --chown=agentg:agentg /app/packages/history-sync/dist-control-plane ./packages/history-sync/dist-control-plane
-COPY --from=build --chown=agentg:agentg /app/packages/summaries/dist ./packages/summaries/dist
 COPY --from=build --chown=agentg:agentg /app/packages/telegram/dist ./packages/telegram/dist
 COPY --from=build --chown=agentg:agentg /app/packages/telegram/dist-control-plane ./packages/telegram/dist-control-plane
 RUN mkdir -p /app/td-data/database /app/td-data/files && chown -R agentg:agentg /app

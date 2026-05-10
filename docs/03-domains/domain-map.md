@@ -7,8 +7,6 @@
 - [History Sync](history-sync.md): manage templates, concrete chat targets, range projection, and sync cadence.
 - Telegram Storage: persist raw events, current Telegram message state, and Telegram history coverage in Postgres.
 - History Sync Storage: persist templates and concrete chat targets in Postgres.
-- Summaries: persist summary runs, results, source references, and invalidation
-  state in Postgres.
 
 ## Supporting Domains
 

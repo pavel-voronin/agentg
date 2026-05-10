@@ -2,7 +2,7 @@
 
 - Use conventional commits.
 - Use only these commit scopes: `project`, `infra`, `telegram`, `history-sync`,
-  `gateway`, `control-plane`, `summaries`, `extensions`, `storage`, `rpc`, and
+  `gateway`, `control-plane`, `extensions`, `storage`, `rpc`, and
   `events`.
 - Do not introduce technical debt, fallback paths, compatibility paths, legacy
   paths, or parallel old/new implementations.

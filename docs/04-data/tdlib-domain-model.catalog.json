@@ -322,7 +322,7 @@
     },
     {
       "name": "telegram_message_interactions",
-      "storedLogicalProjections": "Views, reply counters, mentions, unread state, fact checks, and interaction summaries."
+      "storedLogicalProjections": "Views, reply counters, mentions, unread state, fact checks, and interaction rollups."
     },
     {
       "name": "telegram_message_media",

@@ -81,12 +81,6 @@ History Sync publishes:
 - `history-sync.target.deleted`
 - `history-sync.target.auto_deleted`
 
-Summaries publishes:
-
-- `summaries.summary.requested`
-- `summaries.summary.completed`
-- `summaries.summary.invalidated`
-
 RPC calls publish lifecycle events by default:
 
 - `{domain}.rpc.{procedure}.started`
@@ -131,10 +125,6 @@ Gateway API change explicitly exposes them.
 Control Plane server subscribes to `>` and forwards live integration events to
 browser clients.
 
-Summaries subscribes to Telegram message and coverage events plus History Sync
-target events to invalidate private summary state. It recovers durable state
-through `summaries_*` tables and does not treat NATS as a replay log.
-
 Telegram event `data` embeds Telegram domain objects as inline ModelRefs.
 Stable Telegram chat references use `{ "_model": "telegram.chat", "id": "..." }`.
 Stable Telegram chat folder references use `{ "_model": "telegram.chatFolder",
@@ -170,12 +160,9 @@ Internal RPC contracts are owned by the serving domain package:
   `createHistorySyncRpcClient`. The helper returns the explicit History Sync procedures
   used by typed internal callers. The History Sync schemas, router, server bind config,
   storage schema, commands, and domain types remain package-internal.
-- Modules own package-local RPC contracts. The pilot summaries module owns
-  `@agentg/summaries/rpc`, whose only public export is
-  `createSummariesRpcClient`. The helper returns the explicit summaries
-  procedures used by direct callers and extension getters. The summaries
-  schemas, router, server bind config, storage schema, registrations, and
-  service runtime remain package-internal.
+- Modules own package-local RPC contracts. Module schemas, routers, server bind
+  config, storage schema, registrations, and service runtime remain
+  package-internal.
 
 Gateway owns the external agent WebSocket protocol. Control Plane owns the
 browser-facing WebSocket protocol. Neither protocol is an internal domain RPC

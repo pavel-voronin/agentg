@@ -9,11 +9,11 @@ events; they do not know which modules extend them.
 
 Every module has:
 
-- `slug`: stable short name, for example `summaries`
+- `slug`: stable short name, for example `analysis`
 - `serviceRpcUrl`: internal tRPC service URL
 - `natsUrl`: NATS Core URL
 - `databaseUrl`: Postgres URL
-- `tablePrefix`: owned table prefix, for example `summaries_`
+- `tablePrefix`: owned table prefix, for example `analysis_`
 - `migrationFolder`: module-owned Drizzle migration folder
 - `extensions`: `{ target, extension }` entries declared in its Service
   Directory manifest
@@ -28,17 +28,17 @@ service joins it with one manifest:
 
 ```json
 {
-  "slug": "summaries",
-  "rpcUrl": "http://summaries:8080",
+  "slug": "analysis",
+  "rpcUrl": "http://analysis:8080",
   "procedures": [
-    { "name": "summaries.requestSummary", "kind": "mutation" },
-    { "name": "summaries.chatSummary", "kind": "query" }
+    { "name": "analysis.requestReport", "kind": "mutation" },
+    { "name": "analysis.chatInsights", "kind": "query" }
   ],
-  "events": ["summaries.summary.completed"],
+  "events": ["analysis.report.completed"],
   "extensions": [
     {
       "target": "telegram.chat",
-      "extension": "summaries.chatSummary"
+      "extension": "analysis.chatInsights"
     }
   ]
 }
@@ -58,8 +58,6 @@ and modules own schemas and migrations in their own packages:
 
 - `@agentg/telegram`: `telegram_*`, journal `__drizzle_migrations_telegram`
 - `@agentg/history-sync`: `history_sync_*`, journal `__drizzle_migrations_history_sync`
-- `@agentg/summaries`: `summaries_*`, journal
-  `__drizzle_migrations_summaries`
 
 Cross-domain table reads and writes are a boundary violation. A module that
 needs another domain's data calls that domain's tRPC surface.
@@ -89,10 +87,10 @@ no nested `modelRef` object.
 Package-local tRPC runtimes expose `rpc` as the procedure builder:
 
 ```ts
-readChatSummary: rpc
-  .input(summariesReadChatSummaryInputSchema)
-  .output(summariesReadChatSummaryOutputSchema)
-  .query(({ input }) => readChatSummary(runtime, input.chatId));
+readModuleState: rpc
+  .input(readModuleStateInputSchema)
+  .output(readModuleStateOutputSchema)
+  .query(({ input }) => readModuleState(runtime, input.id));
 ```
 
 RPC lifecycle events are published by default. Event names use
@@ -125,7 +123,7 @@ Extension declaration is part of the service manifest:
 ```json
 {
   "target": "telegram.chat",
-  "extension": "summaries.chatSummary"
+  "extension": "analysis.chatInsights"
 }
 ```
 
@@ -135,10 +133,10 @@ owning service slug and RPC URL. It does not call extension RPC methods.
 An extension getter receives the marked model object directly:
 
 ```ts
-chatSummary: rpc
-  .input(summariesChatSummaryInputSchema)
-  .output(summariesChatSummaryOutputSchema)
-  .query(({ input }) => getChatSummaryExtension(runtime, input.id));
+chatInsights: rpc
+  .input(chatInsightsInputSchema)
+  .output(chatInsightsOutputSchema)
+  .query(({ input }) => getChatInsights(runtime, input.id));
 ```
 
 Caller code composes an extended view when it needs one:

@@ -27,7 +27,7 @@ describe('service directory', () => {
           assetVersion: 'asset-v1',
           contents: [
             {
-              contentId: 'summaries.tile',
+              contentId: 'analytics.tile',
               module: {
                 assetPath: 'tile.js'
               },
@@ -35,17 +35,17 @@ describe('service directory', () => {
             }
           ]
         },
-        events: ['summaries.summary.completed'],
+        events: ['analytics.report.completed'],
         extensions: [
           {
-            extension: 'summaries.chatSummary',
+            extension: 'analytics.chatInsights',
             target: 'telegram.chat'
           }
         ],
-        procedures: [{ kind: 'query', name: 'summaries.chatSummary' }],
+        procedures: [{ kind: 'query', name: 'analytics.chatInsights' }],
         required: false,
-        rpcUrl: 'http://summaries:8080',
-        slug: 'summaries'
+        rpcUrl: 'http://analytics:8080',
+        slug: 'analytics'
       },
       joinedAt
     );
@@ -54,9 +54,9 @@ describe('service directory', () => {
     expect(joined.output.snapshot).toMatchObject({
       extensions: [
         {
-          extension: 'summaries.chatSummary',
-          rpcUrl: 'http://summaries:8080',
-          serviceSlug: 'summaries',
+          extension: 'analytics.chatInsights',
+          rpcUrl: 'http://analytics:8080',
+          serviceSlug: 'analytics',
           target: 'telegram.chat'
         }
       ],
@@ -66,7 +66,7 @@ describe('service directory', () => {
             assetVersion: 'asset-v1',
             contents: [
               {
-                contentId: 'summaries.tile',
+                contentId: 'analytics.tile',
                 module: {
                   assetPath: 'tile.js'
                 },
@@ -74,10 +74,10 @@ describe('service directory', () => {
               }
             ]
           },
-          events: ['summaries.summary.completed'],
-          procedures: [{ kind: 'query', name: 'summaries.chatSummary' }],
-          rpcUrl: 'http://summaries:8080',
-          slug: 'summaries'
+          events: ['analytics.report.completed'],
+          procedures: [{ kind: 'query', name: 'analytics.chatInsights' }],
+          rpcUrl: 'http://analytics:8080',
+          slug: 'analytics'
         }
       ],
       version: 1
@@ -86,7 +86,7 @@ describe('service directory', () => {
     const renewed = directory.renew(
       {
         leaseToken: joined.output.lease.leaseToken,
-        slug: 'summaries'
+        slug: 'analytics'
       },
       refreshedAt
     );
@@ -99,7 +99,7 @@ describe('service directory', () => {
           assetVersion: 'asset-v2',
           contents: [
             {
-              contentId: 'summaries.tile',
+              contentId: 'analytics.tile',
               module: {
                 assetPath: 'tile.js'
               },
@@ -107,17 +107,17 @@ describe('service directory', () => {
             }
           ]
         },
-        events: ['summaries.summary.completed'],
+        events: ['analytics.report.completed'],
         extensions: [
           {
-            extension: 'summaries.chatSummary',
+            extension: 'analytics.chatInsights',
             target: 'telegram.chat'
           }
         ],
-        procedures: [{ kind: 'query', name: 'summaries.chatSummary' }],
+        procedures: [{ kind: 'query', name: 'analytics.chatInsights' }],
         required: false,
-        rpcUrl: 'http://summaries:8080',
-        slug: 'summaries'
+        rpcUrl: 'http://analytics:8080',
+        slug: 'analytics'
       },
       refreshedAt
     );
@@ -147,36 +147,36 @@ describe('service directory', () => {
     try {
       await expect(
         client.join({
-          events: ['summaries.summary.completed'],
+          events: ['analytics.report.completed'],
           extensions: [
             {
-              extension: 'summaries.chatSummary',
+              extension: 'analytics.chatInsights',
               target: 'telegram.chat'
             }
           ],
-          procedures: [{ kind: 'query', name: 'summaries.chatSummary' }],
+          procedures: [{ kind: 'query', name: 'analytics.chatInsights' }],
           required: false,
-          rpcUrl: 'http://summaries:8080',
-          slug: 'summaries'
+          rpcUrl: 'http://analytics:8080',
+          slug: 'analytics'
         })
       ).resolves.toMatchObject({
         services: [
           {
-            slug: 'summaries'
+            slug: 'analytics'
           }
         ],
         version: 1
       });
 
       expect(eventBus.publishedTypes()).toEqual(['service_directory.changed']);
-      expect(client.resolveProcedure('summaries.chatSummary')).toEqual({
+      expect(client.resolveProcedure('analytics.chatInsights')).toEqual({
         kind: 'query',
-        rpcUrl: 'http://summaries:8080'
+        rpcUrl: 'http://analytics:8080'
       });
       expect(client.extensionsForTarget('telegram.chat')).toEqual([
         expect.objectContaining({
-          extension: 'summaries.chatSummary',
-          serviceSlug: 'summaries',
+          extension: 'analytics.chatInsights',
+          serviceSlug: 'analytics',
           target: 'telegram.chat'
         })
       ]);
@@ -211,8 +211,8 @@ describe('service directory', () => {
         extensions: [],
         procedures: [{ kind: 'query', name: 'telegram.getChat' }],
         required: false,
-        rpcUrl: 'http://summaries:8080',
-        slug: 'summaries'
+        rpcUrl: 'http://analytics:8080',
+        slug: 'analytics'
       });
 
       expect(() => client.resolveProcedure('telegram.getChat')).toThrow(

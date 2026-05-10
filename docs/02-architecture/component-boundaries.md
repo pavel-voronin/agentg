@@ -110,22 +110,6 @@ Do not own:
 - Core domain table writes.
 - Gateway external protocol compatibility.
 
-## Summaries Pilot Module
-
-Owns:
-
-- `summaries_*` tables for summary runs, results, source references, and
-  invalidation state.
-- `summaries.*` tRPC methods.
-- `summaries.chatSummary` getter for `telegram.chat` model objects.
-- `summaries.*` lifecycle events.
-
-Does not own:
-
-- Telegram-shaped message storage.
-- History Sync targets or Telegram history coverage.
-- Telegram chat base models or any domain-owned base result.
-
 ## Storage Layer
 
 Owns:

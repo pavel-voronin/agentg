@@ -51,11 +51,7 @@ function auditRawTrpcBuilderImports(files) {
 }
 
 function auditCrossDomainSchemaImports(files) {
-  const schemaImports = [
-    '@agentg/history-sync/schema',
-    '@agentg/summaries/schema',
-    '@agentg/telegram/schema'
-  ];
+  const schemaImports = ['@agentg/history-sync/schema', '@agentg/telegram/schema'];
 
   for (const file of files) {
     const rel = toRel(file);
@@ -80,10 +76,6 @@ function auditTablePrefixes() {
     {
       file: join(root, 'packages/history-sync/src/schema.ts'),
       prefix: 'history_sync_'
-    },
-    {
-      file: join(root, 'packages/summaries/src/schema.ts'),
-      prefix: 'summaries_'
     },
     {
       file: join(root, 'packages/telegram/src/schema.ts'),
@@ -170,7 +162,6 @@ function auditNoDomainEnrichedRuntime(files) {
     'packages/infra/src/',
     'packages/history-sync/src/',
     'packages/telegram/src/',
-    'packages/summaries/src/',
     'packages/gateway/src/'
   ];
   const forbiddenTokens = [
@@ -305,8 +296,6 @@ function auditServiceDirectoryBootstrap() {
   }
   auditRequiredManifest('packages/control-plane/src/server/registrations.ts', true);
 
-  auditRequiredManifest('packages/summaries/src/registrations.ts', false);
-
   const historySyncConfig = readFileSync(join(root, 'packages/history-sync/src/config.ts'), 'utf8');
   if (historySyncConfig.includes('TELEGRAM_RPC_URL')) {
     failures.push('History Sync config must resolve Telegram through Service Directory');
@@ -438,7 +427,7 @@ function auditControlPlaneCompositionBoundaries(files) {
     join(root, 'packages/control-plane/src/composition/slots/manifest.ts'),
     'utf8'
   );
-  for (const token of ['telegram.', 'history-sync.', 'summaries.']) {
+  for (const token of ['telegram.', 'history-sync.']) {
     if (layoutSource.includes(token)) {
       failures.push(`Control Plane default layout must be derived from providers: ${token}`);
     }
@@ -489,11 +478,9 @@ function auditControlPlaneSdkHasNoDomainKnowledge(files) {
   const forbiddenTokens = [
     'telegram.',
     'history-sync.',
-    'summaries.',
     'controlPlane.',
     '@agentg/telegram',
     '@agentg/history-sync',
-    '@agentg/summaries',
     '@agentg/control-plane'
   ];
 

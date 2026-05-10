@@ -14,15 +14,14 @@ npm run dev:service-directory
 npm run dev:telegram
 npm run dev:history-sync
 npm run dev:gateway
-npm run dev:summaries
 npm run dev:control-plane-server
 npm run dev:control-plane
 ```
 
 `npm run infra:up` starts Postgres and NATS.
 
-`npm run db:migrate` applies versioned Drizzle migrations owned by Telegram,
-History Sync, and Summaries.
+`npm run db:migrate` applies versioned Drizzle migrations owned by Telegram and
+History Sync.
 
 `npm run dev:telegram` runs the `@agentg/telegram` ingestion package. It owns the
 TDLib session, receives live Telegram updates, writes Telegram-shaped records to
@@ -35,11 +34,6 @@ its advertised RPC URL, procedures, and events.
 history sync templates, concrete chat targets, range projection, and the history sync
 lifecycle. It joins Service Directory and resolves Telegram through the local
 Service Directory snapshot before internal tRPC calls.
-
-`npm run dev:summaries` runs the `@agentg/summaries` pilot module. It owns
-`summaries_*` tables, subscribes to Telegram and History Sync events for summary
-invalidation, exposes `summaries.*` tRPC methods, and joins Service Directory
-with its procedures, events, and `summaries.chatSummary` extension declaration.
 
 `npm run dev:service-directory` runs the `@agentg/service-directory` package.
 It stores active service manifests, publishes version invalidations, and serves
@@ -79,9 +73,6 @@ Local development defaults:
   `SERVICE_DIRECTORY_RPC_PORT=18084`
 - Services to Service Directory URL:
   `SERVICE_DIRECTORY_RPC_URL=http://127.0.0.1:18084`
-- Summaries internal RPC bind: `SUMMARIES_RPC_HOST=127.0.0.1`,
-  `SUMMARIES_RPC_PORT=18083`
-- Summaries module URL: `MODULE_RPC_URL=http://127.0.0.1:18083`
 - Control Plane server bind: `CONTROL_PLANE_HOST=127.0.0.1`,
   `CONTROL_PLANE_PORT=8789`
 
@@ -90,10 +81,9 @@ Docker Compose uses internal service DNS names:
 - Telegram binds `0.0.0.0:8080` inside its container.
 - History Sync binds `0.0.0.0:8080` inside its container.
 - Service Directory binds `0.0.0.0:8080` inside its container.
-- Summaries binds `0.0.0.0:8080` inside its container.
-- Telegram, History Sync, and Summaries join `http://service-directory:8080`.
-- History Sync, Gateway, Control Plane, and Summaries resolve service RPC URLs
-  from Service Directory snapshots.
+- Telegram and History Sync join `http://service-directory:8080`.
+- History Sync, Gateway, and Control Plane resolve service RPC URLs from Service
+  Directory snapshots.
 - Control Plane exposes the browser UI on `${CONTROL_PLANE_PORT:-8788}`.
 
 Run the containerized Telegram ingestion path when validating Docker packaging:
@@ -110,11 +100,11 @@ subjects, and logs.
 
 Module runtime environment:
 
-- `MODULE_SLUG`: stable module slug, for example `summaries`
+- `MODULE_SLUG`: stable module slug, for example `analysis`
 - `MODULE_RPC_HOST`: bind host inside the container, usually `0.0.0.0`
 - `MODULE_RPC_PORT`: internal RPC port, usually `8080`
-- `MODULE_RPC_URL`: internal service URL, for example `http://summaries:8080`
-- `MODULE_TABLE_PREFIX`: owned table prefix, for example `summaries_`
+- `MODULE_RPC_URL`: internal service URL, for example `http://analysis:8080`
+- `MODULE_TABLE_PREFIX`: owned table prefix, for example `analysis_`
 - `MODULE_MIGRATION_FOLDER`: module-owned Drizzle migration folder
 - `DATABASE_URL`: shared Postgres connection string
 - `NATS_URL`: shared NATS connection string
@@ -130,12 +120,6 @@ module:
 
 ```bash
 docker compose --profile module-smoke up --build modulesmoke
-```
-
-Run the pilot summaries module through Compose:
-
-```bash
-npm run compose:summaries
 ```
 
 ## Inspecting Service Directory
@@ -158,10 +142,9 @@ Service Directory stores active service manifests only. It does not call domain
 or module RPC methods.
 
 Core services register with `required: true`: Telegram ingestion, History Sync,
-Gateway, and Control Plane. Summaries registers with `required: false`.
-Disappearing required services trigger graceful shutdown in Service Directory
-clients. Disappearing optional services only removes their procedures and
-extensions from snapshots.
+Gateway, and Control Plane. Disappearing required services trigger graceful
+shutdown in Service Directory clients. Disappearing optional services only
+removes their procedures and extensions from snapshots.
 
 ## Debugging `callId` Flows
 
@@ -183,8 +166,7 @@ for await (const msg of nc.subscribe('history-sync.rpc.getChatHistorySyncState.>
 Then:
 
 1. Invoke the subscribed RPC method, for example `history-sync.getChatHistorySyncState`.
-   Use `history-sync.rpc.requestSync.>` or `summaries.rpc.requestSummary.>` when
-   inspecting those targets.
+   Use `history-sync.rpc.requestSync.>` when inspecting that target.
 2. Correlate `{domain}.rpc.{procedure}.started`, optional
    `{domain}.rpc.{procedure}.progress`, `{domain}.rpc.{procedure}.completed`,
    and `{domain}.rpc.{procedure}.failed` by `event.data.callId`.
@@ -199,7 +181,6 @@ Initial local stack includes:
 - Telegram ingestion process backed by TDLib
 - History Sync process
 - Service Directory process
-- Summaries pilot module
 - Control Plane server and browser UI for operator views
 - Agent Gateway process when testing agent-facing APIs
 - Postgres

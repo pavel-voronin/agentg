@@ -68,17 +68,17 @@ describe('Control Plane server boundary', () => {
         event: rpcEvent
       });
 
-      const summariesEvent = createIntegrationEvent({
+      const analysisEvent = createIntegrationEvent({
         data: {
           recordId: 'record-a',
           runId: 'run-a'
         },
-        type: 'summaries.summary.requested'
+        type: 'beta.analysis.requested'
       });
-      await eventBus.emit(summariesEvent);
+      await eventBus.emit(analysisEvent);
 
       await expect(nextJsonMessage(socket)).resolves.toEqual({
-        event: summariesEvent
+        event: analysisEvent
       });
     } finally {
       socket.close();

@@ -63,33 +63,11 @@ services:
       MODULE_SLUG: modulesmoke
       MODULE_TABLE_PREFIX: modulesmoke_
 
-  summaries:
-    profiles:
-      - summaries
-    <<: *agentg-module-service
-    command: ['npm', '--workspace', '@agentg/summaries', 'run', 'start']
-    depends_on:
-      service-directory:
-        condition: service_started
-      nats:
-        condition: service_started
-      postgres:
-        condition: service_healthy
-    environment:
-      <<: *agentg-module-environment
-      MODULE_MIGRATION_FOLDER: packages/summaries/drizzle
-      MODULE_RPC_URL: http://summaries:8080
-      MODULE_SLUG: summaries
-      MODULE_TABLE_PREFIX: summaries_
-      SUMMARIES_RPC_HOST: 0.0.0.0
-      SUMMARIES_RPC_PORT: 8080
-
   service-directory:
     profiles:
       - service-directory
       - container-client
       - history-sync
-      - summaries
       - gateway
       - control-plane
     build:

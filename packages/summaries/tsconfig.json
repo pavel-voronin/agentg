@@ -1,4 +1,0 @@
-{
-  "extends": "../../tsconfig.json",
-  "include": ["src", "tests", "drizzle.config.ts", "vite.config.ts"]
-}
