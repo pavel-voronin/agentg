@@ -41,6 +41,12 @@ type SlotDebugIconGroup = {
   items: SlotDebugRectEntry[];
 };
 
+type SlotDebugContentItem = {
+  key: string;
+  label: string;
+  tag: string | null;
+};
+
 const ICON_SIZE = 16;
 const ICON_STEP = 18;
 const POPOVER_ESTIMATED_HEIGHT = 230;
@@ -241,33 +247,31 @@ function clearActiveSlot(): void {
   pinnedId.value = null;
 }
 
-function contentLabel(resolution: SlotResolution): string {
+function contentItems(
+  resolution: SlotResolution,
+  slotTags: readonly string[]
+): SlotDebugContentItem[] {
   switch (resolution.kind) {
     case 'empty':
-      return 'empty';
+      return [{ key: 'empty', label: 'empty', tag: null }];
     case 'contents': {
       const overflowLabel =
-        resolution.overflowCount > 0 ? `, +${String(resolution.overflowCount)} hidden` : '';
-      return `${resolution.items.map(itemLabel).join(', ')}${overflowLabel}`;
+        resolution.overflowCount > 0
+          ? [
+              {
+                key: 'overflow',
+                label: `+${String(resolution.overflowCount)} hidden`,
+                tag: null
+              }
+            ]
+          : [];
+      return [...resolution.items.map((item) => contentItem(item, slotTags)), ...overflowLabel];
     }
   }
 }
 
-function tagList(tags: readonly string[]): string {
-  return tags.length > 0 ? tags.join(', ') : 'none';
-}
-
-function contentTagList(resolution: SlotResolution): string {
-  if (resolution.kind === 'empty') {
-    return 'none';
-  }
-  return tagList(
-    uniqueStrings(
-      resolution.items.flatMap((item) =>
-        item.kind === 'content' || item.kind === 'incompatible' ? item.content.tags : []
-      )
-    )
-  );
+function tagItems(tags: readonly string[]): readonly string[] {
+  return tags.length > 0 ? tags : ['none'];
 }
 
 function stateError(state: SlotRenderState): string | null {
@@ -291,19 +295,35 @@ function stateLabel(state: SlotRenderState): string {
   return `contents (${String(readyCount)}/${String(state.items.length)} ready${overflowLabel})`;
 }
 
-function itemLabel(item: SlotItemResolution): string {
+function contentItem(item: SlotItemResolution, slotTags: readonly string[]): SlotDebugContentItem {
   switch (item.kind) {
-    case 'content':
-      return item.contentId;
+    case 'content': {
+      return {
+        key: `${String(item.index)}:${item.contentId}`,
+        label: item.contentId,
+        tag: matchingSlotTag(slotTags, item.content.tags)
+      };
+    }
     case 'incompatible':
-      return `${item.contentId} (incompatible)`;
+      return {
+        key: `${String(item.index)}:${item.contentId}`,
+        label: item.contentId,
+        tag: 'incompatible'
+      };
     case 'missing-content':
-      return `${item.contentId} (missing)`;
+      return {
+        key: `${String(item.index)}:${item.contentId}`,
+        label: item.contentId,
+        tag: 'missing'
+      };
   }
 }
 
-function uniqueStrings(values: readonly string[]): string[] {
-  return [...new Set(values)];
+function matchingSlotTag(
+  slotTags: readonly string[],
+  contentTags: readonly string[]
+): string | null {
+  return slotTags.find((slotTag) => contentTags.includes(slotTag)) ?? null;
 }
 
 function bindObservedTargets(): void {
@@ -476,11 +496,25 @@ function clamp(value: number, min: number, max: number): number {
         <dl>
           <div>
             <dt>Slot</dt>
-            <dd>{{ activeEntry.slotId }}</dd>
-          </div>
-          <div>
-            <dt>Slot tags</dt>
-            <dd>{{ tagList(activeEntry.tags) }}</dd>
+            <dd>
+              <span class="slot-debug-slot-label">{{ activeEntry.slotId }}</span>
+              <span v-for="tag in tagItems(activeEntry.tags)" :key="tag" class="slot-debug-tag">
+                <svg
+                  aria-hidden="true"
+                  class="slot-debug-tag-icon"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path d="M3.5 3.5h4.75l4.25 4.25-4.75 4.75L3.5 8.25z" />
+                  <path d="M6.25 6.25h.01" />
+                </svg>
+                <span class="slot-debug-tag-text">{{ tag }}</span>
+              </span>
+            </dd>
           </div>
           <div>
             <dt>State</dt>
@@ -488,11 +522,31 @@ function clamp(value: number, min: number, max: number): number {
           </div>
           <div>
             <dt>Content</dt>
-            <dd>{{ contentLabel(activeEntry.resolution) }}</dd>
-          </div>
-          <div>
-            <dt>Content tags</dt>
-            <dd>{{ contentTagList(activeEntry.resolution) }}</dd>
+            <dd>
+              <span
+                v-for="item in contentItems(activeEntry.resolution, activeEntry.tags)"
+                :key="item.key"
+                class="slot-debug-content-item"
+              >
+                <span class="slot-debug-content-label">{{ item.label }}</span>
+                <span v-if="item.tag" class="slot-debug-tag">
+                  <svg
+                    aria-hidden="true"
+                    class="slot-debug-tag-icon"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M3.5 3.5h4.75l4.25 4.25-4.75 4.75L3.5 8.25z" />
+                    <path d="M6.25 6.25h.01" />
+                  </svg>
+                  <span class="slot-debug-tag-text">{{ item.tag }}</span>
+                </span>
+              </span>
+            </dd>
           </div>
           <div v-if="stateError(activeEntry.state)">
             <dt>Error</dt>
@@ -552,5 +606,33 @@ function clamp(value: number, min: number, max: number): number {
 
 .slot-debug-popover dd {
   @apply m-0 max-w-xs break-words;
+}
+
+.slot-debug-slot-label {
+  @apply block;
+}
+
+.slot-debug-content-item {
+  @apply block;
+}
+
+.slot-debug-content-item + .slot-debug-content-item {
+  @apply mt-1.5;
+}
+
+.slot-debug-content-label {
+  @apply block;
+}
+
+.slot-debug-tag {
+  @apply mt-0.5 flex items-center gap-1 pl-2 text-[10px] leading-none text-red-200;
+}
+
+.slot-debug-tag-icon {
+  @apply h-2.5 w-2.5 shrink-0;
+}
+
+.slot-debug-tag-text {
+  @apply min-w-0 break-all;
 }
 </style>
