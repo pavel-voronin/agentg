@@ -57,29 +57,36 @@ export type ControlPlaneChat = TelegramDirectoryChat & {
   _model: 'telegram.chat';
 };
 
-export type ChatFolderNavItem = {
-  active: boolean;
-  badge: string;
-  folderId?: number;
-  id: string;
-  label: string;
-  title: string;
-  type: 'folder' | 'main';
-};
-
-export type ChatListHeaderView =
+export type ChatFolderNavItem =
   | {
-      kind: 'archive';
-      subtitle: string;
+      active: boolean;
+      badge: string;
+      id: 'archive';
+      label: string;
       title: string;
+      type: 'archive';
     }
   | {
-      kind: 'search';
+      active: boolean;
+      badge: string;
+      id: 'main';
+      label: string;
       title: string;
+      type: 'main';
+    }
+  | {
+      active: boolean;
+      badge: string;
+      folderId: number;
+      id: string;
+      label: string;
+      title: string;
+      type: 'folder';
     };
 
-export type ChatArchiveShortcutView = {
-  count: string;
+export type ChatListHeaderView = {
+  kind: 'search';
+  title: string;
 };
 
 export type ChatIconKind = 'bot' | 'channel' | 'group' | 'secret';
@@ -94,7 +101,6 @@ export type ChatListItemView = {
 };
 
 export type ChatSidebarView = {
-  archiveShortcut: ChatArchiveShortcutView | null;
   chats: ChatListItemView[];
   emptyMessage: string | null;
   folders: ChatFolderNavItem[];

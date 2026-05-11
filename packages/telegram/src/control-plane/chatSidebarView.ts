@@ -1,5 +1,4 @@
 import type {
-  ChatArchiveShortcutView,
   ChatFolderNavItem,
   ChatIconKind,
   ChatListHeaderView,
@@ -24,10 +23,9 @@ export function chatSidebarView(
 ): ChatSidebarView {
   const search = source.chatFilter;
   const hasSearch = search.trim().length > 0;
-  const header = chatListHeader(source, hasSearch);
+  const header = chatListHeader(hasSearch);
   const chats = source.chats.map((chat) => chatListItemView(chat, selectedChatId));
   return {
-    archiveShortcut: chatArchiveShortcut(source, hasSearch),
     chats,
     emptyMessage: chats.length === 0 ? chatListEmptyMessage(hasSearch) : null,
     folders: chatFolderNavItems(source),
@@ -37,34 +35,14 @@ export function chatSidebarView(
   };
 }
 
-function chatListHeader(
-  source: ChatSidebarViewSource,
-  hasSearch: boolean
-): ChatListHeaderView | null {
+function chatListHeader(hasSearch: boolean): ChatListHeaderView | null {
   if (hasSearch) {
     return {
       kind: 'search',
       title: 'Search results across all chats'
     };
   }
-  if (source.chatListMode === 'archive') {
-    return {
-      kind: 'archive',
-      subtitle: 'All chats folder',
-      title: 'Archived chats'
-    };
-  }
   return null;
-}
-
-function chatArchiveShortcut(
-  source: ChatSidebarViewSource,
-  hasSearch: boolean
-): ChatArchiveShortcutView | null {
-  const archiveCount = source.chatNavigation.archiveCount;
-  return !hasSearch && source.chatListMode === 'main' && archiveCount > 0
-    ? { count: formatInteger(archiveCount) }
-    : null;
 }
 
 function chatListEmptyMessage(hasSearch: boolean): string {
@@ -74,22 +52,32 @@ function chatListEmptyMessage(hasSearch: boolean): string {
 function chatFolderNavItems(source: ChatSidebarViewSource): ChatFolderNavItem[] {
   return [
     {
-      active: source.chatListMode !== 'folder',
+      active: source.chatListMode === 'main',
       badge: formatOptionalBadge(source.chatNavigation.mainCount),
       id: 'main',
       label: 'All',
       title: 'All chats',
       type: 'main'
     },
-    ...source.chatNavigation.folders.map((folder) => ({
-      active: source.chatListMode === 'folder' && source.chatFolderId === folder.id,
-      badge: formatOptionalBadge(folder.count),
-      folderId: folder.id,
-      id: `folder:${String(folder.id)}`,
-      label: folder.title,
-      title: folder.title,
-      type: 'folder' as const
-    }))
+    ...source.chatNavigation.folders.map(
+      (folder): ChatFolderNavItem => ({
+        active: source.chatListMode === 'folder' && source.chatFolderId === folder.id,
+        badge: formatOptionalBadge(folder.count),
+        folderId: folder.id,
+        id: `folder:${String(folder.id)}`,
+        label: folder.title,
+        title: folder.title,
+        type: 'folder' as const
+      })
+    ),
+    {
+      active: source.chatListMode === 'archive',
+      badge: formatOptionalBadge(source.chatNavigation.archiveCount),
+      id: 'archive',
+      label: 'Archive',
+      title: 'Archive',
+      type: 'archive'
+    }
   ];
 }
 

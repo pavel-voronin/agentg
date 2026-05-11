@@ -14,6 +14,13 @@ import {
 import UiButton from '@agentg/control-plane-sdk/ui';
 
 import { chatSidebarView } from './chatSidebarView.js';
+import {
+  chatFolderIds,
+  chatMatchesListFilter,
+  chatPlacementMatchesFilter,
+  chatPlacementRank,
+  type ChatListKind
+} from './chatListFiltering.js';
 import ChatSidebar from './components/ChatSidebar.vue';
 import { readStorage, writeStorage } from './storage.js';
 import { useTelegramDirectoryProjection } from './telegramDirectoryProjection.js';
@@ -29,18 +36,6 @@ import type {
 const props = defineProps<{
   slotContext?: SlotContext | undefined;
 }>();
-
-type ChatListKind =
-  | {
-      kind: 'archive';
-    }
-  | {
-      kind: 'main';
-    }
-  | {
-      folderId: number;
-      kind: 'folder';
-    };
 
 type WorkspaceTab = {
   item: SlotItemResolution & { kind: 'content' };
@@ -172,7 +167,14 @@ watch(
   { immediate: true }
 );
 
-watch(chatNavigation, ensureSelectedFolderExists, { immediate: true });
+watch(
+  () => ({
+    hydrated: directoryProjection.hydrated.value,
+    navigation: chatNavigation.value
+  }),
+  ensureSelectedFolderExists,
+  { immediate: true }
+);
 
 watch(
   primaryResolvedItems,
@@ -356,6 +358,9 @@ function hasChatFolder(folderId: number | null): boolean {
 }
 
 function ensureSelectedFolderExists(): void {
+  if (!directoryProjection.hydrated.value) {
+    return;
+  }
   if (normalizedChatQuery().length === 0 && chatListMode.value === 'folder') {
     if (!hasChatFolder(chatFolderId.value)) {
       selectMainChatList();
@@ -429,16 +434,6 @@ function buildChatNavigation(
     ],
     mainCount
   };
-}
-
-function chatMatchesListFilter(chat: TelegramDirectoryChat, filter: ChatListKind): boolean {
-  return chat.placements.some((placement) => chatPlacementMatchesFilter(placement, filter));
-}
-
-function chatFolderIds(chat: TelegramDirectoryChat): number[] {
-  return chat.placements
-    .filter((placement) => placement.kind === 'folder')
-    .map((placement) => placement.folderId);
 }
 
 function limitChats(
@@ -515,26 +510,6 @@ function preferredChatPlacement(
     }
     return compareBigIntDescending(left.order, right.order);
   })[0];
-}
-
-function chatPlacementMatchesFilter(placement: ChatPlacement, filter: ChatListKind): boolean {
-  if (filter.kind === 'main') {
-    return placement.kind === 'main';
-  }
-  if (filter.kind === 'archive') {
-    return placement.kind === 'archive';
-  }
-  return placement.kind === 'folder' && placement.folderId === filter.folderId;
-}
-
-function chatPlacementRank(placement: ChatPlacement): number {
-  if (placement.kind === 'main') {
-    return 0;
-  }
-  if (placement.kind === 'archive') {
-    return 1;
-  }
-  return 2;
 }
 
 function preferredChatListSelection(chat: TelegramDirectoryChat): {

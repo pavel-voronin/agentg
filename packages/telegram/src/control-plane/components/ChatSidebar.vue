@@ -1,11 +1,10 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
 import { onModelRefSelected } from '@agentg/control-plane-sdk/model-ref-events';
-import UiButton from '@agentg/control-plane-sdk/ui';
-import type { ChatFolderNavItem, ChatListItemView, ChatSidebarView } from '../views.js';
+import type { ChatFolderNavItem, ChatSidebarView } from '../views.js';
 
-defineProps<{
+const props = defineProps<{
   view: ChatSidebarView;
 }>();
 
@@ -28,6 +27,7 @@ type SearchInputRef = {
 };
 
 const searchInput = ref<SearchInputRef | null>(null);
+const folderNav = ref<HTMLElement | null>(null);
 let stopModelRefListener: (() => void) | null = null;
 
 function onSearchInput(event: Event): void {
@@ -49,21 +49,57 @@ function handleModelRefSelected(selection: { id: string; model: string }): void 
 }
 
 function openFolder(item: ChatFolderNavItem): void {
+  if (item.type === 'archive') {
+    emit('archiveOpen');
+    return;
+  }
   if (item.type === 'main') {
     emit('mainOpen');
     return;
   }
-  if (item.folderId !== undefined) {
-    emit('folderOpen', item.folderId);
-  }
+  emit('folderOpen', item.folderId);
 }
 
 function inputTarget(event: Event): InputEventTarget | null {
   return event.target === null ? null : (event.target as unknown as InputEventTarget);
 }
 
+function folderScrollKey(folders: ChatFolderNavItem[]): string {
+  const activeFolder = folders.find((folder) => folder.active);
+  return `${activeFolder?.id ?? ''}:${folders.map((folder) => folder.id).join(',')}`;
+}
+
+function scrollActiveFolderIntoView(): void {
+  const root = folderNav.value;
+  const activeFolder = root?.querySelector<HTMLElement>(
+    ".chat-sidebar__folder-button[data-active='true']"
+  );
+  if (root === null || activeFolder === undefined || activeFolder === null) {
+    return;
+  }
+
+  const rootRect = root.getBoundingClientRect();
+  const activeRect = activeFolder.getBoundingClientRect();
+  if (activeRect.top < rootRect.top) {
+    root.scrollTop -= rootRect.top - activeRect.top;
+    return;
+  }
+  if (activeRect.bottom > rootRect.bottom) {
+    root.scrollTop += activeRect.bottom - rootRect.bottom;
+  }
+}
+
+watch(
+  () => folderScrollKey(props.view.folders),
+  () => {
+    void nextTick(scrollActiveFolderIntoView);
+  },
+  { flush: 'post', immediate: true }
+);
+
 onMounted(() => {
   stopModelRefListener = onModelRefSelected(handleModelRefSelected);
+  void nextTick(scrollActiveFolderIntoView);
 });
 
 onBeforeUnmount(() => {
@@ -96,7 +132,7 @@ onBeforeUnmount(() => {
       </div>
     </div>
     <div class="chat-sidebar__body">
-      <nav class="chat-sidebar__folder-nav">
+      <nav ref="folderNav" class="chat-sidebar__folder-nav">
         <button
           v-for="folder in view.folders"
           :key="folder.id"
@@ -104,6 +140,7 @@ onBeforeUnmount(() => {
           :title="folder.title"
           class="chat-sidebar__folder-button"
           :data-active="folder.active ? 'true' : undefined"
+          :data-folder-id="folder.id"
           @click="openFolder(folder)"
         >
           <span class="chat-sidebar__folder-label">{{ folder.label }}</span>
@@ -117,31 +154,6 @@ onBeforeUnmount(() => {
         <div v-if="view.header?.kind === 'search'" class="chat-sidebar__search-header">
           {{ view.header.title }}
         </div>
-
-        <div v-else-if="view.header?.kind === 'archive'" class="chat-sidebar__archive-header">
-          <div class="chat-sidebar__archive-header-layout">
-            <div class="chat-sidebar__archive-header-copy">
-              <div class="chat-sidebar__archive-header-title">{{ view.header.title }}</div>
-              <div class="chat-sidebar__archive-header-subtitle">{{ view.header.subtitle }}</div>
-            </div>
-            <UiButton class="chat-sidebar__main-button" @click="emit('mainOpen')"> Main </UiButton>
-          </div>
-        </div>
-
-        <button
-          v-if="view.archiveShortcut"
-          type="button"
-          class="chat-sidebar__archive-shortcut"
-          @click="emit('archiveOpen')"
-        >
-          <div class="chat-sidebar__archive-shortcut-row">
-            <div class="chat-sidebar__archive-shortcut-title">Archived chats</div>
-            <span class="chat-sidebar__archive-shortcut-count">
-              {{ view.archiveShortcut.count }}
-            </span>
-          </div>
-          <div class="chat-sidebar__archive-shortcut-detail">Open archive</div>
-        </button>
 
         <button
           v-for="chat in view.chats"
@@ -272,7 +284,11 @@ onBeforeUnmount(() => {
 }
 
 .chat-sidebar__folder-nav {
-  @apply min-h-0 overflow-auto bg-slate-800;
+  @apply min-h-0 overflow-auto overscroll-none bg-slate-800 [-ms-overflow-style:none] [scrollbar-width:none];
+}
+
+.chat-sidebar__folder-nav::-webkit-scrollbar {
+  @apply hidden;
 }
 
 .chat-sidebar__folder-button {
@@ -292,55 +308,11 @@ onBeforeUnmount(() => {
 }
 
 .chat-sidebar__list {
-  @apply min-h-0 overflow-auto;
+  @apply min-h-0 overflow-auto overscroll-none;
 }
 
 .chat-sidebar__search-header {
   @apply border-b border-zinc-100 px-3 py-2 text-xs text-zinc-500;
-}
-
-.chat-sidebar__archive-header {
-  @apply border-b border-zinc-100 p-3;
-}
-
-.chat-sidebar__archive-header-layout {
-  @apply flex items-center justify-between gap-2;
-}
-
-.chat-sidebar__archive-header-copy {
-  @apply min-w-0;
-}
-
-.chat-sidebar__archive-header-title {
-  @apply truncate text-sm font-semibold;
-}
-
-.chat-sidebar__archive-header-subtitle {
-  @apply text-xs text-zinc-500;
-}
-
-.chat-sidebar__main-button {
-  @apply shrink-0 px-2.5 text-xs;
-}
-
-.chat-sidebar__archive-shortcut {
-  @apply block w-full border-b border-zinc-100 bg-zinc-50 px-3 py-3 text-left hover:bg-zinc-100;
-}
-
-.chat-sidebar__archive-shortcut-row {
-  @apply flex min-w-0 items-center justify-between gap-2;
-}
-
-.chat-sidebar__archive-shortcut-title {
-  @apply min-w-0 truncate font-semibold;
-}
-
-.chat-sidebar__archive-shortcut-count {
-  @apply shrink-0 rounded-full bg-zinc-300 px-2 py-0.5 text-xs font-semibold text-white;
-}
-
-.chat-sidebar__archive-shortcut-detail {
-  @apply mt-1 text-xs text-zinc-500;
 }
 
 .chat-sidebar__chat-button {
