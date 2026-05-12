@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
+import { computed, onBeforeUnmount, ref, shallowRef, watch, type CSSProperties } from 'vue';
 
 import {
   SlotOutletItem,
@@ -51,6 +51,9 @@ type ChatHeaderView = {
 };
 
 const DEFAULT_CHAT_LIMIT = 500;
+const CHAT_SIDEBAR_DEFAULT_WIDTH = 380;
+const CHAT_SIDEBAR_MAX_WIDTH = 560;
+const CHAT_SIDEBAR_MIN_WIDTH = 300;
 const telegramStoragePrefix = 'agentg.telegram.controlPlane';
 const directoryProjection = useTelegramDirectoryProjection();
 const slotRuntime = useSlotRuntime();
@@ -58,10 +61,14 @@ const activePrimaryTabId = ref(readStorage(`${telegramStoragePrefix}.primaryTabI
 const chatFilter = ref(readStorage(`${telegramStoragePrefix}.chatFilter`) ?? '');
 const chatFolderId = ref<number | null>(readStoredChatListSelection().folderId);
 const chatListMode = ref<ChatListMode>(readStoredChatListSelection().mode);
+const chatSidebarWidth = ref(readStoredChatSidebarWidth());
+const isResizingChatSidebar = ref(false);
 const selectedChatId = ref(readStorage(`${telegramStoragePrefix}.selectedChatId`) ?? null);
 const primaryItemStates = shallowRef<ReadonlyMap<string, SlotItemRenderState>>(new Map());
 const emptyContentAttrs: Record<string, unknown> = {};
 let primaryDebugRegistration: SlotDebugRegistration | null = null;
+let resizeStartX = 0;
+let resizeStartWidth = CHAT_SIDEBAR_DEFAULT_WIDTH;
 
 const nestedSlotContext = computed(() => ({
   ...(props.slotContext ?? {}),
@@ -94,6 +101,12 @@ const chatSidebar = computed(() =>
     },
     selectedChatId.value
   )
+);
+const chatInterfaceStyle = computed<CSSProperties>(
+  () =>
+    ({
+      '--telegram-chat-sidebar-width': `${String(chatSidebarWidth.value)}px`
+    }) as CSSProperties
 );
 
 const primarySlot = {
@@ -223,6 +236,7 @@ watch(
 onBeforeUnmount(() => {
   primaryDebugRegistration?.unregister();
   primaryDebugRegistration = null;
+  stopChatSidebarResize();
 });
 
 function clearChatSearch(): void {
@@ -394,18 +408,39 @@ function buildChatNavigation(
   folderRows: TelegramDirectoryFolder[]
 ): ChatNavigation {
   const folderCounts = new Map<number, number>();
+  const folderMutedUnreadCounts = new Map<number, number>();
+  const folderUnreadCounts = new Map<number, number>();
   let archiveCount = 0;
+  let archiveMutedUnreadCount = 0;
+  let archiveUnreadCount = 0;
   let mainCount = 0;
+  let mainMutedUnreadCount = 0;
+  let mainUnreadCount = 0;
 
   for (const chat of navigationChats) {
     if (chatMatchesListFilter(chat, { kind: 'main' })) {
       mainCount += 1;
+      if (chatHasNotifyingUnreadMessages(chat)) {
+        mainUnreadCount += 1;
+      } else if (chatHasMutedUnreadMessages(chat)) {
+        mainMutedUnreadCount += 1;
+      }
     }
     if (chatMatchesListFilter(chat, { kind: 'archive' })) {
       archiveCount += 1;
+      if (chatHasNotifyingUnreadMessages(chat)) {
+        archiveUnreadCount += 1;
+      } else if (chatHasMutedUnreadMessages(chat)) {
+        archiveMutedUnreadCount += 1;
+      }
     }
     for (const folderId of chatFolderIds(chat)) {
       folderCounts.set(folderId, (folderCounts.get(folderId) ?? 0) + 1);
+      if (chatHasNotifyingUnreadMessages(chat)) {
+        folderUnreadCounts.set(folderId, (folderUnreadCounts.get(folderId) ?? 0) + 1);
+      } else if (chatHasMutedUnreadMessages(chat)) {
+        folderMutedUnreadCounts.set(folderId, (folderMutedUnreadCounts.get(folderId) ?? 0) + 1);
+      }
     }
   }
 
@@ -416,24 +451,40 @@ function buildChatNavigation(
 
   return {
     archiveCount,
+    archiveMutedUnreadCount,
+    archiveUnreadCount,
     folders: [
       ...folderRows.map((folder) => ({
         count: folderCounts.get(folder.folderId) ?? 0,
         iconName: folder.iconName,
         id: folder.folderId,
+        mutedUnreadCount: folderMutedUnreadCounts.get(folder.folderId) ?? 0,
         position: folder.position,
-        title: folder.title
+        title: folder.title,
+        unreadCount: folderUnreadCounts.get(folder.folderId) ?? 0
       })),
       ...unknownFolderIds.map((id) => ({
         count: folderCounts.get(id) ?? 0,
         iconName: null,
         id,
+        mutedUnreadCount: folderMutedUnreadCounts.get(id) ?? 0,
         position: id,
-        title: `Folder ${String(id)}`
+        title: `Folder ${String(id)}`,
+        unreadCount: folderUnreadCounts.get(id) ?? 0
       }))
     ],
-    mainCount
+    mainCount,
+    mainMutedUnreadCount,
+    mainUnreadCount
   };
+}
+
+function chatHasNotifyingUnreadMessages(chat: TelegramDirectoryChat): boolean {
+  return (chat.unreadCount > 0 || chat.isUnread) && chat.notificationsEnabled === true;
+}
+
+function chatHasMutedUnreadMessages(chat: TelegramDirectoryChat): boolean {
+  return (chat.unreadCount > 0 || chat.isUnread) && chat.notificationsEnabled === false;
 }
 
 function limitChats(
@@ -599,6 +650,62 @@ function writeStoredChatListSelection(selection: {
   );
 }
 
+function readStoredChatSidebarWidth(): number {
+  const raw = readStorage(`${telegramStoragePrefix}.chatSidebarWidth`);
+  const parsed = raw === null ? Number.NaN : Number.parseInt(raw, 10);
+  return clampChatSidebarWidth(parsed);
+}
+
+function writeStoredChatSidebarWidth(): void {
+  writeStorage(`${telegramStoragePrefix}.chatSidebarWidth`, String(chatSidebarWidth.value));
+}
+
+function startChatSidebarResize(event: PointerEvent): void {
+  resizeStartX = event.clientX;
+  resizeStartWidth = chatSidebarWidth.value;
+  isResizingChatSidebar.value = true;
+  window.addEventListener('pointermove', resizeChatSidebar);
+  window.addEventListener('pointerup', finishChatSidebarResize, { once: true });
+  event.preventDefault();
+}
+
+function resizeChatSidebar(event: PointerEvent): void {
+  chatSidebarWidth.value = clampChatSidebarWidth(
+    resizeStartWidth + Math.round(event.clientX - resizeStartX)
+  );
+}
+
+function finishChatSidebarResize(): void {
+  stopChatSidebarResize();
+  writeStoredChatSidebarWidth();
+}
+
+function stopChatSidebarResize(): void {
+  if (!isResizingChatSidebar.value) {
+    return;
+  }
+  isResizingChatSidebar.value = false;
+  window.removeEventListener('pointermove', resizeChatSidebar);
+  window.removeEventListener('pointerup', finishChatSidebarResize);
+}
+
+function resizeChatSidebarWithKeyboard(event: KeyboardEvent): void {
+  if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
+    return;
+  }
+  const direction = event.key === 'ArrowLeft' ? -1 : 1;
+  chatSidebarWidth.value = clampChatSidebarWidth(chatSidebarWidth.value + direction * 16);
+  writeStoredChatSidebarWidth();
+  event.preventDefault();
+}
+
+function clampChatSidebarWidth(value: number): number {
+  if (!Number.isFinite(value)) {
+    return CHAT_SIDEBAR_DEFAULT_WIDTH;
+  }
+  return Math.min(CHAT_SIDEBAR_MAX_WIDTH, Math.max(CHAT_SIDEBAR_MIN_WIDTH, value));
+}
+
 function workspaceTabFromItem(item: SlotItemResolution): WorkspaceTab | undefined {
   if (item.kind !== 'content') {
     return undefined;
@@ -682,7 +789,11 @@ function isDefined<T>(value: T | undefined): value is T {
 
 <template>
   <div class="telegram-workspace">
-    <section class="telegram-workspace__chat-interface">
+    <section
+      class="telegram-workspace__chat-interface"
+      :data-resizing="isResizingChatSidebar ? 'true' : undefined"
+      :style="chatInterfaceStyle"
+    >
       <ChatSidebar
         :view="chatSidebar"
         @archive-open="openArchiveChats"
@@ -693,6 +804,21 @@ function isDefined<T>(value: T | undefined): value is T {
         @search-clear="clearChatSearch"
         @search-input="searchChats"
       />
+
+      <div
+        class="telegram-workspace__sidebar-resizer"
+        role="separator"
+        aria-label="Resize chat list"
+        aria-orientation="vertical"
+        :aria-valuemax="CHAT_SIDEBAR_MAX_WIDTH"
+        :aria-valuemin="CHAT_SIDEBAR_MIN_WIDTH"
+        :aria-valuenow="chatSidebarWidth"
+        tabindex="0"
+        @keydown="resizeChatSidebarWithKeyboard"
+        @pointerdown="startChatSidebarResize"
+      >
+        <span class="telegram-workspace__sidebar-resizer-line"></span>
+      </div>
 
       <div class="telegram-workspace__primary-panel">
         <div v-if="selectedChatId === null" class="telegram-workspace__empty-state">
@@ -781,11 +907,24 @@ function isDefined<T>(value: T | undefined): value is T {
 }
 
 .telegram-workspace__chat-interface {
-  @apply grid h-full min-h-0 min-w-0 grid-cols-[380px_minmax(0,1fr)] overflow-hidden rounded-lg border border-zinc-200 bg-white;
+  @apply relative grid h-full min-h-0 min-w-0 grid-cols-[var(--telegram-chat-sidebar-width)_minmax(0,1fr)] overflow-hidden rounded-lg border border-zinc-200 bg-white;
+}
+
+.telegram-workspace__chat-interface[data-resizing='true'] {
+  @apply cursor-col-resize select-none;
+}
+
+.telegram-workspace__sidebar-resizer {
+  @apply absolute bottom-0 top-0 z-10 flex w-[5px] cursor-col-resize justify-center bg-transparent focus:outline-none;
+  left: calc(var(--telegram-chat-sidebar-width) - 2px);
+}
+
+.telegram-workspace__sidebar-resizer-line {
+  @apply block h-full w-px bg-zinc-200;
 }
 
 .telegram-workspace__primary-panel {
-  @apply min-h-0 min-w-0 overflow-hidden border-l border-zinc-200 bg-white;
+  @apply min-h-0 min-w-0 overflow-hidden bg-white;
 }
 
 .telegram-workspace__empty-state {
