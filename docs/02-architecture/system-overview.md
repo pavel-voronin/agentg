@@ -9,7 +9,8 @@ The first architecture is intentionally simple. It should prove that the system 
 ```text
 Telegram / TDLib user-client
   -> TypeScript/Node.js sidecar
-  -> Postgres raw event and current-state tables
+  -> TDLib update handlers
+  -> Postgres Telegram domain tables
   -> direct database inspection
 ```
 
@@ -31,8 +32,9 @@ For the first implementation, start with:
 
 ```text
 TDLib sidecar
-  -> Postgres append-only event log
-  -> normalized message/current-state tables
+  -> TDLib update handlers
+  -> Telegram domain tables
+  -> malformed or unhandled TDLib update diagnostics
 ```
 
 The agent-facing integration adds a separate live boundary:
@@ -51,7 +53,7 @@ TDLib sidecar
 
 NATS Core is used as an internal, non-durable event bus. Addressed internal
 domain reads and commands use tRPC. Postgres remains the source of recovery
-and replayable Telegram facts.
+through Telegram domain tables and Telegram history coverage.
 History Sync is a separate process from Telegram ingestion: it owns templates,
 targets, and sync cadence. Telegram ingestion owns TDLib, Telegram-shaped
 persistence, page continuity, and Telegram history coverage.

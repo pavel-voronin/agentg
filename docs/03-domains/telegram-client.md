@@ -14,15 +14,17 @@ AgenTG should be useful as a Telegram client first.
 
 ## Outputs
 
-- Raw Telegram events.
-- Telegram-shaped current state.
+- Normalized Telegram domain table records.
+- Telegram-shaped current state and TDLib update diagnostics.
 - Optional Telegram write operations exposed at the client boundary.
 
 ## Invariants
 
 - Telegram mechanics should not be flattened into a generic message-feed model.
-- All incoming Telegram events should be persistable.
-- Current state should be reconstructable from raw events where practical.
+- Incoming Telegram updates should be handled by explicit update handlers or
+  reported as malformed or unhandled diagnostics.
+- Current state should be reconstructable from Telegram domain tables where
+  practical.
 - Telegram identifiers and semantics should remain available in storage.
 
 ## API Surface Direction

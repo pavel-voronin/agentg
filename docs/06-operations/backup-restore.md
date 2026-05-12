@@ -11,4 +11,5 @@ Not defined yet.
 
 - Should TDLib session backup be encrypted separately?
 - What is the restore procedure on a new machine?
-- Should raw events and current-state tables have different backup policies?
+- Should modeled diagnostic tables and durable domain tables have different
+  backup policies?

@@ -23,5 +23,4 @@ The first implementation target is deliberately small and concrete:
 - [Component Boundaries](docs/02-architecture/component-boundaries.md)
 - [Domain Map](docs/03-domains/domain-map.md)
 - [History Sync](docs/03-domains/history-sync.md)
-- [Data Model](docs/04-data/data-model.md)
 - [MVP](docs/09-roadmap/mvp.md)

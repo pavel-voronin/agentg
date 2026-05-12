@@ -12,13 +12,13 @@
 
 ## Data
 
-- Draft SQL schema for raw events.
+- Draft SQL schema for TDLib domain tables.
 - Draft SQL schema for messages.
 - Draft SQL schema for chats.
 - Draft SQL schema for users or sender records.
 - Draft SQL schema for History Sync templates and targets.
 - Draft SQL schema for Telegram history coverage intervals.
-- Draft SQL schemas for participants, files, reactions, and topics after the first text-message loop works.
+- Draft SQL schemas for participants, files, reactions, and topics.
 - Decide retention defaults.
 
 ## Telegram Client

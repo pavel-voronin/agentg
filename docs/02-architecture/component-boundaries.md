@@ -11,7 +11,7 @@ Owns:
 - Receiving live Telegram updates.
 - Fetching chat lists and historical messages.
 - Exposing a small internal tRPC API for Telegram client commands and reads.
-- Passing raw Telegram facts to storage.
+- Handling TDLib inputs through explicit update handlers.
 - Fetching and persisting historical Telegram pages requested by the History Sync
   Sync domain.
 - Computing and storing Telegram history coverage from fetched pages and live
@@ -43,9 +43,9 @@ Does not own:
 
 - Telegram login, sessions, or TDLib state.
 - Telegram message normalization or Telegram-shaped current-state writes.
-- Telegram raw event storage.
+- Telegram domain table writes.
 - Telegram history coverage tables or TDLib page cursors.
-- Parsing Telegram raw storage payloads for History Sync read behavior.
+- Parsing Telegram storage payloads for History Sync read behavior.
 
 ## Control Plane
 

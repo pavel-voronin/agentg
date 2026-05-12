@@ -12,17 +12,17 @@ Mitigation:
 - last update timestamp
 - replay from TDLib/local state where possible
 
-## Duplicate Events
+## Duplicate Inputs
 
 Risk:
 
-Retries produce duplicate raw events.
+Retries deliver the same TDLib input more than once.
 
 Mitigation:
 
 - payload hash
 - Telegram identifiers
-- idempotent ingestion
+- idempotent domain table writes
 
 ## Unauthorized Sending
 

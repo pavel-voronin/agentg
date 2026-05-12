@@ -8,7 +8,8 @@ The system can connect to the user's Telegram account, read personal chats, grou
 
 - TDLib sidecar.
 - TypeScript/Node.js sidecar if TDLib integration is stable enough.
-- Postgres append-only `telegram_events`.
+- Postgres Telegram domain tables.
+- Malformed or unhandled TDLib update diagnostics.
 - Normalized `telegram_messages`.
 - Basic `telegram_chats`.
 - Basic `telegram_users` or sender records.

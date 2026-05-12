@@ -11,7 +11,7 @@
 - Telegram history coverage ensure page counts and remaining interval counts
 - failed TDLib requests
 - Postgres write latency
-- duplicate event count
+- malformed or unhandled TDLib update count
 - attachment metadata count
 - active Service Directory services and extensions per target
 - RPC call lifecycle by `callId`
@@ -28,7 +28,7 @@ The system should support answering:
 - Which Telegram coverage intervals exist for a chat?
 - When was the last update received?
 - Was a specific Telegram message persisted?
-- Which raw event produced a specific current message record?
+- Which update handler or table write explains a specific Telegram input?
 - Which extension getters are active for a model target such as `telegram.chat`?
 - Did an RPC call start, report progress, complete, or fail for a given
   `callId`?

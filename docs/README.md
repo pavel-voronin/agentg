@@ -23,7 +23,6 @@ Do not pre-document higher-level assistant behavior. Add it only after the Teleg
 - [Telegram Client](03-domains/telegram-client.md)
 - [Ingestion](03-domains/ingestion.md)
 - [History Sync](03-domains/history-sync.md)
-- [Data Model](04-data/data-model.md)
 - [History Sync Schema](04-data/history-sync-schema.md)
 - [TDLib Sidecar API](05-interfaces/tdlib-sidecar-api.md)
 - [Event Plane](05-interfaces/event-plane.md)

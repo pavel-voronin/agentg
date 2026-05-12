@@ -29,4 +29,3 @@ Negative:
 - stores sensitive session data
 - requires stronger security boundaries
 - more operationally sensitive than a bot
-

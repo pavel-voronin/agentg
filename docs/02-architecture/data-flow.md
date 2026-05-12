@@ -4,8 +4,8 @@
 
 ```text
 TDLib update
-  -> raw event
-  -> Telegram-shaped Postgres records
+  -> TDLib update handler
+  -> Telegram domain table records
   -> inspectable chats and messages
 ```
 

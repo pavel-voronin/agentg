@@ -8,7 +8,7 @@
 - Discover personal chats, groups, channels, and Saved Messages.
 - Implement History Sync templates, concrete targets, target range projection,
   and Telegram-owned coverage convergence.
-- Store raw events in Postgres.
+- Store normalized Telegram table records in Postgres.
 - Build basic normalized message state for text-oriented messages.
 - Store attachment metadata without bulk-downloading payloads.
 - Preserve Telegram-specific data model and identifiers.

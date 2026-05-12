@@ -35,5 +35,5 @@ Message state provides the current canonical view of Telegram messages.
 
 ## Invariant
 
-Current message state is derived from raw events. It is not the immutable source of truth.
-
+Current message state is derived from TDLib update handlers and domain table
+writes. It is current Telegram state, not an immutable event ledger.

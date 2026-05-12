@@ -4,7 +4,10 @@ Retention policy is not final yet.
 
 ## Initial Direction
 
-- Keep raw events during early development for replay and debugging.
+- Keep successful Telegram inputs only as normalized Telegram domain table
+  records.
+- Keep modeled TDLib diagnostics only when they are bounded and useful for
+  repair.
 - Keep current message state as long as the user wants Telegram memory.
 - Keep History Sync targets long enough to preserve desired coverage policy.
 - Keep Telegram history coverage long enough to resume coverage convergence
@@ -12,7 +15,6 @@ Retention policy is not final yet.
 
 ## Open Questions
 
-- Should raw events be compacted after normalization confidence is high?
 - Should media payloads be retained or only metadata?
 - Should private chats have stricter retention than groups?
 - Should deleted Telegram messages be removed from local storage or retained as audit facts?
