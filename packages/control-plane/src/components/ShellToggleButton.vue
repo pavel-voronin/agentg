@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue';
+import SolarBillListBold from '~icons/solar/bill-list-bold';
+import SolarEyeBold from '~icons/solar/eye-bold';
+import SolarWidget2Bold from '~icons/solar/widget-2-bold';
 
 import UiButton from '@agentg/control-plane-sdk/ui';
 
@@ -41,43 +44,23 @@ function emitPreviewEnter(): void {
       @mouseenter="emitPreviewEnter"
       @mouseleave="emit('previewLeave')"
     >
-      <svg
+      <SolarWidget2Bold
+        v-if="icon === 'dashboard'"
         class="shell-toggle-button__action-icon"
         :data-active="active ? 'true' : undefined"
-        viewBox="0 0 20 20"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
         aria-hidden="true"
-      >
-        <template v-if="icon === 'dashboard'">
-          <path d="M3 3h5v5H3z" />
-          <path d="M12 3h5v5h-5z" />
-          <path d="M3 12h5v5H3z" />
-          <path d="M12 12h5v5h-5z" />
-        </template>
-        <template v-else>
-          <path d="M4 5h12" />
-          <path d="M4 10h12" />
-          <path d="M4 15h8" />
-        </template>
-      </svg>
-      <svg
+      />
+      <SolarBillListBold
+        v-else
+        class="shell-toggle-button__action-icon"
+        :data-active="active ? 'true' : undefined"
+        aria-hidden="true"
+      />
+      <SolarEyeBold
         class="shell-toggle-button__preview-icon"
         :data-active="active ? 'true' : undefined"
-        viewBox="0 0 20 20"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
         aria-hidden="true"
-      >
-        <path d="M2.5 10S5.5 5 10 5s7.5 5 7.5 5-3 5-7.5 5-7.5-5-7.5-5Z" />
-        <path d="M10 8.25a1.75 1.75 0 1 1 0 3.5 1.75 1.75 0 0 1 0-3.5Z" />
-      </svg>
+      />
     </span>
     <span>{{ label }}</span>
   </UiButton>

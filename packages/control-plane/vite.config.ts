@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 
 import tailwindcss from '@tailwindcss/vite';
 import vue from '@vitejs/plugin-vue';
+import Icons from 'unplugin-icons/vite';
 import { defineConfig, type Plugin, type UserConfig } from 'vite';
 
 const browserSharedModules = new Set(['vue']);
@@ -30,6 +31,7 @@ export default defineConfig(({ command }): UserConfig => {
     plugins: [
       ...(devServer ? [rewriteBrowserSharedModuleImports()] : [externalizeBrowserSharedModules()]),
       vue(),
+      Icons({ autoInstall: false, compiler: 'vue3' }),
       tailwindcss()
     ],
     preview: {

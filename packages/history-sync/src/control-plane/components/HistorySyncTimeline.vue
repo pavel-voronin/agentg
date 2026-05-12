@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
+import SolarAltArrowDownBold from '~icons/solar/alt-arrow-down-bold';
+import SolarAltArrowRightBold from '~icons/solar/alt-arrow-right-bold';
 
 import type { SelectedHistorySyncState } from '../views.js';
 import { useTimelineInteraction } from '../timeline/useTimelineInteraction.js';
@@ -66,19 +68,16 @@ const {
           type="button"
           @click="coverageTableOpen = !coverageTableOpen"
         >
-          <svg
+          <SolarAltArrowDownBold
+            v-if="coverageTableOpen"
             class="history-sync-timeline__toggle-icon"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
             aria-hidden="true"
-          >
-            <path v-if="coverageTableOpen" d="M4 6l4 4 4-4" />
-            <path v-else d="M6 4l4 4-4 4" />
-          </svg>
+          />
+          <SolarAltArrowRightBold
+            v-else
+            class="history-sync-timeline__toggle-icon"
+            aria-hidden="true"
+          />
         </button>
       </div>
       <TimelineTrack

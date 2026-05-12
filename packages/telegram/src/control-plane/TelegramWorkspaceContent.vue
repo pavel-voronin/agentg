@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, watch, type CSSProperties } from 'vue';
+import SolarCloseCircleBold from '~icons/solar/close-circle-bold';
 
 import {
   SlotOutletItem,
@@ -854,19 +855,10 @@ function isDefined<T>(value: T | undefined): value is T {
               title="Close chat"
               @click="closeSelectedChat"
             >
-              <svg
+              <SolarCloseCircleBold
                 class="telegram-workspace__chat-header-close-icon"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
                 aria-hidden="true"
-              >
-                <path d="M18 6 6 18" />
-                <path d="M6 6 18 18" />
-              </svg>
+              />
             </UiButton>
           </div>
           <div class="telegram-workspace__tab-list" role="tablist" aria-label="Chat workspace">

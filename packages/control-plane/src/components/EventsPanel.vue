@@ -1,5 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue';
+import SolarEraserBold from '~icons/solar/eraser-bold';
+import SolarFiltersBold from '~icons/solar/filters-bold';
+import SolarPauseBold from '~icons/solar/pause-bold';
+import SolarPlayBold from '~icons/solar/play-bold';
+import SolarSettingsBold from '~icons/solar/settings-bold';
 
 import type {
   AppEventItem,
@@ -76,28 +81,12 @@ const eventStreamStateLabel = computed(() => (props.streamPaused ? 'Paused' : 'L
           ></span>
           <span class="events-panel__stream-label">{{ eventStreamStateLabel }}</span>
           <span class="events-panel__stream-divider" aria-hidden="true"></span>
-          <svg
+          <SolarPlayBold
             v-if="streamPaused"
             class="events-panel__button-icon-large"
-            viewBox="0 0 20 20"
-            fill="currentColor"
             aria-hidden="true"
-          >
-            <path
-              d="M6 4.75v10.5c0 .63.7 1.01 1.22.66l7.75-5.25a.79.79 0 0 0 0-1.32L7.22 4.09A.78.78 0 0 0 6 4.75Z"
-            />
-          </svg>
-          <svg
-            v-else
-            class="events-panel__button-icon-large"
-            viewBox="0 0 20 20"
-            fill="currentColor"
-            aria-hidden="true"
-          >
-            <path
-              d="M6 4.5A1.5 1.5 0 0 1 7.5 3h.25a1.5 1.5 0 0 1 1.5 1.5v11a1.5 1.5 0 0 1-1.5 1.5H7.5A1.5 1.5 0 0 1 6 15.5v-11ZM10.75 4.5A1.5 1.5 0 0 1 12.25 3h.25A1.5 1.5 0 0 1 14 4.5v11a1.5 1.5 0 0 1-1.5 1.5h-.25a1.5 1.5 0 0 1-1.5-1.5v-11Z"
-            />
-          </svg>
+          />
+          <SolarPauseBold v-else class="events-panel__button-icon-large" aria-hidden="true" />
         </UiButton>
         <UiButton
           :id="filtersToggleId"
@@ -105,20 +94,7 @@ const eventStreamStateLabel = computed(() => (props.streamPaused ? 'Paused' : 'L
           :variant="eventFilterToggleVariant"
           @click="emit('filtersToggle')"
         >
-          <svg
-            class="events-panel__button-icon"
-            viewBox="0 0 20 20"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M3 5h14" />
-            <path d="M6 10h8" />
-            <path d="M8 15h4" />
-          </svg>
+          <SolarFiltersBold class="events-panel__button-icon" aria-hidden="true" />
           <span>Filters</span>
           <span class="events-panel__filters-count">
             {{ view.enabledCount }}
@@ -131,23 +107,7 @@ const eventStreamStateLabel = computed(() => (props.streamPaused ? 'Paused' : 'L
           title="Clear events"
           @click="emit('clear')"
         >
-          <svg
-            class="events-panel__icon-button-icon"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path d="m15 4 5 5" />
-            <path d="m14 5 5 5" />
-            <path d="m7 12 5 5" />
-            <path d="m5 14 5 5" />
-            <path d="M4 20h11" />
-            <path d="m11 8-5 5 5 5 5-5" />
-          </svg>
+          <SolarEraserBold class="events-panel__icon-button-icon" aria-hidden="true" />
         </UiButton>
         <UiButton
           :id="settingsToggleId"
@@ -157,21 +117,7 @@ const eventStreamStateLabel = computed(() => (props.streamPaused ? 'Paused' : 'L
           :variant="eventSettingsToggleVariant"
           @click="emit('settingsToggle')"
         >
-          <svg
-            class="events-panel__icon-button-icon"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path
-              d="M9.67 4.14a2.34 2.34 0 0 1 4.66 0 2.34 2.34 0 0 0 3.32 1.91 2.34 2.34 0 0 1 2.33 4.03 2.34 2.34 0 0 0 0 3.84 2.34 2.34 0 0 1-2.33 4.03 2.34 2.34 0 0 0-3.32 1.91 2.34 2.34 0 0 1-4.66 0 2.34 2.34 0 0 0-3.32-1.91 2.34 2.34 0 0 1-2.33-4.03 2.34 2.34 0 0 0 0-3.84 2.34 2.34 0 0 1 2.33-4.03 2.34 2.34 0 0 0 3.32-1.91"
-            />
-            <circle cx="12" cy="12" r="3" />
-          </svg>
+          <SolarSettingsBold class="events-panel__icon-button-icon" aria-hidden="true" />
         </UiButton>
       </div>
     </div>

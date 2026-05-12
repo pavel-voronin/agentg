@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, shallowRef, watch, type CSSProperties } from 'vue';
+import SolarInfoCircleBold from '~icons/solar/info-circle-bold';
+import SolarTagBold from '~icons/solar/tag-bold';
 
 import { useSlotRuntime } from './runtime.js';
 import type {
@@ -472,18 +474,7 @@ function clamp(value: number, min: number, max: number): number {
         @mouseenter="showHoverSlot(icon.id)"
         @mouseleave="scheduleClearHover"
       >
-        <svg
-          aria-hidden="true"
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.8"
-          stroke-linecap="round"
-        >
-          <circle cx="8" cy="8" r="6" />
-          <path d="M8 7.5v3.25" />
-          <path d="M8 5.15h.01" />
-        </svg>
+        <SolarInfoCircleBold class="slot-debug-icon__mark" aria-hidden="true" />
       </button>
 
       <div
@@ -499,19 +490,7 @@ function clamp(value: number, min: number, max: number): number {
             <dd>
               <span class="slot-debug-slot-label">{{ activeEntry.slotId }}</span>
               <span v-for="tag in tagItems(activeEntry.tags)" :key="tag" class="slot-debug-tag">
-                <svg
-                  aria-hidden="true"
-                  class="slot-debug-tag-icon"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.8"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <path d="M3.5 3.5h4.75l4.25 4.25-4.75 4.75L3.5 8.25z" />
-                  <path d="M6.25 6.25h.01" />
-                </svg>
+                <SolarTagBold aria-hidden="true" class="slot-debug-tag-icon" />
                 <span class="slot-debug-tag-text">{{ tag }}</span>
               </span>
             </dd>
@@ -530,19 +509,7 @@ function clamp(value: number, min: number, max: number): number {
               >
                 <span class="slot-debug-content-label">{{ item.label }}</span>
                 <span v-if="item.tag" class="slot-debug-tag">
-                  <svg
-                    aria-hidden="true"
-                    class="slot-debug-tag-icon"
-                    viewBox="0 0 16 16"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.8"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path d="M3.5 3.5h4.75l4.25 4.25-4.75 4.75L3.5 8.25z" />
-                    <path d="M6.25 6.25h.01" />
-                  </svg>
+                  <SolarTagBold aria-hidden="true" class="slot-debug-tag-icon" />
                   <span class="slot-debug-tag-text">{{ item.tag }}</span>
                 </span>
               </span>

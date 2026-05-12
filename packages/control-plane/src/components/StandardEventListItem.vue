@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import SolarCloseCircleBold from '~icons/solar/close-circle-bold';
+import SolarVolumeCrossBold from '~icons/solar/volume-cross-bold';
+import SolarVolumeLoudBold from '~icons/solar/volume-loud-bold';
 
 import type { AppStandardEventItem } from '../stores/controlPlaneTypes.js';
 import EventBodyBlock from './EventBodyBlock.vue';
@@ -48,20 +51,12 @@ function toggleBodyMode(): void {
           :data-muted="event.muted ? 'true' : undefined"
           @click="emit('muteChange', event.type, !event.muted)"
         >
-          <svg
+          <SolarVolumeCrossBold
+            v-if="event.muted"
             class="standard-event-item__button-icon"
-            viewBox="0 0 20 20"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.8"
-            stroke-linecap="round"
-            stroke-linejoin="round"
             aria-hidden="true"
-          >
-            <path d="M4 8.5v3h3L11 15V5L7 8.5H4Z" />
-            <path v-if="event.muted" d="m14 8 3 3m0-3-3 3" />
-            <path v-else d="M14 7.5a4 4 0 0 1 0 5" />
-          </svg>
+          />
+          <SolarVolumeLoudBold v-else class="standard-event-item__button-icon" aria-hidden="true" />
         </button>
         <button
           v-if="event.muted"
@@ -71,17 +66,7 @@ function toggleBodyMode(): void {
           class="standard-event-item__clear-button"
           @click="emit('clearType', event.type)"
         >
-          <svg
-            class="standard-event-item__button-icon"
-            viewBox="0 0 20 20"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.8"
-            stroke-linecap="round"
-            aria-hidden="true"
-          >
-            <path d="m6 6 8 8M14 6l-8 8" />
-          </svg>
+          <SolarCloseCircleBold class="standard-event-item__button-icon" aria-hidden="true" />
         </button>
       </div>
       <button

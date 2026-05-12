@@ -9,6 +9,7 @@ import {
   watch,
   type ComponentPublicInstance
 } from 'vue';
+import SolarAltArrowDownBold from '~icons/solar/alt-arrow-down-bold';
 
 import { useControlPlaneHost, type ControlPlaneHostEvent } from '@agentg/control-plane-sdk/host';
 import type { SlotContext } from '@agentg/control-plane-sdk/slots';
@@ -1463,18 +1464,7 @@ function errorMessage(error: unknown): string {
       title="Scroll to newest messages"
       @click="scrollToBottom"
     >
-      <svg
-        class="telegram-chat-messages__scroll-down-icon"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2.5"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        aria-hidden="true"
-      >
-        <path d="m6 9 6 6 6-6" />
-      </svg>
+      <SolarAltArrowDownBold class="telegram-chat-messages__scroll-down-icon" aria-hidden="true" />
     </button>
   </section>
 </template>

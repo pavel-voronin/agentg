@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import SolarWidget2Bold from '~icons/solar/widget-2-bold';
 
 import { provideControlPlaneHost } from '@agentg/control-plane-sdk/host';
 import {
@@ -208,21 +209,7 @@ onBeforeUnmount(() => {
               :variant="appShell.slotDebugEnabled ? 'danger' : 'neutral'"
               @click="toggleSlotDebug"
             >
-              <svg
-                class="control-plane-app__button-icon"
-                viewBox="0 0 20 20"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M4 4h5v5H4z" />
-                <path d="M11 4h5v5h-5z" />
-                <path d="M4 11h5v5H4z" />
-                <path d="M11 11h5v5h-5z" />
-              </svg>
+              <SolarWidget2Bold class="control-plane-app__button-icon" aria-hidden="true" />
               <span>Slots</span>
             </UiButton>
             <ShellToggleButton

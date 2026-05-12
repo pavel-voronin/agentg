@@ -1,5 +1,29 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import SolarArchiveDownBold from '~icons/solar/archive-down-bold';
+import SolarBookBold from '~icons/solar/book-bold';
+import SolarCaseBold from '~icons/solar/case-bold';
+import SolarChartBold from '~icons/solar/chart-bold';
+import SolarChatDotsBold from '~icons/solar/chat-dots-bold';
+import SolarChatSquareCodeBold from '~icons/solar/chat-square-code-bold';
+import SolarCheckCircleBold from '~icons/solar/check-circle-bold';
+import SolarCheckReadBold from '~icons/solar/check-read-bold';
+import SolarCloseCircleBold from '~icons/solar/close-circle-bold';
+import SolarCrownBold from '~icons/solar/crown-bold';
+import SolarCrownStarBold from '~icons/solar/crown-star-bold';
+import SolarFolderBold from '~icons/solar/folder-bold';
+import SolarForward2Bold from '~icons/solar/forward-2-bold';
+import SolarGamepadBold from '~icons/solar/gamepad-bold';
+import SolarHeartBold from '~icons/solar/heart-bold';
+import SolarHomeBold from '~icons/solar/home-bold';
+import SolarLockKeyholeMinimalisticBold from '~icons/solar/lock-keyhole-minimalistic-bold';
+import SolarMapPointSchoolBold from '~icons/solar/map-point-school-bold';
+import SolarMedalStarBold from '~icons/solar/medal-star-bold';
+import SolarPinBold from '~icons/solar/pin-bold';
+import SolarPlainBold from '~icons/solar/plain-bold';
+import SolarUnreadBold from '~icons/solar/unread-bold';
+import SolarUsersGroupRoundedBold from '~icons/solar/users-group-rounded-bold';
+import SolarFootballBold from '~icons/solar/football-bold';
 
 import { onModelRefSelected } from '@agentg/control-plane-sdk/model-ref-events';
 import type { ChatFolderNavItem, ChatSidebarView } from '../views.js';
@@ -62,29 +86,6 @@ function openFolder(item: ChatFolderNavItem): void {
 
 function inputTarget(event: Event): InputEventTarget | null {
   return event.target === null ? null : (event.target as unknown as InputEventTarget);
-}
-
-function folderAccentGlyph(accent: ChatFolderNavItem['iconAccent']): string {
-  if (accent === null) {
-    return '';
-  }
-  const glyphs: Record<NonNullable<ChatFolderNavItem['iconAccent']>, string> = {
-    book: 'B',
-    bot: 'BOT',
-    crown: 'C',
-    favorite: '*',
-    game: 'G',
-    home: 'H',
-    love: '<3',
-    private: 'L',
-    school: 'S',
-    sport: 'SP',
-    trade: 'T',
-    travel: 'A',
-    unread: '!',
-    work: 'W'
-  };
-  return glyphs[accent];
 }
 
 function folderScrollKey(folders: ChatFolderNavItem[]): string {
@@ -150,7 +151,7 @@ onBeforeUnmount(() => {
           :data-visible="view.hasSearch ? 'true' : undefined"
           @click="clearSearch"
         >
-          <span class="chat-sidebar__search-clear-icon" aria-hidden="true">x</span>
+          <SolarCloseCircleBold class="chat-sidebar__search-clear-icon" aria-hidden="true" />
         </button>
       </div>
     </div>
@@ -167,42 +168,17 @@ onBeforeUnmount(() => {
           @click="openFolder(folder)"
         >
           <span class="chat-sidebar__folder-icon-wrap">
-            <svg
+            <SolarChatDotsBold
               v-if="folder.icon === 'chats'"
               class="chat-sidebar__folder-icon"
-              viewBox="0 0 24 24"
-              fill="currentColor"
               aria-hidden="true"
-            >
-              <path
-                d="M9 4.5h4.7a6.2 6.2 0 0 1 0 12.4h-.5l-2.9 2.2a.9.9 0 0 1-1.4-.7v-1.5H9A6.2 6.2 0 0 1 9 4.5Z"
-              />
-              <path
-                d="M16.1 8.3a5.3 5.3 0 0 1 .7 8.5l1.9 1.4a.9.9 0 0 0 1.4-.7v-1.3a4.8 4.8 0 0 0-4-7.9Z"
-              />
-            </svg>
-            <svg
+            />
+            <SolarArchiveDownBold
               v-else-if="folder.icon === 'archive'"
               class="chat-sidebar__folder-icon"
-              viewBox="0 0 24 24"
-              fill="currentColor"
               aria-hidden="true"
-            >
-              <path
-                d="M5 4h14a2 2 0 0 1 2 2v2H3V6a2 2 0 0 1 2-2Zm-1 6h16v7a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3v-7Zm7-2h2V6h-2v2Zm-2.4 6.1 2.7 2.7a1 1 0 0 0 1.4 0l2.7-2.7a1 1 0 0 0-1.4-1.4l-1 1V11a1 1 0 1 0-2 0v2.7l-1-1a1 1 0 0 0-1.4 1.4Z"
-              />
-            </svg>
-            <svg
-              v-else
-              class="chat-sidebar__folder-icon"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-              aria-hidden="true"
-            >
-              <path
-                d="M3 7.8A2.8 2.8 0 0 1 5.8 5h4.1c.8 0 1.5.3 2 .9l.8.8c.3.3.7.4 1.1.4h4.4A2.8 2.8 0 0 1 21 9.9v6.3a2.8 2.8 0 0 1-2.8 2.8H5.8A2.8 2.8 0 0 1 3 16.2V7.8Z"
-              />
-            </svg>
+            />
+            <SolarFolderBold v-else class="chat-sidebar__folder-icon" aria-hidden="true" />
             <span
               v-if="folder.badge"
               class="chat-sidebar__folder-badge"
@@ -212,9 +188,72 @@ onBeforeUnmount(() => {
             </span>
           </span>
           <span v-if="folder.iconAccent" class="chat-sidebar__folder-accent">
-            <span class="chat-sidebar__folder-accent-icon" aria-hidden="true">
-              {{ folderAccentGlyph(folder.iconAccent) }}
-            </span>
+            <SolarBookBold
+              v-if="folder.iconAccent === 'book'"
+              class="chat-sidebar__folder-accent-icon"
+              aria-hidden="true"
+            />
+            <SolarChatSquareCodeBold
+              v-else-if="folder.iconAccent === 'bot'"
+              class="chat-sidebar__folder-accent-icon"
+              aria-hidden="true"
+            />
+            <SolarCrownBold
+              v-else-if="folder.iconAccent === 'crown'"
+              class="chat-sidebar__folder-accent-icon"
+              aria-hidden="true"
+            />
+            <SolarMedalStarBold
+              v-else-if="folder.iconAccent === 'favorite'"
+              class="chat-sidebar__folder-accent-icon"
+              aria-hidden="true"
+            />
+            <SolarGamepadBold
+              v-else-if="folder.iconAccent === 'game'"
+              class="chat-sidebar__folder-accent-icon"
+              aria-hidden="true"
+            />
+            <SolarHomeBold
+              v-else-if="folder.iconAccent === 'home'"
+              class="chat-sidebar__folder-accent-icon"
+              aria-hidden="true"
+            />
+            <SolarHeartBold
+              v-else-if="folder.iconAccent === 'love'"
+              class="chat-sidebar__folder-accent-icon"
+              aria-hidden="true"
+            />
+            <SolarLockKeyholeMinimalisticBold
+              v-else-if="folder.iconAccent === 'private'"
+              class="chat-sidebar__folder-accent-icon"
+              aria-hidden="true"
+            />
+            <SolarMapPointSchoolBold
+              v-else-if="folder.iconAccent === 'school'"
+              class="chat-sidebar__folder-accent-icon"
+              aria-hidden="true"
+            />
+            <SolarFootballBold
+              v-else-if="folder.iconAccent === 'sport'"
+              class="chat-sidebar__folder-accent-icon"
+              aria-hidden="true"
+            />
+            <SolarChartBold
+              v-else-if="folder.iconAccent === 'trade'"
+              class="chat-sidebar__folder-accent-icon"
+              aria-hidden="true"
+            />
+            <SolarPlainBold
+              v-else-if="folder.iconAccent === 'travel'"
+              class="chat-sidebar__folder-accent-icon"
+              aria-hidden="true"
+            />
+            <SolarUnreadBold
+              v-else-if="folder.iconAccent === 'unread'"
+              class="chat-sidebar__folder-accent-icon"
+              aria-hidden="true"
+            />
+            <SolarCaseBold v-else class="chat-sidebar__folder-accent-icon" aria-hidden="true" />
           </span>
           <span class="chat-sidebar__folder-label">{{ folder.label }}</span>
         </button>
@@ -246,81 +285,33 @@ onBeforeUnmount(() => {
             <div class="chat-sidebar__chat-content">
               <div class="chat-sidebar__chat-top">
                 <div class="chat-sidebar__chat-title-row">
-                  <svg
+                  <SolarChatSquareCodeBold
                     v-if="chat.icon === 'bot'"
                     class="chat-sidebar__chat-icon"
-                    viewBox="0 0 20 20"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    role="img"
-                    aria-label="Bot"
-                  >
-                    <path
-                      d="M5.5 7.5h7a3 3 0 0 1 3 3v3a3 3 0 0 1-3 3h-7a3 3 0 0 1-3-3v-3a3 3 0 0 1 3-3Z"
-                    />
-                    <path d="M9 7.5V4.75" />
-                    <path d="M6.5 11.25h.01" />
-                    <path d="M11.5 11.25h.01" />
-                  </svg>
-                  <svg
+                    aria-hidden="true"
+                  />
+                  <SolarPlainBold
                     v-else-if="chat.icon === 'channel'"
                     class="chat-sidebar__chat-icon"
-                    viewBox="0 0 20 20"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    role="img"
-                    aria-label="Channel"
-                  >
-                    <path d="M3 10.5 15.5 5v14L3 13.5v-3Z" />
-                    <path d="M6.5 14.75 8 19" />
-                  </svg>
-                  <svg
+                    aria-hidden="true"
+                  />
+                  <SolarUsersGroupRoundedBold
                     v-else-if="chat.icon === 'group'"
                     class="chat-sidebar__chat-icon"
-                    viewBox="0 0 20 20"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    role="img"
-                    aria-label="Group"
-                  >
-                    <path d="M8 11.5a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
-                    <path d="M14.5 10.5a2.5 2.5 0 1 0 0-5" />
-                    <path d="M2.5 18a5.5 5.5 0 0 1 11 0" />
-                    <path d="M13.5 13.5A4.5 4.5 0 0 1 18 18" />
-                  </svg>
-                  <svg
+                    aria-hidden="true"
+                  />
+                  <SolarLockKeyholeMinimalisticBold
                     v-else-if="chat.icon === 'secret'"
                     class="chat-sidebar__chat-icon"
-                    viewBox="0 0 20 20"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    role="img"
-                    aria-label="Secret chat"
-                  >
-                    <path d="M5.5 9.5V7a3.5 3.5 0 0 1 7 0v2.5" />
-                    <path d="M4.5 9.5h9v7h-9v-7Z" />
-                  </svg>
+                    aria-hidden="true"
+                  />
                   <div class="chat-sidebar__chat-title">{{ chat.title }}</div>
-                  <span
+                  <SolarCrownStarBold
                     v-if="chat.isPremium"
                     class="chat-sidebar__chat-premium"
                     title="Telegram Premium"
                     aria-hidden="true"
-                  >
-                    P
-                  </span>
+                  />
                 </div>
                 <div class="chat-sidebar__chat-meta">
                   <span
@@ -328,20 +319,16 @@ onBeforeUnmount(() => {
                     class="chat-sidebar__chat-read-state"
                     :data-state="chat.lastMessage.readState"
                   >
-                    <span
+                    <SolarCheckReadBold
                       v-if="chat.lastMessage.readState === 'read'"
                       class="chat-sidebar__chat-read-icon"
                       aria-hidden="true"
-                    >
-                      vv
-                    </span>
-                    <span
+                    />
+                    <SolarCheckCircleBold
                       v-else-if="chat.lastMessage.readState === 'sent'"
                       class="chat-sidebar__chat-read-icon"
                       aria-hidden="true"
-                    >
-                      v
-                    </span>
+                    />
                     <span v-else class="chat-sidebar__chat-read-placeholder">?</span>
                   </span>
                   <span
@@ -364,20 +351,11 @@ onBeforeUnmount(() => {
                   >
                     {{ chat.lastMessage.author }}:
                   </span>
-                  <svg
+                  <SolarForward2Bold
                     v-if="chat.lastMessage.isForwarded"
                     class="chat-sidebar__chat-forward"
-                    viewBox="0 0 20 20"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
                     aria-hidden="true"
-                  >
-                    <path d="M12 5 17 10l-5 5" />
-                    <path d="M3 15v-2a3 3 0 0 1 3-3h10" />
-                  </svg>
+                  />
                   <span class="chat-sidebar__chat-preview-text">
                     {{ chat.lastMessage.text }}
                   </span>
@@ -391,17 +369,11 @@ onBeforeUnmount(() => {
                   >
                     {{ chat.unreadBadge }}
                   </span>
-                  <svg
+                  <SolarPinBold
                     v-else-if="chat.isPinned"
                     class="chat-sidebar__chat-pin"
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
                     aria-hidden="true"
-                  >
-                    <path
-                      d="M12.4 2.3a1 1 0 0 1 1.4 0l3.9 3.9a1 1 0 0 1 0 1.4l-1.3 1.3 1.1 1.1a1 1 0 0 1-1.4 1.4l-2.3-2.3-3 3 .5 3.7a1 1 0 0 1-1.7.8l-2.7-2.7-3.2 3.2a1 1 0 0 1-1.4-1.4l3.2-3.2-2.7-2.7a1 1 0 0 1 .8-1.7l3.7.5 3-3-2.3-2.3a1 1 0 0 1 1.4-1.4l1.1 1.1 1.3-1.3Z"
-                    />
-                  </svg>
+                  />
                 </div>
               </div>
             </div>
@@ -443,7 +415,7 @@ onBeforeUnmount(() => {
 }
 
 .chat-sidebar__search-clear-icon {
-  @apply flex h-3.5 w-3.5 items-center justify-center;
+  @apply h-3.5 w-3.5;
 }
 
 .chat-sidebar__body {
@@ -487,7 +459,7 @@ onBeforeUnmount(() => {
 }
 
 .chat-sidebar__folder-accent-icon {
-  @apply flex h-4 w-4 items-center justify-center text-[10px] font-bold leading-none;
+  @apply h-4 w-4;
 }
 
 .chat-sidebar__folder-label {
@@ -603,7 +575,7 @@ onBeforeUnmount(() => {
 }
 
 .chat-sidebar__chat-premium {
-  @apply flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-sky-500 text-[9px] font-bold leading-none text-white;
+  @apply h-3.5 w-3.5 shrink-0 text-sky-500;
 }
 
 .chat-sidebar__chat-meta {
@@ -623,7 +595,7 @@ onBeforeUnmount(() => {
 }
 
 .chat-sidebar__chat-read-icon {
-  @apply flex h-3.5 w-3.5 items-center justify-center text-[10px] font-bold leading-none;
+  @apply h-3.5 w-3.5;
 }
 
 .chat-sidebar__chat-read-placeholder {

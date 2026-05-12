@@ -6,6 +6,7 @@ import {
 } from '@agentg/infra/control-plane/assets';
 import tailwindcss from '@tailwindcss/vite';
 import vue from '@vitejs/plugin-vue';
+import Icons from 'unplugin-icons/vite';
 import { defineConfig, type Plugin } from 'vite';
 
 const entry = (path: string): string => fileURLToPath(new URL(path, import.meta.url));
@@ -34,7 +35,12 @@ export default defineConfig({
       }
     }
   },
-  plugins: [vue(), tailwindcss(), controlPlaneAssetVersion()]
+  plugins: [
+    vue(),
+    Icons({ autoInstall: false, compiler: 'vue3' }),
+    tailwindcss(),
+    controlPlaneAssetVersion()
+  ]
 });
 
 function controlPlaneAssetVersion(): Plugin {

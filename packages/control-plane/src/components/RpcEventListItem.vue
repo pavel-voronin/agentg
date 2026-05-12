@@ -1,5 +1,9 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
+import SolarAltArrowRightBold from '~icons/solar/alt-arrow-right-bold';
+import SolarCloseCircleBold from '~icons/solar/close-circle-bold';
+import SolarVolumeCrossBold from '~icons/solar/volume-cross-bold';
+import SolarVolumeLoudBold from '~icons/solar/volume-loud-bold';
 
 import type { AppRpcEventItem, AppRpcLifecycleItem } from '../stores/controlPlaneTypes.js';
 import EventBodyBlock from './EventBodyBlock.vue';
@@ -76,20 +80,12 @@ function toggleBodyMode(): void {
           :data-muted="event.muted ? 'true' : undefined"
           @click="emit('procedureMuteToggle', event)"
         >
-          <svg
+          <SolarVolumeCrossBold
+            v-if="event.muted"
             class="rpc-event-item__button-icon"
-            viewBox="0 0 20 20"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.8"
-            stroke-linecap="round"
-            stroke-linejoin="round"
             aria-hidden="true"
-          >
-            <path d="M4 8.5v3h3L11 15V5L7 8.5H4Z" />
-            <path v-if="event.muted" d="m14 8 3 3m0-3-3 3" />
-            <path v-else d="M14 7.5a4 4 0 0 1 0 5" />
-          </svg>
+          />
+          <SolarVolumeLoudBold v-else class="rpc-event-item__button-icon" aria-hidden="true" />
         </button>
         <button
           v-if="event.muted"
@@ -99,17 +95,7 @@ function toggleBodyMode(): void {
           class="rpc-event-item__clear-button"
           @click="clearRpcTypes"
         >
-          <svg
-            class="rpc-event-item__button-icon"
-            viewBox="0 0 20 20"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.8"
-            stroke-linecap="round"
-            aria-hidden="true"
-          >
-            <path d="m6 6 8 8M14 6l-8 8" />
-          </svg>
+          <SolarCloseCircleBold class="rpc-event-item__button-icon" aria-hidden="true" />
         </button>
       </div>
       <button
@@ -141,15 +127,11 @@ function toggleBodyMode(): void {
             class="rpc-event-item__expand-button"
             @click="toggleLifecycle(lifecycle, lifecycleIndex)"
           >
-            <svg
+            <SolarAltArrowRightBold
               class="rpc-event-item__expand-icon"
               :data-expanded="isLifecycleExpanded(lifecycle, lifecycleIndex) ? 'true' : undefined"
-              viewBox="0 0 20 20"
-              fill="currentColor"
               aria-hidden="true"
-            >
-              <path d="M7.5 4.75 13.25 10 7.5 15.25V4.75Z" />
-            </svg>
+            />
           </button>
           <span
             class="rpc-event-item__lifecycle-title"
@@ -172,20 +154,12 @@ function toggleBodyMode(): void {
             :data-muted="lifecycle.muted ? 'true' : undefined"
             @click="emit('muteChange', lifecycle.type, !lifecycle.muted)"
           >
-            <svg
+            <SolarVolumeCrossBold
+              v-if="lifecycle.muted"
               class="rpc-event-item__button-icon"
-              viewBox="0 0 20 20"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linecap="round"
-              stroke-linejoin="round"
               aria-hidden="true"
-            >
-              <path d="M4 8.5v3h3L11 15V5L7 8.5H4Z" />
-              <path v-if="lifecycle.muted" d="m14 8 3 3m0-3-3 3" />
-              <path v-else d="M14 7.5a4 4 0 0 1 0 5" />
-            </svg>
+            />
+            <SolarVolumeLoudBold v-else class="rpc-event-item__button-icon" aria-hidden="true" />
           </button>
           <button
             v-if="lifecycle.muted"
@@ -195,17 +169,7 @@ function toggleBodyMode(): void {
             class="rpc-event-item__clear-button"
             @click="emit('clearType', lifecycle.type)"
           >
-            <svg
-              class="rpc-event-item__button-icon"
-              viewBox="0 0 20 20"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linecap="round"
-              aria-hidden="true"
-            >
-              <path d="m6 6 8 8M14 6l-8 8" />
-            </svg>
+            <SolarCloseCircleBold class="rpc-event-item__button-icon" aria-hidden="true" />
           </button>
         </div>
         <EventBodyBlock
