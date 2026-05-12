@@ -129,11 +129,40 @@ function normalizeDirectoryChat(
     },
     id,
     isBot: value?.isBot === true,
+    isPremium: value?.isPremium === true,
+    isSelf: value?.isSelf === true,
+    isUnread: value?.isUnread === true,
+    lastMessage: normalizeLastMessage(asRecord(value?.lastMessage)),
     lastMessageDate: asNonNegativeInteger(value?.lastMessageDate),
+    notificationsEnabled:
+      typeof value?.notificationsEnabled === 'boolean' ? value.notificationsEnabled : null,
+    notificationsPlaceholder: value?.notificationsPlaceholder !== false,
     placements: asArray(value?.placements).map(normalizePlacement).filter(isDefined),
     title: asString(value?.title) ?? '',
     type: asString(value?.type) ?? '',
+    unreadCount: asNonNegativeInteger(value?.unreadCount),
+    unreadCountPlaceholder: value?.unreadCountPlaceholder !== false,
     updatedAt: asString(value?.updatedAt) ?? ''
+  };
+}
+
+function normalizeLastMessage(
+  value: Record<string, unknown> | undefined
+): TelegramDirectoryChat['lastMessage'] {
+  if (value === undefined) {
+    return null;
+  }
+  return {
+    authorName: asNullableString(value.authorName),
+    authorPlaceholder: value.authorPlaceholder === true,
+    date: asNonNegativeInteger(value.date),
+    datePlaceholder: value.datePlaceholder === true,
+    isForwarded: value.isForwarded === true,
+    isOutgoing: value.isOutgoing === true,
+    isRead: typeof value.isRead === 'boolean' ? value.isRead : null,
+    readPlaceholder: value.readPlaceholder === true,
+    text: asString(value.text) ?? '',
+    textPlaceholder: value.textPlaceholder === true
   };
 }
 
@@ -214,12 +243,12 @@ function normalizePlacement(value: Record<string, unknown> | undefined): ChatPla
   const kind = asString(value?.kind);
   const order = asString(value?.order) ?? '0';
   if (kind === 'main' || kind === 'archive') {
-    return { kind, order };
+    return { isPinned: value?.isPinned === true, kind, order };
   }
   if (kind === 'folder') {
     const folderId = value?.folderId;
     if (typeof folderId === 'number' && Number.isSafeInteger(folderId) && folderId >= 0) {
-      return { folderId, kind, order };
+      return { folderId, isPinned: value?.isPinned === true, kind, order };
     }
   }
   return undefined;

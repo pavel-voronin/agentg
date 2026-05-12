@@ -4,6 +4,7 @@ import {
   chatSidebarView,
   type ChatSidebarViewSource
 } from '../src/control-plane/chatSidebarView.js';
+import type { ControlPlaneChat } from '../src/control-plane/views.js';
 
 describe('Telegram chat sidebar view', () => {
   it('places Archive at the end of the folder navigation', () => {
@@ -14,16 +15,22 @@ describe('Telegram chat sidebar view', () => {
         chatListMode: 'main',
         chatNavigation: {
           archiveCount: 2,
+          archiveMutedUnreadCount: 0,
+          archiveUnreadCount: 1,
           folders: [
             {
               count: 4,
-              iconName: null,
+              iconName: 'Work',
               id: 7,
+              mutedUnreadCount: 0,
               position: 0,
-              title: 'Work'
+              title: 'Work',
+              unreadCount: 2
             }
           ],
-          mainCount: 10
+          mainCount: 10,
+          mainMutedUnreadCount: 0,
+          mainUnreadCount: 3
         },
         chats: []
       },
@@ -33,25 +40,34 @@ describe('Telegram chat sidebar view', () => {
     expect(view.folders).toMatchObject([
       {
         active: true,
-        badge: '10',
+        badge: '3',
+        badgeTone: 'notify',
         id: 'main',
+        icon: 'chats',
+        iconAccent: null,
         label: 'All',
         title: 'All chats',
         type: 'main'
       },
       {
         active: false,
-        badge: '4',
+        badge: '2',
+        badgeTone: 'notify',
         folderId: 7,
         id: 'folder:7',
+        icon: 'folder',
+        iconAccent: 'work',
         label: 'Work',
         title: 'Work',
         type: 'folder'
       },
       {
         active: false,
-        badge: '2',
+        badge: '1',
+        badgeTone: 'notify',
         id: 'archive',
+        icon: 'archive',
+        iconAccent: null,
         label: 'Archive',
         title: 'Archive',
         type: 'archive'
@@ -76,6 +92,50 @@ describe('Telegram chat sidebar view', () => {
       type: 'archive'
     });
   });
+
+  it('builds Telegram-style row metadata for pinned unread chats', () => {
+    const view = chatSidebarView(
+      {
+        ...sourceWithListMode('main'),
+        chats: [
+          chat({
+            isPremium: true,
+            lastMessage: {
+              authorName: 'Ada',
+              authorPlaceholder: false,
+              date: 1777777777,
+              datePlaceholder: false,
+              isForwarded: false,
+              isOutgoing: false,
+              isRead: null,
+              readPlaceholder: false,
+              text: 'Design notes are ready',
+              textPlaceholder: false
+            },
+            placements: [{ isPinned: true, kind: 'main', order: '100' }],
+            title: 'Signal Crew',
+            type: 'group',
+            unreadCount: 4,
+            unreadCountPlaceholder: false
+          })
+        ]
+      },
+      null
+    );
+
+    expect(view.chats[0]).toMatchObject({
+      icon: 'group',
+      initials: 'SC',
+      isPinned: true,
+      isPremium: false,
+      lastMessage: {
+        author: 'Ada',
+        showAuthor: true,
+        text: 'Design notes are ready'
+      },
+      unreadBadge: '4'
+    });
+  });
 });
 
 function sourceWithListMode(
@@ -87,9 +147,39 @@ function sourceWithListMode(
     chatListMode,
     chatNavigation: {
       archiveCount: 1,
+      archiveMutedUnreadCount: 0,
+      archiveUnreadCount: 0,
       folders: [],
-      mainCount: 3
+      mainCount: 3,
+      mainMutedUnreadCount: 0,
+      mainUnreadCount: 0
     },
     chats: []
+  };
+}
+
+function chat(input: Partial<ControlPlaneChat>): ControlPlaneChat {
+  return {
+    _model: 'telegram.chat',
+    avatar: {
+      big: null,
+      small: null
+    },
+    id: 'chat-1',
+    isBot: false,
+    isPremium: false,
+    isSelf: false,
+    isUnread: false,
+    lastMessage: null,
+    lastMessageDate: 0,
+    notificationsEnabled: true,
+    notificationsPlaceholder: false,
+    placements: [{ isPinned: false, kind: 'main', order: '100' }],
+    title: 'Chat',
+    type: 'group',
+    unreadCount: 0,
+    unreadCountPlaceholder: false,
+    updatedAt: '2026-05-11T00:00:00.000Z',
+    ...input
   };
 }

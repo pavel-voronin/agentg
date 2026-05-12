@@ -21,7 +21,7 @@ import {
   telegramMessages,
   telegramUsers
 } from '../../schema.js';
-import { upsertChat } from '../../store.js';
+import { persistTdlibProcedureProjection, upsertChat } from '../../store.js';
 import {
   readTelegramFileRefsForOwners,
   type TelegramFileOwnerKey
@@ -72,8 +72,14 @@ type TelegramMessageStorageRow = {
 
 type TelegramUserInfo = {
   isBot: boolean;
+  isPremium: boolean | null;
   isSelf: boolean;
   telegramUserId: string;
+};
+
+type TelegramSenderRow = {
+  senderId: string | null;
+  senderType: string | null;
 };
 
 type TelegramSenderDisplayInfo = {
@@ -91,16 +97,16 @@ export async function discoverHistoryChats(
   loadBatchSize: number
 ): Promise<TelegramHistoryChat[]> {
   const folderIds = await listKnownFolderIds(database);
-  await loadAllChats(client, eventBus, loadBatchSize, folderIds);
+  await loadAllChats(database, client, eventBus, loadBatchSize, folderIds);
   const chatIds = dedupeTelegramIds([
-    ...(await getChatIds(client, eventBus, { kind: 'main' }, 100000)),
-    ...(await getChatIds(client, eventBus, { kind: 'archive' }, 100000)),
-    ...(await getFolderChatIds(client, eventBus, folderIds, 100000))
+    ...(await getChatIds(database, client, eventBus, { kind: 'main' }, 100000)),
+    ...(await getChatIds(database, client, eventBus, { kind: 'archive' }, 100000)),
+    ...(await getFolderChatIds(database, client, eventBus, folderIds, 100000))
   ]);
   const chats: TelegramHistoryChat[] = [];
 
   for (const chatId of chatIds) {
-    const chat = await getChatOrUndefined(client, eventBus, chatId);
+    const chat = await getChatOrUndefined(database, client, eventBus, chatId);
     const normalized = normalizeChat(chat);
     if (normalized === undefined) {
       continue;
@@ -143,6 +149,7 @@ export async function listKnownHistoryChats(database: AppDatabase): Promise<Tele
 }
 
 export async function getLastMessageNoLaterThan(
+  database: AppDatabase,
   client: TelegramClient,
   eventBus: EventBus,
   chatId: number,
@@ -152,6 +159,7 @@ export async function getLastMessageNoLaterThan(
   try {
     return asTdObject(
       await invokeTdlib(
+        database,
         eventBus,
         client,
         {
@@ -172,6 +180,7 @@ export async function getLastMessageNoLaterThan(
 }
 
 export async function invokeTdlib(
+  database: AppDatabase,
   eventBus: EventBus,
   client: TelegramClient,
   request: TdObject,
@@ -179,7 +188,11 @@ export async function invokeTdlib(
 ): Promise<unknown> {
   for (;;) {
     try {
-      return await invokeTdlibWithEvents(eventBus, client, request, options);
+      return await invokeTdlibWithEvents(eventBus, client, request, {
+        ...options,
+        resultObserver: (projectionInput) =>
+          persistTdlibProcedureProjection(database, projectionInput)
+      });
     } catch (error) {
       const floodWaitSeconds = parseFloodWaitSeconds(error);
       if (floodWaitSeconds === undefined) {
@@ -330,6 +343,10 @@ export async function toDirectoryEntries(
   chats: TelegramChatStorageRow[]
 ): Promise<TelegramChatDirectoryEntry[]> {
   const userIds = chats.map((chat) => telegramChatUserId(chat.raw)).filter(isDefined);
+  const lastMessageSenderInfoByKey = await readSenderDisplayInfo(
+    database,
+    chats.map((chat) => telegramChatLastMessageSender(chat.raw))
+  );
   const filesByOwner = await readTelegramFileRefsForOwners(
     database,
     chats.map((chat) => ({
@@ -343,6 +360,7 @@ export async function toDirectoryEntries(
       : await database
           .select({
             isBot: telegramUsers.isBot,
+            isPremium: telegramUsers.isPremium,
             isSelf: telegramUsers.isSelf,
             telegramUserId: telegramUsers.telegramUserId
           })
@@ -360,7 +378,8 @@ export async function toDirectoryEntries(
           ownerId: chat.telegramChatId,
           ownerModel: 'telegram.chat'
         })
-      ) ?? []
+      ) ?? [],
+      lastMessageSenderInfoByKey
     );
   });
 }
@@ -458,8 +477,11 @@ export function isTdObject(value: TdObject | undefined): value is TdObject {
 function toDirectoryEntry(
   chat: TelegramChatStorageRow,
   user: TelegramUserInfo | undefined,
-  files: TelegramFileRef[]
+  files: TelegramFileRef[],
+  lastMessageSenderInfoByKey: Map<string, TelegramSenderDisplayInfo>
 ): TelegramChatDirectoryEntry {
+  const unreadCount = telegramChatUnreadCount(chat.raw);
+  const notificationsEnabled = telegramChatNotificationsEnabled(chat.raw);
   return {
     _model: 'telegram.chat',
     avatar: {
@@ -468,11 +490,18 @@ function toDirectoryEntry(
     },
     id: chat.telegramChatId,
     isBot: user?.isBot === true,
+    isPremium: user?.isPremium === true,
     isSelf: user?.isSelf === true,
+    isUnread: telegramChatIsUnread(chat.raw, unreadCount),
+    lastMessage: telegramChatLastMessage(chat.raw, lastMessageSenderInfoByKey),
     lastMessageDate: telegramChatLastMessageDate(chat.raw),
+    notificationsEnabled: notificationsEnabled.value,
+    notificationsPlaceholder: notificationsEnabled.placeholder,
     placements: telegramChatPlacements(chat.raw),
     title: chat.type === 'private' && user?.isSelf === true ? 'Saved Messages' : chat.title,
     type: chat.type,
+    unreadCount: unreadCount.value,
+    unreadCountPlaceholder: unreadCount.placeholder,
     updatedAt: chat.updatedAt.toISOString()
   };
 }
@@ -493,12 +522,14 @@ function telegramChatPlacements(raw: JsonObject): TelegramChatPlacement[] {
       const type = typeof list._ === 'string' ? list._ : undefined;
       if (type === 'chatListMain') {
         return {
+          isPinned: position.is_pinned === true || position.isPinned === true,
           kind: 'main' as const,
           order: order.toString()
         };
       }
       if (type === 'chatListArchive') {
         return {
+          isPinned: position.is_pinned === true || position.isPinned === true,
           kind: 'archive' as const,
           order: order.toString()
         };
@@ -509,6 +540,7 @@ function telegramChatPlacements(raw: JsonObject): TelegramChatPlacement[] {
           ? undefined
           : {
               folderId,
+              isPinned: position.is_pinned === true || position.isPinned === true,
               kind: 'folder' as const,
               order: order.toString()
             };
@@ -531,19 +563,21 @@ async function listKnownFolderIds(database: AppDatabase): Promise<number[]> {
 }
 
 async function loadAllChats(
+  database: AppDatabase,
   client: TelegramClient,
   eventBus: EventBus,
   batchSize: number,
   folderIds: number[]
 ): Promise<void> {
-  await loadAllChatsFromList(client, eventBus, { kind: 'main' }, batchSize);
-  await loadAllChatsFromList(client, eventBus, { kind: 'archive' }, batchSize);
+  await loadAllChatsFromList(database, client, eventBus, { kind: 'main' }, batchSize);
+  await loadAllChatsFromList(database, client, eventBus, { kind: 'archive' }, batchSize);
   for (const folderId of folderIds) {
-    await loadAllChatsFromList(client, eventBus, { folderId, kind: 'folder' }, batchSize);
+    await loadAllChatsFromList(database, client, eventBus, { folderId, kind: 'folder' }, batchSize);
   }
 }
 
 async function loadAllChatsFromList(
+  database: AppDatabase,
   client: TelegramClient,
   eventBus: EventBus,
   chatList: ChatListKind,
@@ -552,6 +586,7 @@ async function loadAllChatsFromList(
   for (;;) {
     try {
       await invokeTdlib(
+        database,
         eventBus,
         client,
         {
@@ -572,6 +607,7 @@ async function loadAllChatsFromList(
 }
 
 async function getChatIds(
+  database: AppDatabase,
   client: TelegramClient,
   eventBus: EventBus,
   chatList: ChatListKind,
@@ -581,6 +617,7 @@ async function getChatIds(
   try {
     chats = asTdObject(
       await invokeTdlib(
+        database,
         eventBus,
         client,
         {
@@ -603,6 +640,7 @@ async function getChatIds(
 }
 
 async function getFolderChatIds(
+  database: AppDatabase,
   client: TelegramClient,
   eventBus: EventBus,
   folderIds: number[],
@@ -610,12 +648,15 @@ async function getFolderChatIds(
 ): Promise<number[]> {
   const chatIds: number[] = [];
   for (const folderId of folderIds) {
-    chatIds.push(...(await getChatIds(client, eventBus, { folderId, kind: 'folder' }, limit)));
+    chatIds.push(
+      ...(await getChatIds(database, client, eventBus, { folderId, kind: 'folder' }, limit))
+    );
   }
   return chatIds;
 }
 
 async function getChatOrUndefined(
+  database: AppDatabase,
   client: TelegramClient,
   eventBus: EventBus,
   chatId: number
@@ -623,6 +664,7 @@ async function getChatOrUndefined(
   try {
     return asTdObject(
       await invokeTdlib(
+        database,
         eventBus,
         client,
         { _: 'getChat', chat_id: chatId },
@@ -663,6 +705,226 @@ function chatFolderId(list: Record<string, unknown> | undefined): number | undef
 function telegramChatLastMessageDate(raw: JsonObject): number {
   const lastMessage = asPlainRecord(raw.last_message) ?? asPlainRecord(raw.lastMessage);
   return typeof lastMessage?.date === 'number' && lastMessage.date > 0 ? lastMessage.date : 0;
+}
+
+function telegramChatLastMessage(
+  raw: JsonObject,
+  senderInfoByKey: Map<string, TelegramSenderDisplayInfo>
+): TelegramChatDirectoryEntry['lastMessage'] {
+  const message = telegramChatLastMessageRaw(raw);
+  if (message === undefined) {
+    return null;
+  }
+
+  const preview = telegramMessagePreview(message);
+  const sender = telegramChatLastMessageSender(raw);
+  const senderKey = senderDisplayKey(sender.senderType, sender.senderId);
+  const authorName =
+    senderKey === null ? null : (senderInfoByKey.get(senderKey)?.displayName ?? null);
+  const isOutgoing = message.is_outgoing === true || message.isOutgoing === true;
+  const readState = isOutgoing ? telegramOutgoingMessageRead(raw, message) : null;
+  const date =
+    typeof message.date === 'number' && Number.isSafeInteger(message.date) && message.date > 0
+      ? message.date
+      : 0;
+
+  return {
+    authorName,
+    authorPlaceholder: senderKey !== null && authorName === null,
+    date,
+    datePlaceholder: date === 0,
+    isForwarded: asPlainRecord(message.forward_info) !== undefined,
+    isOutgoing,
+    isRead: readState,
+    readPlaceholder: isOutgoing && readState === null,
+    text: preview.text,
+    textPlaceholder: preview.placeholder
+  };
+}
+
+function telegramChatLastMessageRaw(raw: JsonObject): Record<string, unknown> | undefined {
+  return asPlainRecord(raw.last_message) ?? asPlainRecord(raw.lastMessage);
+}
+
+function telegramChatLastMessageSender(raw: JsonObject): TelegramSenderRow {
+  const message = telegramChatLastMessageRaw(raw);
+  const sender = asPlainRecord(message?.sender_id) ?? asPlainRecord(message?.senderId);
+  const senderType = typeof sender?._ === 'string' ? sender._ : null;
+  const senderId =
+    stringifyTelegramId(sender?.user_id) ??
+    stringifyTelegramId(sender?.userId) ??
+    stringifyTelegramId(sender?.chat_id) ??
+    stringifyTelegramId(sender?.chatId) ??
+    null;
+  return {
+    senderId,
+    senderType
+  };
+}
+
+function telegramMessagePreview(message: Record<string, unknown>): {
+  placeholder: boolean;
+  text: string;
+} {
+  const content = asPlainRecord(message.content) ?? asPlainRecord(message.new_content);
+  if (content === undefined) {
+    return {
+      placeholder: true,
+      text: 'Message unavailable'
+    };
+  }
+
+  const caption = formattedTextValue(content.caption);
+  if (caption !== null) {
+    return {
+      placeholder: false,
+      text: caption
+    };
+  }
+
+  if (content._ === 'messageText') {
+    const text = formattedTextValue(content.text);
+    return text === null
+      ? { placeholder: true, text: 'Text unavailable' }
+      : { placeholder: false, text };
+  }
+
+  const label = telegramMessageContentLabel(content);
+  return {
+    placeholder: label === null,
+    text: label ?? 'Unsupported message'
+  };
+}
+
+function telegramMessageContentLabel(content: Record<string, unknown>): string | null {
+  switch (content._) {
+    case 'messageAnimation':
+      return 'GIF';
+    case 'messageAudio':
+      return nestedTitle(content.audio, 'Audio');
+    case 'messageChatAddMembers':
+      return 'Members joined';
+    case 'messageChatChangePhoto':
+      return 'Chat photo updated';
+    case 'messageChatChangeTitle':
+      return 'Chat title updated';
+    case 'messageChatDeleteMember':
+      return 'Member left';
+    case 'messageChatDeletePhoto':
+      return 'Chat photo removed';
+    case 'messageContact':
+      return 'Contact';
+    case 'messageDocument':
+      return nestedFileName(content.document, 'File');
+    case 'messageExpiredPhoto':
+      return 'Expired photo';
+    case 'messageExpiredVideo':
+      return 'Expired video';
+    case 'messageGame':
+      return nestedTitle(content.game, 'Game');
+    case 'messageInvoice':
+      return nestedTitle(content.invoice, 'Invoice');
+    case 'messageLocation':
+      return 'Location';
+    case 'messagePhoto':
+      return 'Photo';
+    case 'messagePoll':
+      return nestedQuestion(content.poll, 'Poll');
+    case 'messageSticker':
+      return stickerLabel(content.sticker);
+    case 'messageVideo':
+      return 'Video';
+    case 'messageVideoNote':
+      return 'Video message';
+    case 'messageVoiceNote':
+      return 'Voice message';
+    default:
+      return null;
+  }
+}
+
+function formattedTextValue(value: unknown): string | null {
+  const formattedText = asPlainRecord(value);
+  const text = typeof formattedText?.text === 'string' ? formattedText.text.trim() : '';
+  return text.length === 0 ? null : text;
+}
+
+function nestedTitle(value: unknown, fallback: string): string {
+  const record = asPlainRecord(value);
+  return typeof record?.title === 'string' && record.title.trim().length > 0
+    ? record.title.trim()
+    : fallback;
+}
+
+function nestedQuestion(value: unknown, fallback: string): string {
+  const record = asPlainRecord(value);
+  const question = formattedTextValue(record?.question);
+  return question ?? fallback;
+}
+
+function nestedFileName(value: unknown, fallback: string): string {
+  const record = asPlainRecord(value);
+  return typeof record?.file_name === 'string' && record.file_name.trim().length > 0
+    ? record.file_name.trim()
+    : fallback;
+}
+
+function stickerLabel(value: unknown): string {
+  const record = asPlainRecord(value);
+  return typeof record?.emoji === 'string' && record.emoji.trim().length > 0
+    ? `${record.emoji.trim()} Sticker`
+    : 'Sticker';
+}
+
+function telegramOutgoingMessageRead(
+  raw: JsonObject,
+  message: Record<string, unknown>
+): boolean | null {
+  const messageId = parseNonNegativeBigInt(message.id);
+  const lastReadOutboxMessageId = parseNonNegativeBigInt(
+    raw.last_read_outbox_message_id ?? raw.lastReadOutboxMessageId
+  );
+  if (messageId === undefined || lastReadOutboxMessageId === undefined) {
+    return null;
+  }
+  return messageId <= lastReadOutboxMessageId;
+}
+
+function telegramChatUnreadCount(raw: JsonObject): { placeholder: boolean; value: number } {
+  const value = raw.unread_count ?? raw.unreadCount;
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+    ? { placeholder: false, value }
+    : { placeholder: true, value: 0 };
+}
+
+function telegramChatIsUnread(
+  raw: JsonObject,
+  unreadCount: { placeholder: boolean; value: number }
+): boolean {
+  if (unreadCount.value > 0) {
+    return true;
+  }
+  const marked = raw.is_marked_as_unread ?? raw.isMarkedAsUnread;
+  return typeof marked === 'boolean' ? marked : false;
+}
+
+function telegramChatNotificationsEnabled(raw: JsonObject): {
+  placeholder: boolean;
+  value: boolean | null;
+} {
+  const settings =
+    asPlainRecord(raw.notification_settings) ?? asPlainRecord(raw.notificationSettings);
+  const muteFor = settings?.mute_for ?? settings?.muteFor;
+  if (typeof muteFor === 'number' && Number.isSafeInteger(muteFor) && muteFor >= 0) {
+    return {
+      placeholder: false,
+      value: muteFor === 0
+    };
+  }
+  return {
+    placeholder: true,
+    value: null
+  };
 }
 
 function telegramChatUserId(raw: JsonObject): string | undefined {
@@ -724,7 +986,7 @@ function telegramMessageServiceUserId(message: TelegramMessageStorageRow): strin
 
 async function readSenderDisplayInfo(
   database: AppDatabase,
-  messages: TelegramMessageStorageRow[]
+  messages: TelegramSenderRow[]
 ): Promise<Map<string, TelegramSenderDisplayInfo>> {
   const userIds = dedupeStrings(
     messages
@@ -854,6 +1116,18 @@ function parsePositiveBigInt(value: unknown): bigint | undefined {
   if (typeof value === 'string' && /^[0-9]+$/.test(value)) {
     const parsed = BigInt(value);
     return parsed > 0n ? parsed : undefined;
+  }
+
+  return undefined;
+}
+
+function parseNonNegativeBigInt(value: unknown): bigint | undefined {
+  if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) {
+    return BigInt(value);
+  }
+
+  if (typeof value === 'string' && /^[0-9]+$/.test(value)) {
+    return BigInt(value);
   }
 
   return undefined;

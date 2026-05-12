@@ -10,8 +10,8 @@ describe('Telegram chat list filtering', () => {
   it('keeps archived chats out of the All list', () => {
     const archivedChat = chat({
       placements: [
-        { kind: 'main', order: '100' },
-        { kind: 'archive', order: '90' }
+        { isPinned: false, kind: 'main', order: '100' },
+        { isPinned: false, kind: 'archive', order: '90' }
       ]
     });
 
@@ -21,7 +21,7 @@ describe('Telegram chat list filtering', () => {
 
   it('keeps non-archived main chats in the All list', () => {
     const mainChat = chat({
-      placements: [{ kind: 'main', order: '100' }]
+      placements: [{ isPinned: false, kind: 'main', order: '100' }]
     });
 
     expect(chatMatchesListFilter(mainChat, { kind: 'main' })).toBe(true);
@@ -31,8 +31,8 @@ describe('Telegram chat list filtering', () => {
   it('does not hide archived chats from their explicit folders', () => {
     const folderChat = chat({
       placements: [
-        { folderId: 7, kind: 'folder', order: '80' },
-        { kind: 'archive', order: '90' }
+        { folderId: 7, isPinned: false, kind: 'folder', order: '80' },
+        { isPinned: false, kind: 'archive', order: '90' }
       ]
     });
 
@@ -40,8 +40,8 @@ describe('Telegram chat list filtering', () => {
   });
 
   it('ranks archive before All for preferred chat list selection', () => {
-    expect(chatPlacementRank({ kind: 'archive', order: '90' })).toBeLessThan(
-      chatPlacementRank({ kind: 'main', order: '100' })
+    expect(chatPlacementRank({ isPinned: false, kind: 'archive', order: '90' })).toBeLessThan(
+      chatPlacementRank({ isPinned: false, kind: 'main', order: '100' })
     );
   });
 });
@@ -54,10 +54,18 @@ function chat(input: Pick<TelegramDirectoryChat, 'placements'>): TelegramDirecto
     },
     id: 'chat-1',
     isBot: false,
+    isPremium: false,
+    isSelf: false,
+    isUnread: false,
+    lastMessage: null,
     lastMessageDate: 0,
+    notificationsEnabled: null,
+    notificationsPlaceholder: true,
     placements: input.placements,
     title: 'Chat',
     type: 'group',
+    unreadCount: 0,
+    unreadCountPlaceholder: true,
     updatedAt: '2026-05-11T00:00:00.000Z'
   };
 }

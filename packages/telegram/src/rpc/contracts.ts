@@ -252,25 +252,48 @@ export const telegramSearchMessagesOutputSchema = z.object({
 
 export const telegramChatPlacementSchema = z.discriminatedUnion('kind', [
   z.object({
+    isPinned: z.boolean(),
     kind: z.literal('archive'),
     order: z.string()
   }),
   z.object({
+    isPinned: z.boolean(),
     kind: z.literal('main'),
     order: z.string()
   }),
   z.object({
     folderId: nonNegativeIntegerSchema,
+    isPinned: z.boolean(),
     kind: z.literal('folder'),
     order: z.string()
   })
 ]);
 
+export const telegramChatLastMessageSchema = z.object({
+  authorName: z.string().nullable(),
+  authorPlaceholder: z.boolean(),
+  date: nonNegativeIntegerSchema,
+  datePlaceholder: z.boolean(),
+  isForwarded: z.boolean(),
+  isOutgoing: z.boolean(),
+  isRead: z.boolean().nullable(),
+  readPlaceholder: z.boolean(),
+  text: z.string(),
+  textPlaceholder: z.boolean()
+});
+
 export const telegramChatDirectoryEntrySchema = telegramReadChatSchema.extend({
   isBot: z.boolean(),
+  isPremium: z.boolean(),
   isSelf: z.boolean(),
+  isUnread: z.boolean(),
+  lastMessage: telegramChatLastMessageSchema.nullable(),
   lastMessageDate: nonNegativeIntegerSchema,
-  placements: z.array(telegramChatPlacementSchema)
+  notificationsEnabled: z.boolean().nullable(),
+  notificationsPlaceholder: z.boolean(),
+  placements: z.array(telegramChatPlacementSchema),
+  unreadCount: nonNegativeIntegerSchema,
+  unreadCountPlaceholder: z.boolean()
 });
 
 export const telegramChatFolderSchema = z.object({
