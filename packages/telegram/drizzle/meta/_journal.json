@@ -5,36 +5,22 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1777701133488,
-      "tag": "0000_unknown_lady_bullseye",
+      "when": 1800000000000,
+      "tag": "0000_telegram_tdlib_schema",
       "breakpoints": true
     },
     {
       "idx": 1,
       "version": "7",
-      "when": 1778312400000,
-      "tag": "0001_telegram_files",
+      "when": 1800000001000,
+      "tag": "0001_telegram_history_coverage",
       "breakpoints": true
     },
     {
       "idx": 2,
       "version": "7",
-      "when": 1778340900000,
-      "tag": "0002_telegram_file_assets",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1778370000000,
-      "tag": "0003_telegram_history_coverage",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1778373600000,
-      "tag": "0004_drop_telegram_history_coverage_proofs",
+      "when": 1800000002000,
+      "tag": "0002_telegram_file_worker",
       "breakpoints": true
     }
   ]

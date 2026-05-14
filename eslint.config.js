@@ -8,6 +8,8 @@ export default tseslint.config(
       '**/dist/**',
       'dist-control-plane/**',
       '**/dist-control-plane/**',
+      'dist-tdlib-docs/**',
+      '**/dist-tdlib-docs/**',
       'dist-server/**',
       '**/dist-server/**',
       'coverage/**',
@@ -47,7 +49,7 @@ export default tseslint.config(
     }
   },
   {
-    files: ['eslint.config.js', 'scripts/*.mjs'],
+    files: ['eslint.config.js', 'scripts/**/*.mjs'],
     extends: [tseslint.configs.disableTypeChecked],
     languageOptions: {
       globals: {

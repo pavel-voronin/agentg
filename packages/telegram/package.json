@@ -12,10 +12,12 @@
   "scripts": {
     "dev": "tsx watch --clear-screen=false src/main.ts",
     "dev:control-plane-assets": "vite build --watch --config vite.control-plane.config.ts",
-    "db:generate": "drizzle-kit generate",
+    "dev:tdlib-docs": "vite --host 127.0.0.1 --port 8791 --config vite.tdlib-docs.config.ts",
+    "db:generate": "node ../../scripts/telegram-db-schema-generate.mjs",
     "db:migrate": "tsx src/migrate-main.ts",
-    "build": "npm run build:server && npm run build:control-plane",
+    "build": "npm run build:server && npm run build:control-plane && npm run build:tdlib-docs",
     "build:control-plane": "vite build --config vite.control-plane.config.ts",
+    "build:tdlib-docs": "vite build --config vite.tdlib-docs.config.ts",
     "build:server": "vite build",
     "start": "node dist/main.js",
     "test": "vitest run",
@@ -41,10 +43,12 @@
     "zod": "^4.4.1"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.2.4",
     "@types/node": "24.10.0",
     "@types/pg": "8.15.6",
     "@vitejs/plugin-vue": "^6.0.6",
     "drizzle-kit": "^0.31.10",
+    "tailwindcss": "^4.2.4",
     "tsx": "4.21.0",
     "typescript": "6.0.3",
     "vite": "8.0.10",

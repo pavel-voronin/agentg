@@ -36,6 +36,7 @@
     "db:down": "docker compose down",
     "db:generate": "npm --workspace @agentg/telegram run db:generate && npm --workspace @agentg/history-sync run db:generate",
     "db:migrate": "npm --workspace @agentg/telegram run db:migrate && npm --workspace @agentg/history-sync run db:migrate",
+    "db:recreate": "node scripts/db-recreate.mjs",
     "db:ps": "docker compose ps postgres",
     "db:logs": "docker compose logs --tail=50 postgres",
     "infra:up": "docker compose up -d postgres nats --quiet-pull",
@@ -48,8 +49,8 @@
     "format:check": "prettier --check .",
     "test": "npm --workspaces --if-present run test",
     "typecheck": "npm --workspaces --if-present run typecheck",
-    "tdlib:field-routing:generate": "node scripts/tdlib-field-routing-generate.mjs",
-    "tdlib:data-model:audit": "node scripts/tdlib-data-model-audit.mjs",
+    "tdlib:docs:generate": "node scripts/tdlib-explorer-schema-generate.mjs",
+    "tdlib:docs:build": "npm run tdlib:docs:generate && npm --workspace @agentg/telegram run build:tdlib-docs",
     "source:audit": "node scripts/source-audit.mjs",
     "check": "npm run typecheck && npm run lint && npm run source:audit && npm run format:check && npm run test"
   },

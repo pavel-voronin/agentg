@@ -1,5 +1,6 @@
 /* global console, process */
 
+import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
@@ -20,6 +21,8 @@ auditExtensionBoundaries(tsFiles);
 auditNoSharedWorkspacePackage();
 auditDockerfileWorkspacePackageCopies();
 auditControlPlaneCompositionBoundaries(tsFiles);
+auditDateContract(sourceFiles);
+auditTdlibContractGeneration(sourceFiles);
 auditScopedVueComponentStyles(vueFiles, sourceFiles);
 
 if (failures.length > 0) {
@@ -496,6 +499,274 @@ function auditControlPlaneSdkHasNoDomainKnowledge(files) {
       }
     }
   }
+}
+
+function auditDateContract(files) {
+  auditTelegramDateStorageContract();
+  auditControlPlaneEventDateContract(files);
+}
+
+function auditTelegramDateStorageContract() {
+  const telegramGeneratedSchema = readFileSync(
+    join(root, 'packages/telegram/src/tdlib-db-schema.ts'),
+    'utf8'
+  );
+  const telegramGeneratedMigration = readFileSync(
+    join(root, 'packages/telegram/drizzle/0000_telegram_tdlib_schema.sql'),
+    'utf8'
+  );
+  if (
+    !/\bdate:\s*timestamp\('date',\s*\{\s*withTimezone:\s*true\s*\}\)/.test(telegramGeneratedSchema)
+  ) {
+    failures.push('Telegram generated schema must store TDLib message date as timestamptz');
+  }
+  if (!/"date"\s+timestamp with time zone/.test(telegramGeneratedMigration)) {
+    failures.push('Telegram generated migration must store TDLib message date as timestamptz');
+  }
+
+  for (const rel of [
+    'packages/telegram/src/telegram-message-persistence.ts',
+    'packages/telegram/src/telegram-message-counts.ts'
+  ]) {
+    const source = readFileSync(join(root, rel), 'utf8');
+    if (/getTime\(\)\s*\/\s*1000/.test(source)) {
+      failures.push(`Telegram message storage must keep Date values as timestamptz: ${rel}`);
+    }
+  }
+}
+
+function auditControlPlaneEventDateContract(files) {
+  for (const file of files) {
+    const rel = toRel(file);
+    if (
+      !rel.startsWith('packages/control-plane/src/') &&
+      !rel.startsWith('packages/control-plane-sdk/src/') &&
+      !rel.startsWith('packages/history-sync/src/control-plane/') &&
+      !rel.startsWith('packages/telegram/src/control-plane/')
+    ) {
+      continue;
+    }
+    if (!/\.(ts|vue)$/.test(rel)) {
+      continue;
+    }
+    const source = readFileSync(file, 'utf8');
+    if (/occurredAt\??:\s*Date\s*\|\s*string/.test(source)) {
+      failures.push(`Control Plane browser event state must use ISO strings: ${rel}`);
+    }
+  }
+}
+
+function auditTdlibContractGeneration(files) {
+  const storageReviewPath = join(
+    root,
+    'packages/telegram/src/tdlib-docs/data/tdlib-storage-review.json'
+  );
+  const oldCoveragePath = join(root, 'docs/04-data/telegram-tdlib-schema/coverage.json');
+  const dbSchemaGenerator = readFileSync(
+    join(root, 'scripts/telegram-db-schema-generate.mjs'),
+    'utf8'
+  );
+
+  if (!existsSync(storageReviewPath)) {
+    failures.push(
+      'TDLib storage review must exist: packages/telegram/src/tdlib-docs/data/tdlib-storage-review.json'
+    );
+  } else {
+    const storageReview = JSON.parse(readFileSync(storageReviewPath, 'utf8'));
+    if (storageReview.version !== 2) {
+      failures.push('TDLib storage review must use version 2');
+    }
+    if (!Array.isArray(storageReview.tables) || storageReview.tables.length === 0) {
+      failures.push('TDLib storage review must contain schema-design table definitions');
+    }
+    if (
+      !storageReview.tables?.every(
+        (table) => typeof table.name === 'string' && Array.isArray(table.columns)
+      )
+    ) {
+      failures.push('TDLib storage review tables must include column definitions');
+    }
+    auditTdlibStorageReviewPolicy(storageReview);
+    auditTdlibStorageReviewParserContract(storageReviewPath);
+    auditTelegramChatLastMessageStorage(storageReview);
+  }
+
+  if (existsSync(oldCoveragePath)) {
+    failures.push(
+      'TDLib coverage.json is obsolete; use tdlib-storage-review.json for DB schema design'
+    );
+  }
+  auditNoTdlibMarkdownArtifacts(files);
+  if (dbSchemaGenerator.includes('tables.md')) {
+    failures.push(
+      'Telegram DB schema generator must read tdlib-storage-review.json, not tables.md'
+    );
+  }
+  if (dbSchemaGenerator.includes('contract.json')) {
+    failures.push('Telegram DB schema generator must not read the old TDLib contract');
+  }
+  if (!dbSchemaGenerator.includes('tdlib-storage-review.json')) {
+    failures.push('Telegram DB schema generator must read tdlib-storage-review.json');
+  }
+
+  const forbiddenTokens = [
+    `tdlib-${'data-model'}-audit.mjs`,
+    `tdlib-${'field-routing'}-generate.mjs`,
+    `tdlib-${'field-routing'}.catalog.json`,
+    `tdlib-${'field-routing'}.generated.md`,
+    `tdlib:${'field-routing'}:generate`,
+    `telegram-${'tdlib-schema'}-artifacts-generate.mjs`,
+    `scripts/tdlib/${'overrides'}.json`,
+    `tdlib:${'contract'}:generate`
+  ];
+
+  for (const file of files) {
+    const rel = toRel(file);
+    if (ignored(file) || rel === 'package-lock.json') {
+      continue;
+    }
+    if (!/\.(json|md|mjs|ts)$/.test(rel)) {
+      continue;
+    }
+
+    const source = readFileSync(file, 'utf8');
+    for (const token of forbiddenTokens) {
+      if (source.includes(token)) {
+        failures.push(`old TDLib routing artifact reference is not allowed: ${rel} -> ${token}`);
+      }
+    }
+  }
+}
+
+function auditNoTdlibMarkdownArtifacts(files) {
+  const schemaRoot = 'docs/04-data/telegram-tdlib-schema/';
+
+  for (const file of files) {
+    const rel = toRel(file);
+    if (rel.startsWith(schemaRoot)) {
+      failures.push(`old TDLib contract artifact is obsolete: ${rel}`);
+    }
+  }
+}
+
+function auditTelegramChatLastMessageStorage(storageReview) {
+  const chatsTable = storageReview.tables.find((table) => table.name === 'telegram_chats');
+  const columns = chatsTable?.columns ?? [];
+  const lastMessage = columns.find((column) => column.name === 'last_message');
+  const lastMessageId = columns.find((column) => column.name === 'last_message_id');
+
+  if (lastMessage !== undefined) {
+    failures.push('telegram_chats must not store last_message JSON; store last_message_id instead');
+  }
+  if (lastMessageId === undefined) {
+    failures.push('telegram_chats must store last_message_id');
+    return;
+  }
+  if (lastMessageId.pgType !== 'bigint') {
+    failures.push('telegram_chats.last_message_id must be bigint');
+  }
+}
+
+function auditTdlibStorageReviewPolicy(storageReview) {
+  const allowedColumnTypes = new Set([
+    'bigint',
+    'boolean',
+    'bytea',
+    'double precision',
+    'integer',
+    'jsonb',
+    'text',
+    'timestamp with time zone'
+  ]);
+  const allowedColumnRoles = new Set(['primary-key', 'foreign-key', 'data']);
+
+  for (const table of storageReview.tables ?? []) {
+    const primaryKeyColumns = [];
+    for (const column of table.columns ?? []) {
+      const columnName = String(column.name ?? '');
+      if (columnName === 'raw' || columnName.startsWith('raw_') || columnName.endsWith('_raw')) {
+        failures.push(
+          `TDLib storage review must not expose raw storage columns: ${table.name}.${columnName}`
+        );
+      }
+      if (!allowedColumnTypes.has(String(column.pgType ?? ''))) {
+        failures.push(
+          `TDLib storage review column has unsupported pgType: ${table.name}.${columnName}`
+        );
+      }
+      const role = String(column.role ?? '');
+      if (!allowedColumnRoles.has(role)) {
+        failures.push(
+          `TDLib storage review column has unsupported role: ${table.name}.${columnName}`
+        );
+      }
+      if (role === 'primary-key') {
+        primaryKeyColumns.push(columnName);
+      }
+      if (!Array.isArray(column.sourceFields)) {
+        failures.push(
+          `TDLib storage review column must declare sourceFields: ${table.name}.${columnName}`
+        );
+      }
+    }
+    if (primaryKeyColumns.length === 0) {
+      failures.push(`TDLib storage review table must declare a primary key: ${table.name}`);
+    }
+  }
+}
+
+function auditTdlibStorageReviewParserContract(storageReviewPath) {
+  const tsxBinary = join(
+    root,
+    'node_modules',
+    '.bin',
+    process.platform === 'win32' ? 'tsx.cmd' : 'tsx'
+  );
+  if (!existsSync(tsxBinary)) {
+    failures.push('source-audit requires node_modules/.bin/tsx for TDLib storage parser checks');
+    return;
+  }
+
+  const code = [
+    "(async () => {",
+    "  const { readStorageReviewState } = await import('./packages/telegram/src/tdlib-docs-server/storageReview.ts');",
+    `  await readStorageReviewState(${JSON.stringify(storageReviewPath)});`,
+    '})().catch((error) => {',
+    '  console.error(error instanceof Error ? error.stack : error);',
+    '  process.exit(1);',
+    '});'
+  ].join('\n');
+
+  try {
+    execFileSync(tsxBinary, ['-e', code], {
+      cwd: root,
+      encoding: 'utf8',
+      stdio: 'pipe'
+    });
+  } catch (error) {
+    failures.push(
+      `TDLib storage review must pass the dev-server parser: ${execErrorText(error)}`
+    );
+  }
+}
+
+function execErrorText(error) {
+  const parts = [];
+  if (typeof error === 'object' && error !== null) {
+    const stderr = 'stderr' in error ? error.stderr : undefined;
+    const stdout = 'stdout' in error ? error.stdout : undefined;
+    if (typeof stderr === 'string' && stderr.trim().length > 0) {
+      parts.push(stderr.trim());
+    }
+    if (typeof stdout === 'string' && stdout.trim().length > 0) {
+      parts.push(stdout.trim());
+    }
+  }
+  if (error instanceof Error) {
+    parts.push(error.message);
+  }
+
+  return parts.join('\n');
 }
 
 function auditScopedVueComponentStyles(vueFiles, sourceFiles) {

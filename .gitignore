@@ -2,8 +2,10 @@ node_modules/
 .DS_Store
 dist/
 dist-control-plane/
+dist-tdlib-docs/
 dist-server/
 coverage/
+.tmp/
 .env
 .env.local
 .claude/settings.local.json
