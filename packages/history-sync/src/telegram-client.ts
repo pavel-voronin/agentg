@@ -127,7 +127,7 @@ export type TelegramChatPlacement =
 export type TelegramChatDirectoryEntry = TelegramReadChat & {
   isBot: boolean;
   isSelf: boolean;
-  lastMessageDate: number;
+  lastMessageDate: string | null;
   placements: TelegramChatPlacement[];
 };
 

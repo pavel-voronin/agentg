@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 const nonEmptyStringSchema = z.string().trim().min(1);
+const isoDateTimeStringSchema = z.iso.datetime();
 
 export const historySyncBoundarySchema = z.discriminatedUnion('kind', [
   z.object({
@@ -58,20 +59,20 @@ export const historySyncRequestSyncInputSchema = z
 export const historySyncSelectedChatOutputSchema = z.object({
   _model: z.literal('telegram.chat'),
   historySyncBeginningReached: z.boolean(),
-  historySyncStartAt: z.string().nullable(),
+  historySyncStartAt: isoDateTimeStringSchema.nullable(),
   id: z.string(),
   isBot: z.boolean(),
   messageCount: z.number().int().nonnegative(),
   title: z.string(),
   type: z.string(),
-  updatedAt: z.string()
+  updatedAt: isoDateTimeStringSchema
 });
 
 export const historySyncIntervalOutputSchema = z.object({
-  coveredAt: z.string().optional(),
-  endAt: z.string(),
+  coveredAt: isoDateTimeStringSchema.optional(),
+  endAt: isoDateTimeStringSchema,
   messageCount: z.number().int().nonnegative().optional(),
-  startAt: z.string()
+  startAt: isoDateTimeStringSchema
 });
 
 export const historySyncTargetOutputSchema = z.object({

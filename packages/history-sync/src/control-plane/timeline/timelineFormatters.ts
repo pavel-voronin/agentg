@@ -1,5 +1,4 @@
-export function formatDate(value: Date | string): string {
-  const date = value instanceof Date ? value : new Date(value);
+export function formatDate(date: Date): string {
   return Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 16).replace('T', ' ');
 }
 
@@ -26,7 +25,6 @@ export function formatSignedDuration(milliseconds: number): string {
   return `${milliseconds < 0 ? '-' : '+'}${formatDuration(Math.abs(milliseconds))}`;
 }
 
-export function formatTimelineDate(value: Date | string): string {
-  const date = value instanceof Date ? value : new Date(value);
+export function formatTimelineDate(date: Date): string {
   return Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 19).replace('T', ' ');
 }

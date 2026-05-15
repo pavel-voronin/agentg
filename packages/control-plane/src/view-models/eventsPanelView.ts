@@ -359,8 +359,8 @@ function rpcLifecycleTimeLabel(
   return `+${String(Math.max(0, lifecycle.occurredAtMs - previous.occurredAtMs))} ms`;
 }
 
-function eventTimeMs(value: Date | string | undefined): number | null {
-  const date = value instanceof Date ? value : new Date(value ?? '');
+function eventTimeMs(value: string | undefined): number | null {
+  const date = new Date(value ?? '');
   const timestamp = date.getTime();
   return Number.isNaN(timestamp) ? null : timestamp;
 }

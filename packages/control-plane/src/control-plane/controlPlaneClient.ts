@@ -1,6 +1,6 @@
 export type ControlPlaneEvent = {
   data?: unknown;
-  occurredAt?: Date | string;
+  occurredAt?: string;
   id?: string;
   meta?: unknown;
   type?: string;
@@ -46,6 +46,7 @@ const DEFAULT_RPC_TIMEOUT_MS = 15000;
 const WEBSOCKET_OPEN = 1;
 
 export class ControlPlaneClient {
+  private connection: Promise<void> | null = null;
   private reconnectEnabled = false;
   private readonly pending = new Map<number, PendingRpc>();
   private nextId = 1;
@@ -57,6 +58,15 @@ export class ControlPlaneClient {
     this.reconnectEnabled = true;
     const socket = new (browserGlobal().WebSocket)(this.controlPlaneWebSocketUrl());
     this.socket = socket;
+    this.connection = new Promise((resolve, reject) => {
+      socket.addEventListener('open', () => {
+        resolve();
+      });
+      socket.addEventListener('close', () => {
+        reject(new Error('Control Plane WebSocket closed'));
+      });
+    });
+    void this.connection.catch(() => undefined);
 
     socket.addEventListener('open', () => {
       this.options.onOpen?.();
@@ -64,6 +74,7 @@ export class ControlPlaneClient {
     socket.addEventListener('close', () => {
       if (this.socket === socket) {
         this.socket = null;
+        this.connection = null;
       }
       this.options.onClose?.();
       this.rejectPending(new Error('Control Plane WebSocket closed'));
@@ -87,6 +98,24 @@ export class ControlPlaneClient {
   }
 
   rpc<T = unknown>(method: string, params?: unknown): Promise<T> {
+    const openSocket = this.openSocket();
+    if (openSocket instanceof Promise) {
+      return openSocket.then(() => this.sendRpc(method, params));
+    }
+
+    return this.sendRpc(method, params);
+  }
+
+  private openSocket(): BrowserWebSocket | Promise<void> {
+    const socket = this.socket;
+    if (socket?.readyState === WEBSOCKET_OPEN) {
+      return socket;
+    }
+
+    return this.connection ?? Promise.reject(new Error('Control Plane WebSocket is not connected'));
+  }
+
+  private sendRpc<T = unknown>(method: string, params?: unknown): Promise<T> {
     const socket = this.socket;
     if (socket?.readyState !== WEBSOCKET_OPEN) {
       return Promise.reject(new Error('Control Plane WebSocket is not connected'));

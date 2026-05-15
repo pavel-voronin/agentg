@@ -4,7 +4,7 @@ export type ControlPlaneHostEvent = {
   data?: unknown;
   id?: string;
   meta?: unknown;
-  occurredAt?: Date | string;
+  occurredAt?: string;
   type?: string;
 };
 

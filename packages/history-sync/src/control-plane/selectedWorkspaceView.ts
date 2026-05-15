@@ -79,8 +79,8 @@ function timelineScaleButtons(source: SelectedWorkspaceViewSource): TimelineScal
   }));
 }
 
-function formatDate(value: Date | string): string {
-  const date = value instanceof Date ? value : new Date(value);
+function formatDate(value: string): string {
+  const date = new Date(value);
   return Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 16).replace('T', ' ');
 }
 

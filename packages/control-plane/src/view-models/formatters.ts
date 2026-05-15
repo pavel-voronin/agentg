@@ -1,10 +1,10 @@
-export function formatDate(value: Date | string): string {
-  const date = value instanceof Date ? value : new Date(value);
+export function formatDate(value: string): string {
+  const date = new Date(value);
   return Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 16).replace('T', ' ');
 }
 
-export function formatEventTime(value: Date | string | undefined): string {
-  const date = value instanceof Date ? value : new Date(value ?? '');
+export function formatEventTime(value: string | undefined): string {
+  const date = new Date(value ?? '');
   return Number.isNaN(date.getTime()) ? '' : date.toLocaleTimeString();
 }
 

@@ -23,7 +23,7 @@ export type EventGroup = {
 export type ControlPlaneEvent = {
   data?: unknown;
   id?: string;
-  occurredAt?: Date | string;
+  occurredAt?: string;
   type?: string;
 };
 
