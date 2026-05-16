@@ -8,7 +8,13 @@ import {
 import type { TelegramRpcRuntime } from '../runtime.js';
 import { rpc } from '../trpc.js';
 import { telegramChats, telegramMessages } from '../../schema.js';
-import { isListableDirectoryEntry, toDirectoryEntries } from './support.js';
+import {
+  isListableDirectoryEntry,
+  readChatSelection,
+  toNullableIsoString,
+  toDirectoryEntries,
+  toTelegramChatStorageRow
+} from './support.js';
 
 export const getChatHistoryFacts = query((runtime: TelegramRpcRuntime) =>
   rpc
@@ -16,15 +22,9 @@ export const getChatHistoryFacts = query((runtime: TelegramRpcRuntime) =>
     .output(telegramGetChatHistoryFactsOutputSchema)
     .query(async ({ input }) => {
       const [chat] = await runtime.database
-        .select({
-          raw: telegramChats.raw,
-          telegramChatId: telegramChats.telegramChatId,
-          title: telegramChats.title,
-          type: telegramChats.type,
-          updatedAt: telegramChats.updatedAt
-        })
+        .select(readChatSelection())
         .from(telegramChats)
-        .where(eq(telegramChats.telegramChatId, input.chatId))
+        .where(eq(telegramChats.id, input.chatId))
         .limit(1);
 
       if (chat === undefined) {
@@ -35,7 +35,7 @@ export const getChatHistoryFacts = query((runtime: TelegramRpcRuntime) =>
         };
       }
 
-      const [entry] = await toDirectoryEntries(runtime.database, [chat]);
+      const [entry] = await toDirectoryEntries(runtime.database, [toTelegramChatStorageRow(chat)]);
       if (entry === undefined || !isListableDirectoryEntry(entry)) {
         return {
           chat: null,
@@ -47,28 +47,23 @@ export const getChatHistoryFacts = query((runtime: TelegramRpcRuntime) =>
       const [earliestMessages, messageCounts] = await Promise.all([
         runtime.database
           .select({
-            messageDate: telegramMessages.messageDate
+            messageDate: telegramMessages.date
           })
           .from(telegramMessages)
-          .where(
-            and(
-              eq(telegramMessages.telegramChatId, input.chatId),
-              isNotNull(telegramMessages.messageDate)
-            )
-          )
-          .orderBy(asc(telegramMessages.messageDate))
+          .where(and(eq(telegramMessages.chatId, input.chatId), isNotNull(telegramMessages.date)))
+          .orderBy(asc(telegramMessages.date))
           .limit(1),
         runtime.database
           .select({
             count: sql<number>`count(*)::int`
           })
           .from(telegramMessages)
-          .where(eq(telegramMessages.telegramChatId, input.chatId))
+          .where(eq(telegramMessages.chatId, input.chatId))
       ]);
 
       return {
         chat: entry,
-        earliestMessageDate: earliestMessages[0]?.messageDate?.toISOString() ?? null,
+        earliestMessageDate: toNullableIsoString(earliestMessages[0]?.messageDate ?? null),
         messageCount: messageCounts[0]?.count ?? 0
       };
     })

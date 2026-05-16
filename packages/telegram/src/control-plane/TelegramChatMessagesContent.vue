@@ -512,13 +512,11 @@ function normalizeMessage(value: Record<string, unknown> | undefined): TelegramR
   const chatId = asString(chat?.id);
   const contentType = asString(value?.contentType);
   const telegramMessageId = asString(value?.telegramMessageId);
-  const updatedAt = asString(value?.updatedAt);
   if (
     id === undefined ||
     chatId === undefined ||
     contentType === undefined ||
-    telegramMessageId === undefined ||
-    updatedAt === undefined
+    telegramMessageId === undefined
   ) {
     return null;
   }
@@ -544,8 +542,7 @@ function normalizeMessage(value: Record<string, unknown> | undefined): TelegramR
     serviceAction: normalizeServiceAction(value?.serviceAction),
     telegramMessageId,
     text: asNullableString(value?.text),
-    textEntities: normalizeTextEntities(value?.textEntities),
-    updatedAt
+    textEntities: normalizeTextEntities(value?.textEntities)
   };
 }
 

@@ -262,6 +262,12 @@ export function createTelegramReadMessageUpdatedEvent(
   });
 }
 
+export function createTelegramMessageCreatedEvent(
+  message: TelegramEventSourceMessage
+): IntegrationEvent {
+  return messageEvent('telegram.message.created', message);
+}
+
 type TelegramEventChatFolder = TelegramChatFolder;
 
 type TelegramEventUser = TelegramUserModelRef & {
@@ -291,7 +297,6 @@ type TelegramEventMessage = TelegramMessageModelRef & {
   telegramMessageId: string;
   text: string | null;
   textEntities: TelegramMessageTextEntity[];
-  updatedAt: string;
 };
 
 type TelegramEventMessageUpdate = TelegramMessageModelRef & {
@@ -421,8 +426,7 @@ function eventMessage(message: TelegramEventSourceMessage): TelegramEventMessage
     serviceAction: eventMessageServiceAction(message.serviceAction),
     telegramMessageId: message.messageId,
     text: message.text ?? null,
-    textEntities: message.textEntities ?? [],
-    updatedAt: new Date().toISOString()
+    textEntities: message.textEntities ?? []
   };
 }
 

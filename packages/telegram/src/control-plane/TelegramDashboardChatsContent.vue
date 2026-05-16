@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import UiMetricTile from '@agentg/control-plane-sdk/ui/metric-tile';
 
-import { useTelegramDirectoryProjection } from './telegramDirectoryProjection.js';
+import { useTelegramDirectoryState } from './telegramDirectoryState.js';
 
-const { chatCount } = useTelegramDirectoryProjection();
+const { chatCount } = useTelegramDirectoryState();
 
 function formatInteger(value: number): string {
   return new Intl.NumberFormat().format(Number.isFinite(value) ? value : 0);

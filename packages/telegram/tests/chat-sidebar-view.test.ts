@@ -103,7 +103,7 @@ describe('Telegram chat sidebar view', () => {
             lastMessage: {
               authorName: 'Ada',
               authorPlaceholder: false,
-              date: 1777777777,
+              date: '2026-05-03T03:09:37.000Z',
               datePlaceholder: false,
               isForwarded: false,
               isOutgoing: false,
@@ -171,7 +171,7 @@ function chat(input: Partial<ControlPlaneChat>): ControlPlaneChat {
     isSelf: false,
     isUnread: false,
     lastMessage: null,
-    lastMessageDate: 0,
+    lastMessageDate: null,
     notificationsEnabled: true,
     notificationsPlaceholder: false,
     placements: [{ isPinned: false, kind: 'main', order: '100' }],

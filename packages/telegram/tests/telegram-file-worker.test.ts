@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import type { TelegramFileDownloadRow } from '../src/telegram-file-store.js';
-import { telegramFileDownloadRequest } from '../src/telegram-file-worker.js';
+import {
+  telegramFileDownloadRequest,
+  type TelegramFileDownloadRow
+} from '../src/telegram-file-subsystem.js';
 
 describe('Telegram file download worker', () => {
   it('uses TDLib download list transport for message-owned files', () => {

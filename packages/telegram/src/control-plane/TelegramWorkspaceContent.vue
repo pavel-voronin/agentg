@@ -24,7 +24,7 @@ import {
 } from './chatListFiltering.js';
 import ChatSidebar from './components/ChatSidebar.vue';
 import { readStorage, writeStorage } from './storage.js';
-import { useTelegramDirectoryProjection } from './telegramDirectoryProjection.js';
+import { useTelegramDirectoryState } from './telegramDirectoryState.js';
 import type {
   ChatListMode,
   ChatNavigation,
@@ -56,7 +56,7 @@ const CHAT_SIDEBAR_DEFAULT_WIDTH = 380;
 const CHAT_SIDEBAR_MAX_WIDTH = 560;
 const CHAT_SIDEBAR_MIN_WIDTH = 300;
 const telegramStoragePrefix = 'agentg.telegram.controlPlane';
-const directoryProjection = useTelegramDirectoryProjection();
+const directoryState = useTelegramDirectoryState();
 const slotRuntime = useSlotRuntime();
 const activePrimaryTabId = ref(readStorage(`${telegramStoragePrefix}.primaryTabId`) ?? '');
 const chatFilter = ref(readStorage(`${telegramStoragePrefix}.chatFilter`) ?? '');
@@ -78,12 +78,12 @@ const nestedSlotContext = computed(() => ({
   selectedChatId: selectedChatId.value
 }));
 const chatNavigation = computed(() =>
-  buildChatNavigation(directoryProjection.chats.value, directoryProjection.folders.value)
+  buildChatNavigation(directoryState.chats.value, directoryState.folders.value)
 );
 const visibleDirectoryChats = computed(() => {
   const query = normalizedChatQuery();
   const listFilter = query.length === 0 ? chatListFilter() : undefined;
-  const matchingChats = directoryProjection.chats.value
+  const matchingChats = directoryState.chats.value
     .filter((chat) => (query.length === 0 ? true : chatMatchesSearch(chat, query)))
     .filter((chat) => (listFilter === undefined ? true : chatMatchesListFilter(chat, listFilter)))
     .sort((left, right) => compareTelegramChatsByTdlibOrder(left, right, listFilter));
@@ -153,7 +153,7 @@ const activePrimaryTab = computed(
 const selectedChat = computed(() =>
   selectedChatId.value === null
     ? null
-    : (directoryProjection.chats.value.find((chat) => chat.id === selectedChatId.value) ?? null)
+    : (directoryState.chats.value.find((chat) => chat.id === selectedChatId.value) ?? null)
 );
 const selectedChatAvatarUrl = computed(() =>
   selectedChat.value === null
@@ -183,7 +183,7 @@ watch(
 
 watch(
   () => ({
-    hydrated: directoryProjection.hydrated.value,
+    hydrated: directoryState.hydrated.value,
     navigation: chatNavigation.value
   }),
   ensureSelectedFolderExists,
@@ -319,7 +319,7 @@ async function toggleChat(chatId: string): Promise<void> {
 }
 
 async function findChatById(chatId: string): Promise<TelegramDirectoryChat> {
-  const chat = directoryProjection.chats.value.find((item) => item.id === chatId);
+  const chat = directoryState.chats.value.find((item) => item.id === chatId);
   if (chat === undefined) {
     throw new Error(`Chat ${chatId} is not available in the chat directory`);
   }
@@ -373,7 +373,7 @@ function hasChatFolder(folderId: number | null): boolean {
 }
 
 function ensureSelectedFolderExists(): void {
-  if (!directoryProjection.hydrated.value) {
+  if (!directoryState.hydrated.value) {
     return;
   }
   if (normalizedChatQuery().length === 0 && chatListMode.value === 'folder') {
@@ -518,8 +518,8 @@ function compareTelegramChatsByTdlibOrder(
     return orderComparison;
   }
 
-  if (leftKey.lastMessageDate !== rightKey.lastMessageDate) {
-    return rightKey.lastMessageDate - leftKey.lastMessageDate;
+  if (leftKey.lastMessageAt !== rightKey.lastMessageAt) {
+    return rightKey.lastMessageAt - leftKey.lastMessageAt;
   }
 
   return leftKey.title.localeCompare(rightKey.title) || leftKey.id.localeCompare(rightKey.id);
@@ -529,11 +529,19 @@ function telegramChatSortKey(chat: TelegramDirectoryChat, filter?: ChatListKind)
   const position = preferredChatPlacement(chat, filter);
   return {
     id: chat.id,
-    lastMessageDate: chat.lastMessageDate,
+    lastMessageAt: isoTimeMs(chat.lastMessageDate),
     listRank: position?.listRank ?? 3,
     order: position?.order ?? 0n,
     title: chat.title
   };
+}
+
+function isoTimeMs(value: string | null): number {
+  if (value === null) {
+    return 0;
+  }
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? 0 : parsed;
 }
 
 function preferredChatPlacement(
@@ -907,8 +915,7 @@ function isDefined<T>(value: T | undefined): value is T {
 }
 
 .telegram-workspace__sidebar-resizer {
-  @apply absolute bottom-0 top-0 z-10 flex w-[5px] cursor-col-resize justify-center bg-transparent focus:outline-none;
-  left: calc(var(--telegram-chat-sidebar-width) - 2px);
+  @apply absolute bottom-0 top-0 left-[calc(var(--telegram-chat-sidebar-width)-2px)] z-10 flex w-[5px] cursor-col-resize justify-center bg-transparent focus:outline-none;
 }
 
 .telegram-workspace__sidebar-resizer-line {

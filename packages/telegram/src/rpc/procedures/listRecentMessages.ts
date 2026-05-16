@@ -17,18 +17,18 @@ export const listRecentMessages = query((runtime: TelegramRpcRuntime) =>
     .query(async ({ input }) => {
       const limit = parseLimit(input.limit, 50, 200);
       const where = andSql(
-        input.chatId === undefined ? undefined : eq(telegramMessages.telegramChatId, input.chatId),
+        input.chatId === undefined ? undefined : eq(telegramMessages.chatId, input.chatId),
         input.beforeMessageId === undefined
           ? undefined
-          : sql`${telegramMessages.telegramMessageId}::bigint < ${input.beforeMessageId}::bigint`
+          : sql`${telegramMessages.id}::bigint < ${input.beforeMessageId}::bigint`
       );
       const messages = await runtime.database
         .select(readMessageSelection())
         .from(telegramMessages)
         .where(where)
         .orderBy(
-          desc(telegramMessages.messageDate),
-          sql`${telegramMessages.telegramMessageId}::bigint desc`
+          desc(telegramMessages.date),
+          sql`${telegramMessages.id}::bigint desc`
         )
         .limit(limit);
 

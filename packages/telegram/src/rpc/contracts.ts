@@ -9,6 +9,7 @@ import {
 const nonEmptyStringSchema = z.string().trim().min(1);
 const nonNegativeIntegerSchema = z.number().int().nonnegative();
 const positiveIntegerSchema = z.number().int().positive();
+const isoDateTimeStringSchema = z.iso.datetime();
 
 export const telegramHistoryChatSchema = z.object({
   _model: z.literal('telegram.chat'),
@@ -25,14 +26,14 @@ export const telegramHistoryListChatsInputSchema = z.object({
 export const telegramHistoryFetchPageInputSchema = z.object({
   chatId: z.string().min(1),
   cursorMessageId: z.number().int().optional(),
-  endAt: z.string().min(1),
+  endAt: isoDateTimeStringSchema,
   limit: z.number().int().positive(),
-  startAt: z.string().min(1)
+  startAt: isoDateTimeStringSchema
 });
 
 export const telegramHistoryIntervalSchema = z.object({
-  endAt: z.string().min(1),
-  startAt: z.string().min(1)
+  endAt: isoDateTimeStringSchema,
+  startAt: isoDateTimeStringSchema
 });
 
 export const telegramHistoryFetchPageResultSchema = z.discriminatedUnion('kind', [
@@ -43,7 +44,7 @@ export const telegramHistoryFetchPageResultSchema = z.discriminatedUnion('kind',
     storedMessages: z.literal(0)
   }),
   z.object({
-    anchorMessageDate: z.string(),
+    anchorMessageDate: isoDateTimeStringSchema,
     coveredInterval: telegramHistoryIntervalSchema.optional(),
     fetchedMessages: z.literal(0),
     kind: z.literal('anchor_before_start'),
@@ -55,7 +56,7 @@ export const telegramHistoryFetchPageResultSchema = z.discriminatedUnion('kind',
     fetchedMessages: z.number().int().nonnegative(),
     kind: z.literal('page'),
     nextCursorMessageId: z.number().int().optional(),
-    oldestFetchedMessageDate: z.string().optional(),
+    oldestFetchedMessageDate: isoDateTimeStringSchema.optional(),
     reachedBeginning: z.boolean(),
     storedMessages: z.number().int().nonnegative()
   })
@@ -92,7 +93,7 @@ export const telegramFileRefSchema = z.object({
   renderKind: z.enum(telegramFileRenderKinds),
   slotKey: z.string(),
   status: z.enum(telegramFileStatuses),
-  updatedAt: z.string(),
+  updatedAt: isoDateTimeStringSchema,
   url: z.string().nullable(),
   width: nonNegativeIntegerSchema.nullable()
 });
@@ -106,7 +107,7 @@ export const telegramReadChatSchema = z.object({
   id: z.string(),
   title: z.string(),
   type: z.string(),
-  updatedAt: z.string()
+  updatedAt: isoDateTimeStringSchema
 });
 
 export const telegramMessageTextEntitySchema = z.object({
@@ -129,14 +130,14 @@ export const telegramReadMessageSchema = z.object({
   id: z.string(),
   chat: telegramChatModelRefSchema,
   contentType: z.string(),
-  deletedAt: z.string().nullable(),
-  editDate: z.string().nullable(),
+  deletedAt: isoDateTimeStringSchema.nullable(),
+  editDate: isoDateTimeStringSchema.nullable(),
   isDeleted: z.boolean(),
   isOutgoing: z.boolean(),
   media: z.object({
     files: z.array(telegramFileRefSchema)
   }),
-  messageDate: z.string().nullable(),
+  messageDate: isoDateTimeStringSchema.nullable(),
   replyTo: z
     .object({
       chat: telegramChatModelRefSchema,
@@ -153,8 +154,7 @@ export const telegramReadMessageSchema = z.object({
   serviceAction: telegramMessageServiceActionSchema.nullable(),
   telegramMessageId: z.string(),
   text: z.string().nullable(),
-  textEntities: z.array(telegramMessageTextEntitySchema),
-  updatedAt: z.string()
+  textEntities: z.array(telegramMessageTextEntitySchema)
 });
 
 export const telegramGetChatInputSchema = z.object({
@@ -272,7 +272,7 @@ export const telegramChatPlacementSchema = z.discriminatedUnion('kind', [
 export const telegramChatLastMessageSchema = z.object({
   authorName: z.string().nullable(),
   authorPlaceholder: z.boolean(),
-  date: nonNegativeIntegerSchema,
+  date: isoDateTimeStringSchema.nullable(),
   datePlaceholder: z.boolean(),
   isForwarded: z.boolean(),
   isOutgoing: z.boolean(),
@@ -288,7 +288,7 @@ export const telegramChatDirectoryEntrySchema = telegramReadChatSchema.extend({
   isSelf: z.boolean(),
   isUnread: z.boolean(),
   lastMessage: telegramChatLastMessageSchema.nullable(),
-  lastMessageDate: nonNegativeIntegerSchema,
+  lastMessageDate: isoDateTimeStringSchema.nullable(),
   notificationsEnabled: z.boolean().nullable(),
   notificationsPlaceholder: z.boolean(),
   placements: z.array(telegramChatPlacementSchema),
@@ -330,7 +330,7 @@ export const telegramGetChatHistoryFactsInputSchema = z.object({
 
 export const telegramGetChatHistoryFactsOutputSchema = z.object({
   chat: telegramChatDirectoryEntrySchema.nullable(),
-  earliestMessageDate: z.string().nullable(),
+  earliestMessageDate: isoDateTimeStringSchema.nullable(),
   messageCount: nonNegativeIntegerSchema
 });
 
@@ -338,8 +338,8 @@ export const telegramCountMessagesInIntervalsInputSchema = z.object({
   chatId: nonEmptyStringSchema,
   intervals: z.array(
     z.object({
-      endAt: nonEmptyStringSchema,
-      startAt: nonEmptyStringSchema
+      endAt: isoDateTimeStringSchema,
+      startAt: isoDateTimeStringSchema
     })
   )
 });
@@ -349,7 +349,7 @@ export const telegramCountMessagesInIntervalsOutputSchema = z.object({
 });
 
 export const telegramHistoryCoverageSegmentSchema = telegramHistoryIntervalSchema.extend({
-  coveredAt: z.string().min(1)
+  coveredAt: isoDateTimeStringSchema
 });
 
 export const telegramGetHistoryCoverageInputSchema = z.object({
@@ -362,11 +362,11 @@ export const telegramGetHistoryCoverageOutputSchema = z.object({
 
 export const telegramEnsureHistoryCoverageInputSchema = z.object({
   chatId: nonEmptyStringSchema,
-  endAt: nonEmptyStringSchema,
+  endAt: isoDateTimeStringSchema,
   limit: positiveIntegerSchema.optional(),
   maxPages: positiveIntegerSchema.optional(),
   requestDelayMs: nonNegativeIntegerSchema.optional(),
-  startAt: nonEmptyStringSchema
+  startAt: isoDateTimeStringSchema
 });
 
 export const telegramEnsureHistoryCoverageOutputSchema = z.object({

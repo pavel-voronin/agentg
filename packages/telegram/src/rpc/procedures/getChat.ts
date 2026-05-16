@@ -9,7 +9,8 @@ import {
 import type { TelegramRpcRuntime } from '../runtime.js';
 import { rpc } from '../trpc.js';
 import { telegramChats } from '../../schema.js';
-import { readTelegramFileRefsForOwners } from '../../telegram-file-store.js';
+import { readTelegramFileRefsForOwners } from '../../telegram-file-read.js';
+import { readChatSelection, toTelegramChatStorageRow } from './support.js';
 
 export const getChat = query((runtime: TelegramRpcRuntime) =>
   rpc
@@ -17,14 +18,9 @@ export const getChat = query((runtime: TelegramRpcRuntime) =>
     .output(telegramGetChatOutputSchema)
     .query(async ({ input }) => {
       const [chat] = await runtime.database
-        .select({
-          telegramChatId: telegramChats.telegramChatId,
-          title: telegramChats.title,
-          type: telegramChats.type,
-          updatedAt: telegramChats.updatedAt
-        })
+        .select(readChatSelection())
         .from(telegramChats)
-        .where(eq(telegramChats.telegramChatId, input.chatId))
+        .where(eq(telegramChats.id, input.chatId))
         .limit(1);
       const filesByOwner: Map<string, TelegramFileRef[]> =
         chat === undefined
@@ -35,12 +31,15 @@ export const getChat = query((runtime: TelegramRpcRuntime) =>
                 ownerModel: 'telegram.chat'
               }
             ]);
+      const chatRow = chat === undefined ? undefined : toTelegramChatStorageRow(chat);
       const files =
-        chat === undefined ? [] : (filesByOwner.get(`telegram.chat:${chat.telegramChatId}`) ?? []);
+        chatRow === undefined
+          ? []
+          : (filesByOwner.get(`telegram.chat:${chatRow.telegramChatId}`) ?? []);
 
       return {
         chat:
-          chat === undefined
+          chatRow === undefined
             ? null
             : {
                 _model: 'telegram.chat',
@@ -48,10 +47,10 @@ export const getChat = query((runtime: TelegramRpcRuntime) =>
                   big: files.find((file) => file.slotKey === 'avatar.big') ?? null,
                   small: files.find((file) => file.slotKey === 'avatar.small') ?? null
                 },
-                id: chat.telegramChatId,
-                title: chat.title,
-                type: chat.type,
-                updatedAt: chat.updatedAt.toISOString()
+                id: chatRow.telegramChatId,
+                title: chatRow.title,
+                type: chatRow.type,
+                updatedAt: new Date(0).toISOString()
               }
       };
     })

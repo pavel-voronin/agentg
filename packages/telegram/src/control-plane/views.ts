@@ -23,7 +23,7 @@ export type ChatPlacement =
 export type TelegramDirectoryLastMessage = {
   authorName: string | null;
   authorPlaceholder: boolean;
-  date: number;
+  date: string | null;
   datePlaceholder: boolean;
   isForwarded: boolean;
   isOutgoing: boolean;
@@ -44,7 +44,7 @@ export type TelegramDirectoryChat = {
   isSelf: boolean;
   isUnread: boolean;
   lastMessage: TelegramDirectoryLastMessage | null;
-  lastMessageDate: number;
+  lastMessageDate: string | null;
   notificationsEnabled: boolean | null;
   notificationsPlaceholder: boolean;
   placements: ChatPlacement[];

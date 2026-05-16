@@ -27,7 +27,7 @@ export async function startTelegramTrpcServer(
       client: options.client,
       database: options.database,
       eventBus: options.eventBus,
-      fileIndexer: options.fileIndexer
+      files: options.files
     }),
     staticAssets: [
       {

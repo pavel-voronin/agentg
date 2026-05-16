@@ -24,13 +24,13 @@ let hydratePromise: Promise<void> | null = null;
 let subscribers = 0;
 let stopEvents: (() => void) | null = null;
 
-export function useTelegramDirectoryProjection() {
+export function useTelegramDirectoryState() {
   const host = useControlPlaneHost();
 
   onMounted(() => {
     subscribers += 1;
     stopEvents ??= host.subscribeEvents(applyTelegramDirectoryEvent);
-    void hydrateTelegramDirectory(host).catch(pushProjectionError);
+    void hydrateTelegramDirectory(host).catch(pushDirectoryStateError);
   });
 
   onBeforeUnmount(() => {
@@ -133,7 +133,7 @@ function normalizeDirectoryChat(
     isSelf: value?.isSelf === true,
     isUnread: value?.isUnread === true,
     lastMessage: normalizeLastMessage(asRecord(value?.lastMessage)),
-    lastMessageDate: asNonNegativeInteger(value?.lastMessageDate),
+    lastMessageDate: asNullableString(value?.lastMessageDate),
     notificationsEnabled:
       typeof value?.notificationsEnabled === 'boolean' ? value.notificationsEnabled : null,
     notificationsPlaceholder: value?.notificationsPlaceholder !== false,
@@ -155,7 +155,7 @@ function normalizeLastMessage(
   return {
     authorName: asNullableString(value.authorName),
     authorPlaceholder: value.authorPlaceholder === true,
-    date: asNonNegativeInteger(value.date),
+    date: asNullableString(value.date),
     datePlaceholder: value.datePlaceholder === true,
     isForwarded: value.isForwarded === true,
     isOutgoing: value.isOutgoing === true,
@@ -311,7 +311,7 @@ function isFileRenderKind(value: string | undefined): value is TelegramFileRef['
   return value === 'audio' || value === 'download' || value === 'image' || value === 'video';
 }
 
-function pushProjectionError(error: unknown): void {
+function pushDirectoryStateError(error: unknown): void {
   lastError.value = error;
   console.error(error);
 }

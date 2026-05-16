@@ -47,11 +47,18 @@ const TELEGRAM_HISTORY_COVERAGE_BATCH_CHUNK_SIZE = 5000;
 export async function listTelegramHistoryChatIds(database: AppDatabase): Promise<string[]> {
   const rows = await database
     .select({
-      telegramChatId: telegramChats.telegramChatId,
-      type: telegramChats.type
+      telegramChatId: telegramChats.id,
+      type: sql<string>`case
+        when ${telegramChats.type}->>'_' = 'chatTypePrivate' then 'private'
+        when ${telegramChats.type}->>'_' = 'chatTypeSecret' then 'secret'
+        when ${telegramChats.type}->>'_' = 'chatTypeBasicGroup' then 'group'
+        when ${telegramChats.type}->>'_' = 'chatTypeSupergroup' and coalesce((${telegramChats.type}->>'is_channel')::boolean, false) then 'channel'
+        when ${telegramChats.type}->>'_' = 'chatTypeSupergroup' then 'group'
+        else coalesce(${telegramChats.type}->>'_', 'unknown')
+      end`
     })
     .from(telegramChats)
-    .orderBy(asc(telegramChats.telegramChatId));
+    .orderBy(asc(telegramChats.id));
 
   return rows.filter((row) => isHistorySyncChatType(row.type)).map((row) => row.telegramChatId);
 }

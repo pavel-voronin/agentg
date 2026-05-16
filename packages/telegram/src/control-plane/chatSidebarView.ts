@@ -225,11 +225,14 @@ function placementMatchesCurrentList(
   );
 }
 
-function formatMessageDate(value: number): string {
-  if (!Number.isSafeInteger(value) || value <= 0) {
+function formatMessageDate(value: string | null): string {
+  if (value === null) {
     return 'No date';
   }
-  const date = new Date(value * 1000);
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return 'No date';
+  }
   const now = new Date();
   if (date.toDateString() === now.toDateString()) {
     return new Intl.DateTimeFormat(undefined, {

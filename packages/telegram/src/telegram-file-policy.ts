@@ -12,7 +12,7 @@ export type TelegramFilePolicyInput = {
     sourceFingerprint: string;
     status: string;
   } | null;
-  slot: ExtractedTelegramFileSlot;
+  slot: Pick<ExtractedTelegramFileSlot, 'byteSize' | 'mediaKind'>;
   sourceFingerprint: string;
 };
 

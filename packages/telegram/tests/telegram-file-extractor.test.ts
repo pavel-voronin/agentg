@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
-import { normalizeTelegramUpdate } from '../src/normalize.js';
-import { extractTelegramFileSlots } from '../src/telegram-file-extractor.js';
+import {
+  extractTelegramFileSlots,
+  type TelegramFileSlotUpdate
+} from '../src/telegram-file-extractor.js';
 import { decideTelegramFilePolicy } from '../src/telegram-file-policy.js';
+import { tdlibUpdateNewChat } from '../src/tdlib-schema/UpdateNewChat.js';
+import { tdlibUpdateNewMessage } from '../src/tdlib-schema/UpdateNewMessage.js';
 
 describe('Telegram file extraction', () => {
   it('extracts chat avatar slots from chat photos', () => {
-    const update = normalizeTelegramUpdate({
+    const update = chatSlotUpdate({
       _: 'updateNewChat',
       chat: {
         _: 'chat',
@@ -21,8 +25,7 @@ describe('Telegram file extraction', () => {
       }
     });
 
-    expect(update).toBeDefined();
-    expect(extractTelegramFileSlots(update ?? {})).toMatchObject([
+    expect(extractTelegramFileSlots(update)).toMatchObject([
       {
         mediaKind: 'avatar',
         owner: { _model: 'telegram.chat', id: '42' },
@@ -41,9 +44,8 @@ describe('Telegram file extraction', () => {
   });
 
   it('extracts photo, video, thumbnail, document, and voice message slots', () => {
-    const photoUpdate = normalizeTelegramUpdate({
-      _: 'updateNewMessage',
-      message: message({
+    const photoUpdate = messageSlotUpdate(
+      message({
         content: {
           _: 'messagePhoto',
           photo: {
@@ -56,10 +58,9 @@ describe('Telegram file extraction', () => {
         },
         id: 11
       })
-    });
-    const videoUpdate = normalizeTelegramUpdate({
-      _: 'updateNewMessage',
-      message: message({
+    );
+    const videoUpdate = messageSlotUpdate(
+      message({
         content: {
           _: 'messageVideo',
           video: {
@@ -80,10 +81,9 @@ describe('Telegram file extraction', () => {
         },
         id: 12
       })
-    });
-    const documentUpdate = normalizeTelegramUpdate({
-      _: 'updateNewMessage',
-      message: message({
+    );
+    const documentUpdate = messageSlotUpdate(
+      message({
         content: {
           _: 'messageDocument',
           document: {
@@ -95,10 +95,9 @@ describe('Telegram file extraction', () => {
         },
         id: 13
       })
-    });
-    const voiceUpdate = normalizeTelegramUpdate({
-      _: 'updateNewMessage',
-      message: message({
+    );
+    const voiceUpdate = messageSlotUpdate(
+      message({
         content: {
           _: 'messageVoiceNote',
           voice_note: {
@@ -110,16 +109,16 @@ describe('Telegram file extraction', () => {
         },
         id: 14
       })
-    });
+    );
 
-    expect(extractTelegramFileSlots(photoUpdate ?? {}).map((slot) => slot.slotKey)).toEqual([
+    expect(extractTelegramFileSlots(photoUpdate).map((slot) => slot.slotKey)).toEqual([
       'content.photo.0'
     ]);
-    expect(extractTelegramFileSlots(videoUpdate ?? {}).map((slot) => slot.slotKey)).toEqual([
+    expect(extractTelegramFileSlots(videoUpdate).map((slot) => slot.slotKey)).toEqual([
       'content.video.file',
       'content.video.thumbnail'
     ]);
-    expect(extractTelegramFileSlots(documentUpdate ?? {})).toMatchObject([
+    expect(extractTelegramFileSlots(documentUpdate)).toMatchObject([
       {
         fileName: 'archive.zip',
         mediaKind: 'document',
@@ -127,7 +126,7 @@ describe('Telegram file extraction', () => {
         slotKey: 'content.document.file'
       }
     ]);
-    expect(extractTelegramFileSlots(voiceUpdate ?? {})).toMatchObject([
+    expect(extractTelegramFileSlots(voiceUpdate)).toMatchObject([
       {
         durationSeconds: 17,
         mediaKind: 'voice',
@@ -142,9 +141,8 @@ describe('Telegram file extraction', () => {
 describe('Telegram file policy', () => {
   it('queues small automatic photos and videos', () => {
     const photo = extractTelegramFileSlots(
-      normalizeTelegramUpdate({
-        _: 'updateNewMessage',
-        message: message({
+      messageSlotUpdate(
+        message({
           content: {
             _: 'messagePhoto',
             photo: {
@@ -154,12 +152,11 @@ describe('Telegram file policy', () => {
           },
           id: 21
         })
-      }) ?? {}
+      )
     )[0];
     const video = extractTelegramFileSlots(
-      normalizeTelegramUpdate({
-        _: 'updateNewMessage',
-        message: message({
+      messageSlotUpdate(
+        message({
           content: {
             _: 'messageVideo',
             video: {
@@ -169,7 +166,7 @@ describe('Telegram file policy', () => {
           },
           id: 22
         })
-      }) ?? {}
+      )
     )[0];
 
     expect(photo).toBeDefined();
@@ -197,9 +194,8 @@ describe('Telegram file policy', () => {
 
   it('queues voice messages for Control Plane pages and explicit requests', () => {
     const [voice] = extractTelegramFileSlots(
-      normalizeTelegramUpdate({
-        _: 'updateNewMessage',
-        message: message({
+      messageSlotUpdate(
+        message({
           content: {
             _: 'messageVoiceNote',
             voice_note: {
@@ -211,7 +207,7 @@ describe('Telegram file policy', () => {
           },
           id: 25
         })
-      }) ?? {}
+      )
     );
 
     expect(voice).toBeDefined();
@@ -238,9 +234,8 @@ describe('Telegram file policy', () => {
 
   it('keeps large photos known until an allowed explicit request', () => {
     const [photo] = extractTelegramFileSlots(
-      normalizeTelegramUpdate({
-        _: 'updateNewMessage',
-        message: message({
+      messageSlotUpdate(
+        message({
           content: {
             _: 'messagePhoto',
             photo: {
@@ -257,7 +252,7 @@ describe('Telegram file policy', () => {
           },
           id: 31
         })
-      }) ?? {}
+      )
     );
 
     expect(photo).toBeDefined();
@@ -284,9 +279,8 @@ describe('Telegram file policy', () => {
 
   it('treats zero TDLib sizes as unknown for automatic policies', () => {
     const [photo] = extractTelegramFileSlots(
-      normalizeTelegramUpdate({
-        _: 'updateNewMessage',
-        message: message({
+      messageSlotUpdate(
+        message({
           content: {
             _: 'messagePhoto',
             photo: {
@@ -303,7 +297,7 @@ describe('Telegram file policy', () => {
           },
           id: 35
         })
-      }) ?? {}
+      )
     );
 
     expect(photo).toBeDefined();
@@ -324,9 +318,8 @@ describe('Telegram file policy', () => {
 
   it('keeps history media indexed without automatic downloads', () => {
     const [photo] = extractTelegramFileSlots(
-      normalizeTelegramUpdate({
-        _: 'updateNewMessage',
-        message: message({
+      messageSlotUpdate(
+        message({
           content: {
             _: 'messagePhoto',
             photo: {
@@ -343,7 +336,7 @@ describe('Telegram file policy', () => {
           },
           id: 36
         })
-      }) ?? {}
+      )
     );
 
     expect(photo).toBeDefined();
@@ -363,9 +356,8 @@ describe('Telegram file policy', () => {
 
   it('keeps failed files idle until an explicit retry request', () => {
     const [photo] = extractTelegramFileSlots(
-      normalizeTelegramUpdate({
-        _: 'updateNewMessage',
-        message: message({
+      messageSlotUpdate(
+        message({
           content: {
             _: 'messagePhoto',
             photo: {
@@ -382,7 +374,7 @@ describe('Telegram file policy', () => {
           },
           id: 41
         })
-      }) ?? {}
+      )
     );
 
     expect(photo).toBeDefined();
@@ -415,6 +407,30 @@ describe('Telegram file policy', () => {
   });
 });
 
+function chatSlotUpdate(input: unknown): TelegramFileSlotUpdate {
+  const update = tdlibUpdateNewChat(input);
+  return {
+    chat: {
+      chat: update.chat.chat,
+      id: update.chat.id
+    }
+  };
+}
+
+function messageSlotUpdate(input: unknown): TelegramFileSlotUpdate {
+  const update = tdlibUpdateNewMessage({
+    _: 'updateNewMessage',
+    message: input
+  });
+  return {
+    message: {
+      chatId: update.message.chat_id,
+      content: update.message.content,
+      messageId: update.message.id
+    }
+  };
+}
+
 function message(input: { content: Record<string, unknown>; id: number }) {
   return {
     _: 'message',
@@ -440,6 +456,10 @@ function tdFile(id: number, size: number) {
     id,
     local: {
       _: 'localFile',
+      can_be_deleted: true,
+      can_be_downloaded: true,
+      download_offset: 0,
+      downloaded_prefix_size: 0,
       downloaded_size: 0,
       is_downloading_active: false,
       is_downloading_completed: false,
@@ -448,7 +468,10 @@ function tdFile(id: number, size: number) {
     remote: {
       _: 'remoteFile',
       id: `remote-${String(id)}`,
-      unique_id: `unique-${String(id)}`
+      is_uploading_active: false,
+      is_uploading_completed: true,
+      unique_id: `unique-${String(id)}`,
+      uploaded_size: size
     },
     size
   };

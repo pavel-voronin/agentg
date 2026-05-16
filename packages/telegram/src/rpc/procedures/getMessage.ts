@@ -17,8 +17,8 @@ export const getMessage = query((runtime: TelegramRpcRuntime) =>
         .from(telegramMessages)
         .where(
           and(
-            eq(telegramMessages.telegramChatId, input.chatId),
-            eq(telegramMessages.telegramMessageId, input.messageId)
+            eq(telegramMessages.chatId, input.chatId),
+            eq(telegramMessages.id, input.messageId)
           )
         )
         .limit(1);

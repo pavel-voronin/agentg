@@ -22,10 +22,10 @@ export async function countTelegramMessagesInIntervals(
         .from(telegramMessages)
         .where(
           and(
-            eq(telegramMessages.telegramChatId, interval.chatId),
-            isNotNull(telegramMessages.messageDate),
-            gte(telegramMessages.messageDate, interval.startAt),
-            lt(telegramMessages.messageDate, interval.endAt)
+            eq(telegramMessages.chatId, interval.chatId),
+            isNotNull(telegramMessages.date),
+            gte(telegramMessages.date, interval.startAt),
+            lt(telegramMessages.date, interval.endAt)
           )
         );
 

@@ -58,7 +58,7 @@ function chat(input: Pick<TelegramDirectoryChat, 'placements'>): TelegramDirecto
     isSelf: false,
     isUnread: false,
     lastMessage: null,
-    lastMessageDate: 0,
+    lastMessageDate: null,
     notificationsEnabled: null,
     notificationsPlaceholder: true,
     placements: input.placements,

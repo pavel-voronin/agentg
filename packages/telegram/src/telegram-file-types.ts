@@ -1,6 +1,5 @@
-import type { JsonObject } from '@agentg/events/json';
-
 import type { TelegramChatModelRef, TelegramMessageModelRef } from './model-refs.js';
+import type { TdlibFile } from './tdlib-schema/File.js';
 
 export const telegramFileStatuses = ['known', 'queued', 'downloading', 'ready', 'failed'] as const;
 export const telegramFileMediaKinds = [
@@ -18,18 +17,15 @@ export type TelegramFileMediaKind = (typeof telegramFileMediaKinds)[number];
 export type TelegramFileRenderKind = (typeof telegramFileRenderKinds)[number];
 export type TelegramFileOwner = TelegramChatModelRef | TelegramMessageModelRef;
 export type TelegramFileOwnerModel = TelegramFileOwner['_model'];
-
-export type TelegramFileSource = JsonObject & {
-  kind: 'tdlibFile';
-  localPath?: string;
-  fileId: number;
-  remoteId?: string;
-  remoteUniqueId?: string;
+export type TelegramFileOwnerKey = {
+  ownerId: string;
+  ownerModel: TelegramFileOwnerModel;
 };
 
 export type ExtractedTelegramFileSlot = {
   byteSize: number | null;
   durationSeconds: number | null;
+  file: TdlibFile;
   fileName: string | null;
   height: number | null;
   mediaKind: TelegramFileMediaKind;
@@ -37,7 +33,6 @@ export type ExtractedTelegramFileSlot = {
   owner: TelegramFileOwner;
   renderKind: TelegramFileRenderKind;
   slotKey: string;
-  source: TelegramFileSource;
   tdlibFileId: number;
   width: number | null;
 };

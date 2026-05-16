@@ -2,14 +2,9 @@ import { mutation } from '@agentg/rpc/surface';
 import { and, eq, inArray } from 'drizzle-orm';
 
 import { createTelegramHistoryCoverageChangedEvent } from '../../integration-events.js';
-import {
-  asTdObject,
-  normalizeHistoricalMessage,
-  type NormalizedTelegramUpdate,
-  type TdObject
-} from '../../normalize.js';
-import { telegramMessages } from '../../schema.js';
-import { persistTelegramUpdate } from '../../store.js';
+import { telegramChats, telegramMessages } from '../../schema.js';
+import { tdlibMessages, type TdlibMessage } from '../../tdlib-schema/Message.js';
+import { persistTelegramMessage } from '../../telegram-message-persistence.js';
 import {
   normalizeCoverageWriteInput,
   withTelegramHistoryCoverageLocks,
@@ -28,15 +23,14 @@ import {
 import type { TelegramRpcRuntime } from '../runtime.js';
 import { rpc } from '../trpc.js';
 import {
-  getLastMessageNoLaterThan,
   invokeTdlib,
-  isTdObject,
   oldestMessageDate,
   oldestMessageIdOlderThan,
   parseLimit,
   parseTelegramChatId,
   readMessageSelection,
   tdMessageId,
+  toTelegramDate,
   toReadMessages
 } from './support.js';
 
@@ -60,26 +54,15 @@ export const fetchMessagesPage = mutation((runtime: TelegramRpcRuntime) =>
       );
       const chatId = parseTelegramChatId(input.chatId);
       const cursorMessageId = parseOptionalMessageId(input.beforeMessageId);
+      const initialAnchor =
+        cursorMessageId === undefined ? await readInitialPageAnchor(runtime, input.chatId) : null;
       const pageEndAt =
         cursorMessageId === undefined
-          ? ceilToTelegramSecond(new Date())
+          ? (initialAnchor?.pageEndAt ?? ceilToTelegramSecond(new Date()))
           : await readMessagePageEndAt(runtime, input.chatId, input.beforeMessageId);
-      const anchorMessageId =
-        cursorMessageId ?? (await readLatestMessageId(runtime, chatId, pageEndAt ?? new Date()));
+      const anchorMessageId = cursorMessageId ?? initialAnchor?.messageId ?? 0;
 
-      if (anchorMessageId === undefined) {
-        await addPageCoverage(runtime, {
-          chatId: input.chatId,
-          endAt: pageEndAt,
-          startAt: TELEGRAM_HISTORY_PAST_BOUNDARY
-        });
-        return {
-          messages: [],
-          reachedStart: true
-        };
-      }
-
-      const history = asTdObject(
+      const history = tdlibMessages(
         await invokeTdlib(
           runtime.eventBus,
           runtime.client,
@@ -96,15 +79,14 @@ export const fetchMessagesPage = mutation((runtime: TelegramRpcRuntime) =>
           }
         )
       );
-      const fetchedMessages = Array.isArray(history?.messages)
-        ? history.messages.map(asTdObject).filter(isTdObject)
-        : [];
+      const fetchedMessages = history.messages;
       const pageMessages =
         cursorMessageId === undefined
           ? fetchedMessages
           : fetchedMessages.filter((message) => isOlderThanCursor(message, cursorMessageId));
-      const nextCursorMessageId = oldestMessageIdOlderThan(fetchedMessages, anchorMessageId);
-      const reachedStart = nextCursorMessageId === undefined;
+      const nextCursorMessageId = nextCursorForFetchedPage(fetchedMessages, anchorMessageId);
+      const reachedStart =
+        anchorMessageId === 0 ? fetchedMessages.length < limit : nextCursorMessageId === undefined;
       const observedStartAt = observedIntervalStartAt(pageMessages, reachedStart);
       const persisted = await persistMessagesAndCoverage(runtime, {
         coverage:
@@ -117,7 +99,11 @@ export const fetchMessagesPage = mutation((runtime: TelegramRpcRuntime) =>
               },
         messages: pageMessages
       });
-      const messages = await readPersistedMessages(runtime, input.chatId, persisted.messageIds);
+      const messageIds =
+        cursorMessageId === undefined && initialAnchor?.messageIdText !== undefined
+          ? [initialAnchor.messageIdText, ...persisted.messageIds]
+          : persisted.messageIds;
+      const messages = await readPersistedMessages(runtime, input.chatId, messageIds);
 
       return {
         messages,
@@ -126,21 +112,32 @@ export const fetchMessagesPage = mutation((runtime: TelegramRpcRuntime) =>
     })
 );
 
-async function readLatestMessageId(
+async function readInitialPageAnchor(
   runtime: TelegramRpcRuntime,
-  chatId: number,
-  pageEndAt: Date
-): Promise<number | undefined> {
-  const anchor = await getLastMessageNoLaterThan(
-    runtime.client,
-    runtime.eventBus,
-    chatId,
-    pageEndAt,
-    {
-      priority: telegramTdlibPriorities.high
-    }
-  );
-  return tdMessageId(anchor);
+  chatId: string
+): Promise<{ messageId: number; messageIdText: string; pageEndAt: Date | undefined } | undefined> {
+  const [chat] = await runtime.database
+    .select({
+      lastMessageId: telegramChats.lastMessageId
+    })
+    .from(telegramChats)
+    .where(eq(telegramChats.id, chatId))
+    .limit(1);
+  const messageId = parseOptionalMessageId(chat?.lastMessageId ?? undefined);
+
+  if (
+    chat?.lastMessageId === null ||
+    chat?.lastMessageId === undefined ||
+    messageId === undefined
+  ) {
+    return undefined;
+  }
+
+  return {
+    messageId,
+    messageIdText: chat.lastMessageId,
+    pageEndAt: await readMessagePageEndAt(runtime, chatId, chat.lastMessageId)
+  };
 }
 
 async function readMessagePageEndAt(
@@ -154,48 +151,38 @@ async function readMessagePageEndAt(
 
   const [message] = await runtime.database
     .select({
-      messageDate: telegramMessages.messageDate
+      messageDate: telegramMessages.date
     })
     .from(telegramMessages)
-    .where(
-      and(
-        eq(telegramMessages.telegramChatId, chatId),
-        eq(telegramMessages.telegramMessageId, messageId)
-      )
-    )
+    .where(and(eq(telegramMessages.chatId, chatId), eq(telegramMessages.id, messageId)))
     .limit(1);
 
-  return message?.messageDate === null || message?.messageDate === undefined
-    ? undefined
-    : nextTelegramSecond(message.messageDate);
+  const messageDate =
+    message?.messageDate === null || message?.messageDate === undefined
+      ? null
+      : toTelegramDate(message.messageDate);
+  return messageDate === null ? undefined : nextTelegramSecond(messageDate);
 }
 
 async function persistMessagesAndCoverage(
   runtime: TelegramRpcRuntime,
   input: {
     coverage: TelegramHistoryCoverageInterval | undefined;
-    messages: TdObject[];
+    messages: TdlibMessage[];
   }
 ): Promise<{ coverageIntervals: TelegramHistoryCoverageEventInterval[]; messageIds: string[] }> {
   const coverageIntervals =
     input.coverage === undefined ? [] : normalizeCoverageWriteInput([input.coverage], new Date());
   const messageIds: string[] = [];
-  const normalizedMessages = input.messages.map(normalizeHistoricalMessage).filter(
-    (
-      update
-    ): update is NormalizedTelegramUpdate & {
-      message: NonNullable<NormalizedTelegramUpdate['message']>;
-    } => update?.message !== undefined
-  );
 
   await withTelegramHistoryCoverageLocks(
     input.coverage === undefined ? [] : [input.coverage.chatId],
     async () =>
       runtime.database.transaction(async (transaction) => {
-        for (const normalized of normalizedMessages) {
-          const result = await persistTelegramUpdate(transaction, normalized);
-          if (result.message) {
-            messageIds.push(normalized.message.messageId);
+        for (const message of input.messages) {
+          const stored = await persistTelegramMessage(transaction, message);
+          if (stored) {
+            messageIds.push(message.id);
           }
         }
 
@@ -205,8 +192,8 @@ async function persistMessagesAndCoverage(
       })
   );
 
-  for (const normalized of normalizedMessages) {
-    runtime.fileIndexer.enqueue(normalized, 'operator_page');
+  for (const message of input.messages) {
+    await runtime.files.recordMessageFiles(message, 'operator_page');
   }
   const coverageEventIntervals = await addCoverageMessageCounts(runtime, coverageIntervals);
   if (coverageIntervals.length > 0) {
@@ -234,28 +221,6 @@ async function addCoverageMessageCounts(
   }));
 }
 
-async function addPageCoverage(
-  runtime: TelegramRpcRuntime,
-  interval: {
-    chatId: string;
-    endAt: Date | undefined;
-    startAt: Date;
-  }
-): Promise<void> {
-  if (interval.endAt === undefined || interval.startAt >= interval.endAt) {
-    return;
-  }
-
-  await persistMessagesAndCoverage(runtime, {
-    coverage: {
-      chatId: interval.chatId,
-      endAt: interval.endAt,
-      startAt: interval.startAt
-    },
-    messages: []
-  });
-}
-
 async function readPersistedMessages(
   runtime: TelegramRpcRuntime,
   chatId: string,
@@ -270,10 +235,7 @@ async function readPersistedMessages(
     .select(readMessageSelection())
     .from(telegramMessages)
     .where(
-      and(
-        eq(telegramMessages.telegramChatId, chatId),
-        inArray(telegramMessages.telegramMessageId, orderedMessageIds)
-      )
+      and(eq(telegramMessages.chatId, chatId), inArray(telegramMessages.id, orderedMessageIds))
     );
   const rowsById = new Map(rows.map((row) => [row.telegramMessageId, row]));
   const orderedRows = orderedMessageIds
@@ -284,7 +246,7 @@ async function readPersistedMessages(
 }
 
 function observedIntervalStartAt(
-  messages: TdObject[],
+  messages: TdlibMessage[],
   reachedStart: boolean
 ): Date | null | undefined {
   if (reachedStart) {
@@ -293,6 +255,18 @@ function observedIntervalStartAt(
 
   const oldest = oldestMessageDate(messages);
   return oldest === undefined ? undefined : nextTelegramSecond(oldest);
+}
+
+function nextCursorForFetchedPage(
+  messages: TdlibMessage[],
+  anchorMessageId: number
+): number | undefined {
+  if (anchorMessageId !== 0) {
+    return oldestMessageIdOlderThan(messages, anchorMessageId);
+  }
+
+  const ids = messages.map(tdMessageId).filter((id): id is number => id !== undefined);
+  return ids.length === 0 ? undefined : Math.min(...ids);
 }
 
 function parseOptionalMessageId(value: string | undefined): number | undefined {
@@ -306,7 +280,7 @@ function parseOptionalMessageId(value: string | undefined): number | undefined {
   return parsed;
 }
 
-function isOlderThanCursor(message: TdObject, cursorMessageId: number): boolean {
+function isOlderThanCursor(message: TdlibMessage, cursorMessageId: number): boolean {
   const messageId = tdMessageId(message);
   return messageId !== undefined && messageId < cursorMessageId;
 }

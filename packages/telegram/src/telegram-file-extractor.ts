@@ -1,19 +1,33 @@
-import { createHash } from 'node:crypto';
-
-import type { JsonObject, JsonValue } from '@agentg/events/json';
+import type { JsonObject } from '@agentg/events/json';
 
 import { telegramChatRef, telegramMessageRef, telegramMessageModelId } from './model-refs.js';
-import type { NormalizedTelegramUpdate } from './normalize.js';
+import { tdlibFileOrUndefined, type TdlibFile } from './tdlib-schema/File.js';
 import type {
   ExtractedTelegramFileSlot,
-  TelegramFileSource,
   TelegramFileMediaKind,
   TelegramFileRenderKind
 } from './telegram-file-types.js';
 
+export type TelegramFileSlotUpdate = {
+  chat?: {
+    chat: JsonObject;
+    id: string;
+  };
+  contentUpdate?: {
+    chatId: string;
+    content?: JsonObject;
+    messageId: string;
+  };
+  message?: {
+    chatId: string;
+    content?: JsonObject;
+    messageId: string;
+  };
+};
+
 type TdFileFacts = {
   byteSize: number | null;
-  source: TelegramFileSource;
+  file: TdlibFile;
   tdlibFileId: number;
 };
 
@@ -24,10 +38,10 @@ type MessageOwner = {
 };
 
 export function extractTelegramFileSlots(
-  update: NormalizedTelegramUpdate
+  update: TelegramFileSlotUpdate
 ): ExtractedTelegramFileSlot[] {
   return [
-    ...(update.chat === undefined ? [] : extractChatFileSlots(update.chat.id, update.chat.raw)),
+    ...(update.chat === undefined ? [] : extractChatFileSlots(update.chat.id, update.chat.chat)),
     ...(update.message === undefined
       ? []
       : extractMessageFileSlots(
@@ -36,7 +50,7 @@ export function extractTelegramFileSlots(
             messageId: update.message.messageId,
             ownerId: telegramMessageModelId(update.message.chatId, update.message.messageId)
           },
-          asPlainRecord(update.message.raw.content)
+          asPlainRecord(update.message.content)
         )),
     ...(update.contentUpdate === undefined
       ? []
@@ -49,17 +63,13 @@ export function extractTelegramFileSlots(
               update.contentUpdate.messageId
             )
           },
-          asPlainRecord(update.contentUpdate.raw.new_content)
+          asPlainRecord(update.contentUpdate.content)
         ))
   ];
 }
 
-export function telegramFileSourceFingerprint(source: JsonObject): string {
-  return createHash('sha256').update(JSON.stringify(source)).digest('hex');
-}
-
-function extractChatFileSlots(chatId: string, raw: JsonObject): ExtractedTelegramFileSlot[] {
-  const photo = asPlainRecord(raw.photo);
+function extractChatFileSlots(chatId: string, chat: JsonObject): ExtractedTelegramFileSlot[] {
+  const photo = asPlainRecord(chat.photo);
   return [
     chatAvatarSlot(chatId, 'avatar.small', photo?.small),
     chatAvatarSlot(chatId, 'avatar.big', photo?.big)
@@ -284,6 +294,7 @@ function fileSlot(input: {
   return {
     byteSize: input.facts.byteSize,
     durationSeconds: input.durationSeconds ?? null,
+    file: input.facts.file,
     fileName: input.fileName ?? null,
     height: input.height ?? null,
     mediaKind: input.mediaKind,
@@ -291,37 +302,26 @@ function fileSlot(input: {
     owner: input.owner,
     renderKind: input.renderKind,
     slotKey: input.slotKey,
-    source: input.facts.source,
     tdlibFileId: input.facts.tdlibFileId,
     width: input.width ?? null
   };
 }
 
 function tdFileFacts(value: unknown): TdFileFacts | null {
-  const file = asPlainRecord(value);
-  const fileId = safeInteger(file?.id);
-  if (file === undefined || fileId === null) {
+  const file = tdlibFileOrUndefined(value);
+  if (file === undefined) {
     return null;
   }
 
-  const local = asPlainRecord(file.local);
-  const remote = asPlainRecord(file.remote);
-  const source = compactJsonObject({
-    kind: 'tdlibFile',
-    fileId,
-    localPath: safeString(local?.path),
-    remoteId: safeString(remote?.id),
-    remoteUniqueId: safeString(remote?.unique_id)
-  }) as TelegramFileSource;
-  const localDownloadedSize = safePositiveInteger(local?.downloaded_size);
+  const localDownloadedSize = safePositiveInteger(file.local.downloaded_size);
   return {
     byteSize:
       safePositiveInteger(file.size) ??
       safePositiveInteger(file.expected_size) ??
-      (local?.is_downloading_completed === true ? localDownloadedSize : null) ??
+      (file.local.is_downloading_completed ? localDownloadedSize : null) ??
       null,
-    source,
-    tdlibFileId: fileId
+    file,
+    tdlibFileId: file.id
   };
 }
 
@@ -336,12 +336,6 @@ function photoSizeScore(size: Record<string, unknown>): number {
   return (
     (safeInteger(size.width) ?? 0) * (safeInteger(size.height) ?? 0) +
     (safePositiveInteger(photo?.size) ?? safePositiveInteger(photo?.expected_size) ?? 0)
-  );
-}
-
-function compactJsonObject(value: Record<string, JsonValue | undefined>): JsonObject {
-  return Object.fromEntries(
-    Object.entries(value).filter((entry): entry is [string, JsonValue] => entry[1] !== undefined)
   );
 }
 
