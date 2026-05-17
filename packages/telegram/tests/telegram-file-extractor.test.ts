@@ -5,8 +5,7 @@ import {
   type TelegramFileSlotUpdate
 } from '../src/telegram-file-extractor.js';
 import { decideTelegramFilePolicy } from '../src/telegram-file-policy.js';
-import { tdlibUpdateNewChat } from '../src/tdlib-schema/UpdateNewChat.js';
-import { tdlibUpdateNewMessage } from '../src/tdlib-schema/UpdateNewMessage.js';
+import { telegramWireJsonObject } from '../src/telegram-wire.js';
 
 describe('Telegram file extraction', () => {
   it('extracts chat avatar slots from chat photos', () => {
@@ -408,25 +407,30 @@ describe('Telegram file policy', () => {
 });
 
 function chatSlotUpdate(input: unknown): TelegramFileSlotUpdate {
-  const update = tdlibUpdateNewChat(input);
+  const update = input as {
+    chat: {
+      id: number;
+    };
+  };
   return {
     chat: {
-      chat: update.chat.chat,
-      id: update.chat.id
+      chat: telegramWireJsonObject(update.chat),
+      id: String(update.chat.id)
     }
   };
 }
 
 function messageSlotUpdate(input: unknown): TelegramFileSlotUpdate {
-  const update = tdlibUpdateNewMessage({
-    _: 'updateNewMessage',
-    message: input
-  });
+  const update = input as {
+    chat_id: number;
+    content: unknown;
+    id: number;
+  };
   return {
     message: {
-      chatId: update.message.chat_id,
-      content: update.message.content,
-      messageId: update.message.id
+      chatId: String(update.chat_id),
+      content: telegramWireJsonObject(update.content),
+      messageId: String(update.id)
     }
   };
 }

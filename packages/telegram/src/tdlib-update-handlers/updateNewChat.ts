@@ -1,24 +1,25 @@
-import type { TdlibUpdateNewChat } from '../tdlib-schema/UpdateNewChat.js';
-import { persistTelegramChat } from '../telegram-chat-persistence.js';
-import { persistTelegramMessage } from '../telegram-message-persistence.js';
+import { recordChatFiles, storeChat } from '../telegram-store/Chat.js';
+import { recordMessageFiles, storeMessage } from '../telegram-store/Message.js';
+import type { TelegramWireNewChatUpdate } from '../telegram-wire.js';
 import type { TelegramUpdateHandlerContext } from './context.js';
 
 export async function handleUpdateNewChat(
   { database, events, files }: TelegramUpdateHandlerContext,
-  { chat }: TdlibUpdateNewChat
+  { chat }: TelegramWireNewChatUpdate
 ): Promise<void> {
+  const lastMessage = chat.last_message ?? null;
   await database.transaction(async (transaction) => {
-    if (chat.lastMessage !== null && chat.lastMessage !== undefined) {
-      await persistTelegramMessage(transaction, chat.lastMessage);
+    if (lastMessage !== null) {
+      await storeMessage(transaction, lastMessage);
     }
 
-    await persistTelegramChat(transaction, chat);
+    await storeChat(transaction, chat);
   });
 
-  await files.recordChatFiles(chat, 'live_update');
-  if (chat.lastMessage !== null && chat.lastMessage !== undefined) {
-    await files.recordMessageFiles(chat.lastMessage, 'live_update');
+  await recordChatFiles(files, chat, 'live_update');
+  if (lastMessage !== null) {
+    await recordMessageFiles(files, lastMessage, 'live_update');
   }
 
-  await events.publishTelegramChatDirectoryUpdated(chat.id);
+  await events.publishTelegramChatDirectoryUpdated(String(chat.id));
 }

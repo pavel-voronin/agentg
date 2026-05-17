@@ -31,10 +31,7 @@ export const searchMessages = query((runtime: TelegramRpcRuntime) =>
         .select(readMessageSelection())
         .from(telegramMessages)
         .where(where)
-        .orderBy(
-          desc(telegramMessages.date),
-          sql`${telegramMessages.id}::bigint desc`
-        )
+        .orderBy(desc(telegramMessages.date), sql`${telegramMessages.id}::bigint desc`)
         .limit(limit);
 
       return {

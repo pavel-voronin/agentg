@@ -15,17 +15,23 @@ import {
   telegramMessages,
   telegramUsers
 } from '../../schema.js';
-import { tdlibChat, tdlibChats } from '../../tdlib-schema/Chat.js';
-import { tdlibIdNumber, type TdlibObject } from '../../tdlib-schema/common.js';
-import { tdlibMessage, type TdlibMessage } from '../../tdlib-schema/Message.js';
 import {
   readTelegramFileRefsForOwners,
   type TelegramFileOwnerKey
 } from '../../telegram-file-read.js';
-import { persistTelegramChat } from '../../telegram-chat-persistence.js';
-import { persistTelegramMessage } from '../../telegram-message-persistence.js';
+import { storeChat, telegramChatType } from '../../telegram-store/Chat.js';
+import { storeMessage } from '../../telegram-store/Message.js';
 import { invokeTdlibWithEvents, type TdlibInvokeOptions } from '../../telegram-operation-events.js';
 import { telegramTdlibPriorities } from '../../telegram-tdlib-priority.js';
+import {
+  telegramWireDate,
+  telegramWireIdNumber,
+  telegramWireJsonObject,
+  type TelegramWireChat,
+  type TelegramWireChats,
+  type TelegramWireMessage,
+  type TelegramWireObject
+} from '../../telegram-wire.js';
 import type {
   TelegramChatDirectoryEntry,
   TelegramChatPlacement,
@@ -105,23 +111,25 @@ export async function discoverHistoryChats(
     if (chat === undefined) {
       continue;
     }
-    if (!isListableChat(chat.chat)) {
+    if (!isListableChat(telegramWireJsonObject(chat))) {
       continue;
     }
+    const lastMessage = chat.last_message ?? null;
 
     await database.transaction(async (transaction) => {
-      if (chat.lastMessage !== null && chat.lastMessage !== undefined) {
-        await persistTelegramMessage(transaction, chat.lastMessage);
+      if (lastMessage !== null) {
+        await storeMessage(transaction, lastMessage);
       }
 
-      await persistTelegramChat(transaction, chat);
+      await storeChat(transaction, chat);
     });
-    if (isHistorySyncChatType(chat.type)) {
+    const type = telegramChatType(chat);
+    if (isHistorySyncChatType(type)) {
       chats.push({
         _model: 'telegram.chat',
-        id: chat.id,
+        id: String(chat.id),
         title: chat.title,
-        type: chat.type
+        type
       });
     }
   }
@@ -154,20 +162,18 @@ export async function getLastMessageNoLaterThan(
   chatId: number,
   end: Date,
   options: TdlibInvokeOptions = {}
-): Promise<TdlibMessage | undefined> {
+): Promise<TelegramWireMessage | undefined> {
   try {
-    return tdlibMessage(
-      await invokeTdlib(
-        eventBus,
-        client,
-        {
-          _: 'getChatMessageByDate',
-          chat_id: chatId,
-          date: Math.floor((end.getTime() - 1) / 1000)
-        },
-        options
-      )
-    );
+    return (await invokeTdlib(
+      eventBus,
+      client,
+      {
+        _: 'getChatMessageByDate',
+        chat_id: chatId,
+        date: Math.floor((end.getTime() - 1) / 1000)
+      },
+      options
+    )) as TelegramWireMessage;
   } catch (error) {
     if (isTdlibNotFound(error)) {
       return undefined;
@@ -180,7 +186,7 @@ export async function getLastMessageNoLaterThan(
 export async function invokeTdlib(
   eventBus: EventBus,
   client: TelegramClient,
-  request: TdlibObject,
+  request: TelegramWireObject,
   options: TdlibInvokeOptions = {}
 ): Promise<unknown> {
   for (;;) {
@@ -506,20 +512,20 @@ export function chatTypeCounts(entries: TelegramChatDirectoryEntry[]): TelegramC
     .map(([type, count]) => ({ count, type }));
 }
 
-export function tdMessageId(message: TdlibMessage | undefined): number | undefined {
-  return tdlibIdNumber(message?.id);
+export function tdMessageId(message: TelegramWireMessage | undefined): number | undefined {
+  return telegramWireIdNumber(message?.id);
 }
 
-export function tdMessageDate(message: TdlibMessage | undefined): Date | undefined {
-  return message?.date;
+export function tdMessageDate(message: TelegramWireMessage | undefined): Date | undefined {
+  return telegramWireDate(message?.date);
 }
 
-export function isBeforeInterval(message: TdlibMessage, startAt: Date): boolean {
+export function isBeforeInterval(message: TelegramWireMessage, startAt: Date): boolean {
   const messageDate = tdMessageDate(message);
   return messageDate !== undefined && messageDate < startAt;
 }
 
-export function oldestMessageDate(messages: TdlibMessage[]): Date | undefined {
+export function oldestMessageDate(messages: TelegramWireMessage[]): Date | undefined {
   const dates = messages.map(tdMessageDate).filter((date): date is Date => date !== undefined);
   const [first, ...rest] = dates;
   return first === undefined
@@ -528,7 +534,7 @@ export function oldestMessageDate(messages: TdlibMessage[]): Date | undefined {
 }
 
 export function oldestMessageIdOlderThan(
-  messages: TdlibMessage[],
+  messages: TelegramWireMessage[],
   cursorMessageId: number
 ): number | undefined {
   const ids = messages
@@ -705,20 +711,18 @@ async function getChatIds(
   chatList: ChatListKind,
   limit: number
 ): Promise<number[]> {
-  let chats: ReturnType<typeof tdlibChats> | undefined;
+  let chats: TelegramWireChats | undefined;
   try {
-    chats = tdlibChats(
-      await invokeTdlib(
-        eventBus,
-        client,
-        {
-          _: 'getChats',
-          chat_list: toTdChatList(chatList),
-          limit
-        },
-        { priority: telegramTdlibPriorities.maximum }
-      )
-    );
+    chats = (await invokeTdlib(
+      eventBus,
+      client,
+      {
+        _: 'getChats',
+        chat_list: toTdChatList(chatList),
+        limit
+      },
+      { priority: telegramTdlibPriorities.maximum }
+    )) as TelegramWireChats;
   } catch (error) {
     if (isOptionalChatListNotFound(chatList, error)) {
       return [];
@@ -747,18 +751,16 @@ async function getChatOrUndefined(
   client: TelegramClient,
   eventBus: EventBus,
   chatId: number
-): Promise<ReturnType<typeof tdlibChat> | undefined> {
+): Promise<TelegramWireChat | undefined> {
   try {
-    return tdlibChat(
-      await invokeTdlib(
-        eventBus,
-        client,
-        { _: 'getChat', chat_id: chatId },
-        {
-          priority: telegramTdlibPriorities.maximum
-        }
-      )
-    );
+    return (await invokeTdlib(
+      eventBus,
+      client,
+      { _: 'getChat', chat_id: chatId },
+      {
+        priority: telegramTdlibPriorities.maximum
+      }
+    )) as TelegramWireChat;
   } catch (error) {
     if (isTdlibNotFound(error)) {
       return undefined;
@@ -1188,7 +1190,7 @@ function orSql(first: SQL, second: SQL): SQL {
   return sql`(${first} or ${second})`;
 }
 
-function toTdChatList(chatList: ChatListKind): TdlibObject {
+function toTdChatList(chatList: ChatListKind): TelegramWireObject {
   switch (chatList.kind) {
     case 'main':
       return { _: 'chatListMain' };

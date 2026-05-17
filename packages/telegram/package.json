@@ -31,6 +31,7 @@
     "@agentg/infra": "file:../infra",
     "@agentg/rpc": "file:../rpc",
     "@agentg/service-directory": "file:../service-directory",
+    "@prebuilt-tdlib/types": "0.1008063.0",
     "@trpc/client": "^11.17.0",
     "@trpc/server": "^11.17.0",
     "dotenv": "17.4.2",

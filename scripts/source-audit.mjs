@@ -525,7 +525,7 @@ function auditTelegramDateStorageContract() {
   }
 
   for (const rel of [
-    'packages/telegram/src/telegram-message-persistence.ts',
+    'packages/telegram/src/telegram-store/Message.ts',
     'packages/telegram/src/telegram-message-counts.ts'
   ]) {
     const source = readFileSync(join(root, rel), 'utf8');
@@ -597,6 +597,7 @@ function auditTdlibContractGeneration(files) {
     );
   }
   auditNoTdlibMarkdownArtifacts(files);
+  auditTelegramWireBoundary(files);
   if (dbSchemaGenerator.includes('tables.md')) {
     failures.push(
       'Telegram DB schema generator must read tdlib-storage-review.json, not tables.md'
@@ -634,6 +635,33 @@ function auditTdlibContractGeneration(files) {
       if (source.includes(token)) {
         failures.push(`old TDLib routing artifact reference is not allowed: ${rel} -> ${token}`);
       }
+    }
+  }
+}
+
+function auditTelegramWireBoundary(files) {
+  const boundaryPrefixes = [
+    'packages/telegram/src/ingestion.ts',
+    'packages/telegram/src/rpc/procedures/fetchMessagesPage.ts',
+    'packages/telegram/src/rpc/procedures/support.ts',
+    'packages/telegram/src/tdlib-update-handlers/',
+    'packages/telegram/src/telegram-file-extractor.ts',
+    'packages/telegram/src/telegram-file-subsystem.ts',
+    'packages/telegram/src/telegram-history-fetch.ts',
+    'packages/telegram/src/telegram-store/'
+  ];
+
+  for (const file of files) {
+    const rel = toRel(file);
+    if (!boundaryPrefixes.some((prefix) => rel === prefix || rel.startsWith(prefix))) {
+      continue;
+    }
+
+    const source = readFileSync(file, 'utf8');
+    if (source.includes('/tdlib-schema/')) {
+      failures.push(
+        `Telegram live storage path must use generated wire types, not local schemas: ${rel}`
+      );
     }
   }
 }
@@ -728,7 +756,7 @@ function auditTdlibStorageReviewParserContract(storageReviewPath) {
   }
 
   const code = [
-    "(async () => {",
+    '(async () => {',
     "  const { readStorageReviewState } = await import('./packages/telegram/src/tdlib-docs-server/storageReview.ts');",
     `  await readStorageReviewState(${JSON.stringify(storageReviewPath)});`,
     '})().catch((error) => {',
@@ -744,9 +772,7 @@ function auditTdlibStorageReviewParserContract(storageReviewPath) {
       stdio: 'pipe'
     });
   } catch (error) {
-    failures.push(
-      `TDLib storage review must pass the dev-server parser: ${execErrorText(error)}`
-    );
+    failures.push(`TDLib storage review must pass the dev-server parser: ${execErrorText(error)}`);
   }
 }
 

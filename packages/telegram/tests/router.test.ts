@@ -307,7 +307,11 @@ function positionRow(chatId: string, listKey: string, order: string) {
 function tdlibTextMessage(chatId: string, messageId: string, text: string, date: number) {
   return {
     _: 'message',
+    author_signature: '',
+    auto_delete_in: 0,
+    can_be_saved: true,
     chat_id: Number(chatId),
+    contains_unread_mention: false,
     content: {
       _: 'messageText',
       text: {
@@ -317,7 +321,29 @@ function tdlibTextMessage(chatId: string, messageId: string, text: string, date:
       }
     },
     date,
-    id: Number(messageId)
+    edit_date: 0,
+    effect_id: '0',
+    has_timestamped_media: false,
+    id: Number(messageId),
+    is_channel_post: false,
+    is_from_offline: false,
+    is_outgoing: false,
+    is_paid_star_suggested_post: false,
+    is_paid_ton_suggested_post: false,
+    is_pinned: false,
+    media_album_id: '0',
+    paid_message_star_count: 0,
+    sender_boost_count: 0,
+    sender_business_bot_user_id: 0,
+    sender_id: {
+      _: 'messageSenderUser',
+      user_id: 30
+    },
+    sender_tag: '',
+    self_destruct_in: 0,
+    summary_language_code: '',
+    unread_reactions: [],
+    via_bot_user_id: 0
   };
 }
 

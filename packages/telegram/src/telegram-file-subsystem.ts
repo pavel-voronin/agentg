@@ -25,11 +25,15 @@ import {
   telegramMessages,
   telegramTdlibFiles
 } from './schema.js';
-import { tdlibFile, type TdlibFile } from './tdlib-schema/File.js';
-import type { TdlibChat } from './tdlib-schema/Chat.js';
-import type { TdlibMessage } from './tdlib-schema/Message.js';
-import type { TdlibUpdateFile } from './tdlib-schema/UpdateFile.js';
-import type { TdlibUpdateMessageContent } from './tdlib-schema/UpdateMessageContent.js';
+import {
+  telegramWireFileOrUndefined,
+  telegramWireJsonObject,
+  type TelegramWireChat,
+  type TelegramWireFile,
+  type TelegramWireFileUpdate,
+  type TelegramWireMessage,
+  type TelegramWireMessageContentUpdate
+} from './telegram-wire.js';
 import {
   extractTelegramFileSlots,
   type TelegramFileSlotUpdate
@@ -63,13 +67,16 @@ import {
 export type TelegramFileSubsystem = {
   close(): void;
   getQueueStats(): ReturnType<typeof readTelegramFileQueueStats>;
-  handleUpdateFile(update: TdlibUpdateFile): Promise<void>;
-  recordChatFiles(chat: TdlibChat, cause: TelegramMediaDownloadPolicyCause): Promise<void>;
+  handleUpdateFile(update: TelegramWireFileUpdate): Promise<void>;
+  recordChatFiles(chat: TelegramWireChat, cause: TelegramMediaDownloadPolicyCause): Promise<void>;
   recordMessageContentFiles(
-    update: TdlibUpdateMessageContent,
+    update: TelegramWireMessageContentUpdate,
     cause: TelegramMediaDownloadPolicyCause
   ): Promise<void>;
-  recordMessageFiles(message: TdlibMessage, cause: TelegramMediaDownloadPolicyCause): Promise<void>;
+  recordMessageFiles(
+    message: TelegramWireMessage,
+    cause: TelegramMediaDownloadPolicyCause
+  ): Promise<void>;
   requestFile(input: {
     owner: TelegramFileOwner;
     slotKey: string;
@@ -281,8 +288,8 @@ export function createTelegramFileSubsystem(
         options,
         {
           chat: {
-            chat: chat.chat,
-            id: chat.id
+            chat: telegramWireJsonObject(chat),
+            id: String(chat.id)
           }
         },
         cause
@@ -293,9 +300,9 @@ export function createTelegramFileSubsystem(
         options,
         {
           contentUpdate: {
-            chatId: update.chat_id,
-            content: update.new_content,
-            messageId: update.message_id
+            chatId: String(update.chat_id),
+            content: telegramWireJsonObject(update.new_content),
+            messageId: String(update.message_id)
           }
         },
         cause
@@ -306,9 +313,9 @@ export function createTelegramFileSubsystem(
         options,
         {
           message: {
-            chatId: message.chat_id,
-            content: message.content,
-            messageId: message.id
+            chatId: String(message.chat_id),
+            content: telegramWireJsonObject(message.content),
+            messageId: String(message.id)
           }
         },
         cause
@@ -516,7 +523,7 @@ async function upsertExtractedSlot(
   };
 }
 
-async function upsertTdlibFile(database: TelegramDatabase, file: TdlibFile): Promise<void> {
+async function upsertTdlibFile(database: TelegramDatabase, file: TelegramWireFile): Promise<void> {
   await database
     .insert(telegramTdlibFiles)
     .values(tdlibFileRow(file))
@@ -529,7 +536,7 @@ async function upsertTdlibFile(database: TelegramDatabase, file: TdlibFile): Pro
     });
 }
 
-function tdlibFileRow(file: TdlibFile): typeof telegramTdlibFiles.$inferInsert {
+function tdlibFileRow(file: TelegramWireFile): typeof telegramTdlibFiles.$inferInsert {
   return {
     expectedSize: nullablePositive(file.expected_size),
     localCanBeDeleted: file.local.can_be_deleted,
@@ -613,7 +620,7 @@ async function enqueueTelegramFileAssetDownload(
 
 async function handleTdlibFileSnapshot(
   database: TelegramDatabase,
-  file: TdlibFile
+  file: TelegramWireFile
 ): Promise<string[]> {
   await upsertTdlibFile(database, file);
   const updated = await database
@@ -914,12 +921,12 @@ async function reconcileStaleFileDownload(
 async function dispatchTdlibFileDownload(
   options: TelegramFileSubsystemOptions,
   row: TelegramFileDownloadRow
-): Promise<TdlibFile | undefined> {
+): Promise<TelegramWireFile | undefined> {
   if (row.latestTdlibFileId === null) {
     throw new Error(`Telegram file asset has no TDLib file id: ${row.assetKey}`);
   }
 
-  return parseOptionalTdlibFile(
+  return telegramWireFileOrUndefined(
     await invokeTdlibWithEvents(
       options.eventBus,
       options.client,
@@ -934,11 +941,11 @@ async function dispatchTdlibFileDownload(
 async function getTdlibFile(
   options: TelegramFileSubsystemOptions,
   row: TelegramFileDownloadRow
-): Promise<TdlibFile | undefined> {
+): Promise<TelegramWireFile | undefined> {
   if (row.latestTdlibFileId === null) {
     throw new Error(`Telegram file asset has no TDLib file id: ${row.assetKey}`);
   }
-  return parseOptionalTdlibFile(
+  return telegramWireFileOrUndefined(
     await invokeTdlibWithEvents(
       options.eventBus,
       options.client,
@@ -1251,12 +1258,7 @@ async function publishTelegramFileOwnerUpdated(
   const [message] = await options.database
     .select(readMessageSelection())
     .from(telegramMessages)
-    .where(
-      and(
-        eq(telegramMessages.chatId, parts.chatId),
-        eq(telegramMessages.id, parts.messageId)
-      )
-    )
+    .where(and(eq(telegramMessages.chatId, parts.chatId), eq(telegramMessages.id, parts.messageId)))
     .limit(1);
   const [readMessage] = await toReadMessages(
     options.database,
@@ -1276,7 +1278,7 @@ async function publishTelegramFileQueueUpdated(
 }
 
 function completedFileAssetFromTdlibFile(
-  file: TdlibFile | undefined
+  file: TelegramWireFile | undefined
 ): Omit<TelegramCompletedFileAsset, 'assetKey'> | null {
   if (file?.local.is_downloading_completed === true && file.local.path.length > 0) {
     return {
@@ -1287,15 +1289,7 @@ function completedFileAssetFromTdlibFile(
   return null;
 }
 
-function parseOptionalTdlibFile(value: unknown): TdlibFile | undefined {
-  try {
-    return tdlibFile(value);
-  } catch {
-    return undefined;
-  }
-}
-
-function telegramFileAssetKey(file: TdlibFile): string {
+function telegramFileAssetKey(file: TelegramWireFile): string {
   return file.remote.unique_id.length > 0
     ? `telegram:${file.remote.unique_id}`
     : `tdlib:${String(file.id)}`;

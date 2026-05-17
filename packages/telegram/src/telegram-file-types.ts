@@ -1,5 +1,5 @@
 import type { TelegramChatModelRef, TelegramMessageModelRef } from './model-refs.js';
-import type { TdlibFile } from './tdlib-schema/File.js';
+import type { TelegramWireFile } from './telegram-wire.js';
 
 export const telegramFileStatuses = ['known', 'queued', 'downloading', 'ready', 'failed'] as const;
 export const telegramFileMediaKinds = [
@@ -25,7 +25,7 @@ export type TelegramFileOwnerKey = {
 export type ExtractedTelegramFileSlot = {
   byteSize: number | null;
   durationSeconds: number | null;
-  file: TdlibFile;
+  file: TelegramWireFile;
   fileName: string | null;
   height: number | null;
   mediaKind: TelegramFileMediaKind;

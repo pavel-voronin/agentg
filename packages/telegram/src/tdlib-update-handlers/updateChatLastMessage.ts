@@ -1,23 +1,24 @@
-import type { TdlibUpdateChatLastMessage } from '../tdlib-schema/UpdateChatLastMessage.js';
-import { persistTelegramChatLastMessage } from '../telegram-chat-persistence.js';
-import { persistTelegramMessage } from '../telegram-message-persistence.js';
+import { storeChatLastMessage } from '../telegram-store/Chat.js';
+import { recordMessageFiles, storeMessage } from '../telegram-store/Message.js';
+import type { TelegramWireChatLastMessageUpdate } from '../telegram-wire.js';
 import type { TelegramUpdateHandlerContext } from './context.js';
 
 export async function handleUpdateChatLastMessage(
   { database, events, files }: TelegramUpdateHandlerContext,
-  update: TdlibUpdateChatLastMessage
+  update: TelegramWireChatLastMessageUpdate
 ): Promise<void> {
+  const lastMessage = update.last_message ?? null;
   await database.transaction(async (transaction) => {
-    if (update.lastMessage !== null) {
-      await persistTelegramMessage(transaction, update.lastMessage);
+    if (lastMessage !== null) {
+      await storeMessage(transaction, lastMessage);
     }
 
-    await persistTelegramChatLastMessage(transaction, update);
+    await storeChatLastMessage(transaction, update);
   });
 
-  if (update.lastMessage !== null) {
-    await files.recordMessageFiles(update.lastMessage, 'live_update');
+  if (lastMessage !== null) {
+    await recordMessageFiles(files, lastMessage, 'live_update');
   }
 
-  await events.publishTelegramChatDirectoryUpdated(update.chatId);
+  await events.publishTelegramChatDirectoryUpdated(String(update.chat_id));
 }

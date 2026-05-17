@@ -1,10 +1,6 @@
-import type { TdlibUpdateAuthorizationState } from '../tdlib-schema/UpdateAuthorizationState.js';
+import { recordAuthorizationState } from '../telegram-store/AuthorizationState.js';
+import type { TelegramWireAuthorizationStateUpdate } from '../telegram-wire.js';
 
-export function handleUpdateAuthorizationState(update: TdlibUpdateAuthorizationState): void {
-  console.log(
-    JSON.stringify({
-      event: 'telegram.authorization_state',
-      state: update.authorization_state._
-    })
-  );
+export function handleUpdateAuthorizationState(update: TelegramWireAuthorizationStateUpdate): void {
+  recordAuthorizationState(update);
 }

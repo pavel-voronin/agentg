@@ -13,7 +13,7 @@ import {
 import type {
   TelegramMessageServiceAction,
   TelegramMessageTextEntity
-} from '../tdlib-schema/Message.js';
+} from '../telegram-store/Message.js';
 import { getDirectoryEntryByChatId } from '../rpc/procedures/support.js';
 
 export type TelegramMessageCreatedEventInput = {

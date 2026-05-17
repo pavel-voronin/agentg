@@ -1,9 +1,10 @@
-import type { TdlibUpdateFile } from '../tdlib-schema/UpdateFile.js';
+import { storeFileUpdate } from '../telegram-store/File.js';
+import type { TelegramWireFileUpdate } from '../telegram-wire.js';
 import type { TelegramUpdateHandlerContext } from './context.js';
 
 export async function handleUpdateFile(
   { files }: TelegramUpdateHandlerContext,
-  update: TdlibUpdateFile
+  update: TelegramWireFileUpdate
 ): Promise<void> {
-  await files.handleUpdateFile(update);
+  await storeFileUpdate(files, update);
 }

@@ -1,7 +1,7 @@
 import type { JsonObject } from '@agentg/events/json';
 
 import { telegramChatRef, telegramMessageRef, telegramMessageModelId } from './model-refs.js';
-import { tdlibFileOrUndefined, type TdlibFile } from './tdlib-schema/File.js';
+import { telegramWireFileOrUndefined, type TelegramWireFile } from './telegram-wire.js';
 import type {
   ExtractedTelegramFileSlot,
   TelegramFileMediaKind,
@@ -27,7 +27,7 @@ export type TelegramFileSlotUpdate = {
 
 type TdFileFacts = {
   byteSize: number | null;
-  file: TdlibFile;
+  file: TelegramWireFile;
   tdlibFileId: number;
 };
 
@@ -308,7 +308,7 @@ function fileSlot(input: {
 }
 
 function tdFileFacts(value: unknown): TdFileFacts | null {
-  const file = tdlibFileOrUndefined(value);
+  const file = telegramWireFileOrUndefined(value);
   if (file === undefined) {
     return null;
   }

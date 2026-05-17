@@ -1,7 +1,6 @@
 import { createTelegramHistoryCoverageChangedEvent } from './integration-events.js';
 
-import { tdlibMessages, type TdlibMessage } from './tdlib-schema/Message.js';
-import { persistTelegramMessage } from './telegram-message-persistence.js';
+import { recordMessageFiles, storeMessage } from './telegram-store/Message.js';
 import {
   addTelegramHistoryCoverageBatch,
   listTelegramHistoryCoverage,
@@ -40,6 +39,7 @@ import {
   tdMessageId
 } from './rpc/procedures/support.js';
 import { telegramTdlibPriorities, type TelegramTdlibPriority } from './telegram-tdlib-priority.js';
+import type { TelegramWireMessage, TelegramWireMessages } from './telegram-wire.js';
 
 export type TelegramHistoryPageCheckpointInput = {
   crossedStart: boolean;
@@ -126,24 +126,22 @@ export async function fetchTelegramHistoryPage(
     cursorMessageId = anchorMessageId;
   }
 
-  const history = tdlibMessages(
-    await invokeTdlib(
-      runtime.eventBus,
-      runtime.client,
-      {
-        _: 'getChatHistory',
-        chat_id: chatId,
-        from_message_id: cursorMessageId,
-        limit,
-        offset: 0,
-        only_local: false
-      },
-      {
-        priority: options.priority
-      }
-    )
-  );
-  const concreteMessages = history.messages;
+  const history = (await invokeTdlib(
+    runtime.eventBus,
+    runtime.client,
+    {
+      _: 'getChatHistory',
+      chat_id: chatId,
+      from_message_id: cursorMessageId,
+      limit,
+      offset: 0,
+      only_local: false
+    },
+    {
+      priority: options.priority
+    }
+  )) as TelegramWireMessages;
+  const concreteMessages = history.messages.filter(isFetchedMessage);
 
   if (concreteMessages.length === 0) {
     const coveredInterval = await addAndPublishCoverage(runtime, {
@@ -381,7 +379,7 @@ async function persistPageAndCoverage(
   runtime: TelegramRpcRuntime,
   input: {
     coveredInterval: TelegramHistoryCoverageInterval | undefined;
-    messages: TdlibMessage[];
+    messages: TelegramWireMessage[];
     request: {
       chatId: string;
       endAt: Date;
@@ -397,18 +395,20 @@ async function persistPageAndCoverage(
     input.coveredInterval === undefined
       ? []
       : normalizeCoverageWriteInput([input.coveredInterval], provedAt);
-  const messages = input.messages.filter(
-    (message) =>
-      message.date !== undefined &&
-      message.date >= input.request.startAt &&
-      message.date < input.request.endAt
-  );
+  const messages = input.messages.filter((message) => {
+    const messageDate = tdMessageDate(message);
+    return (
+      messageDate !== undefined &&
+      messageDate >= input.request.startAt &&
+      messageDate < input.request.endAt
+    );
+  });
 
   let storedMessages = 0;
   await withTelegramHistoryCoverageLocks([input.request.chatId], async () =>
     runtime.database.transaction(async (transaction) => {
       for (const message of messages) {
-        const stored = await persistTelegramMessage(transaction, message);
+        const stored = await storeMessage(transaction, message);
         if (stored) {
           storedMessages += 1;
         }
@@ -421,7 +421,7 @@ async function persistPageAndCoverage(
   );
 
   for (const message of messages) {
-    await runtime.files.recordMessageFiles(message, 'history_fetch');
+    await recordMessageFiles(runtime.files, message, 'history_fetch');
   }
 
   return {
@@ -506,6 +506,10 @@ function intervalToResponse(interval: TelegramHistoryInterval): { endAt: string;
     endAt: normalized.endAt.toISOString(),
     startAt: normalized.startAt.toISOString()
   };
+}
+
+function isFetchedMessage(value: TelegramWireMessage | null): value is TelegramWireMessage {
+  return value !== null;
 }
 
 async function delay(milliseconds: number): Promise<void> {

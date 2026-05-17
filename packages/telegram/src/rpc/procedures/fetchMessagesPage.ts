@@ -3,8 +3,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 
 import { createTelegramHistoryCoverageChangedEvent } from '../../integration-events.js';
 import { telegramChats, telegramMessages } from '../../schema.js';
-import { tdlibMessages, type TdlibMessage } from '../../tdlib-schema/Message.js';
-import { persistTelegramMessage } from '../../telegram-message-persistence.js';
+import { recordMessageFiles, storeMessage } from '../../telegram-store/Message.js';
 import {
   normalizeCoverageWriteInput,
   withTelegramHistoryCoverageLocks,
@@ -15,6 +14,7 @@ import {
 import { countTelegramMessagesInIntervals } from '../../telegram-message-counts.js';
 import { TELEGRAM_HISTORY_PAST_BOUNDARY } from '../../telegram-history-time.js';
 import { telegramTdlibPriorities } from '../../telegram-tdlib-priority.js';
+import type { TelegramWireMessage, TelegramWireMessages } from '../../telegram-wire.js';
 import {
   telegramFetchMessagesPageInputSchema,
   telegramFetchMessagesPageOutputSchema,
@@ -62,24 +62,22 @@ export const fetchMessagesPage = mutation((runtime: TelegramRpcRuntime) =>
           : await readMessagePageEndAt(runtime, input.chatId, input.beforeMessageId);
       const anchorMessageId = cursorMessageId ?? initialAnchor?.messageId ?? 0;
 
-      const history = tdlibMessages(
-        await invokeTdlib(
-          runtime.eventBus,
-          runtime.client,
-          {
-            _: 'getChatHistory',
-            chat_id: chatId,
-            from_message_id: anchorMessageId,
-            limit,
-            offset: 0,
-            only_local: false
-          },
-          {
-            priority: telegramTdlibPriorities.high
-          }
-        )
-      );
-      const fetchedMessages = history.messages;
+      const history = (await invokeTdlib(
+        runtime.eventBus,
+        runtime.client,
+        {
+          _: 'getChatHistory',
+          chat_id: chatId,
+          from_message_id: anchorMessageId,
+          limit,
+          offset: 0,
+          only_local: false
+        },
+        {
+          priority: telegramTdlibPriorities.high
+        }
+      )) as TelegramWireMessages;
+      const fetchedMessages = history.messages.filter(isDefined);
       const pageMessages =
         cursorMessageId === undefined
           ? fetchedMessages
@@ -168,7 +166,7 @@ async function persistMessagesAndCoverage(
   runtime: TelegramRpcRuntime,
   input: {
     coverage: TelegramHistoryCoverageInterval | undefined;
-    messages: TdlibMessage[];
+    messages: TelegramWireMessage[];
   }
 ): Promise<{ coverageIntervals: TelegramHistoryCoverageEventInterval[]; messageIds: string[] }> {
   const coverageIntervals =
@@ -180,9 +178,9 @@ async function persistMessagesAndCoverage(
     async () =>
       runtime.database.transaction(async (transaction) => {
         for (const message of input.messages) {
-          const stored = await persistTelegramMessage(transaction, message);
+          const stored = await storeMessage(transaction, message);
           if (stored) {
-            messageIds.push(message.id);
+            messageIds.push(String(message.id));
           }
         }
 
@@ -193,7 +191,7 @@ async function persistMessagesAndCoverage(
   );
 
   for (const message of input.messages) {
-    await runtime.files.recordMessageFiles(message, 'operator_page');
+    await recordMessageFiles(runtime.files, message, 'operator_page');
   }
   const coverageEventIntervals = await addCoverageMessageCounts(runtime, coverageIntervals);
   if (coverageIntervals.length > 0) {
@@ -246,7 +244,7 @@ async function readPersistedMessages(
 }
 
 function observedIntervalStartAt(
-  messages: TdlibMessage[],
+  messages: TelegramWireMessage[],
   reachedStart: boolean
 ): Date | null | undefined {
   if (reachedStart) {
@@ -258,7 +256,7 @@ function observedIntervalStartAt(
 }
 
 function nextCursorForFetchedPage(
-  messages: TdlibMessage[],
+  messages: TelegramWireMessage[],
   anchorMessageId: number
 ): number | undefined {
   if (anchorMessageId !== 0) {
@@ -280,7 +278,7 @@ function parseOptionalMessageId(value: string | undefined): number | undefined {
   return parsed;
 }
 
-function isOlderThanCursor(message: TdlibMessage, cursorMessageId: number): boolean {
+function isOlderThanCursor(message: TelegramWireMessage, cursorMessageId: number): boolean {
   const messageId = tdMessageId(message);
   return messageId !== undefined && messageId < cursorMessageId;
 }
@@ -295,6 +293,6 @@ function ceilToTelegramSecond(date: Date): Date {
   return new Date(Math.ceil(date.getTime() / TELEGRAM_SECOND_MS) * TELEGRAM_SECOND_MS);
 }
 
-function isDefined<T>(value: T | undefined): value is T {
-  return value !== undefined;
+function isDefined<T>(value: T | null | undefined): value is T {
+  return value !== null && value !== undefined;
 }

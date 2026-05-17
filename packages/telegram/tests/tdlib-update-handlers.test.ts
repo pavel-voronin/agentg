@@ -2,22 +2,25 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { TelegramDatabase } from '../src/database.js';
 import { telegramChats, telegramFileSlots, telegramMessages } from '../src/schema.js';
-import { tdlibUpdateChatLastMessage } from '../src/tdlib-schema/UpdateChatLastMessage.js';
-import { tdlibUpdateDeleteMessages } from '../src/tdlib-schema/UpdateDeleteMessages.js';
-import { tdlibUpdateNewChat } from '../src/tdlib-schema/UpdateNewChat.js';
-import { tdlibUpdateNewMessage } from '../src/tdlib-schema/UpdateNewMessage.js';
 import type { TelegramUpdateHandlerContext } from '../src/tdlib-update-handlers/context.js';
 import { handleUpdateChatLastMessage } from '../src/tdlib-update-handlers/updateChatLastMessage.js';
 import { handleUpdateDeleteMessages } from '../src/tdlib-update-handlers/updateDeleteMessages.js';
 import { handleUpdateNewChat } from '../src/tdlib-update-handlers/updateNewChat.js';
 import { handleUpdateNewMessage } from '../src/tdlib-update-handlers/updateNewMessage.js';
+import type {
+  TelegramWireChatLastMessageUpdate,
+  TelegramWireDeleteMessagesUpdate,
+  TelegramWireMessage,
+  TelegramWireNewChatUpdate,
+  TelegramWireNewMessageUpdate
+} from '../src/telegram-wire.js';
 
 describe('TDLib update handlers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('persists updateNewMessage with direct handler logic', async () => {
+  it('persists updateNewMessage through message type operations', async () => {
     const {
       context,
       insert,
@@ -27,12 +30,11 @@ describe('TDLib update handlers', () => {
       recordLiveMessage,
       values
     } = createHandlerContext();
-    const message = {
+    const message = wireMessage({
       _: 'message',
       author_signature: 'channel admin',
       can_be_saved: true,
       chat_id: 20,
-      contains_unread_poll_votes: false,
       content: {
         _: 'messageText',
         text: {
@@ -70,9 +72,9 @@ describe('TDLib update handlers', () => {
         forum_topic_id: 7
       },
       via_bot_user_id: 40
-    };
+    });
 
-    const update = tdlibUpdateNewMessage({
+    const update = wireUpdateNewMessage({
       _: 'updateNewMessage',
       message
     });
@@ -84,7 +86,6 @@ describe('TDLib update handlers', () => {
         authorSignature: 'channel admin',
         canBeSaved: true,
         chatId: '20',
-        containsUnreadPollVotes: false,
         content: expectObjectContaining({
           _: 'messageText'
         }),
@@ -99,7 +100,7 @@ describe('TDLib update handlers', () => {
         senderBoostCount: 2,
         senderId: expectObjectContaining({
           _: 'messageSenderUser',
-          user_id: '30'
+          user_id: 30
         }),
         senderTag: 'tag',
         summaryLanguageCode: 'en',
@@ -143,9 +144,9 @@ describe('TDLib update handlers', () => {
       recordMessageFiles
     } = createHandlerContext({ insertedRows: [] });
 
-    const update = tdlibUpdateNewMessage({
+    const update = wireUpdateNewMessage({
       _: 'updateNewMessage',
-      message: {
+      message: wireMessage({
         _: 'message',
         chat_id: 20,
         content: {
@@ -158,95 +159,13 @@ describe('TDLib update handlers', () => {
         },
         date: 1_710_000_000,
         id: 10
-      }
+      })
     });
     await handleUpdateNewMessage(context, update);
 
     expect(insert).toHaveBeenCalledWith(telegramMessages);
     expect(recordMessageFiles).not.toHaveBeenCalled();
     expect(recordLiveMessage).not.toHaveBeenCalled();
-    expect(publishTelegramMessageCreated).not.toHaveBeenCalled();
-  });
-
-  it('rejects malformed updateNewMessage payloads before writing', () => {
-    const { insert, publishTelegramMessageCreated, recordMessageFiles } = createHandlerContext();
-
-    expect(() =>
-      tdlibUpdateNewMessage({
-        _: 'updateNewMessage',
-        message: {
-          _: 'message',
-          chat_id: 20,
-          content: {
-            _: 'messageText',
-            text: {
-              _: 'formattedText',
-              entities: [],
-              text: 'missing id'
-            }
-          }
-        }
-      })
-    ).toThrow();
-
-    expect(insert).not.toHaveBeenCalled();
-    expect(recordMessageFiles).not.toHaveBeenCalled();
-    expect(publishTelegramMessageCreated).not.toHaveBeenCalled();
-  });
-
-  it('rejects unknown updateNewMessage fields before writing', () => {
-    const { insert, publishTelegramMessageCreated, recordMessageFiles } = createHandlerContext();
-
-    expect(() =>
-      tdlibUpdateNewMessage({
-        _: 'updateNewMessage',
-        message: {
-          _: 'message',
-          chat_id: 20,
-          content: {
-            _: 'messageText',
-            text: {
-              _: 'formattedText',
-              entities: [],
-              text: 'unknown field'
-            }
-          },
-          id: 10,
-          unknown_tdlib_field: true
-        }
-      })
-    ).toThrow();
-
-    expect(insert).not.toHaveBeenCalled();
-    expect(recordMessageFiles).not.toHaveBeenCalled();
-    expect(publishTelegramMessageCreated).not.toHaveBeenCalled();
-  });
-
-  it('rejects unknown updateNewMessage envelope fields before writing', () => {
-    const { insert, publishTelegramMessageCreated, recordMessageFiles } = createHandlerContext();
-
-    expect(() =>
-      tdlibUpdateNewMessage({
-        _: 'updateNewMessage',
-        message: {
-          _: 'message',
-          chat_id: 20,
-          content: {
-            _: 'messageText',
-            text: {
-              _: 'formattedText',
-              entities: [],
-              text: 'valid message'
-            }
-          },
-          id: 10
-        },
-        unknown_update_field: true
-      })
-    ).toThrow();
-
-    expect(insert).not.toHaveBeenCalled();
-    expect(recordMessageFiles).not.toHaveBeenCalled();
     expect(publishTelegramMessageCreated).not.toHaveBeenCalled();
   });
 
@@ -260,12 +179,12 @@ describe('TDLib update handlers', () => {
       recordMessageFiles,
       values
     } = createHandlerContext();
-    const update = tdlibUpdateNewChat({
+    const update = wireUpdateNewChat({
       _: 'updateNewChat',
       chat: {
         _: 'chat',
         id: 20,
-        last_message: {
+        last_message: wireMessage({
           _: 'message',
           chat_id: 20,
           content: {
@@ -278,7 +197,8 @@ describe('TDLib update handlers', () => {
           },
           date: 1_710_000_000,
           id: 10
-        },
+        }),
+        positions: [],
         title: 'Chat',
         type: {
           _: 'chatTypePrivate',
@@ -303,7 +223,7 @@ describe('TDLib update handlers', () => {
       })
     );
     expect(recordChatFiles).toHaveBeenCalledWith(update.chat, 'live_update');
-    expect(recordMessageFiles).toHaveBeenCalledWith(update.chat.lastMessage, 'live_update');
+    expect(recordMessageFiles).toHaveBeenCalledWith(update.chat.last_message, 'live_update');
     expect(recordLiveMessage).not.toHaveBeenCalled();
     expect(publishTelegramChatDirectoryUpdated).toHaveBeenCalledWith('20');
   });
@@ -317,10 +237,10 @@ describe('TDLib update handlers', () => {
       recordMessageFiles,
       values
     } = createHandlerContext();
-    const update = tdlibUpdateChatLastMessage({
+    const update = wireUpdateChatLastMessage({
       _: 'updateChatLastMessage',
       chat_id: 20,
-      last_message: {
+      last_message: wireMessage({
         _: 'message',
         chat_id: 20,
         content: {
@@ -333,7 +253,7 @@ describe('TDLib update handlers', () => {
         },
         date: 1_710_000_000,
         id: 10
-      },
+      }),
       positions: []
     });
 
@@ -352,14 +272,14 @@ describe('TDLib update handlers', () => {
         lastMessageId: '10'
       })
     );
-    expect(recordMessageFiles).toHaveBeenCalledWith(update.lastMessage, 'live_update');
+    expect(recordMessageFiles).toHaveBeenCalledWith(update.last_message, 'live_update');
     expect(recordLiveMessage).not.toHaveBeenCalled();
     expect(publishTelegramChatDirectoryUpdated).toHaveBeenCalledWith('20');
   });
 
   it('clears chat last_message_id on null updateChatLastMessage', async () => {
     const { context, recordMessageFiles, values } = createHandlerContext();
-    const update = tdlibUpdateChatLastMessage({
+    const update = wireUpdateChatLastMessage({
       _: 'updateChatLastMessage',
       chat_id: 20,
       last_message: null,
@@ -379,7 +299,7 @@ describe('TDLib update handlers', () => {
 
   it('clears chat last_message_id when updateChatLastMessage omits last_message', async () => {
     const { context, recordMessageFiles, values } = createHandlerContext();
-    const update = tdlibUpdateChatLastMessage({
+    const update = wireUpdateChatLastMessage({
       _: 'updateChatLastMessage',
       chat_id: 20,
       positions: []
@@ -400,7 +320,7 @@ describe('TDLib update handlers', () => {
     const { context, deleteRows, publishTelegramMessageDeleted, transaction } =
       createHandlerContext();
 
-    const update = tdlibUpdateDeleteMessages({
+    const update = wireUpdateDeleteMessages({
       _: 'updateDeleteMessages',
       chat_id: 20,
       from_cache: false,
@@ -424,7 +344,7 @@ describe('TDLib update handlers', () => {
   it('ignores cache-only updateDeleteMessages', async () => {
     const { context, publishTelegramMessageDeleted, transaction } = createHandlerContext();
 
-    const update = tdlibUpdateDeleteMessages({
+    const update = wireUpdateDeleteMessages({
       _: 'updateDeleteMessages',
       chat_id: 20,
       from_cache: true,
@@ -440,7 +360,7 @@ describe('TDLib update handlers', () => {
   it('ignores non-permanent updateDeleteMessages', async () => {
     const { context, publishTelegramMessageDeleted, transaction } = createHandlerContext();
 
-    const update = tdlibUpdateDeleteMessages({
+    const update = wireUpdateDeleteMessages({
       _: 'updateDeleteMessages',
       chat_id: 20,
       from_cache: false,
@@ -567,5 +487,65 @@ function createHandlerContext(options: { insertedRows?: unknown[] } = {}): {
 }
 
 function expectObjectContaining(value: Record<string, unknown>): unknown {
-  return expect.objectContaining(value) as unknown;
+  return expect.objectContaining(value);
+}
+
+function wireMessage(overrides: Record<string, unknown>): TelegramWireMessage {
+  return {
+    _: 'message',
+    author_signature: '',
+    auto_delete_in: 0,
+    can_be_saved: true,
+    chat_id: 20,
+    contains_unread_mention: false,
+    content: {
+      _: 'messageText',
+      text: {
+        _: 'formattedText',
+        entities: [],
+        text: ''
+      }
+    },
+    date: 1_710_000_000,
+    edit_date: 0,
+    effect_id: '0',
+    has_timestamped_media: false,
+    id: 10,
+    is_channel_post: false,
+    is_from_offline: false,
+    is_outgoing: false,
+    is_paid_star_suggested_post: false,
+    is_paid_ton_suggested_post: false,
+    is_pinned: false,
+    media_album_id: '0',
+    paid_message_star_count: 0,
+    sender_boost_count: 0,
+    sender_business_bot_user_id: 0,
+    sender_id: {
+      _: 'messageSenderUser',
+      user_id: 30
+    },
+    sender_tag: '',
+    self_destruct_in: 0,
+    summary_language_code: '',
+    unread_reactions: [],
+    via_bot_user_id: 0,
+    ...overrides
+  };
+}
+
+function wireUpdateNewMessage(update: unknown): TelegramWireNewMessageUpdate {
+  return update as TelegramWireNewMessageUpdate;
+}
+
+function wireUpdateNewChat(update: unknown): TelegramWireNewChatUpdate {
+  return update as TelegramWireNewChatUpdate;
+}
+
+function wireUpdateChatLastMessage(update: unknown): TelegramWireChatLastMessageUpdate {
+  return update as TelegramWireChatLastMessageUpdate;
+}
+
+function wireUpdateDeleteMessages(update: unknown): TelegramWireDeleteMessagesUpdate {
+  return update as TelegramWireDeleteMessagesUpdate;
 }
