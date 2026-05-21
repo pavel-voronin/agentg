@@ -647,7 +647,14 @@ function validateUpdateDesigns(
 
       validateUpdateIgnoredRoute(fieldDesign.ignored?.reason, `${fieldPath}.ignored`, issues);
       for (const event of fieldDesign.events ?? []) {
-        validateUpdateEventRoute(updateName, fieldName, event, `${fieldPath}.events`, context, issues);
+        validateUpdateEventRoute(
+          updateName,
+          fieldName,
+          event,
+          `${fieldPath}.events`,
+          context,
+          issues
+        );
       }
       for (const effect of fieldDesign.effects ?? []) {
         validateUpdateEffectRoute(
@@ -777,7 +784,11 @@ function validateUpdateHandlerPlanStep(
       addIssue(issues, `${stepPath}.effect`, 'handler plan effect step must name effect');
     }
     if (step.effectKind === undefined || !supportedUpdateEffectKinds.has(step.effectKind)) {
-      addIssue(issues, `${stepPath}.effectKind`, 'handler plan effect step must declare effectKind');
+      addIssue(
+        issues,
+        `${stepPath}.effectKind`,
+        'handler plan effect step must declare effectKind'
+      );
     }
   }
 }
@@ -798,7 +809,7 @@ function validateUpdateIgnoredRoute(
   path: string,
   issues: SchemaDesignValidationIssue[]
 ): void {
-  if (reason !== undefined && reason.trim().length === 0) {
+  if (reason?.trim().length === 0) {
     addIssue(issues, `${path}.reason`, 'ignored update field must declare reason');
   }
 }

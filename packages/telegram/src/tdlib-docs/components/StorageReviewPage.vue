@@ -8,10 +8,7 @@ import {
   onStorageReviewStateUpdate,
   updateStorageReviewEntry
 } from '../storageReviewClient.js';
-import {
-  storageReviewButtonKey,
-  storageReviewButtons
-} from '../storageReviewDisplay.js';
+import { storageReviewButtonKey, storageReviewButtons } from '../storageReviewDisplay.js';
 import type {
   StorageReviewEntry,
   StorageReviewEntryPatch,

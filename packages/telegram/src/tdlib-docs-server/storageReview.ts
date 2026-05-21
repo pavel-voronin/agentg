@@ -770,10 +770,7 @@ function parseStorageSchemaUpdateFieldDesigns(
       ...(fieldDesign.notes === undefined
         ? {}
         : {
-            notes: parseStringList(
-              fieldDesign.notes,
-              `${fieldName}.${parsedUpdateFieldName}.notes`
-            )
+            notes: parseStringList(fieldDesign.notes, `${fieldName}.${parsedUpdateFieldName}.notes`)
           })
     };
   }

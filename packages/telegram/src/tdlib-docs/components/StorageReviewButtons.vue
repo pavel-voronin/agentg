@@ -1,10 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 
-import {
-  storageReviewButtons,
-  type StorageReviewButton
-} from '../storageReviewDisplay.js';
+import { storageReviewButtons, type StorageReviewButton } from '../storageReviewDisplay.js';
 import type { StorageReviewEntry } from '../storageReviewTypes.js';
 import StorageReviewInfoCard from './StorageReviewInfoCard.vue';
 

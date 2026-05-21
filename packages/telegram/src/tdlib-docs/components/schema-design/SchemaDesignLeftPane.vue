@@ -95,7 +95,9 @@ const emit = defineEmits<{
       @field-layout-change="emit('fieldLayoutChange', $event)"
       @scroll-change="emit('updateScrollChange', $event)"
       @table-focus="emit('tableFocus', $event)"
-      @update-expanded-change="(updateName, expanded) => emit('updateExpandedChange', updateName, expanded)"
+      @update-expanded-change="
+        (updateName, expanded) => emit('updateExpandedChange', updateName, expanded)
+      "
     />
   </section>
 </template>

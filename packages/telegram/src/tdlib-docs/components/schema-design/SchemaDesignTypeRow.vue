@@ -40,9 +40,7 @@ const emit = defineEmits<{
 
 const constructors = computed(() => schemaConstructors(props.entry));
 const progress = computed(() => schemaProgressForEntry(props.entry));
-const constructorSummary = computed(
-  () => schemaConstructorSummaryLabel(constructors.value)
-);
+const constructorSummary = computed(() => schemaConstructorSummaryLabel(constructors.value));
 const expandedReviewIndexList = computed(() =>
   storageReviewButtons(props.entry)
     .filter((reviewButton) =>
@@ -128,5 +126,4 @@ function toggleDetail(): void {
 .schema-design-type-row__summary {
   @apply shrink-0 font-mono text-[10px] leading-none text-neutral-400;
 }
-
 </style>

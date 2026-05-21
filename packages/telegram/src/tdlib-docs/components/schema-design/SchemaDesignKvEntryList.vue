@@ -72,10 +72,7 @@ function focusSource(source: SchemaDesignSourceReference): void {
   });
 }
 
-function onSourceActivate(
-  event: MouseEvent,
-  source: SchemaDesignSourceReference
-): void {
+function onSourceActivate(event: MouseEvent, source: SchemaDesignSourceReference): void {
   event.preventDefault();
   focusSource(source);
 }
@@ -194,5 +191,4 @@ defineExpose({
 .schema-design-kv-entry-list__field {
   @apply inline-flex max-w-full appearance-none items-center rounded border border-l-0 border-neutral-200 bg-white px-1 py-0 text-left font-mono text-[0.92em] leading-snug text-neutral-600 outline-none hover:border-neutral-300 hover:bg-neutral-50 hover:text-neutral-900;
 }
-
 </style>

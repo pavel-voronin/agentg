@@ -38,7 +38,9 @@ async function copySql(): Promise<void> {
         {{ copied ? 'copied' : 'copy' }}
       </button>
     </header>
-    <pre class="schema-design-table-ddl__body"><code class="schema-design-table-ddl__code">{{ sql }}</code></pre>
+    <pre
+      class="schema-design-table-ddl__body"
+    ><code class="schema-design-table-ddl__code">{{ sql }}</code></pre>
   </section>
 </template>
 

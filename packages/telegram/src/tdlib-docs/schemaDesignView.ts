@@ -680,7 +680,10 @@ function schemaUpdateTableWritesForField(
     }));
 }
 
-function schemaUpdateFieldNameFromSourceField(updateName: string, sourceField: string): string | null {
+function schemaUpdateFieldNameFromSourceField(
+  updateName: string,
+  sourceField: string
+): string | null {
   const prefix = `Update.${updateName}.`;
   if (!sourceField.startsWith(prefix)) {
     return null;

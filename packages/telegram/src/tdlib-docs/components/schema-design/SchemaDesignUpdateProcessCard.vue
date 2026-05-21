@@ -90,8 +90,7 @@ function routeIsNotStored(route: SchemaDesignUpdateFieldRoute): boolean {
 
 function routeIsFocused(route: SchemaDesignUpdateFieldRoute): boolean {
   return (
-    props.focusTarget?.update === props.update.name &&
-    props.focusTarget.field === route.field.name
+    props.focusTarget?.update === props.update.name && props.focusTarget.field === route.field.name
   );
 }
 
@@ -125,9 +124,9 @@ async function onPlanStepUseClick(stepId: string): Promise<void> {
   focusedPlanStepId.value = stepId;
   await nextTick();
 
-  const stepElement = [...(cardElement.value?.querySelectorAll<HTMLElement>(
-    '[data-handler-plan-step]'
-  ) ?? [])].find((element) => element.dataset.handlerPlanStep === stepId);
+  const stepElement = [
+    ...(cardElement.value?.querySelectorAll<HTMLElement>('[data-handler-plan-step]') ?? [])
+  ].find((element) => element.dataset.handlerPlanStep === stepId);
   stepElement?.focus({ preventScroll: true });
   stepElement?.scrollIntoView({ block: 'center', inline: 'nearest' });
 }
@@ -178,7 +177,10 @@ async function onPlanStepUseClick(stepId: string): Promise<void> {
           <span class="schema-design-update-process-card__plan-description">
             {{ step.description }}
           </span>
-          <span v-if="stepMeta(step).length > 0" class="schema-design-update-process-card__plan-meta">
+          <span
+            v-if="stepMeta(step).length > 0"
+            class="schema-design-update-process-card__plan-meta"
+          >
             {{ stepMeta(step) }}
           </span>
           <span class="schema-design-update-process-card__plan-sources">
@@ -260,10 +262,7 @@ async function onPlanStepUseClick(stepId: string): Promise<void> {
                 :type-name="step.type ?? ''"
               />
             </span>
-            <span
-              v-if="routeIsNotStored(route)"
-              class="schema-design-update-process-card__db-none"
-            >
+            <span v-if="routeIsNotStored(route)" class="schema-design-update-process-card__db-none">
               not stored
             </span>
             <button
@@ -353,10 +352,7 @@ async function onPlanStepUseClick(stepId: string): Promise<void> {
                 :type-name="step.type ?? ''"
               />
             </span>
-            <span
-              v-if="routeIsNotStored(route)"
-              class="schema-design-update-process-card__db-none"
-            >
+            <span v-if="routeIsNotStored(route)" class="schema-design-update-process-card__db-none">
               not stored
             </span>
             <button

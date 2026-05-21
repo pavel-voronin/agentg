@@ -15,10 +15,10 @@ describe('TDLib schema design component styles', () => {
 
     for (const fileName of vueFiles()) {
       const source = readFileSync(join(schemaDesignComponentDirectory, fileName), 'utf8');
-      const styleBlock = source.match(/<style scoped>[\s\S]*?<\/style>/)?.[0] ?? '';
+      const styleBlock = /<style scoped>[\s\S]*?<\/style>/.exec(source)?.[0] ?? '';
 
       for (const match of source.matchAll(/<(button|input|select|textarea)\b[\s\S]*?>/g)) {
-        const tag = match[1];
+        const tag = match[1] ?? 'control';
         const control = match[0];
         const className = singleStaticClass(control);
 
@@ -67,7 +67,7 @@ function vueFiles(): string[] {
 }
 
 function singleStaticClass(control: string): string | null {
-  const classValue = control.match(/\bclass="([^"]+)"/)?.[1] ?? null;
+  const classValue = /\bclass="([^"]+)"/.exec(control)?.[1] ?? null;
   if (classValue === null) {
     return null;
   }
@@ -78,7 +78,5 @@ function singleStaticClass(control: string): string | null {
 
 function classStyle(styleBlock: string, className: string): string | null {
   const escapedClassName = className.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return (
-    styleBlock.match(new RegExp(`\\.${escapedClassName}\\s*\\{([\\s\\S]*?)\\}`))?.[1] ?? null
-  );
+  return new RegExp(`\\.${escapedClassName}\\s*\\{([\\s\\S]*?)\\}`).exec(styleBlock)?.[1] ?? null;
 }
