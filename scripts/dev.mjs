@@ -5,6 +5,7 @@ import { spawn } from 'node:child_process';
 import { stat } from 'node:fs/promises';
 import { createConnection } from 'node:net';
 import { resolve } from 'node:path';
+import { clearInterval, setInterval } from 'node:timers';
 import { setTimeout as delay } from 'node:timers/promises';
 
 const setupCommands = [
@@ -14,6 +15,9 @@ const setupCommands = [
 
 const children = new Set();
 let shuttingDown = false;
+const tcpMonitors = new Map();
+const TCP_MONITOR_INTERVAL_MS = 1000;
+const TCP_UNAVAILABLE_GRACE_MS = 15000;
 
 try {
   for (const [command, args] of setupCommands) {
@@ -44,7 +48,13 @@ try {
   startDevProcess('gateway', 'npm', ['run', 'dev:gateway']);
   await waitForTcp('gateway', '127.0.0.1', 8787);
 
-  startDevProcess('control-plane-server', 'npm', ['run', 'dev:control-plane-server']);
+  startTcpDevProcess(
+    'control-plane-server',
+    'npm',
+    ['run', 'dev:control-plane-server'],
+    '127.0.0.1',
+    8789
+  );
   await waitForTcp('control-plane server', '127.0.0.1', 8789);
 
   startDevProcess('control-plane', 'npm', ['run', 'dev:control-plane']);
@@ -100,6 +110,45 @@ function startDevProcess(name, command, args) {
     child,
     startedAt
   };
+}
+
+function startTcpDevProcess(name, command, args, host, port) {
+  const started = startDevProcess(name, command, args);
+  monitorTcpProcess(name, host, port);
+  return started;
+}
+
+function monitorTcpProcess(name, host, port) {
+  const key = `${host}:${String(port)}`;
+  if (tcpMonitors.has(key)) {
+    return;
+  }
+
+  let missingSince = null;
+  const monitor = setInterval(() => {
+    void (async () => {
+      if (shuttingDown) {
+        clearInterval(monitor);
+        tcpMonitors.delete(key);
+        return;
+      }
+      const listening = await canConnect(host, port);
+      if (listening) {
+        missingSince = null;
+        return;
+      }
+      missingSince ??= Date.now();
+      if (Date.now() - missingSince < TCP_UNAVAILABLE_GRACE_MS) {
+        return;
+      }
+
+      console.error(`${name} stopped listening on ${key}`);
+      stopChildren('SIGTERM');
+      process.exit(1);
+    })();
+  }, TCP_MONITOR_INTERVAL_MS);
+
+  tcpMonitors.set(key, monitor);
 }
 
 async function waitForTcp(name, host, port) {
@@ -159,6 +208,10 @@ function canConnect(host, port) {
 
 function shutdown(signal) {
   shuttingDown = true;
+  for (const monitor of tcpMonitors.values()) {
+    clearInterval(monitor);
+  }
+  tcpMonitors.clear();
   stopChildren(signal);
 }
 
