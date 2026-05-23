@@ -2,7 +2,7 @@ import 'dotenv/config';
 
 import { resolve } from 'node:path';
 
-import type { ControlPlaneRuntimeVueBuild } from './control-plane-server.js';
+import type { ControlPlaneRuntimeVueBuild } from './controlPlaneServer.js';
 
 type InternalServiceConfig = {
   url: string;

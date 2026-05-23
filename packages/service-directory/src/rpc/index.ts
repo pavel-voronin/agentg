@@ -2,4 +2,4 @@ export {
   createServiceDirectoryClient,
   type ServiceDirectoryClient,
   type ServiceDirectoryProcedureCall
-} from './service-directory-client.js';
+} from './serviceDirectoryClient.js';

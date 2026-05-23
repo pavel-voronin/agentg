@@ -1,11 +1,11 @@
 import { createIntegrationEvent } from '@agentg/events/envelope';
 import { mutation } from '@agentg/rpc/surface';
 
-import { deleteManualHistorySyncTargetFromCommand } from '../../target-commands.js';
+import { deleteManualHistorySyncTargetFromCommand } from '../../targetCommands.js';
 import {
   historySyncDeleteTargetInputSchema,
   historySyncTargetMutationOutputSchema
-} from '../history-sync-contracts.js';
+} from '../historySyncContracts.js';
 import { runtimeForCall, type CreateHistorySyncRouterOptions } from '../runtime.js';
 import { rpc } from '../trpc.js';
 

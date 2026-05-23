@@ -1,5 +1,5 @@
-import { storeUser, userUpdatedEventInput } from '../telegram-store/User.js';
-import type { TelegramWireUserUpdate } from '../telegram-wire.js';
+import { storeUser, userUpdatedEventInput } from '../telegram-store/user.js';
+import type { TelegramWireUserUpdate } from '../telegramWire.js';
 import type { TelegramUpdateHandlerContext } from './context.js';
 
 export async function handleUpdateUser(

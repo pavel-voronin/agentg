@@ -5,7 +5,7 @@
     "tests",
     "drizzle.config.ts",
     "vite.config.ts",
-    "vite.control-plane.config.ts",
-    "vite.tdlib-docs.config.ts"
+    "viteControlPlane.config.ts",
+    "viteTdlibDocs.config.ts"
   ]
 }

@@ -26,21 +26,21 @@ import {
   type TdlibInvokeOptions,
   publishTdlibOperationEvents,
   publishTelegramOperationEvents
-} from './telegram-operation-events.js';
-import { telegramTdlibPriorities } from './telegram-tdlib-priority.js';
+} from './telegramOperationEvents.js';
+import { telegramTdlibPriorities } from './telegramTdlibPriority.js';
 import {
   createTelegramFileSubsystem,
   type TelegramFileSubsystem
-} from './telegram-file-subsystem.js';
+} from './telegramFileSubsystem.js';
 import {
   createTelegramTdlibScheduler,
   type TelegramTdlibScheduler
-} from './telegram-tdlib-scheduler.js';
+} from './telegramTdlibScheduler.js';
 import {
   createTelegramLiveCoverageObserver,
   type TelegramLiveCoverageObserver
-} from './telegram-live-coverage.js';
-import { createTelegramUpdateEventPublishers } from './tdlib-update-handlers/event-publishers.js';
+} from './telegramLiveCoverage.js';
+import { createTelegramUpdateEventPublishers } from './tdlib-update-handlers/eventPublishers.js';
 import { handleUpdateAuthorizationState } from './tdlib-update-handlers/updateAuthorizationState.js';
 import { handleUpdateChatLastMessage } from './tdlib-update-handlers/updateChatLastMessage.js';
 import { handleUpdateChatFolders } from './tdlib-update-handlers/updateChatFolders.js';
@@ -51,16 +51,16 @@ import { handleUpdateMessageContent } from './tdlib-update-handlers/updateMessag
 import { handleUpdateNewChat } from './tdlib-update-handlers/updateNewChat.js';
 import { handleUpdateNewMessage } from './tdlib-update-handlers/updateNewMessage.js';
 import { handleUpdateUser } from './tdlib-update-handlers/updateUser.js';
-import { recordChatFiles, storeChat } from './telegram-store/Chat.js';
-import { recordMessageFiles, storeMessage } from './telegram-store/Message.js';
-import { storeUser, userUpdatedEventInput } from './telegram-store/User.js';
+import { recordChatFiles, storeChat } from './telegram-store/chat.js';
+import { recordMessageFiles, storeMessage } from './telegram-store/message.js';
+import { storeUser, userUpdatedEventInput } from './telegram-store/user.js';
 import type {
   TelegramWireChat,
   TelegramWireChats,
   TelegramWireObject,
   TelegramWireUpdate,
   TelegramWireUser
-} from './telegram-wire.js';
+} from './telegramWire.js';
 
 export type TelegramIngestionOptions = {
   database: AppDatabase;

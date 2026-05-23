@@ -2,8 +2,8 @@ import {
   messageCreatedEventInput,
   recordMessageFiles,
   storeMessage
-} from '../telegram-store/Message.js';
-import type { TelegramWireNewMessageUpdate } from '../telegram-wire.js';
+} from '../telegram-store/message.js';
+import type { TelegramWireNewMessageUpdate } from '../telegramWire.js';
 import type { TelegramUpdateHandlerContext } from './context.js';
 
 export async function handleUpdateNewMessage(

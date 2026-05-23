@@ -18,10 +18,10 @@
 
 Current architecture is documented in:
 
-- [Component Boundaries](../02-architecture/component-boundaries.md)
-- [Data Flow](../02-architecture/data-flow.md)
-- [Module Runtime And Extensions](../02-architecture/module-runtime-and-extensions.md)
-- [Event Plane](../05-interfaces/event-plane.md)
-- [Local Development](../06-operations/local-dev.md)
+- [Component Boundaries](../02-architecture/componentBoundaries.md)
+- [Data Flow](../02-architecture/dataFlow.md)
+- [Module Runtime And Extensions](../02-architecture/moduleRuntimeAndExtensions.md)
+- [Event Plane](../05-interfaces/eventPlane.md)
+- [Local Development](../06-operations/localDev.md)
 
 Roadmap entries must describe only the active target architecture.

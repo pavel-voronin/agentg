@@ -5,7 +5,7 @@ import {
 } from '../contracts.js';
 import type { TelegramRpcRuntime } from '../runtime.js';
 import { rpc } from '../trpc.js';
-import { countTelegramMessagesInIntervals } from '../../telegram-message-counts.js';
+import { countTelegramMessagesInIntervals } from '../../telegramMessageCounts.js';
 import { requireDate } from './support.js';
 
 export const countMessagesInIntervals = query((runtime: TelegramRpcRuntime) =>

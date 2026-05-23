@@ -1,6 +1,6 @@
-import { storeChatLastMessage } from '../telegram-store/Chat.js';
-import { recordMessageFiles, storeMessage } from '../telegram-store/Message.js';
-import type { TelegramWireChatLastMessageUpdate } from '../telegram-wire.js';
+import { storeChatLastMessage } from '../telegram-store/chat.js';
+import { recordMessageFiles, storeMessage } from '../telegram-store/message.js';
+import type { TelegramWireChatLastMessageUpdate } from '../telegramWire.js';
 import type { TelegramUpdateHandlerContext } from './context.js';
 
 export async function handleUpdateChatLastMessage(

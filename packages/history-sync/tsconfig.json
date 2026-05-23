@@ -1,4 +1,4 @@
 {
   "extends": "../../tsconfig.json",
-  "include": ["src", "tests", "drizzle.config.ts", "vite.config.ts", "vite.control-plane.config.ts"]
+  "include": ["src", "tests", "drizzle.config.ts", "vite.config.ts", "viteControlPlane.config.ts"]
 }

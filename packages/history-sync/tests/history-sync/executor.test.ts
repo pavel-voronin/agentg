@@ -5,7 +5,7 @@ import type { HistorySyncDatabase as AppDatabase } from '../../src/database.js';
 import { runHistorySync } from '../../src/executor.js';
 import { expressionBoundary, historySyncRange } from '../../src/ranges.js';
 import { historySyncTargets, historySyncTemplates } from '../../src/schema.js';
-import type { TelegramHistoryClient } from '../../src/telegram-client.js';
+import type { TelegramHistoryClient } from '../../src/telegramClient.js';
 import type { HistorySyncTarget } from '../../src/types.js';
 
 describe('history sync executor', () => {

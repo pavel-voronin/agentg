@@ -9,7 +9,7 @@ import {
 import type { TelegramRpcRuntime } from '../runtime.js';
 import { rpc } from '../trpc.js';
 import { telegramChats } from '../../schema.js';
-import { readTelegramFileRefsForOwners } from '../../telegram-file-read.js';
+import { readTelegramFileRefsForOwners } from '../../telegramFileRead.js';
 import { readChatSelection, toTelegramChatStorageRow } from './support.js';
 
 export const getChat = query((runtime: TelegramRpcRuntime) =>

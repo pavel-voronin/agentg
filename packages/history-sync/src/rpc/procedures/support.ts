@@ -6,7 +6,7 @@ import {
   projectHistorySyncRange,
   type HistorySyncRangeProjectionContext
 } from '../../ranges.js';
-import type { TelegramReadClient } from '../../telegram-client.js';
+import type { TelegramReadClient } from '../../telegramClient.js';
 import { floorToTelegramSecond, normalizeTelegramHistoryInterval } from '../../time.js';
 import type { HistorySyncInterval, HistorySyncRange, HistorySyncTarget } from '../../types.js';
 import type { HistorySyncRuntime } from '../runtime.js';

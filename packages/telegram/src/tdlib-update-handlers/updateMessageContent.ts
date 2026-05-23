@@ -2,8 +2,8 @@ import {
   messageContentUpdatedEventInput,
   recordMessageContentFiles,
   replaceMessageContent
-} from '../telegram-store/Message.js';
-import type { TelegramWireMessageContentUpdate } from '../telegram-wire.js';
+} from '../telegram-store/message.js';
+import type { TelegramWireMessageContentUpdate } from '../telegramWire.js';
 import type { TelegramUpdateHandlerContext } from './context.js';
 
 export async function handleUpdateMessageContent(

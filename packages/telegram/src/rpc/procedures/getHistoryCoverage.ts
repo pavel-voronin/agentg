@@ -1,6 +1,6 @@
 import { query } from '@agentg/rpc/surface';
 
-import { listTelegramHistoryCoverage } from '../../telegram-history-coverage.js';
+import { listTelegramHistoryCoverage } from '../../telegramHistoryCoverage.js';
 import {
   telegramGetHistoryCoverageInputSchema,
   telegramGetHistoryCoverageOutputSchema

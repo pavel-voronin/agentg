@@ -1,5 +1,5 @@
-import { storeFileUpdate } from '../telegram-store/File.js';
-import type { TelegramWireFileUpdate } from '../telegram-wire.js';
+import { storeFileUpdate } from '../telegram-store/file.js';
+import type { TelegramWireFileUpdate } from '../telegramWire.js';
 import type { TelegramUpdateHandlerContext } from './context.js';
 
 export async function handleUpdateFile(

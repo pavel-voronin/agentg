@@ -4,7 +4,7 @@ import { mutation } from '@agentg/rpc/surface';
 import {
   historySyncRequestSyncInputSchema,
   historySyncRequestSyncOutputSchema
-} from '../history-sync-contracts.js';
+} from '../historySyncContracts.js';
 import { runtimeForCall, type CreateHistorySyncRouterOptions } from '../runtime.js';
 import { rpc } from '../trpc.js';
 

@@ -3,7 +3,7 @@ import type { EventBus } from '@agentg/events/bus';
 import { createIntegrationEvent } from '@agentg/events/envelope';
 
 import { runHistorySync } from './executor.js';
-import type { TelegramHistoryClient } from './telegram-client.js';
+import type { TelegramHistoryClient } from './telegramClient.js';
 
 export type HistorySyncControllerOptions = {
   chatLoadBatchSize: number;

@@ -1,7 +1,7 @@
 import { createNatsEventBus } from '@agentg/events/bus';
 
 import { loadControlPlaneConfig } from './config.js';
-import { runControlPlaneServer } from './control-plane-server.js';
+import { runControlPlaneServer } from './controlPlaneServer.js';
 
 const config = loadControlPlaneConfig();
 

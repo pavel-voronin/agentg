@@ -1,5 +1,5 @@
-import { deleteMessages } from '../telegram-store/Message.js';
-import type { TelegramWireDeleteMessagesUpdate } from '../telegram-wire.js';
+import { deleteMessages } from '../telegram-store/message.js';
+import type { TelegramWireDeleteMessagesUpdate } from '../telegramWire.js';
 import type { TelegramUpdateHandlerContext } from './context.js';
 
 export async function handleUpdateDeleteMessages(

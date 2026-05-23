@@ -1,5 +1,5 @@
-import { recordAuthorizationState } from '../telegram-store/AuthorizationState.js';
-import type { TelegramWireAuthorizationStateUpdate } from '../telegram-wire.js';
+import { recordAuthorizationState } from '../telegram-store/authorizationState.js';
+import type { TelegramWireAuthorizationStateUpdate } from '../telegramWire.js';
 
 export function handleUpdateAuthorizationState(update: TelegramWireAuthorizationStateUpdate): void {
   recordAuthorizationState(update);

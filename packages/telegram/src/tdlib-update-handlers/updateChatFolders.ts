@@ -1,5 +1,5 @@
-import { chatFoldersUpdatedEventInput, replaceChatFolders } from '../telegram-store/ChatFolders.js';
-import type { TelegramWireChatFoldersUpdate } from '../telegram-wire.js';
+import { chatFoldersUpdatedEventInput, replaceChatFolders } from '../telegram-store/chatFolders.js';
+import type { TelegramWireChatFoldersUpdate } from '../telegramWire.js';
 import type { TelegramUpdateHandlerContext } from './context.js';
 
 export async function handleUpdateChatFolders(

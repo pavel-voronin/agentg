@@ -1,4 +1,4 @@
-import rawSchema from './data/tdlib-schema.json' with { type: 'json' };
+import rawSchema from './data/tdlibSchema.json' with { type: 'json' };
 import type {
   SearchEntry,
   SearchEntryKind,

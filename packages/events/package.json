@@ -7,7 +7,7 @@
     "./bus": "./src/bus.ts",
     "./envelope": "./src/envelope.ts",
     "./json": "./src/json.ts",
-    "./validated-bus": "./src/validated-bus.ts"
+    "./validated-bus": "./src/validatedBus.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

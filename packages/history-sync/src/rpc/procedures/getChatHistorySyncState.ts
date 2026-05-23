@@ -7,7 +7,7 @@ import { historySyncTargets } from '../../schema.js';
 import {
   historySyncChatHistorySyncStateOutputSchema,
   historySyncGetChatHistorySyncStateInputSchema
-} from '../history-sync-contracts.js';
+} from '../historySyncContracts.js';
 import { runtimeForCall, type CreateHistorySyncRouterOptions } from '../runtime.js';
 import { rpc } from '../trpc.js';
 import {

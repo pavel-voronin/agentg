@@ -1,6 +1,6 @@
 import { createNatsEventBus } from '@agentg/events/bus';
 
-import { runAgentGateway } from './agent-gateway.js';
+import { runAgentGateway } from './agentGateway.js';
 import { loadGatewayConfig } from './config.js';
 
 const config = loadGatewayConfig();

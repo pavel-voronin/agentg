@@ -1,6 +1,6 @@
-import { recordChatFiles, storeChat } from '../telegram-store/Chat.js';
-import { recordMessageFiles, storeMessage } from '../telegram-store/Message.js';
-import type { TelegramWireNewChatUpdate } from '../telegram-wire.js';
+import { recordChatFiles, storeChat } from '../telegram-store/chat.js';
+import { recordMessageFiles, storeMessage } from '../telegram-store/message.js';
+import type { TelegramWireNewChatUpdate } from '../telegramWire.js';
 import type { TelegramUpdateHandlerContext } from './context.js';
 
 export async function handleUpdateNewChat(

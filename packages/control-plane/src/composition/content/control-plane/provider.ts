@@ -4,7 +4,7 @@ export const controlPlaneContentProvider = {
   contents: [
     {
       contentId: 'events.stream.panel',
-      load: () => import('../events/EventStreamContent.vue'),
+      load: () => import('../events/eventStreamContent.vue'),
       tags: ['control-plane.events']
     }
   ],

@@ -8,9 +8,9 @@
     "./manifest": "./src/manifest.ts",
     "./model-ref-events": "./src/modelRefEvents.ts",
     "./slots": "./src/slots/index.ts",
-    "./ui": "./src/ui/UiButton.vue",
-    "./ui/metric-tile": "./src/ui/UiMetricTile.vue",
-    "./ui/status-badge": "./src/ui/UiStatusBadge.vue"
+    "./ui": "./src/ui/uiButton.vue",
+    "./ui/metric-tile": "./src/ui/uiMetricTile.vue",
+    "./ui/status-badge": "./src/ui/uiStatusBadge.vue"
   },
   "scripts": {
     "typecheck": "vue-tsc --noEmit"

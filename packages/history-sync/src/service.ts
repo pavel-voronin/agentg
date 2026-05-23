@@ -19,9 +19,9 @@ import {
   HISTORY_SYNC_CONTROL_PLANE_ASSETS_ROOT,
   startHistorySyncTrpcServer,
   stopHistorySyncTrpcServer
-} from './rpc/history-sync-server.js';
+} from './rpc/historySyncServer.js';
 import { createHistorySyncServiceManifest } from './registrations.js';
-import { createServiceDirectoryTelegramHistoryClient } from './telegram-client.js';
+import { createServiceDirectoryTelegramHistoryClient } from './telegramClient.js';
 
 export type HistorySyncServiceOptions = {
   database: AppDatabase;

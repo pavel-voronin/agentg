@@ -4,6 +4,14 @@
 - Use only these commit scopes: `project`, `infra`, `telegram`, `history-sync`,
   `gateway`, `control-plane`, `extensions`, `storage`, `rpc`, and
   `events`.
+- Project-owned directories must use kebab-case. Project-owned file names must
+  use camelCase stems; `.test`, `.config`, and `.d` are allowed only as
+  technical suffixes after the camelCase stem. The only allowed exceptions are
+  external tool or platform contract names: `AGENTS.md`, `Dockerfile`,
+  `package.json`, `package-lock.json`, `tsconfig.json`, `eslint.config.js`,
+  `docker-compose.yml`, `vite.config.ts`, `drizzle.config.ts`, dotfiles, and
+  generated Drizzle migration/meta files. Do not add new exceptions or
+  differently-cased names; rename the file or directory instead.
 - Do not introduce technical debt, fallback paths, compatibility paths, legacy
   paths, or parallel old/new implementations.
 - Do not keep alternative architecture artifacts or documentation for replaced

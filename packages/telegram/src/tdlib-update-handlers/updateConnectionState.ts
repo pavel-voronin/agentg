@@ -1,5 +1,5 @@
-import { recordConnectionState } from '../telegram-store/ConnectionState.js';
-import type { TelegramWireConnectionStateUpdate } from '../telegram-wire.js';
+import { recordConnectionState } from '../telegram-store/connectionState.js';
+import type { TelegramWireConnectionStateUpdate } from '../telegramWire.js';
 import type { TelegramUpdateHandlerContext } from './context.js';
 
 export async function handleUpdateConnectionState(

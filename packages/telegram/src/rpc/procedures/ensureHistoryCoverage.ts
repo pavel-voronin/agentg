@@ -1,6 +1,6 @@
 import { mutation } from '@agentg/rpc/surface';
 
-import { ensureTelegramHistoryCoverage } from '../../telegram-history-fetch.js';
+import { ensureTelegramHistoryCoverage } from '../../telegramHistoryFetch.js';
 import {
   telegramEnsureHistoryCoverageInputSchema,
   telegramEnsureHistoryCoverageOutputSchema

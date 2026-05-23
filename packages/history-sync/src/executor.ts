@@ -11,7 +11,7 @@ import {
   listHistorySyncTemplates,
   upsertHistorySyncTargets
 } from './store.js';
-import type { TelegramHistoryClient } from './telegram-client.js';
+import type { TelegramHistoryClient } from './telegramClient.js';
 import type {
   HistorySyncInterval,
   HistorySyncTarget,

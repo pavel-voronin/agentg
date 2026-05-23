@@ -1,20 +1,20 @@
 import { mutation } from '@agentg/rpc/surface';
 import { and, eq, inArray } from 'drizzle-orm';
 
-import { createTelegramHistoryCoverageChangedEvent } from '../../integration-events.js';
+import { createTelegramHistoryCoverageChangedEvent } from '../../integrationEvents.js';
 import { telegramChats, telegramMessages } from '../../schema.js';
-import { recordMessageFiles, storeMessage } from '../../telegram-store/Message.js';
+import { recordMessageFiles, storeMessage } from '../../telegram-store/message.js';
 import {
   normalizeCoverageWriteInput,
   withTelegramHistoryCoverageLocks,
   writeTelegramHistoryCoverageInTransaction,
   type TelegramHistoryCoverageInterval,
   type TelegramHistoryCoverageWriteSegment
-} from '../../telegram-history-coverage.js';
-import { countTelegramMessagesInIntervals } from '../../telegram-message-counts.js';
-import { TELEGRAM_HISTORY_PAST_BOUNDARY } from '../../telegram-history-time.js';
-import { telegramTdlibPriorities } from '../../telegram-tdlib-priority.js';
-import type { TelegramWireMessage, TelegramWireMessages } from '../../telegram-wire.js';
+} from '../../telegramHistoryCoverage.js';
+import { countTelegramMessagesInIntervals } from '../../telegramMessageCounts.js';
+import { TELEGRAM_HISTORY_PAST_BOUNDARY } from '../../telegramHistoryTime.js';
+import { telegramTdlibPriorities } from '../../telegramTdlibPriority.js';
+import type { TelegramWireMessage, TelegramWireMessages } from '../../telegramWire.js';
 import {
   telegramFetchMessagesPageInputSchema,
   telegramFetchMessagesPageOutputSchema,

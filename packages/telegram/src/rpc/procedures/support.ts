@@ -18,11 +18,11 @@ import {
 import {
   readTelegramFileRefsForOwners,
   type TelegramFileOwnerKey
-} from '../../telegram-file-read.js';
-import { storeChat, telegramChatType } from '../../telegram-store/Chat.js';
-import { storeMessage } from '../../telegram-store/Message.js';
-import { invokeTdlibWithEvents, type TdlibInvokeOptions } from '../../telegram-operation-events.js';
-import { telegramTdlibPriorities } from '../../telegram-tdlib-priority.js';
+} from '../../telegramFileRead.js';
+import { storeChat, telegramChatType } from '../../telegram-store/chat.js';
+import { storeMessage } from '../../telegram-store/message.js';
+import { invokeTdlibWithEvents, type TdlibInvokeOptions } from '../../telegramOperationEvents.js';
+import { telegramTdlibPriorities } from '../../telegramTdlibPriority.js';
 import {
   telegramWireDate,
   telegramWireIdNumber,
@@ -31,7 +31,7 @@ import {
   type TelegramWireChats,
   type TelegramWireMessage,
   type TelegramWireObject
-} from '../../telegram-wire.js';
+} from '../../telegramWire.js';
 import type {
   TelegramChatDirectoryEntry,
   TelegramChatPlacement,

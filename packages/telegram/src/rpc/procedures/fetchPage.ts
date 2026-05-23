@@ -1,7 +1,7 @@
 import { mutation } from '@agentg/rpc/surface';
 
-import { fetchTelegramHistoryPage } from '../../telegram-history-fetch.js';
-import { telegramTdlibPriorities } from '../../telegram-tdlib-priority.js';
+import { fetchTelegramHistoryPage } from '../../telegramHistoryFetch.js';
+import { telegramTdlibPriorities } from '../../telegramTdlibPriority.js';
 import {
   telegramHistoryFetchPageInputSchema,
   telegramHistoryFetchPageResultSchema

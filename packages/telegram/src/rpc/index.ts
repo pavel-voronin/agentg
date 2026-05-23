@@ -1,4 +1,4 @@
-export { createTelegramRpcClient } from './telegram-client.js';
+export { createTelegramRpcClient } from './telegramClient.js';
 export type {
   TelegramListChatDirectoryInput,
   TelegramListChatDirectoryOutput

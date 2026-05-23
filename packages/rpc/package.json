@@ -4,13 +4,13 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./call-event-types": "./src/call-event-types.ts",
-    "./call-events": "./src/call-events.ts",
-    "./call-options": "./src/call-options.ts",
-    "./http-server": "./src/http-server.ts",
+    "./call-event-types": "./src/callEventTypes.ts",
+    "./call-events": "./src/callEvents.ts",
+    "./call-options": "./src/callOptions.ts",
+    "./http-server": "./src/httpServer.ts",
     "./surface": "./src/surface.ts",
-    "./trpc-proxy": "./src/trpc-proxy.ts",
-    "./model-refs": "./src/model-refs.ts"
+    "./trpc-proxy": "./src/trpcProxy.ts",
+    "./model-refs": "./src/modelRefs.ts"
   },
   "scripts": {
     "test": "vitest run",

@@ -1,1 +1,1 @@
-export { createHistorySyncRpcClient } from './history-sync-client.js';
+export { createHistorySyncRpcClient } from './historySyncClient.js';
