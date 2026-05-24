@@ -40,7 +40,7 @@ import {
   createTelegramLiveCoverageObserver,
   type TelegramLiveCoverageObserver
 } from './telegramLiveCoverage.js';
-import { createTelegramUpdateEventPublishers } from './tdlib-update-handlers/eventPublishers.js';
+import { createTelegramUpdateEventPublishers } from './telegram-events/updateEventPublishers.js';
 import { handleUpdateAuthorizationState } from './tdlib-update-handlers/updateAuthorizationState.js';
 import { handleUpdateChatLastMessage } from './tdlib-update-handlers/updateChatLastMessage.js';
 import { handleUpdateChatFolders } from './tdlib-update-handlers/updateChatFolders.js';

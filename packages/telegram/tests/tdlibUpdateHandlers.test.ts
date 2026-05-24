@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { TelegramDatabase } from '../src/database.js';
 import { telegramChats, telegramFileSlots, telegramMessages } from '../src/schema.js';
-import type { TelegramUpdateHandlerContext } from '../src/tdlib-update-handlers/context.js';
+import type { TelegramUpdateHandlerContext } from '../src/telegram-update-runtime/context.js';
 import { handleUpdateChatLastMessage } from '../src/tdlib-update-handlers/updateChatLastMessage.js';
 import { handleUpdateDeleteMessages } from '../src/tdlib-update-handlers/updateDeleteMessages.js';
 import { handleUpdateNewChat } from '../src/tdlib-update-handlers/updateNewChat.js';
