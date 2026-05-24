@@ -53,7 +53,7 @@ import { handleUpdateNewMessage } from './tdlib-update-handlers/updateNewMessage
 import { handleUpdateUser } from './tdlib-update-handlers/updateUser.js';
 import { recordChatFiles, storeChat } from './telegram-store/chat.js';
 import { recordMessageFiles, storeMessage } from './telegram-store/message.js';
-import { storeUser, userUpdatedEventInput } from './telegram-store/user.js';
+import { storeUser } from './telegram-store/user.js';
 import type {
   TelegramWireChat,
   TelegramWireChats,
@@ -703,12 +703,11 @@ function isTdlibLiveCoverageConnectionState(connectionState: string): boolean {
 }
 
 function summarizeCurrentUser(user: TelegramWireUser): Record<string, unknown> {
-  const eventInput = userUpdatedEventInput(user, { isSelf: true });
   return {
-    id: eventInput.id,
-    firstName: eventInput.firstName,
-    lastName: eventInput.lastName,
-    username: eventInput.username,
+    id: String(user.id),
+    firstName: user.first_name,
+    lastName: user.last_name,
+    username: user.usernames?.active_usernames[0],
     isPremium: user.is_premium
   };
 }

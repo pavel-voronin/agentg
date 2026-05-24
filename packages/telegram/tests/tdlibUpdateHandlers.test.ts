@@ -116,23 +116,7 @@ describe('TDLib update handlers', () => {
     });
     expect(recordMessageFiles).toHaveBeenCalledWith(update.message, 'live_update');
     expect(recordLiveMessage).toHaveBeenCalledWith('20', expect.any(Date));
-    expect(publishTelegramMessageCreated).toHaveBeenCalledWith(
-      expect.objectContaining({
-        chatId: '20',
-        contentType: 'messageText',
-        isOutgoing: false,
-        messageId: '10',
-        text: 'example.com',
-        textEntities: [
-          {
-            kind: 'url',
-            length: 11,
-            offset: 0,
-            url: 'https://example.com/'
-          }
-        ]
-      })
-    );
+    expect(publishTelegramMessageCreated).toHaveBeenCalledWith(update.message);
   });
 
   it('does not publish side effects when updateNewMessage already exists', async () => {

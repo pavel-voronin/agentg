@@ -16,19 +16,3 @@ export async function storeUser(database: TelegramDatabase, user: TelegramWireUs
     target: telegramUsers.id
   });
 }
-
-export function userUpdatedEventInput(user: TelegramWireUser, options: { isSelf?: boolean } = {}) {
-  const username = activeUsername(user.usernames);
-  return {
-    firstName: user.first_name,
-    id: String(user.id),
-    isBot: user.type._ === 'userTypeBot',
-    lastName: user.last_name,
-    ...(options.isSelf === true ? { isSelf: true } : {}),
-    ...(username === undefined ? {} : { username })
-  };
-}
-
-function activeUsername(value: TelegramWireUser['usernames']): string | undefined {
-  return value?.active_usernames[0];
-}

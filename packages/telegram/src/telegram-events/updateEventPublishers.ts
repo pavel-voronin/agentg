@@ -2,40 +2,49 @@ import type { EventBus } from '@agentg/events/bus';
 import { createIntegrationEvent } from '@agentg/events/envelope';
 
 import type { TelegramDatabase } from '../database.js';
-import { createTelegramChatUpdatedEvent } from '../integrationEvents.js';
 import {
-  telegramChatFolderRef,
-  telegramChatRef,
-  telegramMessageRef,
-  telegramMessageSenderRef,
-  telegramUserRef
-} from '../modelRefs.js';
-import type {
-  TelegramMessageServiceAction,
-  TelegramMessageTextEntity
-} from '../telegram-store/message.js';
+  createTelegramChatUpdatedEvent,
+  createTelegramIntegrationEvents,
+  type TelegramEventPersistResult,
+  type TelegramEventSourceChatFolder,
+  type TelegramEventSourceMessage,
+  type TelegramEventSourceMessageContentUpdate,
+  type TelegramEventSourceMessageDelete,
+  type TelegramEventSourceMessageServiceAction,
+  type TelegramEventSourceUpdate,
+  type TelegramEventSourceUser
+} from '../integrationEvents.js';
+import type { TelegramMessageTextEntity } from '../rpc/contracts.js';
 import { getDirectoryEntryByChatId } from '../rpc/procedures/support.js';
+import {
+  telegramWireDate,
+  telegramWireId,
+  type TelegramWireChatFoldersUpdate,
+  type TelegramWireMessage,
+  type TelegramWireMessageContentUpdate,
+  type TelegramWireObject,
+  type TelegramWireUser
+} from '../telegramWire.js';
 
-export type TelegramMessageCreatedEventInput = {
-  chatId: string;
-  contentType: string;
-  isOutgoing: boolean;
-  messageDate?: Date;
-  messageId: string;
-  senderId?: string;
-  senderType?: string;
-  text?: string;
-  textEntities: TelegramMessageTextEntity[];
+const CHAT_FOLDERS_UPDATED: TelegramEventPersistResult = {
+  chat: false,
+  chatFolders: true,
+  message: false,
+  user: false
 };
 
-export type TelegramMessageUpdatedEventInput = {
-  chatId: string;
-  contentType: string;
-  editDate?: Date;
-  messageId: string;
-  serviceAction?: TelegramMessageServiceAction;
-  text?: string;
-  textEntities: TelegramMessageTextEntity[];
+const MESSAGE_UPDATED: TelegramEventPersistResult = {
+  chat: false,
+  chatFolders: false,
+  message: true,
+  user: false
+};
+
+const USER_UPDATED: TelegramEventPersistResult = {
+  chat: false,
+  chatFolders: false,
+  message: false,
+  user: true
 };
 
 export type TelegramMessagesDeletedEventInput = {
@@ -46,39 +55,18 @@ export type TelegramMessagesDeletedEventInput = {
   messageIds: string[];
 };
 
-export type TelegramChatFoldersUpdatedEventInput = {
-  folders: {
-    iconName?: string;
-    id: number;
-    position: number;
-    title: string;
-  }[];
-};
+export function createTelegramUpdateEventPublishers(eventBus: EventBus, database: TelegramDatabase) {
+  function publishTelegramEvents(
+    update: TelegramEventSourceUpdate,
+    result: TelegramEventPersistResult
+  ): void {
+    for (const event of createTelegramIntegrationEvents(update, result)) {
+      eventBus.publish(event);
+    }
+  }
 
-export type TelegramUserUpdatedEventInput = {
-  firstName: string;
-  id: string;
-  isBot: boolean;
-  isSelf?: boolean;
-  lastName: string;
-  username?: string;
-};
-
-export type TelegramUpdateEventPublishers = {
-  publishTelegramChatDirectoryUpdated(chatId: string): Promise<void>;
-  publishTelegramChatFoldersUpdated(input: TelegramChatFoldersUpdatedEventInput): void;
-  publishTelegramMessageCreated(input: TelegramMessageCreatedEventInput): void;
-  publishTelegramMessageDeleted(input: TelegramMessagesDeletedEventInput): void;
-  publishTelegramMessageUpdated(input: TelegramMessageUpdatedEventInput): void;
-  publishTelegramUserUpdated(input: TelegramUserUpdatedEventInput): void;
-};
-
-export function createTelegramUpdateEventPublishers(
-  eventBus: EventBus,
-  database: TelegramDatabase
-): TelegramUpdateEventPublishers {
   return {
-    async publishTelegramChatDirectoryUpdated(chatId): Promise<void> {
+    async publishTelegramChatDirectoryUpdated(chatId: string): Promise<void> {
       const chat = await getDirectoryEntryByChatId(database, chatId);
       eventBus.publish(
         chat === null
@@ -90,140 +78,246 @@ export function createTelegramUpdateEventPublishers(
           : createTelegramChatUpdatedEvent(chat)
       );
     },
-    publishTelegramChatFoldersUpdated(input): void {
-      eventBus.publish(
-        createIntegrationEvent({
-          type: 'telegram.chat_folders.updated',
-          data: {
-            folders: input.folders.map((folder) => ({
-              ...telegramChatFolderRef(folder.id),
-              folderId: folder.id,
-              iconName: folder.iconName ?? null,
-              position: folder.position,
-              title: folder.title
-            }))
-          }
-        })
+    publishTelegramChatFoldersUpdated(update: TelegramWireChatFoldersUpdate): void {
+      publishTelegramEvents(
+        { chatFolders: { folders: telegramChatFoldersUpdateSource(update) } },
+        CHAT_FOLDERS_UPDATED
       );
     },
-    publishTelegramMessageCreated(input): void {
-      eventBus.publish(
-        createIntegrationEvent({
-          type: 'telegram.message.created',
-          data: {
-            message: {
-              ...telegramMessageRef({
-                chatId: input.chatId,
-                messageId: input.messageId
-              }),
-              chat: telegramChatRef(input.chatId),
-              contentType: input.contentType,
-              isDeleted: false,
-              isOutgoing: input.isOutgoing,
-              messageDate: input.messageDate?.toISOString() ?? null,
-              replyTo: null,
-              sender: telegramMessageSenderRef(input.senderType, input.senderId),
-              senderDisplayName: null,
-              senderType: input.senderType ?? null,
-              serviceAction: null,
-              telegramMessageId: input.messageId,
-              text: input.text ?? null,
-              textEntities: input.textEntities
-            }
-          },
-          meta: {
-            chatId: input.chatId,
-            messageId: input.messageId
-          },
-          ...(input.messageDate === undefined ? {} : { occurredAt: input.messageDate })
-        })
+    publishTelegramMessageCreated(message: TelegramWireMessage): void {
+      publishTelegramEvents({ message: telegramMessageEventSource(message) }, MESSAGE_UPDATED);
+    },
+    publishTelegramMessageDeleted(input: TelegramMessagesDeletedEventInput): void {
+      publishTelegramEvents({ delete: input }, MESSAGE_UPDATED);
+    },
+    publishTelegramMessageUpdated(update: TelegramWireMessageContentUpdate): void {
+      publishTelegramEvents(
+        { contentUpdate: telegramMessageContentUpdateSource(update) },
+        MESSAGE_UPDATED
       );
     },
-    publishTelegramMessageDeleted(input): void {
-      eventBus.publish(
-        createIntegrationEvent({
-          type: 'telegram.message.deleted',
-          occurredAt: input.deletedAt,
-          data: {
-            delete: {
-              chat: telegramChatRef(input.chatId),
-              deletedAt: input.deletedAt.toISOString(),
-              fromCache: input.fromCache,
-              isPermanent: input.isPermanent,
-              messages: input.messageIds.map((messageId) =>
-                telegramMessageRef({ chatId: input.chatId, messageId })
-              )
-            }
-          },
-          meta: {
-            chatId: input.chatId,
-            messageIds: input.messageIds
-          }
-        })
-      );
-    },
-    publishTelegramMessageUpdated(input): void {
-      eventBus.publish(
-        createIntegrationEvent({
-          type: 'telegram.message.updated',
-          data: {
-            message: {
-              ...telegramMessageRef({
-                chatId: input.chatId,
-                messageId: input.messageId
-              }),
-              chat: telegramChatRef(input.chatId),
-              contentType: input.contentType,
-              editDate: input.editDate?.toISOString() ?? null,
-              serviceAction: eventMessageServiceAction(input.serviceAction),
-              telegramMessageId: input.messageId,
-              text: input.text ?? null,
-              textEntities: input.textEntities
-            }
-          },
-          meta: {
-            chatId: input.chatId,
-            messageId: input.messageId
-          },
-          ...(input.editDate === undefined ? {} : { occurredAt: input.editDate })
-        })
-      );
-    },
-    publishTelegramUserUpdated(input): void {
-      eventBus.publish(
-        createIntegrationEvent({
-          type: 'telegram.user.updated',
-          data: {
-            user: {
-              ...telegramUserRef(input.id),
-              firstName: input.firstName,
-              isBot: input.isBot,
-              isSelf: input.isSelf === true,
-              lastName: input.lastName,
-              username: input.username ?? null
-            }
-          },
-          meta: {
-            userId: input.id
-          }
-        })
-      );
+    publishTelegramUserUpdated(
+      user: TelegramWireUser,
+      options: { isSelf?: boolean } = {}
+    ): void {
+      publishTelegramEvents({ user: telegramUserEventSource(user, options) }, USER_UPDATED);
     }
   };
 }
 
-function eventMessageServiceAction(action: TelegramMessageServiceAction | undefined): {
-  kind: 'chatMemberLeft';
-  user: ReturnType<typeof telegramUserRef>;
-  userDisplayName: string;
-} | null {
-  if (action === undefined) {
+export type TelegramUpdateEventPublishers = ReturnType<typeof createTelegramUpdateEventPublishers>;
+
+function telegramChatFoldersUpdateSource(
+  update: TelegramWireChatFoldersUpdate
+): TelegramEventSourceChatFolder[] {
+  return update.chat_folders.map((folder, position) => ({
+    id: folder.id,
+    position,
+    title: folder.name.text.text,
+    ...(folder.icon.name.length === 0 ? {} : { iconName: folder.icon.name })
+  }));
+}
+
+function telegramUserEventSource(
+  user: TelegramWireUser,
+  options: { isSelf?: boolean }
+): TelegramEventSourceUser {
+  const username = activeUsername(user.usernames);
+  return {
+    firstName: user.first_name,
+    id: String(user.id),
+    isBot: user.type._ === 'userTypeBot',
+    lastName: user.last_name,
+    ...(options.isSelf === true ? { isSelf: true } : {}),
+    ...(username === undefined ? {} : { username })
+  };
+}
+
+function activeUsername(value: TelegramWireUser['usernames']): string | undefined {
+  return value?.active_usernames[0];
+}
+
+function telegramMessageEventSource(message: TelegramWireMessage): TelegramEventSourceMessage {
+  const senderId = messageSenderId(message);
+  const senderType = message.sender_id._;
+  const text = messageText(message);
+  const messageDate = telegramWireDate(message.date);
+
+  return {
+    chatId: String(message.chat_id),
+    contentType: message.content._,
+    isOutgoing: message.is_outgoing,
+    messageId: String(message.id),
+    textEntities: messageTextEntities(message),
+    ...(messageDate === undefined ? {} : { messageDate }),
+    ...(senderId === undefined ? {} : { senderId }),
+    senderType,
+    ...(text === undefined ? {} : { text })
+  };
+}
+
+function telegramMessageContentUpdateSource(
+  update: TelegramWireMessageContentUpdate
+): TelegramEventSourceMessageContentUpdate {
+  const text = messageContentText(update.new_content);
+  const serviceAction = messageContentServiceAction(update.new_content);
+
+  return {
+    chatId: String(update.chat_id),
+    contentType: update.new_content._,
+    messageId: String(update.message_id),
+    textEntities: messageContentTextEntities(update.new_content),
+    ...(text === undefined ? {} : { text }),
+    ...(serviceAction === undefined ? {} : { serviceAction })
+  };
+}
+
+function messageSenderId(message: TelegramWireMessage): string | undefined {
+  const sender = message.sender_id as TelegramWireObject;
+  return jsonId(sender.user_id) ?? jsonId(sender.chat_id);
+}
+
+function messageText(message: TelegramWireMessage): string | undefined {
+  return messageContentText(message.content);
+}
+
+function messageTextEntities(message: TelegramWireMessage): TelegramMessageTextEntity[] {
+  return messageContentTextEntities(message.content);
+}
+
+function messageContentText(content: unknown): string | undefined {
+  const text = messageTextContent(content);
+  return typeof text?.text === 'string' ? text.text : undefined;
+}
+
+function messageContentTextEntities(content: unknown): TelegramMessageTextEntity[] {
+  const text = messageTextContent(content);
+  return text === undefined ? [] : extractFormattedTextLinkEntities(text);
+}
+
+function messageContentServiceAction(
+  content: unknown
+): TelegramEventSourceMessageServiceAction | undefined {
+  const object = recordValue(content);
+  if (object?._ !== 'messageChatDeleteMember') {
+    return undefined;
+  }
+
+  const userId = jsonId(object.user_id);
+  return userId === undefined
+    ? undefined
+    : {
+        kind: 'chatMemberLeft',
+        userId
+      };
+}
+
+function messageTextContent(content: unknown): TelegramWireObject | undefined {
+  const object = recordValue(content);
+  if (object?._ !== 'messageText') {
+    return undefined;
+  }
+  return recordValue(object.text);
+}
+
+function extractFormattedTextLinkEntities(value: unknown): TelegramMessageTextEntity[] {
+  const formattedText = recordValue(value);
+  const text = typeof formattedText?.text === 'string' ? formattedText.text : '';
+  const sourceEntities = Array.isArray(formattedText?.entities) ? formattedText.entities : [];
+  const entities = sourceEntities
+    .map((entity) => telegramTextLinkEntity(entity, text))
+    .filter((entity): entity is TelegramMessageTextEntity => entity !== undefined)
+    .sort(compareTextEntities);
+
+  const result: TelegramMessageTextEntity[] = [];
+  let consumedUntil = 0;
+  for (const entity of entities) {
+    if (entity.offset < consumedUntil) {
+      continue;
+    }
+    result.push(entity);
+    consumedUntil = entity.offset + entity.length;
+  }
+  return result;
+}
+
+function telegramTextLinkEntity(
+  value: unknown,
+  text: string
+): TelegramMessageTextEntity | undefined {
+  const entity = recordValue(value);
+  const type = recordValue(entity?.type);
+  const offset = safeInteger(entity?.offset);
+  const length = safeInteger(entity?.length);
+  if (
+    offset === undefined ||
+    length === undefined ||
+    length <= 0 ||
+    offset < 0 ||
+    offset + length > text.length
+  ) {
+    return undefined;
+  }
+
+  if (type?._ === 'textEntityTypeUrl') {
+    const url = normalizeHttpUrl(text.slice(offset, offset + length), true);
+    return url === null ? undefined : { kind: 'url', length, offset, url };
+  }
+
+  if (type?._ === 'textEntityTypeTextUrl') {
+    const url = normalizeHttpUrl(type.url, false);
+    return url === null ? undefined : { kind: 'textUrl', length, offset, url };
+  }
+
+  return undefined;
+}
+
+function normalizeHttpUrl(value: unknown, allowMissingProtocol: boolean): string | null {
+  if (typeof value !== 'string') {
     return null;
   }
 
-  return {
-    kind: 'chatMemberLeft',
-    user: telegramUserRef(action.userId),
-    userDisplayName: action.userId
-  };
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return null;
+  }
+
+  const directUrl = parseHttpUrl(trimmed);
+  if (directUrl !== null || !allowMissingProtocol) {
+    return directUrl;
+  }
+  return parseHttpUrl(`https://${trimmed}`);
+}
+
+function parseHttpUrl(value: string): string | null {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+function compareTextEntities(
+  left: TelegramMessageTextEntity,
+  right: TelegramMessageTextEntity
+): number {
+  if (left.offset !== right.offset) {
+    return left.offset - right.offset;
+  }
+  return right.length - left.length;
+}
+
+function safeInteger(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isSafeInteger(value) ? value : undefined;
+}
+
+function jsonId(value: unknown): string | undefined {
+  return typeof value === 'number' || typeof value === 'string' ? telegramWireId(value) : undefined;
+}
+
+function recordValue(value: unknown): TelegramWireObject | undefined {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as TelegramWireObject)
+    : undefined;
 }

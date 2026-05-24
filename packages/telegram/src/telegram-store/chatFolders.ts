@@ -16,17 +16,6 @@ export async function replaceChatFolders(
   });
 }
 
-export function chatFoldersUpdatedEventInput(update: TelegramWireChatFoldersUpdate) {
-  return {
-    folders: update.chat_folders.map((folder, position) => ({
-      id: folder.id,
-      position,
-      title: folderTitle(folder),
-      ...(folder.icon.name.length === 0 ? {} : { iconName: folder.icon.name })
-    }))
-  };
-}
-
 function chatFolderInfoRow(
   folder: TelegramWireChatFoldersUpdate['chat_folders'][number],
   position: number
@@ -40,8 +29,4 @@ function chatFolderInfoRow(
     name: telegramWireJsonObject(folder.name),
     position
   };
-}
-
-function folderTitle(folder: TelegramWireChatFoldersUpdate['chat_folders'][number]): string {
-  return folder.name.text.text;
 }
