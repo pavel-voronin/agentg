@@ -56,7 +56,7 @@ describe('TDLib explorer state persistence', () => {
       localStorage: storage
     });
 
-    const { cardsForSlot } = await import('../src/tdlib-docs/explorerState.js');
+    const { cardsForSlot } = await import('../src/explorerState.js');
 
     expect(
       cardsForSlot(

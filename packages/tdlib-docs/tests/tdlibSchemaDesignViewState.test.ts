@@ -4,7 +4,7 @@ import {
   persistSchemaDesignViewState,
   readSchemaDesignViewState,
   schemaDesignViewStateStorageKey
-} from '../src/tdlib-docs/schemaDesignViewState.js';
+} from '../src/schemaDesignViewState.js';
 
 describe('TDLib schema design view state', () => {
   it('uses default state when local storage is empty', () => {

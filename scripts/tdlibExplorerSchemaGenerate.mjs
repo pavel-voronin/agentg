@@ -8,7 +8,7 @@ import { format, resolveConfig } from 'prettier';
 import { TD_LIB_SCHEMA_COMMIT, TD_LIB_SCHEMA_URL } from './tdlib/schemaSource.mjs';
 
 const ROOT = new URL('../', import.meta.url);
-const OUT_FILE = new URL('packages/telegram/src/tdlib-docs/data/tdlibSchema.json', ROOT);
+const OUT_FILE = new URL('packages/tdlib-docs/src/data/tdlibSchema.json', ROOT);
 const PRETTIER_OPTIONS = (await resolveConfig(new URL('package.json', ROOT))) ?? {};
 const SCALAR_TYPES = [
   'int32',

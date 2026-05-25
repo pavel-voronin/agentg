@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 
 const schemaDesignComponentDirectory = join(
   dirname(fileURLToPath(import.meta.url)),
-  '../src/tdlib-docs/components/schema-design'
+  '../src/components/schema-design'
 );
 
 describe('TDLib schema design component styles', () => {

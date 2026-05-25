@@ -16,8 +16,8 @@ Error
 
 Source evidence:
 
-- `packages/telegram/src/tdlib-docs/data/tdlibSchema.json`
-- `packages/telegram/src/tdlib-docs/data/tdlibStorageReview.json`
+- `packages/tdlib-docs/src/data/tdlibSchema.json`
+- `packages/tdlib-docs/src/data/tdlibStorageReview.json`
 
 Spreadsheet updates: none.
 

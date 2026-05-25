@@ -4,7 +4,7 @@ import {
   persistStorageReviewViewState,
   readStorageReviewViewState,
   storageReviewViewStateStorageKey
-} from '../src/tdlib-docs/storageReviewViewState.js';
+} from '../src/storageReviewViewState.js';
 
 describe('TDLib storage review view state', () => {
   it('uses default filters when local storage is empty', () => {

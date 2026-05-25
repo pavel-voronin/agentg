@@ -1,19 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { fileURLToPath } from 'node:url';
 
-import rawSchema from '../src/tdlib-docs/data/tdlibSchema.json' with { type: 'json' };
-import rawStorageReview from '../src/tdlib-docs/data/tdlibStorageReview.json' with { type: 'json' };
-import { readStorageReviewState } from '../src/tdlib-docs-server/storageReview.js';
+import rawSchema from '../src/data/tdlibSchema.json' with { type: 'json' };
+import rawStorageReview from '../src/data/tdlibStorageReview.json' with { type: 'json' };
+import { readStorageReviewState } from '../src/server/storageReview.js';
 import {
   validateSchemaDesignState as validateSchemaDesignStateStrict,
   type SchemaDesignValidationIssue
-} from '../src/tdlib-docs/schemaDesignValidator.js';
-import type { StorageReviewState } from '../src/tdlib-docs/storageReviewTypes.js';
-import type { TdlibExplorerSchema } from '../src/tdlib-docs/types.js';
+} from '../src/schemaDesignValidator.js';
+import type { StorageReviewState } from '../src/storageReviewTypes.js';
+import type { TdlibExplorerSchema } from '../src/types.js';
 
 const schema = rawSchema as TdlibExplorerSchema;
 const committedStorageReviewFilePath = fileURLToPath(
-  new URL('../src/tdlib-docs/data/tdlibStorageReview.json', import.meta.url)
+  new URL('../src/data/tdlibStorageReview.json', import.meta.url)
 );
 
 describe('TDLib schema design validator', () => {

@@ -9,7 +9,6 @@ import {
   type TelegramEventSourceChatFolder,
   type TelegramEventSourceMessage,
   type TelegramEventSourceMessageContentUpdate,
-  type TelegramEventSourceMessageDelete,
   type TelegramEventSourceMessageServiceAction,
   type TelegramEventSourceUpdate,
   type TelegramEventSourceUser
@@ -55,7 +54,10 @@ export type TelegramMessagesDeletedEventInput = {
   messageIds: string[];
 };
 
-export function createTelegramUpdateEventPublishers(eventBus: EventBus, database: TelegramDatabase) {
+export function createTelegramUpdateEventPublishers(
+  eventBus: EventBus,
+  database: TelegramDatabase
+) {
   function publishTelegramEvents(
     update: TelegramEventSourceUpdate,
     result: TelegramEventPersistResult
@@ -96,10 +98,7 @@ export function createTelegramUpdateEventPublishers(eventBus: EventBus, database
         MESSAGE_UPDATED
       );
     },
-    publishTelegramUserUpdated(
-      user: TelegramWireUser,
-      options: { isSelf?: boolean } = {}
-    ): void {
+    publishTelegramUserUpdated(user: TelegramWireUser, options: { isSelf?: boolean } = {}): void {
       publishTelegramEvents({ user: telegramUserEventSource(user, options) }, USER_UPDATED);
     }
   };

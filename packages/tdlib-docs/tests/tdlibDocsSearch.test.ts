@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { searchTdlib } from '../src/tdlib-docs/schemaIndex.js';
+import { searchTdlib } from '../src/schemaIndex.js';
 
 describe('TDLib docs search', () => {
   it('keeps separated field matches below dense prefix matches', () => {

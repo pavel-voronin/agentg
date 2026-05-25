@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { storageReviewButtons } from '../src/tdlib-docs/storageReviewDisplay.js';
-import type { StorageReviewEntry } from '../src/tdlib-docs/storageReviewTypes.js';
+import { storageReviewButtons } from '../src/storageReviewDisplay.js';
+import type { StorageReviewEntry } from '../src/storageReviewTypes.js';
 
 describe('TDLib storage review display state', () => {
   it('returns one button per review sorted by maturity', () => {

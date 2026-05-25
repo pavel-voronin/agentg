@@ -8,8 +8,6 @@ export default tseslint.config(
       '**/dist/**',
       'dist-control-plane/**',
       '**/dist-control-plane/**',
-      'dist-tdlib-docs/**',
-      '**/dist-tdlib-docs/**',
       'dist-server/**',
       '**/dist-server/**',
       'coverage/**',

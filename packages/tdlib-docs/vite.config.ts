@@ -3,14 +3,14 @@ import { fileURLToPath } from 'node:url';
 import tailwindcss from '@tailwindcss/vite';
 import vue from '@vitejs/plugin-vue';
 import Icons from 'unplugin-icons/vite';
-import { defineConfig, type Plugin } from 'vite';
+import { defineConfig, type Plugin } from 'vitest/config';
 
-import { tdlibStorageReviewPlugin } from './src/tdlib-docs-server/storageReview.js';
+import { tdlibStorageReviewPlugin } from './src/server/storageReview.js';
 
-const docsRoot = fileURLToPath(new URL('./src/tdlib-docs/', import.meta.url));
-const outDir = fileURLToPath(new URL('./dist-tdlib-docs/', import.meta.url));
+const docsRoot = fileURLToPath(new URL('./src/', import.meta.url));
+const outDir = fileURLToPath(new URL('./dist/', import.meta.url));
 const storageReviewFile = fileURLToPath(
-  new URL('./src/tdlib-docs/data/tdlibStorageReview.json', import.meta.url)
+  new URL('./src/data/tdlibStorageReview.json', import.meta.url)
 );
 
 export default defineConfig({
@@ -29,7 +29,10 @@ export default defineConfig({
     tdlibStorageReviewPlugin(storageReviewFile),
     inlineSingleHtml()
   ],
-  root: docsRoot
+  root: docsRoot,
+  test: {
+    include: ['../tests/**/*.test.ts']
+  }
 });
 
 function inlineSingleHtml(): Plugin {

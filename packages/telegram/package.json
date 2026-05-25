@@ -12,12 +12,10 @@
   "scripts": {
     "dev": "tsx watch --clear-screen=false src/main.ts",
     "dev:control-plane-assets": "vite build --watch --config viteControlPlane.config.ts",
-    "dev:tdlib-docs": "vite --host 127.0.0.1 --port 8791 --config viteTdlibDocs.config.ts",
     "db:generate": "node ../../scripts/telegramDbSchemaGenerate.mjs",
     "db:migrate": "tsx src/migrateMain.ts",
-    "build": "npm run build:server && npm run build:control-plane && npm run build:tdlib-docs",
+    "build": "npm run build:server && npm run build:control-plane",
     "build:control-plane": "vite build --config viteControlPlane.config.ts",
-    "build:tdlib-docs": "vite build --config viteTdlibDocs.config.ts",
     "build:server": "vite build",
     "start": "node dist/main.js",
     "test": "vitest run",

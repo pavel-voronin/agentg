@@ -6,13 +6,13 @@ import {
   schemaProgressForEntry,
   schemaTableMatchesQuery,
   schemaUpdateProcessForUpdate
-} from '../src/tdlib-docs/schemaDesignView.js';
+} from '../src/schemaDesignView.js';
 import type {
   StorageReviewEntry,
   StorageSchemaTable,
   StorageSchemaUpdateDesign
-} from '../src/tdlib-docs/storageReviewTypes.js';
-import type { TdlibCallableEntity } from '../src/tdlib-docs/types.js';
+} from '../src/storageReviewTypes.js';
+import type { TdlibCallableEntity } from '../src/types.js';
 
 describe('TDLib schema design view', () => {
   it('derives key-value table mappings from constructor targets', () => {

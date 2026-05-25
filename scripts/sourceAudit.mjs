@@ -652,10 +652,7 @@ function auditControlPlaneEventDateContract(files) {
 }
 
 function auditTdlibContractGeneration(files) {
-  const storageReviewPath = join(
-    root,
-    'packages/telegram/src/tdlib-docs/data/tdlibStorageReview.json'
-  );
+  const storageReviewPath = join(root, 'packages/tdlib-docs/src/data/tdlibStorageReview.json');
   const oldCoveragePath = join(root, 'docs/04-data/telegram-tdlib-schema/coverage.json');
   const dbSchemaGenerator = readFileSync(
     join(root, 'scripts/telegramDbSchemaGenerate.mjs'),
@@ -664,7 +661,7 @@ function auditTdlibContractGeneration(files) {
 
   if (!existsSync(storageReviewPath)) {
     failures.push(
-      'TDLib storage review must exist: packages/telegram/src/tdlib-docs/data/tdlibStorageReview.json'
+      'TDLib storage review must exist: packages/tdlib-docs/src/data/tdlibStorageReview.json'
     );
   } else {
     const storageReview = JSON.parse(readFileSync(storageReviewPath, 'utf8'));
@@ -850,7 +847,7 @@ function auditTdlibStorageReviewParserContract(storageReviewPath) {
 
   const code = [
     '(async () => {',
-    "  const { readStorageReviewState } = await import('./packages/telegram/src/tdlib-docs-server/storageReview.ts');",
+    "  const { readStorageReviewState } = await import('./packages/tdlib-docs/src/server/storageReview.ts');",
     `  await readStorageReviewState(${JSON.stringify(storageReviewPath)});`,
     '})().catch((error) => {',
     '  console.error(error instanceof Error ? error.stack : error);',

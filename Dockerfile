@@ -12,6 +12,7 @@ COPY packages/control-plane/package.json packages/control-plane/package.json
 COPY packages/gateway/package.json packages/gateway/package.json
 COPY packages/history-sync/package.json packages/history-sync/package.json
 COPY packages/telegram/package.json packages/telegram/package.json
+COPY packages/tdlib-docs/package.json packages/tdlib-docs/package.json
 RUN npm install
 
 FROM deps AS build
@@ -34,6 +35,7 @@ COPY packages/control-plane/package.json packages/control-plane/package.json
 COPY packages/gateway/package.json packages/gateway/package.json
 COPY packages/history-sync/package.json packages/history-sync/package.json
 COPY packages/telegram/package.json packages/telegram/package.json
+COPY packages/tdlib-docs/package.json packages/tdlib-docs/package.json
 RUN npm install --omit=dev && npm cache clean --force
 COPY --from=build --chown=agentg:agentg /app/packages/database/dist ./packages/database/dist
 COPY --from=build --chown=agentg:agentg /app/packages/control-plane/dist ./packages/control-plane/dist

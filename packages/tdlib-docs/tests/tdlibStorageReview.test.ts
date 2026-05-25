@@ -4,11 +4,8 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import {
-  createStorageReviewStore,
-  readStorageReviewState
-} from '../src/tdlib-docs-server/storageReview.js';
-import type { StorageReviewState } from '../src/tdlib-docs/storageReviewTypes.js';
+import { createStorageReviewStore, readStorageReviewState } from '../src/server/storageReview.js';
+import type { StorageReviewState } from '../src/storageReviewTypes.js';
 
 describe('TDLib storage review store', () => {
   it('reads the storage review state from JSON', async () => {

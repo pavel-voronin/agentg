@@ -18,7 +18,7 @@ import type {
   StorageReviewEntryPatch,
   StorageReviewState,
   StorageSchemaTablePatch
-} from '../tdlib-docs/storageReviewTypes.js';
+} from '../storageReviewTypes.js';
 
 const storageReviewApiPath = '/api/tdlib-storage-review';
 const storageReviewEntryApiPath = `${storageReviewApiPath}/entries/`;
