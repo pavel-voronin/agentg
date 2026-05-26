@@ -1862,7 +1862,7 @@
           "id": "telegram_chat_photos.minithumbnail",
           "name": "minithumbnail",
           "notes": ["Minithumbnail is stored as embedded JSONB."],
-          "nullable": false,
+          "nullable": true,
           "pgType": "jsonb",
           "role": "data",
           "sourceFields": ["ChatPhoto.chatPhoto.minithumbnail"]
@@ -1874,7 +1874,7 @@
             "AnimatedChatPhoto is stored as embedded JSONB.",
             "Embedded payload contains File-bearing values; nested File payloads are stored in telegram_files and represented by file_id/File.id references inside this JSONB value."
           ],
-          "nullable": false,
+          "nullable": true,
           "pgType": "jsonb",
           "role": "data",
           "sourceFields": ["ChatPhoto.chatPhoto.animation"]
@@ -1886,7 +1886,7 @@
             "AnimatedChatPhoto is stored as embedded JSONB.",
             "Embedded payload contains File-bearing values; nested File payloads are stored in telegram_files and represented by file_id/File.id references inside this JSONB value."
           ],
-          "nullable": false,
+          "nullable": true,
           "pgType": "jsonb",
           "role": "data",
           "sourceFields": ["ChatPhoto.chatPhoto.small_animation"]
@@ -1895,7 +1895,7 @@
           "id": "telegram_chat_photos.sticker",
           "name": "sticker",
           "notes": ["ChatPhotoSticker is stored as embedded JSONB."],
-          "nullable": false,
+          "nullable": true,
           "pgType": "jsonb",
           "role": "data",
           "sourceFields": ["ChatPhoto.chatPhoto.sticker"]
@@ -5492,7 +5492,7 @@
           "id": "telegram_message_reactions.used_sender_id",
           "name": "used_sender_id",
           "notes": ["MessageSender is stored as embedded JSONB."],
-          "nullable": false,
+          "nullable": true,
           "pgType": "jsonb",
           "role": "data",
           "sourceFields": [
@@ -7910,7 +7910,7 @@
           "id": "telegram_saved_messages_topics.draft_message",
           "name": "draft_message",
           "notes": ["DraftMessage is stored as embedded JSONB."],
-          "nullable": false,
+          "nullable": true,
           "pgType": "jsonb",
           "role": "data",
           "sourceFields": [
@@ -9431,7 +9431,7 @@
           "id": "telegram_supergroups.usernames",
           "name": "usernames",
           "notes": ["Usernames is stored as embedded JSONB."],
-          "nullable": false,
+          "nullable": true,
           "pgType": "jsonb",
           "role": "data",
           "sourceFields": ["Supergroup.supergroup.usernames", "Update.updateSupergroup.supergroup"]
@@ -9449,7 +9449,7 @@
           "id": "telegram_supergroups.verification_status",
           "name": "verification_status",
           "notes": ["VerificationStatus is stored as embedded JSONB."],
-          "nullable": false,
+          "nullable": true,
           "pgType": "jsonb",
           "role": "data",
           "sourceFields": [
@@ -9461,7 +9461,7 @@
           "id": "telegram_supergroups.restriction_info",
           "name": "restriction_info",
           "notes": ["RestrictionInfo is stored as embedded JSONB."],
-          "nullable": false,
+          "nullable": true,
           "pgType": "jsonb",
           "role": "data",
           "sourceFields": [
@@ -9473,7 +9473,7 @@
           "id": "telegram_supergroups.active_story_state",
           "name": "active_story_state",
           "notes": ["ActiveStoryState is stored as embedded JSONB."],
-          "nullable": false,
+          "nullable": true,
           "pgType": "jsonb",
           "role": "data",
           "sourceFields": [
@@ -10229,8 +10229,10 @@
         {
           "id": "telegram_text_composition_styles.prompt",
           "name": "prompt",
-          "notes": [],
-          "nullable": false,
+          "notes": [
+            "TDLib omits TextCompositionStyle.prompt for non-created catalog styles; store SQL null for absent prompt."
+          ],
+          "nullable": true,
           "pgType": "text",
           "role": "data",
           "sourceFields": [
@@ -11552,14 +11554,6 @@
               "telegram_active_live_location_messages.message_id"
             ],
             "description": "Replace the current active live-location message set with chat_id and message_id for every message in the complete messages vector. An empty vector clears the set; canonical message payloads remain in telegram_messages.",
-            "sourceFields": ["Update.updateActiveLiveLocationMessages.messages"]
-          },
-          {
-            "id": "schedule-active-live-location-updates",
-            "op": "runEffect",
-            "effect": "activeLiveLocationMessages.scheduleUpdatesFromStoredSet",
-            "effectKind": "other",
-            "description": "Notify the live-location updater to use the replaced active message set after database writes commit.",
             "sourceFields": ["Update.updateActiveLiveLocationMessages.messages"]
           }
         ],
@@ -15050,19 +15044,8 @@
       "handlerPlan": {
         "maturity": 1,
         "status": "draft",
-        "summary": "Replace transient pending-notification delivery state and publish the live status; do not persist it.",
+        "summary": "Publish the transient pending-notification delivery status; do not persist it.",
         "steps": [
-          {
-            "id": "update-pending-notification-lifecycle",
-            "op": "runEffect",
-            "effect": "notificationLifecycle.setPendingNotifications",
-            "effectKind": "other",
-            "description": "Replace process-local notification delivery hold state from both booleans. Keep the application alive while either have_delayed_notifications or have_unreceived_notifications is true; release the hold when both are false. Do not store this state in the database.",
-            "sourceFields": [
-              "Update.updateHavePendingNotifications.have_delayed_notifications",
-              "Update.updateHavePendingNotifications.have_unreceived_notifications"
-            ]
-          },
           {
             "id": "publish-pending-notifications-updated",
             "op": "publishEvent",
@@ -15076,8 +15059,8 @@
         ],
         "notes": [
           "This update carries no Notification, NotificationGroup, chat id, message id, or stable owner key, so it must not mutate active notification tables.",
-          "The incoming booleans are replacement state for a transient lifecycle hold. There is no stale-row or stale-KV cleanup because no durable rows are written.",
-          "false/false is meaningful and must be delivered to the effect and event; it clears the keep-alive condition."
+          "The incoming booleans are live TDLib notification-drain status. There is no stale-row or stale-KV cleanup because no durable rows are written.",
+          "false/false is meaningful and must still be delivered in the event."
         ]
       },
       "notes": []
@@ -15605,14 +15588,12 @@
       "handlerPlan": {
         "maturity": 1,
         "status": "draft",
-        "summary": "Request an immediate live-location refresh for the addressed message without mutating durable message or active live-location state.",
+        "summary": "Acknowledge a viewed live-location message signal without mutating durable message or active live-location state.",
         "steps": [
           {
-            "id": "request-viewed-live-location-update",
-            "op": "runEffect",
-            "effect": "activeLiveLocationMessages.requestUpdateForViewedMessage",
-            "effectKind": "other",
-            "description": "Ask the live-location updater to refresh the addressed live-location message using chat_id and message_id. The update carries no Message payload, no MessageContent payload, and no new location values, so it must not mutate telegram_messages or telegram_active_live_location_messages.",
+            "id": "ignore-viewed-live-location-signal",
+            "op": "ignoreField",
+            "description": "Use chat_id and message_id only to acknowledge that TDLib reported a viewed live-location message. The read-only cache does not request refreshes and the update carries no Message payload, MessageContent payload, viewed timestamp, actor, or location value to store.",
             "sourceFields": [
               "Update.updateMessageLiveLocationViewed.chat_id",
               "Update.updateMessageLiveLocationViewed.message_id"
@@ -15620,9 +15601,8 @@
           }
         ],
         "notes": [
-          "chat_id and message_id are used only to target the live-location refresh side effect.",
           "Do not store viewed state from this update; TDLib provides no viewed timestamp, actor, location payload, or message content replacement.",
-          "If the refresh produces a Message or updateMessageContent later, that payload is persisted by the canonical message storage path."
+          "If TDLib later sends a Message or updateMessageContent payload, that payload is persisted by the canonical message storage path."
         ]
       },
       "notes": []
@@ -17218,21 +17198,8 @@
       "handlerPlan": {
         "maturity": 1,
         "status": "draft",
-        "summary": "Publish and track the transient bot pending-text message scoped by chat, forum topic, and draft id; do not persist it as Message, DraftMessage, or standalone FormattedText storage.",
+        "summary": "Publish the transient bot pending-text message scoped by chat, forum topic, and draft id; do not persist it as Message, DraftMessage, or standalone FormattedText storage.",
         "steps": [
-          {
-            "id": "track-pending-text-message-lifecycle",
-            "op": "runEffect",
-            "effect": "pendingTextMessageLifecycle.replaceAndScheduleClear",
-            "effectKind": "other",
-            "description": "Replace the process-local pending text entry keyed by chat_id, forum_topic_id, and draft_id with the received FormattedText payload, schedule automatic clearing after option:pending_text_message_period, and register it for clearing when an incoming bot message arrives in the same message thread. This is transient lifecycle state, not database storage.",
-            "sourceFields": [
-              "Update.updatePendingTextMessage.chat_id",
-              "Update.updatePendingTextMessage.forum_topic_id",
-              "Update.updatePendingTextMessage.draft_id",
-              "Update.updatePendingTextMessage.text"
-            ]
-          },
           {
             "id": "publish-pending-text-message-updated",
             "op": "publishEvent",
@@ -17249,8 +17216,7 @@
         "notes": [
           "updatePendingTextMessage carries no Message payload and no message_id, so it must not write telegram_messages.",
           "draft_id is the generated-text pending draft identifier within the message thread, not DraftMessage storage.",
-          "FormattedText and TextEntity remain embedded payload values; updatePendingTextMessage.text must not create standalone text/entity rows.",
-          "The future updateNewMessage handler must clear matching pending text when an incoming bot message arrives in the same message thread."
+          "FormattedText and TextEntity remain embedded payload values; updatePendingTextMessage.text must not create standalone text/entity rows."
         ]
       },
       "notes": []
