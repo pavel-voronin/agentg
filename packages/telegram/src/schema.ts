@@ -29,6 +29,34 @@ export const telegramHistoryCoverage = pgTable(
   ]
 );
 
+export const telegramHistoryLiveWindows = pgTable(
+  'telegram_history_live_windows',
+  {
+    closedAt: timestamp('closed_at', { withTimezone: true }),
+    closeReason: text('close_reason'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    endAt: timestamp('end_at', { withTimezone: true }).notNull(),
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    startAt: timestamp('start_at', { withTimezone: true }).notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    index('telegram_history_live_windows_closed_idx').on(table.closedAt),
+    index('telegram_history_live_windows_interval_idx').on(table.startAt, table.endAt)
+  ]
+);
+
+export const telegramHistoryLiveChats = pgTable(
+  'telegram_history_live_chats',
+  {
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    eligibleFrom: timestamp('eligible_from', { withTimezone: true }).notNull(),
+    telegramChatId: text('telegram_chat_id').primaryKey(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [index('telegram_history_live_chats_eligible_idx').on(table.eligibleFrom)]
+);
+
 export const telegramFileAssets = pgTable(
   'telegram_file_assets',
   {

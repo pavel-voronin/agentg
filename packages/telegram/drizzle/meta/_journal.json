@@ -22,6 +22,13 @@
       "when": 1800000002000,
       "tag": "0002_telegram_file_worker",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1800000003000,
+      "tag": "0003_telegram_live_coverage",
+      "breakpoints": true
     }
   ]
 }

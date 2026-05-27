@@ -1,7 +1,12 @@
-import { and, asc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, gte, inArray, isNull, lt, lte, sql } from 'drizzle-orm';
 
 import type { TelegramDatabase as AppDatabase } from './database.js';
-import { telegramChats, telegramHistoryCoverage } from './schema.js';
+import {
+  telegramChats,
+  telegramHistoryCoverage,
+  telegramHistoryLiveChats,
+  telegramHistoryLiveWindows
+} from './schema.js';
 import {
   normalizeTelegramHistoryInterval,
   TELEGRAM_HISTORY_TICK_MS,
@@ -67,25 +72,159 @@ export async function listTelegramHistoryCoverage(
   database: AppDatabase,
   chatId: string
 ): Promise<TelegramHistoryCoverageSegment[]> {
-  const rows = await database
-    .select({
-      coveredAt: telegramHistoryCoverage.coveredAt,
-      endAt: telegramHistoryCoverage.endAt,
-      startAt: telegramHistoryCoverage.startAt,
-      telegramChatId: telegramHistoryCoverage.telegramChatId
-    })
-    .from(telegramHistoryCoverage)
-    .where(eq(telegramHistoryCoverage.telegramChatId, chatId))
-    .orderBy(asc(telegramHistoryCoverage.startAt));
+  const [rows, liveSegments] = await Promise.all([
+    database
+      .select({
+        coveredAt: telegramHistoryCoverage.coveredAt,
+        endAt: telegramHistoryCoverage.endAt,
+        startAt: telegramHistoryCoverage.startAt,
+        telegramChatId: telegramHistoryCoverage.telegramChatId
+      })
+      .from(telegramHistoryCoverage)
+      .where(eq(telegramHistoryCoverage.telegramChatId, chatId))
+      .orderBy(asc(telegramHistoryCoverage.startAt)),
+    listTelegramHistoryLiveCoverage(database, chatId)
+  ]);
 
-  return normalizeCoverageSegments(
-    rows.map((row) => ({
+  return normalizeCoverageSegments([
+    ...rows.map((row) => ({
       chatId: row.telegramChatId,
       coveredAt: row.coveredAt,
       endAt: row.endAt,
       startAt: row.startAt
+    })),
+    ...liveSegments
+  ]);
+}
+
+export async function recoverTelegramHistoryLiveWindows(database: AppDatabase): Promise<void> {
+  await database
+    .update(telegramHistoryLiveWindows)
+    .set({
+      closedAt: sql`${telegramHistoryLiveWindows.endAt}`,
+      closeReason: 'recovered_after_crash',
+      updatedAt: sql`now()`
+    })
+    .where(isNull(telegramHistoryLiveWindows.closedAt));
+}
+
+export async function openTelegramHistoryLiveWindow(
+  database: AppDatabase,
+  startAt: Date
+): Promise<number> {
+  const [row] = await database
+    .insert(telegramHistoryLiveWindows)
+    .values({
+      endAt: startAt,
+      startAt,
+      updatedAt: sql`now()`
+    })
+    .returning({
+      id: telegramHistoryLiveWindows.id
+    });
+
+  if (row === undefined) {
+    throw new Error('Telegram live coverage window insert returned no id');
+  }
+
+  return row.id;
+}
+
+export async function extendTelegramHistoryLiveWindow(
+  database: AppDatabase,
+  id: number,
+  endAt: Date
+): Promise<void> {
+  await database
+    .update(telegramHistoryLiveWindows)
+    .set({
+      endAt,
+      updatedAt: sql`now()`
+    })
+    .where(
+      and(
+        eq(telegramHistoryLiveWindows.id, id),
+        isNull(telegramHistoryLiveWindows.closedAt),
+        lt(telegramHistoryLiveWindows.endAt, endAt)
+      )
+    );
+}
+
+export async function closeTelegramHistoryLiveWindow(
+  database: AppDatabase,
+  id: number,
+  endAt: Date,
+  closeReason: string
+): Promise<void> {
+  const durableEndAt = sql<Date>`greatest(${telegramHistoryLiveWindows.endAt}, ${endAt})`;
+  await database
+    .update(telegramHistoryLiveWindows)
+    .set({
+      closedAt: durableEndAt,
+      closeReason,
+      endAt: durableEndAt,
+      updatedAt: sql`now()`
+    })
+    .where(and(eq(telegramHistoryLiveWindows.id, id), isNull(telegramHistoryLiveWindows.closedAt)));
+}
+
+export async function registerTelegramHistoryLiveChats(
+  database: AppDatabase,
+  chatIds: string[],
+  eligibleFrom: Date
+): Promise<void> {
+  const uniqueChatIds = uniqueSortedStrings(chatIds);
+  for (const chunk of chunks(uniqueChatIds, TELEGRAM_HISTORY_COVERAGE_BATCH_CHUNK_SIZE)) {
+    if (chunk.length > 0) {
+      await database
+        .insert(telegramHistoryLiveChats)
+        .values(
+          chunk.map((chatId) => ({
+            eligibleFrom,
+            telegramChatId: chatId,
+            updatedAt: sql`now()`
+          }))
+        )
+        .onConflictDoNothing({
+          target: telegramHistoryLiveChats.telegramChatId
+        });
+    }
+  }
+}
+
+async function listTelegramHistoryLiveCoverage(
+  database: AppDatabase,
+  chatId: string
+): Promise<TelegramHistoryCoverageSegment[]> {
+  const [liveChat] = await database
+    .select({
+      eligibleFrom: telegramHistoryLiveChats.eligibleFrom
+    })
+    .from(telegramHistoryLiveChats)
+    .where(eq(telegramHistoryLiveChats.telegramChatId, chatId))
+    .limit(1);
+
+  if (liveChat === undefined) {
+    return [];
+  }
+
+  const rows = await database
+    .select({
+      endAt: telegramHistoryLiveWindows.endAt,
+      startAt: telegramHistoryLiveWindows.startAt
+    })
+    .from(telegramHistoryLiveWindows)
+    .where(gt(telegramHistoryLiveWindows.endAt, liveChat.eligibleFrom))
+    .orderBy(asc(telegramHistoryLiveWindows.startAt));
+
+  return rows
+    .map((row) => ({
+      chatId,
+      coveredAt: row.endAt,
+      endAt: row.endAt,
+      startAt: maxDate(row.startAt, liveChat.eligibleFrom)
     }))
-  );
+    .filter((segment) => segment.startAt < segment.endAt);
 }
 
 export async function addTelegramHistoryCoverage(

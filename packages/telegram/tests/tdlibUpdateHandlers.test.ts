@@ -710,6 +710,7 @@ function createHandlerContext(options: { insertedRows?: unknown[] } = {}): {
         markConnected: vi.fn(() => Promise.resolve(undefined)),
         markDisconnected: vi.fn(() => Promise.resolve(undefined)),
         recordLiveMessage,
+        syncKnownChats: vi.fn(() => Promise.resolve(undefined)),
         tick: vi.fn(() => Promise.resolve(undefined)),
         wait: vi.fn(() => Promise.resolve(undefined))
       },

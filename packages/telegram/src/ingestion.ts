@@ -262,6 +262,7 @@ type TdlibStatusTracker = {
 };
 
 const TDLIB_STATUS_HEARTBEAT_MS = 5000;
+const TELEGRAM_LIVE_COVERAGE_TICK_MS = 30_000;
 const TELEGRAM_SHUTDOWN_FORCE_EXIT_MS = 4500;
 const TELEGRAM_SHUTDOWN_STEP_TIMEOUT_MS = 2000;
 
@@ -310,8 +311,7 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
     tdlibStatus = createTdlibStatusTracker(eventBus);
     const activeTdlibStatus = tdlibStatus;
     liveCoverageObserver = createTelegramLiveCoverageObserver({
-      database: options.database,
-      eventBus
+      database: options.database
     });
     const activeLiveCoverageObserver = liveCoverageObserver;
 
@@ -337,8 +337,9 @@ export async function runTelegramIngestion(options: TelegramIngestionOptions): P
     tdlibStatusHeartbeat = startTdlibStatusHeartbeat(activeTdlibStatus);
     liveCoverageTick = setInterval(() => {
       void activeLiveCoverageObserver.tick();
-    }, TDLIB_STATUS_HEARTBEAT_MS);
+    }, TELEGRAM_LIVE_COVERAGE_TICK_MS);
     await syncInitialChats(options.database, activeTdlibScheduler, eventBus, activeFileSubsystem);
+    await activeLiveCoverageObserver.syncKnownChats();
 
     telegramRpcServer = await startTelegramTrpcServer({
       bind: options.internalRpc,
