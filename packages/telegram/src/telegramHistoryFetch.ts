@@ -25,23 +25,14 @@ import type {
   TelegramHistoryFetchPageResult
 } from './rpc/contracts.js';
 import type { TelegramRpcRuntime } from './rpc/runtime.js';
-import {
-  isBeforeInterval,
-  oldestMessageDate,
-  oldestMessageIdOlderThan,
-  optionalTelegramMessageId,
-  parseLimit,
-  parseTelegramChatId,
-  requireDate,
-  tdMessageDate,
-  tdMessageId
-} from './tdlib-procedure-handlers/helpers.js';
-import {
-  getLastMessageNoLaterThan,
-  invokeTdlib
-} from './tdlib-procedure-handlers/tdlibOperations.js';
+import { parseLimit, requireDate } from './telegramProcedureInputs.js';
+import { getChatHistory, getChatMessageByDate } from './telegramTdlibOperations.js';
 import { telegramTdlibPriorities, type TelegramTdlibPriority } from './telegramTdlibPriority.js';
-import type { TelegramWireMessage, TelegramWireMessages } from './telegramWire.js';
+import {
+  telegramWireDate,
+  telegramWireIdNumber,
+  type TelegramWireMessage
+} from './telegramWire.js';
 
 export type TelegramHistoryPageCheckpointInput = {
   crossedStart: boolean;
@@ -122,9 +113,8 @@ export async function fetchTelegramHistoryPage(
     cursorMessageId = anchorMessageId;
   }
 
-  const history = (await invokeTdlib(
-    runtime.eventBus,
-    runtime.client,
+  const history = await getChatHistory(
+    runtime,
     {
       _: 'getChatHistory',
       chat_id: chatId,
@@ -136,7 +126,7 @@ export async function fetchTelegramHistoryPage(
     {
       priority: options.priority
     }
-  )) as TelegramWireMessages;
+  );
   const concreteMessages = history.messages.filter(isFetchedMessage);
 
   if (concreteMessages.length === 0) {
@@ -506,6 +496,88 @@ function intervalToResponse(interval: TelegramHistoryInterval): { endAt: string;
 
 function isFetchedMessage(value: TelegramWireMessage | null): value is TelegramWireMessage {
   return value !== null;
+}
+
+async function getLastMessageNoLaterThan(
+  runtime: TelegramRpcRuntime,
+  chatId: number,
+  end: Date,
+  options: { priority: TelegramTdlibPriority }
+): Promise<TelegramWireMessage | undefined> {
+  try {
+    return await getChatMessageByDate(
+      runtime,
+      {
+        _: 'getChatMessageByDate',
+        chat_id: chatId,
+        date: Math.floor((end.getTime() - 1) / 1000)
+      },
+      options
+    );
+  } catch (error) {
+    if (isTdlibNotFound(error)) {
+      return undefined;
+    }
+
+    throw error;
+  }
+}
+
+function parseTelegramChatId(value: string): number {
+  const text = value.trim();
+  const parsed = Number(text);
+  if (text.length === 0 || !Number.isSafeInteger(parsed)) {
+    throw new Error(`Telegram chat id must be numeric: ${text}`);
+  }
+  return parsed;
+}
+
+function optionalTelegramMessageId(value: number | undefined): number | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!Number.isSafeInteger(value)) {
+    throw new Error(`Telegram message id must be numeric: ${String(value)}`);
+  }
+  return value;
+}
+
+function tdMessageId(message: TelegramWireMessage | undefined): number | undefined {
+  return telegramWireIdNumber(message?.id);
+}
+
+function tdMessageDate(message: TelegramWireMessage | undefined): Date | undefined {
+  return telegramWireDate(message?.date);
+}
+
+function isBeforeInterval(message: TelegramWireMessage, startAt: Date): boolean {
+  const messageDate = tdMessageDate(message);
+  return messageDate !== undefined && messageDate < startAt;
+}
+
+function oldestMessageDate(messages: TelegramWireMessage[]): Date | undefined {
+  const dates = messages.map(tdMessageDate).filter((date): date is Date => date !== undefined);
+  const [first, ...rest] = dates;
+  return first === undefined
+    ? undefined
+    : rest.reduce((oldest, date) => (date < oldest ? date : oldest), first);
+}
+
+function oldestMessageIdOlderThan(
+  messages: TelegramWireMessage[],
+  cursorMessageId: number
+): number | undefined {
+  const ids = messages
+    .map(tdMessageId)
+    .filter((id): id is number => id !== undefined && id < cursorMessageId);
+
+  return ids.length === 0 ? undefined : Math.min(...ids);
+}
+
+function isTdlibNotFound(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /\b404\b/.test(message) || message.includes('NOT_FOUND') || message.includes('Not Found');
 }
 
 async function delay(milliseconds: number): Promise<void> {

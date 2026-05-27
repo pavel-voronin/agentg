@@ -1,16 +1,28 @@
 import { mutation } from '@agentg/rpc/surface';
-
-import { handleFetchPage } from '../../tdlib-procedure-handlers/fetchPage.js';
 import {
   telegramHistoryFetchPageInputSchema,
   telegramHistoryFetchPageResultSchema
 } from '../contracts.js';
 import type { TelegramRpcRuntime } from '../runtime.js';
 import { rpc } from '../trpc.js';
+import type {
+  TelegramHistoryFetchPageRequest,
+  TelegramHistoryFetchPageResult
+} from '../contracts.js';
+import { fetchTelegramHistoryPage } from '../../telegramHistoryFetch.js';
+import { telegramTdlibPriorities } from '../../telegramTdlibPriority.js';
+import type { TelegramProcedureContext } from '../../telegram-procedure-runtime/context.js';
 
 export const fetchPage = mutation((runtime: TelegramRpcRuntime) =>
   rpc
     .input(telegramHistoryFetchPageInputSchema)
     .output(telegramHistoryFetchPageResultSchema)
-    .mutation(({ input }) => handleFetchPage(runtime, input))
+    .mutation(({ input }) => runFetchPage(runtime, input))
 );
+
+function runFetchPage(
+  context: TelegramProcedureContext,
+  input: TelegramHistoryFetchPageRequest
+): Promise<TelegramHistoryFetchPageResult> {
+  return fetchTelegramHistoryPage(context, input, { priority: telegramTdlibPriorities.low });
+}
