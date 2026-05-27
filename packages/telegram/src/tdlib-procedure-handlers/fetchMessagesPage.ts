@@ -6,7 +6,7 @@ import type {
   TelegramFetchMessagesPageOutput
 } from '../rpc/contracts.js';
 import { telegramChats, telegramMessages } from '../schema.js';
-import { recordMessageFiles, storeMessage } from '../telegram-store/message.js';
+import { storeMessage } from '../telegram-store/message.js';
 import {
   normalizeCoverageWriteInput,
   withTelegramHistoryCoverageLocks,
@@ -98,6 +98,7 @@ export async function handleFetchMessagesPage(
       ? [initialAnchor.messageIdText, ...persisted.messageIds]
       : persisted.messageIds;
   const messages = await readPersistedMessages(context, input.chatId, messageIds);
+  scheduleOperatorPageFileRecording(context, pageMessages);
 
   return {
     messages,
@@ -185,9 +186,6 @@ async function persistMessagesAndCoverage(
       })
   );
 
-  for (const message of input.messages) {
-    await recordMessageFiles(context.files, message, 'operator_page');
-  }
   const coverageEventIntervals = await addCoverageMessageCounts(context, coverageIntervals);
   if (coverageIntervals.length > 0) {
     context.eventBus.publish(
@@ -198,6 +196,36 @@ async function persistMessagesAndCoverage(
   }
 
   return { coverageIntervals: coverageEventIntervals, messageIds };
+}
+
+function scheduleOperatorPageFileRecording(
+  context: TelegramProcedureHandlerContext,
+  messages: TelegramWireMessage[]
+): void {
+  if (messages.length === 0) {
+    return;
+  }
+
+  setImmediate(() => {
+    void recordOperatorPageFiles(context, messages).catch((error: unknown) => {
+      console.error(
+        JSON.stringify({
+          error: error instanceof Error ? error.message : String(error),
+          event: 'telegram.operator_page_file_recording_failed',
+          messageCount: messages.length
+        })
+      );
+    });
+  });
+}
+
+async function recordOperatorPageFiles(
+  context: TelegramProcedureHandlerContext,
+  messages: TelegramWireMessage[]
+): Promise<void> {
+  for (const message of messages) {
+    await context.files.recordMessageFiles(message, 'operator_page');
+  }
 }
 
 async function addCoverageMessageCounts(

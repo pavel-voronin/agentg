@@ -4,6 +4,7 @@ import type { TelegramDatabase } from '../src/database.js';
 import { createTelegramRouter } from '../src/rpc/router.js';
 import { toTelegramChatStorageRow } from '../src/telegram-read-model/chat.js';
 import { toDirectoryEntries } from '../src/telegram-read-model/directory.js';
+import type { TelegramFileSubsystem } from '../src/telegramFileSubsystem.js';
 
 describe('Telegram history router chat listing', () => {
   it('filters chats without TDLib list placements from the chat directory', async () => {
@@ -177,87 +178,134 @@ describe('Telegram history router chat listing', () => {
       expect.any(Object)
     );
   });
+
+  it('returns a message page before operator page file recording completes', async () => {
+    const database = createFakeDatabase([
+      [{ lastMessageId: '10' }],
+      [{ messageDate: new Date('2024-01-01T00:00:10Z') }],
+      [],
+      [{ count: 1 }],
+      [messageRow('20', '9', 'older')],
+      []
+    ]);
+    const client = {
+      invoke: vi.fn(() =>
+        Promise.resolve({
+          _: 'messages',
+          messages: [tdlibTextMessage('20', '9', 'older', 1_704_067_209)]
+        })
+      )
+    };
+    const recordMessageFiles = vi.fn(() => delay(100));
+    const caller = createCaller(database, {
+      client,
+      files: {
+        recordMessageFiles
+      }
+    });
+
+    const result = await Promise.race([
+      caller.fetchMessagesPage({ chatId: '20', limit: 50 }).then(() => 'resolved'),
+      delay(50).then(() => 'timeout')
+    ]);
+
+    expect(result).toBe('resolved');
+    await nextImmediate();
+    expect(recordMessageFiles).toHaveBeenCalledTimes(1);
+  });
 });
 
 function createCaller(
   database: ReturnType<typeof createFakeDatabase>,
   options: {
     client?: { invoke(request: Record<string, unknown>, options?: unknown): Promise<unknown> };
+    files?: Partial<TelegramFileSubsystem>;
   } = {}
 ) {
+  const files: TelegramFileSubsystem = {
+    close() {
+      return;
+    },
+    getQueueStats() {
+      return Promise.resolve({}) as never;
+    },
+    handleUpdateFile() {
+      return Promise.resolve();
+    },
+    startFileGeneration() {
+      return;
+    },
+    stopFileGeneration() {
+      return Promise.resolve();
+    },
+    recordChatBackgroundFiles() {
+      return Promise.resolve();
+    },
+    recordChatFiles() {
+      return Promise.resolve();
+    },
+    recordChatPhotoFiles() {
+      return Promise.resolve();
+    },
+    recordChatThemeFiles() {
+      return Promise.resolve();
+    },
+    recordDefaultBackgroundFiles() {
+      return Promise.resolve();
+    },
+    recordEmojiChatThemeFiles() {
+      return Promise.resolve();
+    },
+    recordMessageContentFiles() {
+      return Promise.resolve();
+    },
+    recordMessageFiles() {
+      return Promise.resolve();
+    },
+    recordNotificationGroupFiles() {
+      return Promise.resolve();
+    },
+    recordNotificationFiles() {
+      return Promise.resolve();
+    },
+    recordQuickReplyMessageFiles() {
+      return Promise.resolve();
+    },
+    recordStickerSetFiles() {
+      return Promise.resolve();
+    },
+    recordStoryFiles() {
+      return Promise.resolve();
+    },
+    recordTrendingStickerSetFiles() {
+      return Promise.resolve();
+    },
+    recordUserFullInfoFiles() {
+      return Promise.resolve();
+    },
+    deleteStoryFileSlots() {
+      return Promise.resolve();
+    },
+    requestFile() {
+      return Promise.resolve({}) as never;
+    },
+    ...options.files
+  };
+
   return createTelegramRouter({
     client: options.client ?? { invoke: vi.fn() },
     database: database as unknown as TelegramDatabase,
     eventBus: { publish: vi.fn() } as never,
-    files: {
-      close() {
-        return;
-      },
-      getQueueStats() {
-        return Promise.resolve({}) as never;
-      },
-      handleUpdateFile() {
-        return Promise.resolve();
-      },
-      startFileGeneration() {
-        return;
-      },
-      stopFileGeneration() {
-        return Promise.resolve();
-      },
-      recordChatBackgroundFiles() {
-        return Promise.resolve();
-      },
-      recordChatFiles() {
-        return Promise.resolve();
-      },
-      recordChatPhotoFiles() {
-        return Promise.resolve();
-      },
-      recordChatThemeFiles() {
-        return Promise.resolve();
-      },
-      recordDefaultBackgroundFiles() {
-        return Promise.resolve();
-      },
-      recordEmojiChatThemeFiles() {
-        return Promise.resolve();
-      },
-      recordMessageContentFiles() {
-        return Promise.resolve();
-      },
-      recordMessageFiles() {
-        return Promise.resolve();
-      },
-      recordNotificationGroupFiles() {
-        return Promise.resolve();
-      },
-      recordNotificationFiles() {
-        return Promise.resolve();
-      },
-      recordQuickReplyMessageFiles() {
-        return Promise.resolve();
-      },
-      recordStickerSetFiles() {
-        return Promise.resolve();
-      },
-      recordStoryFiles() {
-        return Promise.resolve();
-      },
-      recordTrendingStickerSetFiles() {
-        return Promise.resolve();
-      },
-      recordUserFullInfoFiles() {
-        return Promise.resolve();
-      },
-      deleteStoryFileSlots() {
-        return Promise.resolve();
-      },
-      requestFile() {
-        return Promise.resolve({}) as never;
-      }
-    }
+    files
   }).createCaller({});
+}
+
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+function nextImmediate(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
 }
 
 function createFakeDatabase(results: unknown[][]) {
