@@ -18,7 +18,8 @@ import {
   type TelegramEventSourceUser
 } from '../integrationEvents.js';
 import type { TelegramMessageTextEntity } from '../rpc/contracts.js';
-import { getDirectoryEntryByChatId, readMessageSelection } from '../rpc/procedures/support.js';
+import { getDirectoryEntryByChatId } from '../telegram-read-model/directory.js';
+import { readMessageSelection } from '../telegram-read-model/message.js';
 import { telegramMessages } from '../schema.js';
 import {
   telegramWireDate,

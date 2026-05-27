@@ -1,6 +1,6 @@
 import { mutation } from '@agentg/rpc/surface';
 
-import { ensureTelegramHistoryCoverage } from '../../telegramHistoryFetch.js';
+import { handleEnsureHistoryCoverage } from '../../tdlib-procedure-handlers/ensureHistoryCoverage.js';
 import {
   telegramEnsureHistoryCoverageInputSchema,
   telegramEnsureHistoryCoverageOutputSchema
@@ -12,5 +12,5 @@ export const ensureHistoryCoverage = mutation((runtime: TelegramRpcRuntime) =>
   rpc
     .input(telegramEnsureHistoryCoverageInputSchema)
     .output(telegramEnsureHistoryCoverageOutputSchema)
-    .mutation(async ({ input }) => ensureTelegramHistoryCoverage(runtime, input))
+    .mutation(({ input }) => handleEnsureHistoryCoverage(runtime, input))
 );

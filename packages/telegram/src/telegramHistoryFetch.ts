@@ -26,8 +26,6 @@ import type {
 } from './rpc/contracts.js';
 import type { TelegramRpcRuntime } from './rpc/runtime.js';
 import {
-  getLastMessageNoLaterThan,
-  invokeTdlib,
   isBeforeInterval,
   oldestMessageDate,
   oldestMessageIdOlderThan,
@@ -37,7 +35,11 @@ import {
   requireDate,
   tdMessageDate,
   tdMessageId
-} from './rpc/procedures/support.js';
+} from './tdlib-procedure-handlers/helpers.js';
+import {
+  getLastMessageNoLaterThan,
+  invokeTdlib
+} from './tdlib-procedure-handlers/tdlibOperations.js';
 import { telegramTdlibPriorities, type TelegramTdlibPriority } from './telegramTdlibPriority.js';
 import type { TelegramWireMessage, TelegramWireMessages } from './telegramWire.js';
 
@@ -78,15 +80,9 @@ export async function fetchTelegramHistoryPage(
   let remainingEndAt = endAt;
 
   if (cursorMessageId === undefined) {
-    const anchor = await getLastMessageNoLaterThan(
-      runtime.client,
-      runtime.eventBus,
-      chatId,
-      endAt,
-      {
-        priority: options.priority
-      }
-    );
+    const anchor = await getLastMessageNoLaterThan(runtime, chatId, endAt, {
+      priority: options.priority
+    });
     const anchorDate = tdMessageDate(anchor);
     const anchorMessageId = tdMessageId(anchor);
 

@@ -1,6 +1,6 @@
 import { query } from '@agentg/rpc/surface';
 
-import { listTelegramHistoryCoverage } from '../../telegramHistoryCoverage.js';
+import { handleGetHistoryCoverage } from '../../tdlib-procedure-handlers/getHistoryCoverage.js';
 import {
   telegramGetHistoryCoverageInputSchema,
   telegramGetHistoryCoverageOutputSchema
@@ -12,15 +12,5 @@ export const getHistoryCoverage = query((runtime: TelegramRpcRuntime) =>
   rpc
     .input(telegramGetHistoryCoverageInputSchema)
     .output(telegramGetHistoryCoverageOutputSchema)
-    .query(async ({ input }) => {
-      const coverage = await listTelegramHistoryCoverage(runtime.database, input.chatId);
-
-      return {
-        coverage: coverage.map((interval) => ({
-          coveredAt: interval.coveredAt.toISOString(),
-          endAt: interval.endAt.toISOString(),
-          startAt: interval.startAt.toISOString()
-        }))
-      };
-    })
+    .query(({ input }) => handleGetHistoryCoverage(runtime, input))
 );

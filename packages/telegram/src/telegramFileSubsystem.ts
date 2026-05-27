@@ -73,11 +73,8 @@ import type {
 import { invokeTdlibWithEvents, type TdlibInvoker } from './telegramOperationEvents.js';
 import { telegramTdlibPriorities, assertTelegramTdlibPriority } from './telegramTdlibPriority.js';
 import { isTelegramTdlibUnderNavigationPressure } from './telegramTdlibScheduler.js';
-import {
-  getDirectoryEntryByChatId,
-  readMessageSelection,
-  toReadMessages
-} from './rpc/procedures/support.js';
+import { getDirectoryEntryByChatId } from './telegram-read-model/directory.js';
+import { readMessageSelection, toReadMessages } from './telegram-read-model/message.js';
 import { readDefaultBackgroundSelection } from './telegram-store/defaultBackground.js';
 
 export type TelegramFileSubsystem = {

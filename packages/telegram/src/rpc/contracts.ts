@@ -432,13 +432,21 @@ export type TelegramMessageTextEntity = z.infer<typeof telegramMessageTextEntity
 export type TelegramMessageServiceAction = z.infer<typeof telegramMessageServiceActionSchema>;
 export type TelegramReadMessage = z.infer<typeof telegramReadMessageSchema>;
 export type TelegramGetChatInput = z.infer<typeof telegramGetChatInputSchema>;
+export type TelegramGetChatOutput = z.infer<typeof telegramGetChatOutputSchema>;
 export type TelegramGetMessageInput = z.infer<typeof telegramGetMessageInputSchema>;
+export type TelegramGetMessageOutput = z.infer<typeof telegramGetMessageOutputSchema>;
 export type TelegramRequestFileInput = z.infer<typeof telegramRequestFileInputSchema>;
 export type TelegramRequestFileOutput = z.infer<typeof telegramRequestFileOutputSchema>;
+export type TelegramGetFileQueueStatsInput = z.infer<typeof telegramGetFileQueueStatsInputSchema>;
+export type TelegramGetFileQueueStatsOutput = z.infer<typeof telegramGetFileQueueStatsOutputSchema>;
 export type TelegramListRecentMessagesInput = z.infer<typeof telegramListRecentMessagesInputSchema>;
+export type TelegramListRecentMessagesOutput = z.infer<
+  typeof telegramListRecentMessagesOutputSchema
+>;
 export type TelegramFetchMessagesPageInput = z.infer<typeof telegramFetchMessagesPageInputSchema>;
 export type TelegramFetchMessagesPageOutput = z.infer<typeof telegramFetchMessagesPageOutputSchema>;
 export type TelegramSearchMessagesInput = z.infer<typeof telegramSearchMessagesInputSchema>;
+export type TelegramSearchMessagesOutput = z.infer<typeof telegramSearchMessagesOutputSchema>;
 export type TelegramChatPlacement = z.infer<typeof telegramChatPlacementSchema>;
 export type TelegramChatDirectoryEntry = z.infer<typeof telegramChatDirectoryEntrySchema>;
 export type TelegramChatFolder = z.infer<typeof telegramChatFolderSchema>;
