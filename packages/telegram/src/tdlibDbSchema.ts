@@ -131,12 +131,12 @@ export const telegramBackgrounds = pgTable('telegram_backgrounds', {
 
 export const telegramChatPhotos = pgTable('telegram_chat_photos', {
   addedDate: timestamp('added_date', { withTimezone: true }).notNull(),
-  animation: jsonb('animation').$type<JsonValue>().notNull(),
+  animation: jsonb('animation').$type<JsonValue>(),
   id: bigintText('id').primaryKey(),
-  minithumbnail: jsonb('minithumbnail').$type<JsonValue>().notNull(),
+  minithumbnail: jsonb('minithumbnail').$type<JsonValue>(),
   sizes: jsonb('sizes').$type<JsonValue>().notNull(),
-  smallAnimation: jsonb('small_animation').$type<JsonValue>().notNull(),
-  sticker: jsonb('sticker').$type<JsonValue>().notNull()
+  smallAnimation: jsonb('small_animation').$type<JsonValue>(),
+  sticker: jsonb('sticker').$type<JsonValue>()
 });
 
 export const telegramBasicGroups = pgTable(
@@ -856,7 +856,7 @@ export const telegramMessageReactions = pgTable(
     reactionType: text('reaction_type').notNull(),
     recentSenderIds: jsonb('recent_sender_ids').$type<JsonValue>().notNull(),
     totalCount: integer('total_count').notNull(),
-    usedSenderId: jsonb('used_sender_id').$type<JsonValue>().notNull()
+    usedSenderId: jsonb('used_sender_id').$type<JsonValue>()
   },
   (table) => [
     primaryKey({
@@ -1094,7 +1094,7 @@ export const telegramSavedMessagesTags = pgTable(
 export const telegramSavedMessagesTopics = pgTable(
   'telegram_saved_messages_topics',
   {
-    draftMessage: jsonb('draft_message').$type<JsonValue>().notNull(),
+    draftMessage: jsonb('draft_message').$type<JsonValue>(),
     id: bigintText('id').notNull(),
     isPinned: boolean('is_pinned').notNull(),
     lastMessageChatId: bigintText('last_message_chat_id'),
@@ -1207,7 +1207,7 @@ export const telegramSuggestedActions = pgTable('telegram_suggested_actions', {
 export const telegramSupergroups = pgTable(
   'telegram_supergroups',
   {
-    activeStoryState: jsonb('active_story_state').$type<JsonValue>().notNull(),
+    activeStoryState: jsonb('active_story_state').$type<JsonValue>(),
     administratorCount: integer('administrator_count'),
     bannedCount: integer('banned_count'),
     boostLevel: integer('boost_level').notNull(),
@@ -1259,7 +1259,7 @@ export const telegramSupergroups = pgTable(
     paidMessageStarCount: bigintText('paid_message_star_count').notNull(),
     photoId: bigintText('photo_id'),
     restrictedCount: integer('restricted_count'),
-    restrictionInfo: jsonb('restriction_info').$type<JsonValue>().notNull(),
+    restrictionInfo: jsonb('restriction_info').$type<JsonValue>(),
     showMessageSender: boolean('show_message_sender').notNull(),
     signMessages: boolean('sign_messages').notNull(),
     slowModeDelay: integer('slow_mode_delay'),
@@ -1269,8 +1269,8 @@ export const telegramSupergroups = pgTable(
     unrestrictBoostCount: integer('unrestrict_boost_count'),
     upgradedFromBasicGroupId: bigintText('upgraded_from_basic_group_id'),
     upgradedFromMaxMessageId: bigintText('upgraded_from_max_message_id'),
-    usernames: jsonb('usernames').$type<JsonValue>().notNull(),
-    verificationStatus: jsonb('verification_status').$type<JsonValue>().notNull()
+    usernames: jsonb('usernames').$type<JsonValue>(),
+    verificationStatus: jsonb('verification_status').$type<JsonValue>()
   },
   (table) => [
     primaryKey({
@@ -1300,7 +1300,7 @@ export const telegramTextCompositionStyles = pgTable('telegram_text_composition_
   isCreator: boolean('is_creator').notNull(),
   isCustom: boolean('is_custom').notNull(),
   name: text('name').primaryKey(),
-  prompt: text('prompt').notNull(),
+  prompt: text('prompt'),
   title: text('title').notNull()
 });
 

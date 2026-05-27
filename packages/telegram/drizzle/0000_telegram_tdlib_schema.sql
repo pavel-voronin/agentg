@@ -71,12 +71,12 @@ CREATE TABLE "telegram_backgrounds" (
 
 CREATE TABLE "telegram_chat_photos" (
   "added_date" timestamp with time zone NOT NULL,
-  "animation" jsonb NOT NULL,
+  "animation" jsonb,
   "id" bigint NOT NULL,
-  "minithumbnail" jsonb NOT NULL,
+  "minithumbnail" jsonb,
   "sizes" jsonb NOT NULL,
-  "small_animation" jsonb NOT NULL,
-  "sticker" jsonb NOT NULL,
+  "small_animation" jsonb,
+  "sticker" jsonb,
   CONSTRAINT "telegram_chat_photos_pk" PRIMARY KEY ("id")
 );
 
@@ -651,7 +651,7 @@ CREATE TABLE "telegram_message_reactions" (
   "reaction_type" text NOT NULL,
   "recent_sender_ids" jsonb NOT NULL,
   "total_count" integer NOT NULL,
-  "used_sender_id" jsonb NOT NULL,
+  "used_sender_id" jsonb,
   CONSTRAINT "telegram_message_reactions_pk" PRIMARY KEY ("chat_id", "message_id", "reaction_type")
 );
 
@@ -814,7 +814,7 @@ CREATE TABLE "telegram_saved_messages_tags" (
 --> statement-breakpoint
 
 CREATE TABLE "telegram_saved_messages_topics" (
-  "draft_message" jsonb NOT NULL,
+  "draft_message" jsonb,
   "id" bigint NOT NULL,
   "is_pinned" boolean NOT NULL,
   "last_message_chat_id" bigint,
@@ -923,7 +923,7 @@ CREATE TABLE "telegram_suggested_actions" (
 --> statement-breakpoint
 
 CREATE TABLE "telegram_supergroups" (
-  "active_story_state" jsonb NOT NULL,
+  "active_story_state" jsonb,
   "administrator_count" integer,
   "banned_count" integer,
   "boost_level" integer NOT NULL,
@@ -975,7 +975,7 @@ CREATE TABLE "telegram_supergroups" (
   "paid_message_star_count" bigint NOT NULL,
   "photo_id" bigint,
   "restricted_count" integer,
-  "restriction_info" jsonb NOT NULL,
+  "restriction_info" jsonb,
   "show_message_sender" boolean NOT NULL,
   "sign_messages" boolean NOT NULL,
   "slow_mode_delay" integer,
@@ -985,8 +985,8 @@ CREATE TABLE "telegram_supergroups" (
   "unrestrict_boost_count" integer,
   "upgraded_from_basic_group_id" bigint,
   "upgraded_from_max_message_id" bigint,
-  "usernames" jsonb NOT NULL,
-  "verification_status" jsonb NOT NULL,
+  "usernames" jsonb,
+  "verification_status" jsonb,
   CONSTRAINT "telegram_supergroups_pk" PRIMARY KEY ("id"),
   CONSTRAINT "telegram_supergroups_photo_id_fk" FOREIGN KEY ("photo_id") REFERENCES "telegram_chat_photos" ("id")
 );
@@ -1011,7 +1011,7 @@ CREATE TABLE "telegram_text_composition_styles" (
   "is_creator" boolean NOT NULL,
   "is_custom" boolean NOT NULL,
   "name" text NOT NULL,
-  "prompt" text NOT NULL,
+  "prompt" text,
   "title" text NOT NULL,
   CONSTRAINT "telegram_text_composition_styles_pk" PRIMARY KEY ("name")
 );
