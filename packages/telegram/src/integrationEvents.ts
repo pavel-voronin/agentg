@@ -115,6 +115,13 @@ export type TelegramFileQueueStats = {
   unknownRemainingCount: number;
 };
 
+export type TelegramDefaultBackgroundUpdatedEventInput = {
+  backgroundId: string | null;
+  forDarkTheme: boolean;
+  key: string;
+  scope: 'dark' | 'light';
+};
+
 export type TelegramEventSourceChatFolder = {
   iconName?: string;
   id: number;
@@ -202,6 +209,19 @@ export function createTelegramFileQueueUpdatedEvent(
       unknownRemainingCount: stats.unknownRemainingCount
     },
     type: 'telegram.files.queue.updated'
+  });
+}
+
+export function createTelegramDefaultBackgroundUpdatedEvent(
+  input: TelegramDefaultBackgroundUpdatedEventInput
+): IntegrationEvent {
+  return createIntegrationEvent({
+    data: input,
+    meta: {
+      key: input.key,
+      scope: input.scope
+    },
+    type: 'telegram.default_background.updated'
   });
 }
 

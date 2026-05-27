@@ -1,0 +1,17 @@
+import type { TelegramUpdateHandlerContext } from '../telegram-update-runtime/context.js';
+import { storeChatTheme } from '../telegram-store/chatTheme.js';
+import type { TelegramWireUpdateByType } from '../telegramWire.js';
+
+type TelegramWireChatThemeUpdate = TelegramWireUpdateByType<'updateChatTheme'>;
+
+export async function handleUpdateChatTheme(
+  { database, events, files }: TelegramUpdateHandlerContext,
+  update: TelegramWireChatThemeUpdate
+): Promise<void> {
+  const chatId = String(update.chat_id);
+  const theme = update.theme ?? null;
+
+  await storeChatTheme(database, chatId, theme);
+  await files.recordChatThemeFiles(chatId, theme, 'live_update');
+  await events.publishTelegramChatDirectoryUpdated(chatId);
+}

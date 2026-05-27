@@ -692,6 +692,9 @@ function normalizeFileOwner(value: unknown): TelegramFileRef['owner'] | null {
   if (model === 'telegram.message') {
     return { _model: 'telegram.message', id };
   }
+  if (model === 'telegram.emojiChatThemes') {
+    return { _model: 'telegram.emojiChatThemes', id };
+  }
   return null;
 }
 

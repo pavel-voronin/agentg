@@ -1,8 +1,15 @@
 import { and, eq, inArray } from 'drizzle-orm';
 
+import type { JsonObject, JsonValue } from '@agentg/events/json';
+
 import { TELEGRAM_MESSAGE_MODEL, telegramMessageModelId } from '../modelRefs.js';
 import type { TelegramDatabase } from '../database.js';
-import { telegramFileSlots, telegramMessageReactions, telegramMessages } from '../schema.js';
+import {
+  telegramActiveLiveLocationMessages,
+  telegramFileSlots,
+  telegramMessageReactions,
+  telegramMessages
+} from '../schema.js';
 import {
   telegramWireDate,
   telegramWireId,
@@ -13,8 +20,16 @@ import {
 } from '../telegramWire.js';
 import type { TelegramFileSubsystem } from '../telegramFileSubsystem.js';
 import type { TelegramMediaDownloadPolicyCause } from '../telegramFilePolicy.js';
+import { reactionTypeKey } from './reaction.js';
 
 type StoreMessageConflict = 'ignore' | 'update';
+type TelegramMessageReaction = NonNullable<
+  NonNullable<
+    NonNullable<TelegramWireMessage['interaction_info']>['reactions']
+  >['reactions'][number]
+>;
+
+export type TelegramMessageFragment = typeof telegramMessages.$inferInsert;
 
 export async function storeMessage(
   database: TelegramDatabase,
@@ -110,6 +125,103 @@ export async function replaceMessageContent(
     });
 }
 
+export async function upsertTelegramMessageFragment(
+  database: TelegramDatabase,
+  row: TelegramMessageFragment
+): Promise<void> {
+  await database
+    .insert(telegramMessages)
+    .values(row)
+    .onConflictDoUpdate({
+      set: row,
+      target: [telegramMessages.chatId, telegramMessages.id]
+    });
+}
+
+export async function patchOpenedMessageContent(
+  database: TelegramDatabase,
+  input: {
+    chatId: string;
+    messageId: string;
+  }
+): Promise<boolean> {
+  const [row] = await database
+    .select({ content: telegramMessages.content })
+    .from(telegramMessages)
+    .where(and(eq(telegramMessages.chatId, input.chatId), eq(telegramMessages.id, input.messageId)))
+    .limit(1);
+
+  const currentContent = row?.content;
+  if (currentContent === undefined || currentContent === null) {
+    return false;
+  }
+
+  const content = openedMessageContent(currentContent);
+  if (content === currentContent) {
+    return true;
+  }
+
+  await upsertTelegramMessageFragment(database, {
+    chatId: input.chatId,
+    content,
+    id: input.messageId
+  });
+
+  return true;
+}
+
+export async function replaceMessageReactionSummaries(
+  database: TelegramDatabase,
+  input: {
+    chatId: string;
+    messageId: string;
+    reactions: readonly TelegramMessageReaction[];
+  }
+): Promise<void> {
+  await database
+    .delete(telegramMessageReactions)
+    .where(
+      and(
+        eq(telegramMessageReactions.chatId, input.chatId),
+        eq(telegramMessageReactions.messageId, input.messageId)
+      )
+    );
+
+  const rows = input.reactions.map((reaction) => ({
+    chatId: input.chatId,
+    isChosen: reaction.is_chosen,
+    messageId: input.messageId,
+    reactionType: reactionTypeKey(reaction.type),
+    recentSenderIds: requiredTelegramWireJsonValue(reaction.recent_sender_ids),
+    totalCount: reaction.total_count,
+    usedSenderId: requiredTelegramWireJsonValue(reaction.used_sender_id ?? null)
+  }));
+
+  if (rows.length === 0) {
+    return;
+  }
+
+  await database.insert(telegramMessageReactions).values(rows);
+}
+
+export async function replaceActiveLiveLocationMessageSet(
+  database: TelegramDatabase,
+  messages: TelegramWireMessage[]
+): Promise<void> {
+  await database.delete(telegramActiveLiveLocationMessages);
+
+  const rows = messages.map((message) => ({
+    chatId: String(message.chat_id),
+    messageId: String(message.id)
+  }));
+
+  if (rows.length === 0) {
+    return;
+  }
+
+  await database.insert(telegramActiveLiveLocationMessages).values(rows);
+}
+
 export async function deleteMessages(
   database: TelegramDatabase,
   input: {
@@ -127,6 +239,14 @@ export async function deleteMessages(
         )
       )
     );
+    await transaction
+      .delete(telegramActiveLiveLocationMessages)
+      .where(
+        and(
+          eq(telegramActiveLiveLocationMessages.chatId, input.chatId),
+          inArray(telegramActiveLiveLocationMessages.messageId, input.messageIds)
+        )
+      );
 
     await transaction
       .delete(telegramMessageReactions)
@@ -161,4 +281,38 @@ export function recordMessageContentFiles(
   cause: TelegramMediaDownloadPolicyCause
 ): Promise<void> {
   return files.recordMessageContentFiles(update, cause);
+}
+
+function openedMessageContent(content: JsonValue): JsonValue {
+  if (!isJsonObject(content) || typeof content._ !== 'string') {
+    return content;
+  }
+
+  if (content._ === 'messageVoiceNote') {
+    return {
+      ...content,
+      is_listened: true
+    };
+  }
+
+  if (content._ === 'messageVideoNote') {
+    return {
+      ...content,
+      is_viewed: true
+    };
+  }
+
+  return content;
+}
+
+function isJsonObject(value: JsonValue): value is JsonObject {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function requiredTelegramWireJsonValue(value: unknown): JsonValue {
+  const json = telegramWireJsonValue(value);
+  if (json === undefined) {
+    throw new Error('Expected Telegram wire JSON value');
+  }
+  return json;
 }

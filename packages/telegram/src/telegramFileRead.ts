@@ -2,7 +2,28 @@ import { and, eq, inArray, sql } from 'drizzle-orm';
 
 import type { TelegramDatabase } from './database.js';
 import type { TelegramFileQueueStats } from './integrationEvents.js';
-import { telegramChatRef, telegramMessageRef, telegramMessageModelParts } from './modelRefs.js';
+import {
+  TELEGRAM_ACTIVE_NOTIFICATION_MODEL,
+  TELEGRAM_CHAT_MODEL,
+  TELEGRAM_DEFAULT_BACKGROUND_MODEL,
+  TELEGRAM_EMOJI_CHAT_THEMES_MODEL,
+  TELEGRAM_MESSAGE_MODEL,
+  TELEGRAM_QUICK_REPLY_MESSAGE_MODEL,
+  TELEGRAM_STICKER_SET_MODEL,
+  TELEGRAM_STORY_MODEL,
+  TELEGRAM_USER_MODEL,
+  telegramActiveNotificationModelParts,
+  telegramActiveNotificationRef,
+  telegramChatRef,
+  telegramDefaultBackgroundRef,
+  telegramEmojiChatThemesRef,
+  telegramMessageRef,
+  telegramMessageModelParts,
+  telegramQuickReplyMessageRef,
+  telegramStickerSetRef,
+  telegramStoryRef,
+  telegramUserRef
+} from './modelRefs.js';
 import { telegramFileAssets, telegramFileDownloadJobs, telegramFileSlots } from './schema.js';
 import type {
   TelegramFileMediaKind,
@@ -257,8 +278,37 @@ function effectiveFileStatus(row: TelegramFileRefRow): TelegramFileStatus {
 }
 
 function ownerRef(ownerModel: TelegramFileOwnerModel, ownerId: string): TelegramFileOwner {
-  if (ownerModel === 'telegram.chat') {
+  if (ownerModel === TELEGRAM_ACTIVE_NOTIFICATION_MODEL) {
+    const parts = telegramActiveNotificationModelParts(ownerId);
+    return telegramActiveNotificationRef({
+      groupId: parts?.groupId ?? ownerId,
+      notificationId: parts?.notificationId ?? ownerId
+    });
+  }
+  if (ownerModel === TELEGRAM_CHAT_MODEL) {
     return telegramChatRef(ownerId);
+  }
+  if (ownerModel === TELEGRAM_DEFAULT_BACKGROUND_MODEL) {
+    return telegramDefaultBackgroundRef(ownerId);
+  }
+  if (ownerModel === TELEGRAM_EMOJI_CHAT_THEMES_MODEL) {
+    return telegramEmojiChatThemesRef();
+  }
+  if (ownerModel === TELEGRAM_QUICK_REPLY_MESSAGE_MODEL) {
+    return telegramQuickReplyMessageRef(ownerId);
+  }
+  if (ownerModel === TELEGRAM_STICKER_SET_MODEL) {
+    return telegramStickerSetRef(ownerId);
+  }
+  if (ownerModel === TELEGRAM_STORY_MODEL) {
+    const parts = telegramMessageModelParts(ownerId);
+    return telegramStoryRef({
+      posterChatId: parts?.chatId ?? ownerId,
+      storyId: parts?.messageId ?? ownerId
+    });
+  }
+  if (ownerModel === TELEGRAM_USER_MODEL) {
+    return telegramUserRef(ownerId);
   }
   const parts = telegramMessageModelParts(ownerId);
   return telegramMessageRef({
@@ -299,7 +349,17 @@ function maxDate(left: Date, right: Date): Date {
 }
 
 function assertOwnerModel(value: string): TelegramFileOwnerModel {
-  if (value === 'telegram.chat' || value === 'telegram.message') {
+  if (
+    value === TELEGRAM_ACTIVE_NOTIFICATION_MODEL ||
+    value === TELEGRAM_CHAT_MODEL ||
+    value === TELEGRAM_DEFAULT_BACKGROUND_MODEL ||
+    value === TELEGRAM_EMOJI_CHAT_THEMES_MODEL ||
+    value === TELEGRAM_MESSAGE_MODEL ||
+    value === TELEGRAM_QUICK_REPLY_MESSAGE_MODEL ||
+    value === TELEGRAM_STICKER_SET_MODEL ||
+    value === TELEGRAM_STORY_MODEL ||
+    value === TELEGRAM_USER_MODEL
+  ) {
     return value;
   }
   throw new Error(`Unsupported Telegram file owner model: ${value}`);

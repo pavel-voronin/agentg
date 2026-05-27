@@ -365,16 +365,104 @@ function createHandlerContext(options: { insertedRows?: unknown[] } = {}): {
   onConflictDoNothing: ReturnType<typeof vi.fn>;
   onConflictDoUpdate: ReturnType<typeof vi.fn>;
   publishTelegramChatDirectoryUpdated: ReturnType<typeof vi.fn>;
+  publishTelegramDirectMessagesChatTopicUpdated: ReturnType<typeof vi.fn>;
+  publishTelegramEmojiChatThemesUpdated: ReturnType<typeof vi.fn>;
+  publishTelegramFileDownloadRemoved: ReturnType<typeof vi.fn>;
+  publishTelegramFileDownloadUpdated: ReturnType<typeof vi.fn>;
+  publishTelegramFileDownloadsUpdated: ReturnType<typeof vi.fn>;
+  publishTelegramForumTopicInfoUpdated: ReturnType<typeof vi.fn>;
+  publishTelegramForumTopicUpdated: ReturnType<typeof vi.fn>;
+  publishTelegramFreezeStateUpdated: ReturnType<typeof vi.fn>;
+  publishTelegramGiftAuctionStateUpdated: ReturnType<typeof vi.fn>;
+  publishTelegramGroupCallUpdated: ReturnType<typeof vi.fn>;
+  publishTelegramGroupCallEncryptedParticipantUsersUpdated: ReturnType<typeof vi.fn>;
+  publishTelegramGroupCallMessageSendFailed: ReturnType<typeof vi.fn>;
+  publishTelegramGroupCallParticipantUpdatedOrRemoved: ReturnType<typeof vi.fn>;
+  publishTelegramGroupCallMessagesDeleted: ReturnType<typeof vi.fn>;
+  publishTelegramGroupCallVerificationStateUpdated: ReturnType<typeof vi.fn>;
+  publishTelegramGroupCallMessageCreated: ReturnType<typeof vi.fn>;
+  publishTelegramGroupCallPaidReactionReceived: ReturnType<typeof vi.fn>;
+  publishTelegramGuestQueryReceived: ReturnType<typeof vi.fn>;
+  publishTelegramInlineCallbackQueryReceived: ReturnType<typeof vi.fn>;
+  publishTelegramInlineQueryReceived: ReturnType<typeof vi.fn>;
+  publishTelegramLiveStoryTopDonorsUpdated: ReturnType<typeof vi.fn>;
+  publishTelegramManagedBotUpdated: ReturnType<typeof vi.fn>;
+  publishTelegramBusinessCallbackQueryReceived: ReturnType<typeof vi.fn>;
+  publishTelegramCallbackQueryReceived: ReturnType<typeof vi.fn>;
+  publishTelegramCallSignalingDataReceived: ReturnType<typeof vi.fn>;
+  publishTelegramChatJoinRequestCreated: ReturnType<typeof vi.fn>;
+  publishTelegramChosenInlineResultReceived: ReturnType<typeof vi.fn>;
+  publishTelegramConnectionState: ReturnType<typeof vi.fn>;
+  publishTelegramCustomEventReceived: ReturnType<typeof vi.fn>;
+  publishTelegramCustomQueryReceived: ReturnType<typeof vi.fn>;
   publishTelegramMessageCreated: ReturnType<typeof vi.fn>;
   publishTelegramMessageDeleted: ReturnType<typeof vi.fn>;
+  publishTelegramMessageSendFailed: ReturnType<typeof vi.fn>;
+  publishTelegramMessageSendSucceeded: ReturnType<typeof vi.fn>;
+  publishTelegramOauthRequestReceived: ReturnType<typeof vi.fn>;
+  publishTelegramPaidMediaPurchased: ReturnType<typeof vi.fn>;
+  publishTelegramPendingNotificationsUpdated: ReturnType<typeof vi.fn>;
+  publishTelegramPendingTextMessageUpdated: ReturnType<typeof vi.fn>;
+  publishTelegramPollAnswerUpdated: ReturnType<typeof vi.fn>;
+  publishTelegramPollUpdated: ReturnType<typeof vi.fn>;
+  publishTelegramPreCheckoutQueryReceived: ReturnType<typeof vi.fn>;
+  publishTelegramQuickReplyShortcutDeleted: ReturnType<typeof vi.fn>;
+  publishTelegramQuickReplyShortcutMessagesUpdated: ReturnType<typeof vi.fn>;
+  publishTelegramQuickReplyShortcutUpdated: ReturnType<typeof vi.fn>;
+  publishTelegramSavedMessagesTagsUpdated: ReturnType<typeof vi.fn>;
+  publishTelegramSavedMessagesTopicUpdated: ReturnType<typeof vi.fn>;
+  publishTelegramScopeNotificationSettingsUpdated: ReturnType<typeof vi.fn>;
+  publishTelegramServiceNotificationReceived: ReturnType<typeof vi.fn>;
+  publishTelegramShippingQueryReceived: ReturnType<typeof vi.fn>;
+  publishTelegramSpeedLimitNotificationReceived: ReturnType<typeof vi.fn>;
+  publishTelegramStakeDiceStateUpdated: ReturnType<typeof vi.fn>;
+  publishTelegramStoryDeleted: ReturnType<typeof vi.fn>;
+  publishTelegramStoryPostFailed: ReturnType<typeof vi.fn>;
+  publishTelegramStoryPostSucceeded: ReturnType<typeof vi.fn>;
+  publishTelegramStoryStealthModeUpdated: ReturnType<typeof vi.fn>;
+  publishTelegramStoryUpdated: ReturnType<typeof vi.fn>;
+  publishTelegramSuggestedActionsUpdated: ReturnType<typeof vi.fn>;
+  publishTelegramTermsOfServiceRequired: ReturnType<typeof vi.fn>;
+  publishTelegramTonRevenueStatusUpdated: ReturnType<typeof vi.fn>;
+  publishTelegramUnconfirmedSessionUpdated: ReturnType<typeof vi.fn>;
+  publishTelegramUnreadChatCountUpdated: ReturnType<typeof vi.fn>;
+  publishTelegramUnreadMessageCountUpdated: ReturnType<typeof vi.fn>;
+  publishTelegramUserStatusUpdated: ReturnType<typeof vi.fn>;
+  publishTelegramUserFullInfoUpdated: ReturnType<typeof vi.fn>;
+  publishTelegramUserPrivacySettingRulesUpdated: ReturnType<typeof vi.fn>;
+  publishTelegramWebAppCloseRequested: ReturnType<typeof vi.fn>;
+  publishTelegramStoredMessageUpdated: ReturnType<typeof vi.fn>;
   recordChatFiles: ReturnType<typeof vi.fn>;
+  recordChatBackgroundFiles: ReturnType<typeof vi.fn>;
+  recordChatPhotoFiles: ReturnType<typeof vi.fn>;
+  recordChatThemeFiles: ReturnType<typeof vi.fn>;
+  recordDefaultBackgroundFiles: ReturnType<typeof vi.fn>;
+  recordEmojiChatThemeFiles: ReturnType<typeof vi.fn>;
   recordMessageFiles: ReturnType<typeof vi.fn>;
+  recordNotificationFiles: ReturnType<typeof vi.fn>;
+  recordQuickReplyMessageFiles: ReturnType<typeof vi.fn>;
+  recordStickerSetFiles: ReturnType<typeof vi.fn>;
+  recordStoryFiles: ReturnType<typeof vi.fn>;
+  recordTrendingStickerSetFiles: ReturnType<typeof vi.fn>;
+  recordUserFullInfoFiles: ReturnType<typeof vi.fn>;
   recordLiveMessage: ReturnType<typeof vi.fn>;
   returning: ReturnType<typeof vi.fn>;
   transaction: ReturnType<typeof vi.fn>;
   values: ReturnType<typeof vi.fn>;
 } {
   const recordMessageFiles = vi.fn(() => Promise.resolve(undefined));
+  const recordNotificationFiles = vi.fn(() => Promise.resolve(undefined));
+  const recordNotificationGroupFiles = vi.fn(() => Promise.resolve(undefined));
+  const recordQuickReplyMessageFiles = vi.fn(() => Promise.resolve(undefined));
+  const recordStickerSetFiles = vi.fn(() => Promise.resolve(undefined));
+  const recordStoryFiles = vi.fn(() => Promise.resolve(undefined));
+  const recordTrendingStickerSetFiles = vi.fn(() => Promise.resolve(undefined));
+  const recordUserFullInfoFiles = vi.fn(() => Promise.resolve(undefined));
+  const recordChatBackgroundFiles = vi.fn(() => Promise.resolve(undefined));
+  const recordChatPhotoFiles = vi.fn(() => Promise.resolve(undefined));
+  const recordChatThemeFiles = vi.fn(() => Promise.resolve(undefined));
+  const recordDefaultBackgroundFiles = vi.fn(() => Promise.resolve(undefined));
+  const recordEmojiChatThemeFiles = vi.fn(() => Promise.resolve(undefined));
   const recordChatFiles = vi.fn(() => Promise.resolve(undefined));
   const returning = vi.fn(() =>
     Promise.resolve(
@@ -392,10 +480,90 @@ function createHandlerContext(options: { insertedRows?: unknown[] } = {}): {
     returning
   }));
   const publishTelegramMessageCreated = vi.fn();
+  const publishTelegramActiveGiftAuctionsUpdated = vi.fn();
+  const publishTelegramActiveNotificationsUpdated = vi.fn();
+  const publishTelegramAnimatedEmojiMessageClicked = vi.fn();
+  const publishTelegramApplicationRecaptchaVerificationRequired = vi.fn();
+  const publishTelegramApplicationVerificationRequired = vi.fn();
+  const publishTelegramAttachmentMenuBotsUpdated = vi.fn();
+  const publishTelegramAutosaveSettingsUpdated = vi.fn();
+  const publishTelegramBusinessConnectionUpdated = vi.fn();
+  const publishTelegramBusinessMessagesDeleted = vi.fn();
+  const publishTelegramCallUpdated = vi.fn();
+  const publishTelegramChatAction = vi.fn();
   const publishTelegramChatDirectoryUpdated = vi.fn(() => Promise.resolve(undefined));
   const publishTelegramChatFoldersUpdated = vi.fn();
+  const publishTelegramChatMemberUpdated = vi.fn();
+  const publishTelegramChatOnlineMemberCountUpdated = vi.fn();
+  const publishTelegramDefaultBackgroundUpdated = vi.fn();
+  const publishTelegramDirectMessagesChatTopicUpdated = vi.fn();
+  const publishTelegramEmojiChatThemesUpdated = vi.fn();
+  const publishTelegramFileDownloadRemoved = vi.fn();
+  const publishTelegramFileDownloadUpdated = vi.fn();
+  const publishTelegramFileDownloadsUpdated = vi.fn();
+  const publishTelegramForumTopicInfoUpdated = vi.fn();
+  const publishTelegramForumTopicUpdated = vi.fn();
+  const publishTelegramFreezeStateUpdated = vi.fn();
+  const publishTelegramGiftAuctionStateUpdated = vi.fn();
+  const publishTelegramGroupCallUpdated = vi.fn();
+  const publishTelegramGroupCallEncryptedParticipantUsersUpdated = vi.fn();
+  const publishTelegramGroupCallMessageSendFailed = vi.fn();
+  const publishTelegramGroupCallParticipantUpdatedOrRemoved = vi.fn();
+  const publishTelegramGroupCallMessagesDeleted = vi.fn();
+  const publishTelegramGroupCallVerificationStateUpdated = vi.fn();
+  const publishTelegramGroupCallMessageCreated = vi.fn();
+  const publishTelegramGroupCallPaidReactionReceived = vi.fn();
+  const publishTelegramGuestQueryReceived = vi.fn();
+  const publishTelegramInlineCallbackQueryReceived = vi.fn();
+  const publishTelegramInlineQueryReceived = vi.fn();
+  const publishTelegramLiveStoryTopDonorsUpdated = vi.fn();
+  const publishTelegramManagedBotUpdated = vi.fn();
+  const publishTelegramBusinessCallbackQueryReceived = vi.fn();
+  const publishTelegramCallbackQueryReceived = vi.fn();
+  const publishTelegramCallSignalingDataReceived = vi.fn();
+  const publishTelegramChatJoinRequestCreated = vi.fn();
+  const publishTelegramChosenInlineResultReceived = vi.fn();
+  const publishTelegramConnectionState = vi.fn();
+  const publishTelegramCustomEventReceived = vi.fn();
+  const publishTelegramCustomQueryReceived = vi.fn();
   const publishTelegramMessageDeleted = vi.fn();
+  const publishTelegramMessageSendFailed = vi.fn();
+  const publishTelegramMessageSendSucceeded = vi.fn();
   const publishTelegramMessageUpdated = vi.fn();
+  const publishTelegramOauthRequestReceived = vi.fn();
+  const publishTelegramPaidMediaPurchased = vi.fn();
+  const publishTelegramPendingNotificationsUpdated = vi.fn();
+  const publishTelegramPendingTextMessageUpdated = vi.fn();
+  const publishTelegramPollAnswerUpdated = vi.fn();
+  const publishTelegramPollUpdated = vi.fn();
+  const publishTelegramPreCheckoutQueryReceived = vi.fn();
+  const publishTelegramQuickReplyShortcutDeleted = vi.fn();
+  const publishTelegramQuickReplyShortcutMessagesUpdated = vi.fn();
+  const publishTelegramQuickReplyShortcutUpdated = vi.fn();
+  const publishTelegramSavedMessagesTagsUpdated = vi.fn();
+  const publishTelegramSavedMessagesTopicUpdated = vi.fn();
+  const publishTelegramScopeNotificationSettingsUpdated = vi.fn();
+  const publishTelegramServiceNotificationReceived = vi.fn();
+  const publishTelegramShippingQueryReceived = vi.fn();
+  const publishTelegramSpeedLimitNotificationReceived = vi.fn();
+  const publishTelegramStakeDiceStateUpdated = vi.fn();
+  const publishTelegramStoryDeleted = vi.fn();
+  const publishTelegramStoryPostFailed = vi.fn();
+  const publishTelegramStoryPostSucceeded = vi.fn();
+  const publishTelegramStoryStealthModeUpdated = vi.fn();
+  const publishTelegramStoryUpdated = vi.fn();
+  const publishTelegramSuggestedActionsUpdated = vi.fn();
+  const publishTelegramTermsOfServiceRequired = vi.fn();
+  const publishTelegramTonRevenueStatusUpdated = vi.fn();
+  const publishTelegramUnconfirmedSessionUpdated = vi.fn();
+  const publishTelegramUnreadChatCountUpdated = vi.fn();
+  const publishTelegramUnreadMessageCountUpdated = vi.fn();
+  const publishTelegramUserStatusUpdated = vi.fn();
+  const publishTelegramUserFullInfoUpdated = vi.fn();
+  const publishTelegramUserPrivacySettingRulesUpdated = vi.fn();
+  const publishTelegramWebAppCloseRequested = vi.fn();
+  const publishTelegramStoredMessageUpdated = vi.fn();
+  const publishTelegramSupergroupUpdated = vi.fn();
   const publishTelegramUserUpdated = vi.fn();
   const recordLiveMessage = vi.fn(() => Promise.resolve(undefined));
   const values = vi.fn(() => ({
@@ -427,20 +595,115 @@ function createHandlerContext(options: { insertedRows?: unknown[] } = {}): {
         transaction
       } as unknown as TelegramDatabase,
       events: {
+        publishTelegramActiveGiftAuctionsUpdated,
+        publishTelegramActiveNotificationsUpdated,
+        publishTelegramAnimatedEmojiMessageClicked,
+        publishTelegramApplicationRecaptchaVerificationRequired,
+        publishTelegramApplicationVerificationRequired,
+        publishTelegramAttachmentMenuBotsUpdated,
+        publishTelegramAutosaveSettingsUpdated,
+        publishTelegramBusinessConnectionUpdated,
+        publishTelegramBusinessMessagesDeleted,
+        publishTelegramCallUpdated,
+        publishTelegramChatAction,
         publishTelegramChatDirectoryUpdated,
         publishTelegramChatFoldersUpdated,
+        publishTelegramChatMemberUpdated,
+        publishTelegramChatOnlineMemberCountUpdated,
+        publishTelegramDefaultBackgroundUpdated,
+        publishTelegramDirectMessagesChatTopicUpdated,
+        publishTelegramEmojiChatThemesUpdated,
+        publishTelegramFileDownloadRemoved,
+        publishTelegramFileDownloadUpdated,
+        publishTelegramFileDownloadsUpdated,
+        publishTelegramForumTopicInfoUpdated,
+        publishTelegramForumTopicUpdated,
+        publishTelegramFreezeStateUpdated,
+        publishTelegramGiftAuctionStateUpdated,
+        publishTelegramGroupCallUpdated,
+        publishTelegramGroupCallEncryptedParticipantUsersUpdated,
+        publishTelegramGroupCallMessageSendFailed,
+        publishTelegramGroupCallParticipantUpdatedOrRemoved,
+        publishTelegramGroupCallMessagesDeleted,
+        publishTelegramGroupCallVerificationStateUpdated,
+        publishTelegramGroupCallMessageCreated,
+        publishTelegramGroupCallPaidReactionReceived,
+        publishTelegramGuestQueryReceived,
+        publishTelegramInlineCallbackQueryReceived,
+        publishTelegramInlineQueryReceived,
+        publishTelegramLiveStoryTopDonorsUpdated,
+        publishTelegramManagedBotUpdated,
+        publishTelegramBusinessCallbackQueryReceived,
+        publishTelegramCallbackQueryReceived,
+        publishTelegramCallSignalingDataReceived,
+        publishTelegramChatJoinRequestCreated,
+        publishTelegramChosenInlineResultReceived,
+        publishTelegramConnectionState,
+        publishTelegramCustomEventReceived,
+        publishTelegramCustomQueryReceived,
         publishTelegramMessageCreated,
         publishTelegramMessageDeleted,
+        publishTelegramMessageSendFailed,
+        publishTelegramMessageSendSucceeded,
         publishTelegramMessageUpdated,
+        publishTelegramOauthRequestReceived,
+        publishTelegramPaidMediaPurchased,
+        publishTelegramPendingNotificationsUpdated,
+        publishTelegramPendingTextMessageUpdated,
+        publishTelegramPollAnswerUpdated,
+        publishTelegramPollUpdated,
+        publishTelegramPreCheckoutQueryReceived,
+        publishTelegramQuickReplyShortcutDeleted,
+        publishTelegramQuickReplyShortcutMessagesUpdated,
+        publishTelegramQuickReplyShortcutUpdated,
+        publishTelegramSavedMessagesTagsUpdated,
+        publishTelegramSavedMessagesTopicUpdated,
+        publishTelegramScopeNotificationSettingsUpdated,
+        publishTelegramServiceNotificationReceived,
+        publishTelegramShippingQueryReceived,
+        publishTelegramSpeedLimitNotificationReceived,
+        publishTelegramStakeDiceStateUpdated,
+        publishTelegramStoryDeleted,
+        publishTelegramStoryPostFailed,
+        publishTelegramStoryPostSucceeded,
+        publishTelegramStoryStealthModeUpdated,
+        publishTelegramStoryUpdated,
+        publishTelegramSuggestedActionsUpdated,
+        publishTelegramTermsOfServiceRequired,
+        publishTelegramTonRevenueStatusUpdated,
+        publishTelegramUnconfirmedSessionUpdated,
+        publishTelegramUnreadChatCountUpdated,
+        publishTelegramUnreadMessageCountUpdated,
+        publishTelegramUserStatusUpdated,
+        publishTelegramUserFullInfoUpdated,
+        publishTelegramUserPrivacySettingRulesUpdated,
+        publishTelegramWebAppCloseRequested,
+        publishTelegramStoredMessageUpdated,
+        publishTelegramSupergroupUpdated,
         publishTelegramUserUpdated
       },
       files: {
         close: vi.fn(),
         getQueueStats: vi.fn(),
         handleUpdateFile: vi.fn(),
+        startFileGeneration: vi.fn(),
+        stopFileGeneration: vi.fn(() => Promise.resolve(undefined)),
+        recordChatBackgroundFiles,
         recordChatFiles,
+        recordChatPhotoFiles,
+        recordChatThemeFiles,
+        recordDefaultBackgroundFiles,
+        recordEmojiChatThemeFiles,
         recordMessageContentFiles: vi.fn(),
         recordMessageFiles,
+        recordNotificationFiles,
+        recordNotificationGroupFiles,
+        recordQuickReplyMessageFiles,
+        recordStickerSetFiles,
+        recordStoryFiles,
+        recordTrendingStickerSetFiles,
+        recordUserFullInfoFiles,
+        deleteStoryFileSlots: vi.fn(() => Promise.resolve(undefined)),
         requestFile: vi.fn()
       },
       liveCoverageObserver: {
@@ -459,10 +722,86 @@ function createHandlerContext(options: { insertedRows?: unknown[] } = {}): {
     onConflictDoNothing,
     onConflictDoUpdate,
     publishTelegramChatDirectoryUpdated,
+    publishTelegramDirectMessagesChatTopicUpdated,
+    publishTelegramEmojiChatThemesUpdated,
+    publishTelegramFileDownloadRemoved,
+    publishTelegramFileDownloadUpdated,
+    publishTelegramFileDownloadsUpdated,
+    publishTelegramForumTopicInfoUpdated,
+    publishTelegramForumTopicUpdated,
+    publishTelegramFreezeStateUpdated,
+    publishTelegramGiftAuctionStateUpdated,
+    publishTelegramGroupCallUpdated,
+    publishTelegramGroupCallEncryptedParticipantUsersUpdated,
+    publishTelegramGroupCallMessageSendFailed,
+    publishTelegramGroupCallParticipantUpdatedOrRemoved,
+    publishTelegramGroupCallMessagesDeleted,
+    publishTelegramGroupCallVerificationStateUpdated,
+    publishTelegramGroupCallMessageCreated,
+    publishTelegramGroupCallPaidReactionReceived,
+    publishTelegramGuestQueryReceived,
+    publishTelegramInlineCallbackQueryReceived,
+    publishTelegramInlineQueryReceived,
+    publishTelegramLiveStoryTopDonorsUpdated,
+    publishTelegramManagedBotUpdated,
+    publishTelegramBusinessCallbackQueryReceived,
+    publishTelegramCallbackQueryReceived,
+    publishTelegramCallSignalingDataReceived,
+    publishTelegramChatJoinRequestCreated,
+    publishTelegramChosenInlineResultReceived,
+    publishTelegramConnectionState,
+    publishTelegramCustomEventReceived,
+    publishTelegramCustomQueryReceived,
     publishTelegramMessageCreated,
     publishTelegramMessageDeleted,
+    publishTelegramMessageSendFailed,
+    publishTelegramMessageSendSucceeded,
+    publishTelegramOauthRequestReceived,
+    publishTelegramPaidMediaPurchased,
+    publishTelegramPendingNotificationsUpdated,
+    publishTelegramPendingTextMessageUpdated,
+    publishTelegramPollAnswerUpdated,
+    publishTelegramPollUpdated,
+    publishTelegramPreCheckoutQueryReceived,
+    publishTelegramQuickReplyShortcutDeleted,
+    publishTelegramQuickReplyShortcutMessagesUpdated,
+    publishTelegramQuickReplyShortcutUpdated,
+    publishTelegramSavedMessagesTagsUpdated,
+    publishTelegramSavedMessagesTopicUpdated,
+    publishTelegramScopeNotificationSettingsUpdated,
+    publishTelegramServiceNotificationReceived,
+    publishTelegramShippingQueryReceived,
+    publishTelegramSpeedLimitNotificationReceived,
+    publishTelegramStakeDiceStateUpdated,
+    publishTelegramStoryDeleted,
+    publishTelegramStoryPostFailed,
+    publishTelegramStoryPostSucceeded,
+    publishTelegramStoryStealthModeUpdated,
+    publishTelegramStoryUpdated,
+    publishTelegramSuggestedActionsUpdated,
+    publishTelegramTermsOfServiceRequired,
+    publishTelegramTonRevenueStatusUpdated,
+    publishTelegramUnconfirmedSessionUpdated,
+    publishTelegramUnreadChatCountUpdated,
+    publishTelegramUnreadMessageCountUpdated,
+    publishTelegramUserStatusUpdated,
+    publishTelegramUserFullInfoUpdated,
+    publishTelegramUserPrivacySettingRulesUpdated,
+    publishTelegramWebAppCloseRequested,
+    publishTelegramStoredMessageUpdated,
     recordChatFiles,
+    recordChatBackgroundFiles,
+    recordChatPhotoFiles,
+    recordChatThemeFiles,
+    recordDefaultBackgroundFiles,
+    recordEmojiChatThemeFiles,
     recordMessageFiles,
+    recordNotificationFiles,
+    recordQuickReplyMessageFiles,
+    recordStickerSetFiles,
+    recordStoryFiles,
+    recordTrendingStickerSetFiles,
+    recordUserFullInfoFiles,
     recordLiveMessage,
     returning,
     transaction,

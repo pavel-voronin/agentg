@@ -1,10 +1,12 @@
+import type { TelegramDatabase } from '../database.js';
 import type { TelegramWireAuthorizationStateUpdate } from '../telegramWire.js';
+import { upsertTelegramKv } from './kv.js';
 
-export function recordAuthorizationState(update: TelegramWireAuthorizationStateUpdate): void {
-  console.log(
-    JSON.stringify({
-      event: 'telegram.authorization_state',
-      state: update.authorization_state._
-    })
-  );
+const AUTHORIZATION_STATE_KEY = 'authorization_state';
+
+export async function storeAuthorizationState(
+  database: TelegramDatabase,
+  update: TelegramWireAuthorizationStateUpdate
+): Promise<void> {
+  await upsertTelegramKv(database, AUTHORIZATION_STATE_KEY, update.authorization_state);
 }

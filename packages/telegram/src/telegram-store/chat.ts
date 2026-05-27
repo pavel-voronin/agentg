@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
 import type { TelegramDatabase } from '../database.js';
 import { telegramChatPositions, telegramChats } from '../schema.js';
@@ -10,9 +10,15 @@ import {
   telegramWireJsonValue,
   type TelegramWireChat,
   type TelegramWireChatLastMessageUpdate,
+  type TelegramWireChatNotificationSettingsUpdate,
+  type TelegramWireChatPositionUpdate,
   type TelegramWireMessage,
   type TelegramWireObject
 } from '../telegramWire.js';
+
+type TelegramWireChatPosition = TelegramWireChat['positions'][number];
+
+export type TelegramChatFragment = typeof telegramChats.$inferInsert;
 
 export async function storeChat(database: TelegramDatabase, chat: TelegramWireChat): Promise<void> {
   const row = telegramChatRow(chat);
@@ -22,6 +28,16 @@ export async function storeChat(database: TelegramDatabase, chat: TelegramWireCh
   });
 
   await replaceTelegramChatPositions(database, String(chat.id), chat.positions);
+}
+
+export async function upsertTelegramChatFragment(
+  database: TelegramDatabase,
+  row: TelegramChatFragment
+): Promise<void> {
+  await database.insert(telegramChats).values(row).onConflictDoUpdate({
+    set: row,
+    target: telegramChats.id
+  });
 }
 
 export async function storeChatLastMessage(
@@ -41,6 +57,48 @@ export async function storeChatLastMessage(
   });
 
   await replaceTelegramChatPositions(database, String(update.chat_id), update.positions);
+}
+
+export async function storeChatNotificationSettings(
+  database: TelegramDatabase,
+  update: TelegramWireChatNotificationSettingsUpdate
+): Promise<void> {
+  const row: typeof telegramChats.$inferInsert = {
+    id: String(update.chat_id),
+    notificationSettings: telegramWireJsonObject(update.notification_settings)
+  };
+
+  await database.insert(telegramChats).values(row).onConflictDoUpdate({
+    set: row,
+    target: telegramChats.id
+  });
+}
+
+export async function storeChatPosition(
+  database: TelegramDatabase,
+  update: TelegramWireChatPositionUpdate
+): Promise<void> {
+  const row = telegramChatPositionRow(String(update.chat_id), update.position);
+
+  if (update.position.order === '0') {
+    await database
+      .delete(telegramChatPositions)
+      .where(
+        and(
+          eq(telegramChatPositions.chatId, row.chatId),
+          eq(telegramChatPositions.listKey, row.listKey)
+        )
+      );
+    return;
+  }
+
+  await database
+    .insert(telegramChatPositions)
+    .values(row)
+    .onConflictDoUpdate({
+      set: row,
+      target: [telegramChatPositions.chatId, telegramChatPositions.listKey]
+    });
 }
 
 export function recordChatFiles(
@@ -120,20 +178,25 @@ function telegramChatPositionRows(
   chatId: string,
   positions: TelegramWireChat['positions']
 ): (typeof telegramChatPositions.$inferInsert)[] {
-  return positions.map((position) => {
-    const listKey = chatPositionListKey(position.list);
-
-    return {
-      chatId,
-      isPinned: position.is_pinned,
-      listKey,
-      order: position.order,
-      source: telegramWireJsonValue(position.source)
-    };
-  });
+  return positions.map((position) => telegramChatPositionRow(chatId, position));
 }
 
-function chatPositionListKey(list: TelegramWireChat['positions'][number]['list']): string {
+function telegramChatPositionRow(
+  chatId: string,
+  position: TelegramWireChatPosition
+): typeof telegramChatPositions.$inferInsert {
+  const listKey = chatPositionListKey(position.list);
+
+  return {
+    chatId,
+    isPinned: position.is_pinned,
+    listKey,
+    order: position.order,
+    source: telegramWireJsonValue(position.source)
+  };
+}
+
+function chatPositionListKey(list: TelegramWireChatPosition['list']): string {
   if (list._ === 'chatListMain') {
     return 'main';
   }

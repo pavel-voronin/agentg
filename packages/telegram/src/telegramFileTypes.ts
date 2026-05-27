@@ -1,4 +1,14 @@
-import type { TelegramChatModelRef, TelegramMessageModelRef } from './modelRefs.js';
+import type {
+  TelegramActiveNotificationModelRef,
+  TelegramChatModelRef,
+  TelegramDefaultBackgroundModelRef,
+  TelegramEmojiChatThemesModelRef,
+  TelegramMessageModelRef,
+  TelegramQuickReplyMessageModelRef,
+  TelegramStickerSetModelRef,
+  TelegramStoryModelRef,
+  TelegramUserModelRef
+} from './modelRefs.js';
 import type { TelegramWireFile } from './telegramWire.js';
 
 export const telegramFileStatuses = ['known', 'queued', 'downloading', 'ready', 'failed'] as const;
@@ -15,7 +25,16 @@ export const telegramFileRenderKinds = ['audio', 'download', 'image', 'video'] a
 export type TelegramFileStatus = (typeof telegramFileStatuses)[number];
 export type TelegramFileMediaKind = (typeof telegramFileMediaKinds)[number];
 export type TelegramFileRenderKind = (typeof telegramFileRenderKinds)[number];
-export type TelegramFileOwner = TelegramChatModelRef | TelegramMessageModelRef;
+export type TelegramFileOwner =
+  | TelegramActiveNotificationModelRef
+  | TelegramChatModelRef
+  | TelegramDefaultBackgroundModelRef
+  | TelegramEmojiChatThemesModelRef
+  | TelegramMessageModelRef
+  | TelegramQuickReplyMessageModelRef
+  | TelegramStickerSetModelRef
+  | TelegramStoryModelRef
+  | TelegramUserModelRef;
 export type TelegramFileOwnerModel = TelegramFileOwner['_model'];
 export type TelegramFileOwnerKey = {
   ownerId: string;

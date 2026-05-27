@@ -1,22 +1,39 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
 import { mkdir, rename, rm, stat } from 'node:fs/promises';
-import { basename, extname, join } from 'node:path';
+import { basename, dirname, extname, join } from 'node:path';
+import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 
 import type { EventBus } from '@agentg/events/bus';
+import { createIntegrationEvent } from '@agentg/events/envelope';
 import { and, eq, notInArray, sql } from 'drizzle-orm';
 
 import type { TelegramDatabase } from './database.js';
 import {
+  createTelegramDefaultBackgroundUpdatedEvent,
   createTelegramChatUpdatedEvent,
   createTelegramFileQueueUpdatedEvent,
   createTelegramReadMessageUpdatedEvent
 } from './integrationEvents.js';
 import {
+  TELEGRAM_ACTIVE_NOTIFICATION_MODEL,
+  TELEGRAM_CHAT_MODEL,
+  TELEGRAM_DEFAULT_BACKGROUND_MODEL,
+  TELEGRAM_EMOJI_CHAT_THEMES_MODEL,
   TELEGRAM_MESSAGE_MODEL,
+  TELEGRAM_QUICK_REPLY_MESSAGE_MODEL,
+  TELEGRAM_STICKER_SET_MODEL,
+  TELEGRAM_STORY_MODEL,
+  TELEGRAM_USER_MODEL,
+  telegramActiveNotificationRef,
+  telegramEmojiChatThemesRef,
   telegramMessageModelParts,
-  telegramMessageRef
+  telegramMessageRef,
+  telegramQuickReplyMessageRef,
+  telegramStickerSetRef,
+  telegramStoryRef,
+  telegramUserRef
 } from './modelRefs.js';
 import {
   telegramFileAssets,
@@ -32,7 +49,8 @@ import {
   type TelegramWireFile,
   type TelegramWireFileUpdate,
   type TelegramWireMessage,
-  type TelegramWireMessageContentUpdate
+  type TelegramWireMessageContentUpdate,
+  type TelegramWireUpdateByType
 } from './telegramWire.js';
 import { extractTelegramFileSlots, type TelegramFileSlotUpdate } from './telegramFileExtractor.js';
 import {
@@ -60,12 +78,39 @@ import {
   readMessageSelection,
   toReadMessages
 } from './rpc/procedures/support.js';
+import { readDefaultBackgroundSelection } from './telegram-store/defaultBackground.js';
 
 export type TelegramFileSubsystem = {
   close(): void;
   getQueueStats(): ReturnType<typeof readTelegramFileQueueStats>;
   handleUpdateFile(update: TelegramWireFileUpdate): Promise<void>;
+  startFileGeneration(update: TelegramWireFileGenerationStartUpdate): void;
+  stopFileGeneration(generationId: number | string): Promise<void>;
+  recordChatBackgroundFiles(
+    chatId: string,
+    background: TelegramWireChatBackground,
+    cause: TelegramMediaDownloadPolicyCause
+  ): Promise<void>;
   recordChatFiles(chat: TelegramWireChat, cause: TelegramMediaDownloadPolicyCause): Promise<void>;
+  recordChatPhotoFiles(
+    chatId: string,
+    photo: TelegramWireChatPhotoInfo | null,
+    cause: TelegramMediaDownloadPolicyCause
+  ): Promise<void>;
+  recordChatThemeFiles(
+    chatId: string,
+    theme: TelegramWireChatTheme | null,
+    cause: TelegramMediaDownloadPolicyCause
+  ): Promise<void>;
+  recordDefaultBackgroundFiles(
+    key: string,
+    background: TelegramWireDefaultBackground | null,
+    cause: TelegramMediaDownloadPolicyCause
+  ): Promise<void>;
+  recordEmojiChatThemeFiles(
+    themes: TelegramWireEmojiChatTheme[],
+    cause: TelegramMediaDownloadPolicyCause
+  ): Promise<void>;
   recordMessageContentFiles(
     update: TelegramWireMessageContentUpdate,
     cause: TelegramMediaDownloadPolicyCause
@@ -74,6 +119,37 @@ export type TelegramFileSubsystem = {
     message: TelegramWireMessage,
     cause: TelegramMediaDownloadPolicyCause
   ): Promise<void>;
+  recordNotificationGroupFiles(
+    groups: TelegramWireNotificationGroup[],
+    cause: TelegramMediaDownloadPolicyCause
+  ): Promise<void>;
+  recordNotificationFiles(
+    groupId: number,
+    notification: TelegramWireNotification,
+    cause: TelegramMediaDownloadPolicyCause
+  ): Promise<void>;
+  recordQuickReplyMessageFiles(
+    message: TelegramWireQuickReplyMessage,
+    cause: TelegramMediaDownloadPolicyCause
+  ): Promise<void>;
+  recordStickerSetFiles(
+    stickerSet: TelegramWireStickerSet,
+    cause: TelegramMediaDownloadPolicyCause
+  ): Promise<void>;
+  recordStoryFiles(
+    story: TelegramWireStory,
+    cause: TelegramMediaDownloadPolicyCause
+  ): Promise<void>;
+  recordTrendingStickerSetFiles(
+    stickerSets: TelegramWireTrendingStickerSets,
+    cause: TelegramMediaDownloadPolicyCause
+  ): Promise<void>;
+  recordUserFullInfoFiles(
+    userId: string,
+    info: TelegramWireUserFullInfo,
+    cause: TelegramMediaDownloadPolicyCause
+  ): Promise<void>;
+  deleteStoryFileSlots(input: { posterChatId: string; storyId: number }): Promise<void>;
   requestFile(input: {
     owner: TelegramFileOwner;
     slotKey: string;
@@ -128,10 +204,37 @@ type TelegramFileDownloadBatchResult = {
   readyCount: number;
 };
 
+type TelegramWireNotificationGroup =
+  TelegramWireUpdateByType<'updateActiveNotifications'>['groups'][number];
+type TelegramWireNotification = TelegramWireUpdateByType<'updateNotification'>['notification'];
+type TelegramWireQuickReplyMessage =
+  TelegramWireUpdateByType<'updateQuickReplyShortcut'>['shortcut']['first_message'];
+type TelegramWireStickerSet = TelegramWireUpdateByType<'updateStickerSet'>['sticker_set'];
+type TelegramWireStory = TelegramWireUpdateByType<'updateStory'>['story'];
+type TelegramWireTrendingStickerSets =
+  TelegramWireUpdateByType<'updateTrendingStickerSets'>['sticker_sets'];
+type TelegramWireUserFullInfo = TelegramWireUpdateByType<'updateUserFullInfo'>['user_full_info'];
+type TelegramWireChatBackground = NonNullable<
+  TelegramWireUpdateByType<'updateChatBackground'>['background']
+>;
+type TelegramWireChatPhotoInfo = NonNullable<TelegramWireUpdateByType<'updateChatPhoto'>['photo']>;
+type TelegramWireChatTheme = NonNullable<TelegramWireUpdateByType<'updateChatTheme'>['theme']>;
+type TelegramWireDefaultBackground = NonNullable<
+  TelegramWireUpdateByType<'updateDefaultBackground'>['background']
+>;
+type TelegramWireEmojiChatTheme =
+  TelegramWireUpdateByType<'updateEmojiChatThemes'>['chat_themes'][number];
+type TelegramWireFileGenerationStartUpdate = TelegramWireUpdateByType<'updateFileGenerationStart'>;
+
 type TelegramCompletedFileAsset = {
   assetKey: string;
   localPath: string;
   tdlibFileId: number;
+};
+
+type ActiveTelegramFileGeneration = {
+  controller: AbortController;
+  destinationPath: string;
 };
 
 type StoredCanonicalFile = {
@@ -150,6 +253,10 @@ type RequestFileSlotRow = {
   mediaKind: string;
 };
 
+type TelegramFileSlotScope = {
+  slotKeyPrefix: string;
+};
+
 const DEFAULT_WORKER_INTERVAL_MS = 1000;
 const DEFAULT_WORKER_FAILURE_BACKOFF_MS = 5000;
 const DEFAULT_WORKER_MAX_CONCURRENT_DOWNLOADS = 2;
@@ -161,6 +268,7 @@ export function createTelegramFileSubsystem(
   options: TelegramFileSubsystemOptions
 ): TelegramFileSubsystem {
   const completedFiles = new Map<string, TelegramCompletedFileAsset>();
+  const activeFileGenerations = new Map<string, ActiveTelegramFileGeneration>();
   const intervalMs = options.intervalMs ?? DEFAULT_WORKER_INTERVAL_MS;
   const failureBackoffMs = options.failureBackoffMs ?? DEFAULT_WORKER_FAILURE_BACKOFF_MS;
   const maxConcurrentDownloads = positiveInteger(
@@ -256,6 +364,10 @@ export function createTelegramFileSubsystem(
       closed = true;
       pending = false;
       completedFiles.clear();
+      for (const generation of activeFileGenerations.values()) {
+        generation.controller.abort();
+      }
+      activeFileGenerations.clear();
       if (timer !== undefined) {
         clearTimeout(timer);
         timer = undefined;
@@ -280,6 +392,45 @@ export function createTelegramFileSubsystem(
       }
       await publishAssetOwnersAndQueue(options, changedAssets);
     },
+    startFileGeneration(update): void {
+      const generationId = update.generation_id;
+      activeFileGenerations.get(generationId)?.controller.abort();
+
+      const generation: ActiveTelegramFileGeneration = {
+        controller: new AbortController(),
+        destinationPath: update.destination_path
+      };
+      activeFileGenerations.set(generationId, generation);
+
+      void startTelegramFileGeneration(options, update, generation.controller.signal)
+        .catch((error: unknown) => {
+          if (generation.controller.signal.aborted) {
+            return;
+          }
+          console.error(
+            JSON.stringify({
+              error: error instanceof Error ? error.message : String(error),
+              event: 'telegram.file_generation_unhandled_failure',
+              generationId: update.generation_id
+            })
+          );
+        })
+        .finally(() => {
+          if (activeFileGenerations.get(generationId) === generation) {
+            activeFileGenerations.delete(generationId);
+          }
+        });
+    },
+    async stopFileGeneration(generationId): Promise<void> {
+      const active = activeFileGenerations.get(String(generationId));
+      if (active === undefined) {
+        return;
+      }
+
+      active.controller.abort();
+      activeFileGenerations.delete(String(generationId));
+      await rm(active.destinationPath, { force: true });
+    },
     async recordChatFiles(chat, cause): Promise<void> {
       await recordFileSlotUpdate(
         options,
@@ -287,6 +438,77 @@ export function createTelegramFileSubsystem(
           chat: {
             chat: telegramWireJsonObject(chat),
             id: String(chat.id)
+          }
+        },
+        cause
+      );
+    },
+    async recordChatBackgroundFiles(chatId, background, cause): Promise<void> {
+      await recordFileSlotUpdate(
+        options,
+        {
+          chatBackground: {
+            background: telegramWireJsonObject(background),
+            chatId
+          }
+        },
+        cause,
+        {
+          slotKeyPrefix: 'background.'
+        }
+      );
+    },
+    async recordChatPhotoFiles(chatId, photo, cause): Promise<void> {
+      await recordFileSlotUpdate(
+        options,
+        {
+          chatPhoto: {
+            chatId,
+            photo: photo === null ? null : telegramWireJsonObject(photo)
+          }
+        },
+        cause,
+        {
+          slotKeyPrefix: 'avatar.'
+        }
+      );
+    },
+    async recordChatThemeFiles(chatId, theme, cause): Promise<void> {
+      await recordFileSlotUpdate(
+        options,
+        {
+          chatTheme: {
+            chatId,
+            theme: theme === null ? null : telegramWireJsonObject(theme)
+          }
+        },
+        cause,
+        {
+          slotKeyPrefix: 'theme.'
+        }
+      );
+    },
+    async recordDefaultBackgroundFiles(key, background, cause): Promise<void> {
+      await recordFileSlotUpdate(
+        options,
+        {
+          defaultBackground: {
+            background: background === null ? null : telegramWireJsonObject(background),
+            key
+          }
+        },
+        cause,
+        {
+          slotKeyPrefix: 'background.'
+        }
+      );
+    },
+    async recordEmojiChatThemeFiles(themes, cause): Promise<void> {
+      await recordFileSlotUpdate(
+        options,
+        {
+          emojiChatThemes: {
+            themes: themes.map(telegramWireJsonObject)
           }
         },
         cause
@@ -318,6 +540,110 @@ export function createTelegramFileSubsystem(
         cause
       );
     },
+    async recordNotificationGroupFiles(groups, cause): Promise<void> {
+      await recordFileSlotUpdate(
+        options,
+        {
+          notificationGroups: {
+            groups: groups.map(telegramWireJsonObject)
+          }
+        },
+        cause
+      );
+    },
+    async recordNotificationFiles(groupId, notification, cause): Promise<void> {
+      await recordFileSlotUpdate(
+        options,
+        {
+          notificationGroups: {
+            groups: [
+              {
+                id: groupId,
+                notifications: [telegramWireJsonObject(notification)]
+              }
+            ]
+          }
+        },
+        cause
+      );
+    },
+    async recordQuickReplyMessageFiles(message, cause): Promise<void> {
+      await recordFileSlotUpdate(
+        options,
+        {
+          quickReplyMessage: {
+            content: telegramWireJsonObject(message.content),
+            messageId: String(message.id)
+          }
+        },
+        cause
+      );
+    },
+    async recordStickerSetFiles(stickerSet, cause): Promise<void> {
+      await recordFileSlotUpdate(
+        options,
+        {
+          stickerSet: {
+            id: stickerSet.id,
+            stickerSet: telegramWireJsonObject(stickerSet)
+          }
+        },
+        cause
+      );
+    },
+    async recordStoryFiles(story, cause): Promise<void> {
+      await recordFileSlotUpdate(
+        options,
+        {
+          story: {
+            posterChatId: String(story.poster_chat_id),
+            story: telegramWireJsonObject(story),
+            storyId: story.id
+          }
+        },
+        cause
+      );
+    },
+    async recordTrendingStickerSetFiles(stickerSets, cause): Promise<void> {
+      await recordFileSlotUpdate(
+        options,
+        {
+          stickerSetInfos: {
+            sets: stickerSets.sets.map(telegramWireJsonObject)
+          }
+        },
+        cause,
+        {
+          slotKeyPrefix: 'trending.'
+        }
+      );
+    },
+    async recordUserFullInfoFiles(userId, info, cause): Promise<void> {
+      await recordFileSlotUpdate(
+        options,
+        {
+          userFullInfo: {
+            info: telegramWireJsonObject(info),
+            userId
+          }
+        },
+        cause,
+        {
+          slotKeyPrefix: 'full_info.'
+        }
+      );
+    },
+    async deleteStoryFileSlots(input): Promise<void> {
+      const owner = telegramStoryRef(input);
+      await options.database
+        .delete(telegramFileSlots)
+        .where(
+          and(
+            eq(telegramFileSlots.ownerModel, owner._model),
+            eq(telegramFileSlots.ownerId, owner.id)
+          )
+        );
+    },
     async requestFile(input): Promise<TelegramFileRequestResult> {
       return requestTelegramFile(options, input);
     }
@@ -327,18 +653,26 @@ export function createTelegramFileSubsystem(
 async function recordFileSlotUpdate(
   options: TelegramFileSubsystemOptions,
   update: TelegramFileSlotUpdate,
-  cause: TelegramMediaDownloadPolicyCause
+  cause: TelegramMediaDownloadPolicyCause,
+  scope?: TelegramFileSlotScope
 ): Promise<void> {
   const slots = extractTelegramFileSlots(update);
   const owners = updateFileOwners(update);
   const changedOwners = new Map<string, TelegramFileOwnerKey>();
   let queueChanged = false;
 
+  if (update.notificationGroups !== undefined) {
+    await deleteStaleActiveNotificationFileSlots(options.database, owners);
+  }
+
   for (const owner of owners) {
     const ownerSlots = slots.filter(
       (slot) => slot.owner._model === owner.ownerModel && slot.owner.id === owner.ownerId
     );
-    const result = await replaceOwnerFileSlots(options.database, owner, ownerSlots, cause);
+    const result =
+      scope === undefined
+        ? await replaceOwnerFileSlots(options.database, owner, ownerSlots, cause)
+        : await replaceOwnerFileSlotsInScope(options.database, owner, ownerSlots, cause, scope);
     if (result.ownerChanged) {
       changedOwners.set(ownerKey(owner), owner);
     }
@@ -360,7 +694,47 @@ function updateFileOwners(update: TelegramFileSlotUpdate): TelegramFileOwnerKey[
       : [
           {
             ownerId: update.chat.id,
-            ownerModel: 'telegram.chat' as const
+            ownerModel: TELEGRAM_CHAT_MODEL
+          }
+        ]),
+    ...(update.chatBackground === undefined
+      ? []
+      : [
+          {
+            ownerId: update.chatBackground.chatId,
+            ownerModel: TELEGRAM_CHAT_MODEL
+          }
+        ]),
+    ...(update.chatPhoto === undefined
+      ? []
+      : [
+          {
+            ownerId: update.chatPhoto.chatId,
+            ownerModel: TELEGRAM_CHAT_MODEL
+          }
+        ]),
+    ...(update.chatTheme === undefined
+      ? []
+      : [
+          {
+            ownerId: update.chatTheme.chatId,
+            ownerModel: TELEGRAM_CHAT_MODEL
+          }
+        ]),
+    ...(update.defaultBackground === undefined
+      ? []
+      : [
+          {
+            ownerId: update.defaultBackground.key,
+            ownerModel: TELEGRAM_DEFAULT_BACKGROUND_MODEL
+          }
+        ]),
+    ...(update.emojiChatThemes === undefined
+      ? []
+      : [
+          {
+            ownerId: telegramEmojiChatThemesRef().id,
+            ownerModel: TELEGRAM_EMOJI_CHAT_THEMES_MODEL
           }
         ]),
     ...(update.message === undefined
@@ -371,7 +745,7 @@ function updateFileOwners(update: TelegramFileSlotUpdate): TelegramFileOwnerKey[
               chatId: update.message.chatId,
               messageId: update.message.messageId
             }).id,
-            ownerModel: 'telegram.message' as const
+            ownerModel: TELEGRAM_MESSAGE_MODEL
           }
         ]),
     ...(update.contentUpdate === undefined
@@ -382,10 +756,141 @@ function updateFileOwners(update: TelegramFileSlotUpdate): TelegramFileOwnerKey[
               chatId: update.contentUpdate.chatId,
               messageId: update.contentUpdate.messageId
             }).id,
-            ownerModel: 'telegram.message' as const
+            ownerModel: TELEGRAM_MESSAGE_MODEL
+          }
+        ]),
+    ...(update.notificationGroups === undefined
+      ? []
+      : notificationGroupFileOwners(update.notificationGroups.groups)),
+    ...(update.quickReplyMessage === undefined
+      ? []
+      : [
+          {
+            ownerId: telegramQuickReplyMessageRef(update.quickReplyMessage.messageId).id,
+            ownerModel: TELEGRAM_QUICK_REPLY_MESSAGE_MODEL
+          }
+        ]),
+    ...(update.stickerSet === undefined
+      ? []
+      : [
+          {
+            ownerId: telegramStickerSetRef(update.stickerSet.id).id,
+            ownerModel: TELEGRAM_STICKER_SET_MODEL
+          }
+        ]),
+    ...(update.stickerSetInfos === undefined
+      ? []
+      : update.stickerSetInfos.sets
+          .map((stickerSet) => safeTdlibId(stickerSet.id))
+          .filter((stickerSetId): stickerSetId is string => stickerSetId !== null)
+          .map((stickerSetId) => ({
+            ownerId: telegramStickerSetRef(stickerSetId).id,
+            ownerModel: TELEGRAM_STICKER_SET_MODEL
+          }))),
+    ...(update.story === undefined
+      ? []
+      : [
+          {
+            ownerId: telegramStoryRef({
+              posterChatId: update.story.posterChatId,
+              storyId: update.story.storyId
+            }).id,
+            ownerModel: TELEGRAM_STORY_MODEL
+          }
+        ]),
+    ...(update.userFullInfo === undefined
+      ? []
+      : [
+          {
+            ownerId: telegramUserRef(update.userFullInfo.userId).id,
+            ownerModel: TELEGRAM_USER_MODEL
           }
         ])
   ];
+}
+
+function notificationGroupFileOwners(groups: Record<string, unknown>[]): TelegramFileOwnerKey[] {
+  const owners: TelegramFileOwnerKey[] = [];
+
+  for (const group of groups) {
+    const groupId = safeTdlibId(group.id);
+    for (const notification of asRecordArray(group.notifications)) {
+      const type = asPlainRecord(notification.type);
+      if (type?._ === 'notificationTypeNewMessage') {
+        const message = asPlainRecord(type.message);
+        const chatId = safeTdlibId(message?.chat_id);
+        const messageId = safeTdlibId(message?.id);
+        if (chatId !== null && messageId !== null) {
+          owners.push({
+            ownerId: telegramMessageRef({ chatId, messageId }).id,
+            ownerModel: TELEGRAM_MESSAGE_MODEL
+          });
+        }
+      }
+
+      if (type?._ === 'notificationTypeNewPushMessage') {
+        const notificationId = safeTdlibId(notification.id);
+        if (groupId !== null && notificationId !== null) {
+          owners.push({
+            ownerId: telegramActiveNotificationRef({ groupId, notificationId }).id,
+            ownerModel: TELEGRAM_ACTIVE_NOTIFICATION_MODEL
+          });
+        }
+      }
+    }
+  }
+
+  return owners;
+}
+
+function asRecordArray(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value) ? value.map(asPlainRecord).filter(isDefined) : [];
+}
+
+function asPlainRecord(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+function safeTdlibId(value: unknown): string | null {
+  if (typeof value === 'string' && value.length > 0) {
+    return value;
+  }
+  return typeof value === 'number' && Number.isSafeInteger(value) ? String(value) : null;
+}
+
+function isDefined<T>(value: T | undefined): value is T {
+  return value !== undefined;
+}
+
+async function deleteStaleActiveNotificationFileSlots(
+  database: TelegramDatabase,
+  owners: TelegramFileOwnerKey[]
+): Promise<void> {
+  const ownerIds = [
+    ...new Set(
+      owners
+        .filter((owner) => owner.ownerModel === TELEGRAM_ACTIVE_NOTIFICATION_MODEL)
+        .map((owner) => owner.ownerId)
+    )
+  ];
+
+  if (ownerIds.length === 0) {
+    await database
+      .delete(telegramFileSlots)
+      .where(eq(telegramFileSlots.ownerModel, TELEGRAM_ACTIVE_NOTIFICATION_MODEL));
+    return;
+  }
+
+  await database
+    .delete(telegramFileSlots)
+    .where(
+      and(
+        eq(telegramFileSlots.ownerModel, TELEGRAM_ACTIVE_NOTIFICATION_MODEL),
+        notInArray(telegramFileSlots.ownerId, ownerIds)
+      )
+    );
 }
 
 async function replaceOwnerFileSlots(
@@ -431,6 +936,73 @@ async function replaceOwnerFileSlots(
       and(
         eq(telegramFileSlots.ownerModel, owner.ownerModel),
         eq(telegramFileSlots.ownerId, owner.ownerId),
+        notInArray(telegramFileSlots.slotKey, slotKeys)
+      )
+    )
+    .returning({
+      slotKey: telegramFileSlots.slotKey
+    });
+  const currentSlotKeys = new Set(currentRows.map((row) => row.slotKey));
+  let ownerChanged = removed.length > 0;
+  let queueChanged = false;
+
+  for (const slot of slots) {
+    const changedSlot = await upsertExtractedSlot(database, slot, cause);
+    ownerChanged ||= changedSlot.ownerChanged || !currentSlotKeys.has(slot.slotKey);
+    queueChanged ||= changedSlot.queueChanged;
+  }
+
+  return { ownerChanged, queueChanged };
+}
+
+async function replaceOwnerFileSlotsInScope(
+  database: TelegramDatabase,
+  owner: TelegramFileOwnerKey,
+  slots: ExtractedTelegramFileSlot[],
+  cause: TelegramMediaDownloadPolicyCause,
+  scope: TelegramFileSlotScope
+): Promise<{ ownerChanged: boolean; queueChanged: boolean }> {
+  const scopedSlotCondition = sql`${telegramFileSlots.slotKey} like ${`${scope.slotKeyPrefix}%`}`;
+  const currentRows = await database
+    .select({
+      slotKey: telegramFileSlots.slotKey
+    })
+    .from(telegramFileSlots)
+    .where(
+      and(
+        eq(telegramFileSlots.ownerModel, owner.ownerModel),
+        eq(telegramFileSlots.ownerId, owner.ownerId),
+        scopedSlotCondition
+      )
+    );
+
+  if (slots.length === 0) {
+    const removed = await database
+      .delete(telegramFileSlots)
+      .where(
+        and(
+          eq(telegramFileSlots.ownerModel, owner.ownerModel),
+          eq(telegramFileSlots.ownerId, owner.ownerId),
+          scopedSlotCondition
+        )
+      )
+      .returning({
+        slotKey: telegramFileSlots.slotKey
+      });
+    return {
+      ownerChanged: removed.length > 0,
+      queueChanged: false
+    };
+  }
+
+  const slotKeys = slots.map((slot) => slot.slotKey);
+  const removed = await database
+    .delete(telegramFileSlots)
+    .where(
+      and(
+        eq(telegramFileSlots.ownerModel, owner.ownerModel),
+        eq(telegramFileSlots.ownerId, owner.ownerId),
+        scopedSlotCondition,
         notInArray(telegramFileSlots.slotKey, slotKeys)
       )
     )
@@ -935,6 +1507,116 @@ async function dispatchTdlibFileDownload(
   );
 }
 
+async function startTelegramFileGeneration(
+  options: TelegramFileSubsystemOptions,
+  update: TelegramWireFileGenerationStartUpdate,
+  signal: AbortSignal
+): Promise<void> {
+  try {
+    if (update.conversion !== '#url#') {
+      throw new Error(`Unsupported Telegram file generation conversion: ${update.conversion}`);
+    }
+
+    await downloadGeneratedFileFromUrl(options, update, signal);
+    if (signal.aborted) {
+      return;
+    }
+    await finishTelegramFileGeneration(options, update.generation_id, null);
+  } catch (error) {
+    if (signal.aborted) {
+      return;
+    }
+    await finishTelegramFileGeneration(options, update.generation_id, {
+      _: 'error',
+      code: 500,
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+}
+
+async function downloadGeneratedFileFromUrl(
+  options: TelegramFileSubsystemOptions,
+  update: TelegramWireFileGenerationStartUpdate,
+  signal: AbortSignal
+): Promise<void> {
+  const url = new URL(update.original_path);
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new Error(`Unsupported Telegram generated file URL protocol: ${url.protocol}`);
+  }
+
+  const response = await fetch(url, { signal });
+  if (!response.ok) {
+    throw new Error(`Telegram generated file download failed with HTTP ${String(response.status)}`);
+  }
+  if (response.body === null) {
+    throw new Error('Telegram generated file download returned an empty body');
+  }
+
+  const expectedSize = response.headers.get('content-length');
+  await setTelegramFileGenerationProgress(options, update.generation_id, {
+    expectedSize: expectedSize === null ? 0 : Number.parseInt(expectedSize, 10),
+    localPrefixSize: 0
+  });
+
+  await mkdir(dirname(update.destination_path), { recursive: true });
+  const source = Readable.fromWeb(
+    response.body as unknown as Parameters<typeof Readable.fromWeb>[0]
+  );
+  await pipeline(source, createWriteStream(update.destination_path), { signal });
+
+  const generated = await stat(update.destination_path);
+  await setTelegramFileGenerationProgress(options, update.generation_id, {
+    expectedSize: generated.size,
+    localPrefixSize: generated.size
+  });
+}
+
+async function setTelegramFileGenerationProgress(
+  options: TelegramFileSubsystemOptions,
+  generationId: number | string,
+  input: {
+    expectedSize: number;
+    localPrefixSize: number;
+  }
+): Promise<void> {
+  await invokeTdlibWithEvents(
+    options.eventBus,
+    options.client,
+    {
+      _: 'setFileGenerationProgress',
+      expected_size: safeFileGenerationSize(input.expectedSize),
+      generation_id: generationId,
+      local_prefix_size: safeFileGenerationSize(input.localPrefixSize)
+    },
+    {
+      priority: telegramTdlibPriorities.normal
+    }
+  );
+}
+
+async function finishTelegramFileGeneration(
+  options: TelegramFileSubsystemOptions,
+  generationId: number | string,
+  error: Record<string, unknown> | null
+): Promise<void> {
+  await invokeTdlibWithEvents(
+    options.eventBus,
+    options.client,
+    {
+      _: 'finishFileGeneration',
+      error,
+      generation_id: generationId
+    },
+    {
+      priority: telegramTdlibPriorities.normal
+    }
+  );
+}
+
+function safeFileGenerationSize(value: number): number {
+  return Number.isSafeInteger(value) && value > 0 ? value : 0;
+}
+
 async function getTdlibFile(
   options: TelegramFileSubsystemOptions,
   row: TelegramFileDownloadRow
@@ -1240,11 +1922,39 @@ async function publishTelegramFileOwnerUpdated(
   options: TelegramFileSubsystemOptions,
   owner: TelegramFileOwnerKey
 ): Promise<void> {
-  if (owner.ownerModel === 'telegram.chat') {
+  if (owner.ownerModel === TELEGRAM_ACTIVE_NOTIFICATION_MODEL) {
+    options.eventBus.publish(
+      createIntegrationEvent({
+        data: {},
+        type: 'telegram.active_notifications.updated'
+      })
+    );
+    return;
+  }
+
+  if (owner.ownerModel === TELEGRAM_CHAT_MODEL) {
     const chat = await getDirectoryEntryByChatId(options.database, owner.ownerId);
     if (chat !== null) {
       options.eventBus.publish(createTelegramChatUpdatedEvent(chat));
     }
+    return;
+  }
+
+  if (owner.ownerModel === TELEGRAM_DEFAULT_BACKGROUND_MODEL) {
+    const selection = await readDefaultBackgroundSelection(options.database, owner.ownerId);
+    if (selection !== null) {
+      options.eventBus.publish(createTelegramDefaultBackgroundUpdatedEvent(selection));
+    }
+    return;
+  }
+
+  if (owner.ownerModel === TELEGRAM_EMOJI_CHAT_THEMES_MODEL) {
+    options.eventBus.publish(
+      createIntegrationEvent({
+        data: {},
+        type: 'telegram.emoji_chat_themes.updated'
+      })
+    );
     return;
   }
 

@@ -198,13 +198,58 @@ function createCaller(
       handleUpdateFile() {
         return Promise.resolve();
       },
+      startFileGeneration() {
+        return;
+      },
+      stopFileGeneration() {
+        return Promise.resolve();
+      },
+      recordChatBackgroundFiles() {
+        return Promise.resolve();
+      },
       recordChatFiles() {
+        return Promise.resolve();
+      },
+      recordChatPhotoFiles() {
+        return Promise.resolve();
+      },
+      recordChatThemeFiles() {
+        return Promise.resolve();
+      },
+      recordDefaultBackgroundFiles() {
+        return Promise.resolve();
+      },
+      recordEmojiChatThemeFiles() {
         return Promise.resolve();
       },
       recordMessageContentFiles() {
         return Promise.resolve();
       },
       recordMessageFiles() {
+        return Promise.resolve();
+      },
+      recordNotificationGroupFiles() {
+        return Promise.resolve();
+      },
+      recordNotificationFiles() {
+        return Promise.resolve();
+      },
+      recordQuickReplyMessageFiles() {
+        return Promise.resolve();
+      },
+      recordStickerSetFiles() {
+        return Promise.resolve();
+      },
+      recordStoryFiles() {
+        return Promise.resolve();
+      },
+      recordTrendingStickerSetFiles() {
+        return Promise.resolve();
+      },
+      recordUserFullInfoFiles() {
+        return Promise.resolve();
+      },
+      deleteStoryFileSlots() {
         return Promise.resolve();
       },
       requestFile() {

@@ -10,24 +10,54 @@ import type {
   message,
   messages,
   updateAuthorizationState,
+  updateChatAddedToList,
   updateChatFolders,
   updateChatLastMessage,
+  updateChatNotificationSettings,
+  updateChatPosition,
   updateConnectionState,
   updateDeleteMessages,
   updateFile,
   updateMessageContent,
   updateNewChat,
   updateNewMessage,
+  updateSupergroup,
+  updateSupergroupFullInfo,
   updateUser,
   user
 } from 'tdlib-types';
 
-export type TelegramWireUpdate = Update;
+export type TelegramWireMessageContainsUnreadPollVotesUpdate = {
+  _: 'updateMessageContainsUnreadPollVotes';
+  chat_id: number | string;
+  contains_unread_poll_votes: boolean;
+  message_id: number | string;
+  unread_poll_vote_count: number;
+};
+
+export type TelegramWireNewGuestQueryUpdate = {
+  _: 'updateNewGuestQuery';
+  id: string;
+  message: message;
+  reference_messages: message[];
+};
+
+export type TelegramWireUpdate =
+  | Update
+  | TelegramWireMessageContainsUnreadPollVotesUpdate
+  | TelegramWireNewGuestQueryUpdate;
+export type TelegramWireUpdateByType<Type extends TelegramWireUpdate['_']> = Extract<
+  TelegramWireUpdate,
+  { _: Type }
+>;
 export type TelegramWireAuthorizationStateUpdate = updateAuthorizationState;
 export type TelegramWireChat = chat;
+export type TelegramWireChatAddedToListUpdate = updateChatAddedToList;
 export type TelegramWireChats = chats;
 export type TelegramWireChatFoldersUpdate = updateChatFolders;
 export type TelegramWireChatLastMessageUpdate = updateChatLastMessage;
+export type TelegramWireChatNotificationSettingsUpdate = updateChatNotificationSettings;
+export type TelegramWireChatPositionUpdate = updateChatPosition;
 export type TelegramWireConnectionStateUpdate = updateConnectionState;
 export type TelegramWireDeleteMessagesUpdate = updateDeleteMessages;
 export type TelegramWireFile = file;
@@ -38,6 +68,8 @@ export type TelegramWireMessageContentUpdate = updateMessageContent;
 export type TelegramWireNewChatUpdate = updateNewChat;
 export type TelegramWireNewMessageUpdate = updateNewMessage;
 export type TelegramWireObject = JsonObject & { _: string };
+export type TelegramWireSupergroupFullInfoUpdate = updateSupergroupFullInfo;
+export type TelegramWireSupergroupUpdate = updateSupergroup;
 export type TelegramWireUser = user;
 export type TelegramWireUserUpdate = updateUser;
 

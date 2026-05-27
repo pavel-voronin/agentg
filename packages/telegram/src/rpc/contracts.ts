@@ -67,8 +67,38 @@ export const telegramChatModelRefSchema = z.object({
   id: z.string()
 });
 
+export const telegramDefaultBackgroundModelRefSchema = z.object({
+  _model: z.literal('telegram.defaultBackground'),
+  id: z.string()
+});
+
+export const telegramEmojiChatThemesModelRefSchema = z.object({
+  _model: z.literal('telegram.emojiChatThemes'),
+  id: z.string()
+});
+
+export const telegramActiveNotificationModelRefSchema = z.object({
+  _model: z.literal('telegram.activeNotification'),
+  id: z.string()
+});
+
 export const telegramMessageModelRefSchema = z.object({
   _model: z.literal('telegram.message'),
+  id: z.string()
+});
+
+export const telegramQuickReplyMessageModelRefSchema = z.object({
+  _model: z.literal('telegram.quickReplyMessage'),
+  id: z.string()
+});
+
+export const telegramStickerSetModelRefSchema = z.object({
+  _model: z.literal('telegram.stickerSet'),
+  id: z.string()
+});
+
+export const telegramStoryModelRefSchema = z.object({
+  _model: z.literal('telegram.story'),
   id: z.string()
 });
 
@@ -76,6 +106,18 @@ export const telegramUserModelRefSchema = z.object({
   _model: z.literal('telegram.user'),
   id: z.string()
 });
+
+export const telegramFileOwnerModelRefSchema = z.discriminatedUnion('_model', [
+  telegramActiveNotificationModelRefSchema,
+  telegramChatModelRefSchema,
+  telegramDefaultBackgroundModelRefSchema,
+  telegramEmojiChatThemesModelRefSchema,
+  telegramMessageModelRefSchema,
+  telegramQuickReplyMessageModelRefSchema,
+  telegramStickerSetModelRefSchema,
+  telegramStoryModelRefSchema,
+  telegramUserModelRefSchema
+]);
 
 export const telegramFileRefSchema = z.object({
   _model: z.literal('telegram.file'),
@@ -89,7 +131,7 @@ export const telegramFileRefSchema = z.object({
   id: z.string(),
   mediaKind: z.enum(telegramFileMediaKinds),
   mimeType: z.string().nullable(),
-  owner: z.union([telegramChatModelRefSchema, telegramMessageModelRefSchema]),
+  owner: telegramFileOwnerModelRefSchema,
   renderKind: z.enum(telegramFileRenderKinds),
   slotKey: z.string(),
   status: z.enum(telegramFileStatuses),
@@ -175,7 +217,7 @@ export const telegramGetMessageOutputSchema = z.object({
 });
 
 export const telegramRequestFileInputSchema = z.object({
-  owner: z.union([telegramChatModelRefSchema, telegramMessageModelRefSchema]),
+  owner: telegramFileOwnerModelRefSchema,
   slotKey: nonEmptyStringSchema
 });
 
