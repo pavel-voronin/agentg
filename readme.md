@@ -1,26 +1,74 @@
 # AgenTG
 
-AgenTG is a Telegram client for a personal agent.
+AgenTG is a pre-alpha Telegram client runtime for a personal agent.
 
-AgenTG is not the assistant itself and not a Telegram bot. It is a Telegram client service that gives an external personal assistant controlled access to the user's Telegram data.
+It runs as a local developer stack: Telegram ingestion, Postgres, NATS, history
+sync, gateway, and the Control Plane UI.
 
-The first implementation target is deliberately small and concrete:
+## Requirements
 
-- log in as the user through Telegram client infrastructure;
-- synchronize the chat list;
-- read personal chats, groups, channels, and Saved Messages;
-- maintain requested visible text history coverage;
-- persist text-oriented Telegram data into Postgres;
-- keep attachment payloads lazy while storing basic attachment metadata;
-- make new Telegram messages visible in Postgres shortly after they appear in the normal Telegram client.
+- Node.js and npm
+- Docker with Compose
+- Telegram API credentials:
+  - `TELEGRAM_API_ID`
+  - `TELEGRAM_API_HASH`
 
-## Documentation
+Set the Telegram credentials in your shell before running Telegram commands:
 
-- [Docs Index](docs/readme.md)
-- [Vision](docs/01-product/vision.md)
-- [Non-Goals](docs/01-product/nonGoals.md)
-- [System Overview](docs/02-architecture/systemOverview.md)
-- [Component Boundaries](docs/02-architecture/componentBoundaries.md)
-- [Domain Map](docs/03-domains/domainMap.md)
-- [History Sync](docs/03-domains/historySync.md)
-- [MVP](docs/09-roadmap/mvp.md)
+```sh
+export TELEGRAM_API_ID=12345
+export TELEGRAM_API_HASH=your_api_hash
+```
+
+## Install
+
+```sh
+npm install
+```
+
+## Authenticate TDLib
+
+Run the interactive auth command once before starting the dev stack:
+
+```sh
+npm run telegram:auth
+```
+
+The command asks for the phone number, Telegram login code, email code when
+Telegram requests it, and 2FA password when enabled. Secret codes and passwords
+are not echoed back to the terminal.
+
+TDLib session data is stored under `td-data/` by default.
+
+## Run In Developer Mode
+
+Start the full local stack:
+
+```sh
+npm run dev
+```
+
+This command starts Postgres and NATS through Docker Compose, runs database
+migrations, starts the Telegram runtime, history sync, gateway, Control Plane
+server, and the Vite Control Plane app.
+
+When the command prints the Vite local URL, open:
+
+[http://127.0.0.1:8788/](http://127.0.0.1:8788/)
+
+The Telegram RPC server listens on `127.0.0.1:18081`. The Control Plane server
+listens on `127.0.0.1:8789`.
+
+Stop the stack with `Ctrl+C` in the terminal running `npm run dev`.
+
+## Useful Commands
+
+```sh
+npm run db:recreate
+npm run check
+```
+
+`npm run db:recreate` drops and recreates the local database from the current
+generated schema.
+
+`npm run check` runs typecheck, lint, source audit, formatting check, and tests.

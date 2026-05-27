@@ -32,6 +32,7 @@
     "dev:claude": "npm --workspace @agentg/claude-plugin run start",
     "dev:telegram-control-plane": "npm --workspace @agentg/telegram run dev:control-plane-assets",
     "dev:telegram": "npm --workspace @agentg/telegram run dev",
+    "telegram:auth": "npm --workspace @agentg/telegram run auth",
     "dev:tdlib-docs": "npm --workspace @agentg/tdlib-docs run dev",
     "build": "npm --workspaces --if-present run build",
     "db:up": "docker compose up -d postgres --quiet-pull",

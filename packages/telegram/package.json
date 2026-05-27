@@ -10,6 +10,7 @@
     "./rpc": "./src/rpc/index.ts"
   },
   "scripts": {
+    "auth": "tsx src/authMain.ts",
     "dev": "tsx watch --clear-screen=false src/main.ts",
     "dev:control-plane-assets": "vite build --watch --config viteControlPlane.config.ts",
     "db:generate": "node ../../scripts/telegramDbSchemaGenerate.mjs",
