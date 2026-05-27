@@ -112,6 +112,28 @@ describe('Telegram history coverage', () => {
       updates: []
     });
   });
+
+  it('does not refresh an existing coverage row only because proof time changed', () => {
+    const segment = coverage(
+      'chat-a',
+      '2026-05-01T00:00:00.000Z',
+      '2026-05-01T02:00:00.000Z',
+      '10:30'
+    );
+
+    expect(
+      planTelegramHistoryCoverageMerge(
+        [
+          coverageRow(10, 'chat-a', '2026-05-01T00:00:00.000Z', '2026-05-01T02:00:00.000Z', '10:05')
+        ],
+        [segment]
+      )
+    ).toEqual({
+      deleteIds: [],
+      inserts: [],
+      updates: []
+    });
+  });
 });
 
 function interval(startAt: string, endAt: string) {

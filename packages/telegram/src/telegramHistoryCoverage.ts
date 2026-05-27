@@ -473,8 +473,7 @@ function coverageRowMatchesSegment(
   return (
     row.telegramChatId === segment.chatId &&
     row.startAt.getTime() === segment.startAt.getTime() &&
-    row.endAt.getTime() === segment.endAt.getTime() &&
-    row.coveredAt.getTime() === segment.coveredAt.getTime()
+    row.endAt.getTime() === segment.endAt.getTime()
   );
 }
 
