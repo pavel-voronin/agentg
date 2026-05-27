@@ -1,167 +1,54 @@
-import { createTelegramRpcClient } from '@agentg/telegram/rpc';
+import {
+  createTelegramRpcClient,
+  type TelegramChatDirectoryEntry,
+  type TelegramChatFolder,
+  type TelegramChatTypeCount,
+  type TelegramCountMessagesInIntervalsOutput,
+  type TelegramEnsureHistoryCoverageInput,
+  type TelegramEnsureHistoryCoverageOutput,
+  type TelegramGetChatHistoryFactsOutput,
+  type TelegramGetChatOutput,
+  type TelegramGetHistoryCoverageOutput,
+  type TelegramGetMessageOutput,
+  type TelegramHistoryChat,
+  type TelegramHistoryCoverageSegment,
+  type TelegramHistoryFetchPageRequest,
+  type TelegramHistoryFetchPageResult,
+  type TelegramHistoryInterval,
+  type TelegramHistoryListChatsRequest,
+  type TelegramListChatDirectoryInput,
+  type TelegramListChatDirectoryOutput,
+  type TelegramListRecentMessagesInput,
+  type TelegramListRecentMessagesOutput,
+  type TelegramReadChat,
+  type TelegramReadMessage,
+  type TelegramSearchMessagesInput,
+  type TelegramSearchMessagesOutput
+} from '@agentg/telegram/rpc';
 import type { InternalRpcCallOptions } from '@agentg/rpc/call-options';
 
 import type { InternalTrpcClientConfig } from './rpc/config.js';
 
-export type TelegramHistoryChat = {
-  _model: 'telegram.chat';
-  id: string;
-  title: string;
-  type: string;
+export type {
+  TelegramChatDirectoryEntry,
+  TelegramChatFolder,
+  TelegramChatTypeCount,
+  TelegramHistoryChat,
+  TelegramHistoryCoverageSegment,
+  TelegramHistoryFetchPageRequest,
+  TelegramHistoryFetchPageResult,
+  TelegramHistoryInterval,
+  TelegramHistoryListChatsRequest,
+  TelegramReadChat,
+  TelegramReadMessage
 };
 
-export type TelegramHistoryListChatsRequest = {
-  discover?: boolean;
-  loadBatchSize?: number;
-};
-
-export type TelegramHistoryFetchPageRequest = {
-  chatId: string;
-  cursorMessageId?: number;
-  endAt: string;
-  limit: number;
-  startAt: string;
-};
-
-export type TelegramHistoryFetchPageResult =
-  | {
-      fetchedMessages: 0;
-      kind: 'no_messages_before_end';
-      storedMessages: 0;
-    }
-  | {
-      anchorMessageDate: string;
-      fetchedMessages: 0;
-      kind: 'anchor_before_start';
-      storedMessages: 0;
-    }
-  | {
-      crossedStart: boolean;
-      fetchedMessages: number;
-      kind: 'page';
-      nextCursorMessageId?: number;
-      oldestFetchedMessageDate?: string;
-      reachedBeginning: boolean;
-      storedMessages: number;
-    };
-
-export type TelegramHistoryInterval = {
-  endAt: string;
-  startAt: string;
-};
-
-export type TelegramHistoryCoverageSegment = TelegramHistoryInterval & {
-  coveredAt: string;
-};
-
-export type TelegramGetHistoryCoverageResult = {
-  coverage: TelegramHistoryCoverageSegment[];
-};
-
-export type TelegramEnsureHistoryCoverageResult = {
-  alreadyCovered: boolean;
-  coveredIntervals: TelegramHistoryInterval[];
-  fetchedMessages: number;
-  pages: number;
-  reachedBeginning: boolean;
-  remainingIntervals: TelegramHistoryInterval[];
-  storedMessages: number;
-};
-
-export type TelegramMessageInterval = {
-  endAt: string;
-  startAt: string;
-};
-
-export type TelegramReadChat = {
-  _model: 'telegram.chat';
-  id: string;
-  title: string;
-  type: string;
-  updatedAt: string;
-};
-
-export type TelegramReadMessage = {
-  _model: 'telegram.message';
-  id: string;
-  chat: {
-    _model: 'telegram.chat';
-    id: string;
-  };
-  contentType: string;
-  deletedAt: string | null;
-  editDate: string | null;
-  isDeleted: boolean;
-  messageDate: string | null;
-  sender:
-    | {
-        _model: 'telegram.chat';
-        id: string;
-      }
-    | {
-        _model: 'telegram.user';
-        id: string;
-      }
-    | null;
-  senderType: string | null;
-  telegramMessageId: string;
-  text: string | null;
-  updatedAt: string;
-};
-
-export type TelegramChatPlacement =
-  | {
-      kind: 'archive';
-      order: string;
-    }
-  | {
-      kind: 'main';
-      order: string;
-    }
-  | {
-      folderId: number;
-      kind: 'folder';
-      order: string;
-    };
-
-export type TelegramChatDirectoryEntry = TelegramReadChat & {
-  isBot: boolean;
-  isSelf: boolean;
-  lastMessageDate: string | null;
-  placements: TelegramChatPlacement[];
-};
-
-export type TelegramChatFolder = {
-  _model: 'telegram.chatFolder';
-  folderId: number;
-  iconName: string | null;
-  id: string;
-  position: number;
-  title: string;
-};
-
-export type TelegramChatTypeCount = {
-  count: number;
-  type: string;
-};
-
-export type TelegramChatDirectoryRequest = {
-  query?: string;
-  type?: string;
-};
-
-export type TelegramChatDirectoryResult = {
-  chats: TelegramChatDirectoryEntry[];
-  folders: TelegramChatFolder[];
-  navigationChats: TelegramChatDirectoryEntry[];
-  types: TelegramChatTypeCount[];
-};
-
-export type TelegramChatHistoryFacts = {
-  chat: TelegramChatDirectoryEntry | null;
-  earliestMessageDate: string | null;
-  messageCount: number;
-};
+export type TelegramChatDirectoryRequest = TelegramListChatDirectoryInput;
+export type TelegramChatDirectoryResult = TelegramListChatDirectoryOutput;
+export type TelegramChatHistoryFacts = TelegramGetChatHistoryFactsOutput;
+export type TelegramEnsureHistoryCoverageResult = TelegramEnsureHistoryCoverageOutput;
+export type TelegramGetHistoryCoverageResult = TelegramGetHistoryCoverageOutput;
+export type TelegramMessageInterval = TelegramHistoryInterval;
 
 export type TelegramReadClient = {
   countMessagesInIntervals(
@@ -170,11 +57,11 @@ export type TelegramReadClient = {
       intervals: TelegramMessageInterval[];
     },
     options?: InternalRpcCallOptions
-  ): Promise<{ counts: number[] }>;
+  ): Promise<TelegramCountMessagesInIntervalsOutput>;
   getChat(
     request: { chatId: string },
     options?: InternalRpcCallOptions
-  ): Promise<{ chat: TelegramReadChat | null }>;
+  ): Promise<TelegramGetChatOutput>;
   getChatHistoryFacts(
     request: { chatId: string },
     options?: InternalRpcCallOptions
@@ -189,39 +76,25 @@ export type TelegramReadClient = {
       messageId: string;
     },
     options?: InternalRpcCallOptions
-  ): Promise<{ message: TelegramReadMessage | null }>;
+  ): Promise<TelegramGetMessageOutput>;
   listChatDirectory(
     request: TelegramChatDirectoryRequest,
     options?: InternalRpcCallOptions
   ): Promise<TelegramChatDirectoryResult>;
   listRecentMessages(
-    request: {
-      chatId?: string;
-      limit?: number;
-    },
+    request: TelegramListRecentMessagesInput,
     options?: InternalRpcCallOptions
-  ): Promise<{ messages: TelegramReadMessage[] }>;
+  ): Promise<TelegramListRecentMessagesOutput>;
   searchMessages(
-    request: {
-      chatId?: string;
-      limit?: number;
-      query: string;
-    },
+    request: TelegramSearchMessagesInput,
     options?: InternalRpcCallOptions
-  ): Promise<{ messages: TelegramReadMessage[] }>;
+  ): Promise<TelegramSearchMessagesOutput>;
 };
 
 export type TelegramHistoryClient = {
   close?(): void;
   ensureHistoryCoverage(
-    request: {
-      chatId: string;
-      endAt: string;
-      limit?: number;
-      maxPages?: number;
-      requestDelayMs?: number;
-      startAt: string;
-    },
+    request: TelegramEnsureHistoryCoverageInput,
     options?: InternalRpcCallOptions
   ): Promise<TelegramEnsureHistoryCoverageResult>;
   fetchPage(
@@ -252,9 +125,10 @@ export function createTrpcTelegramHistoryClient(
       return;
     },
     countMessagesInIntervals(request, callOptions) {
-      return telegram.countMessagesInIntervals(request, callOptions) as Promise<{
-        counts: number[];
-      }>;
+      return telegram.countMessagesInIntervals(
+        request,
+        callOptions
+      ) as Promise<TelegramCountMessagesInIntervalsOutput>;
     },
     ensureHistoryCoverage(request, callOptions) {
       return telegram.ensureHistoryCoverage(
@@ -266,7 +140,7 @@ export function createTrpcTelegramHistoryClient(
       return telegram.fetchPage(request, callOptions) as Promise<TelegramHistoryFetchPageResult>;
     },
     getChat(request, callOptions) {
-      return telegram.getChat(request, callOptions) as Promise<{ chat: TelegramReadChat | null }>;
+      return telegram.getChat(request, callOptions) as Promise<TelegramGetChatOutput>;
     },
     getChatHistoryFacts(request, callOptions) {
       return telegram.getChatHistoryFacts(
@@ -281,9 +155,7 @@ export function createTrpcTelegramHistoryClient(
       ) as Promise<TelegramGetHistoryCoverageResult>;
     },
     getMessage(request, callOptions) {
-      return telegram.getMessage(request, callOptions) as Promise<{
-        message: TelegramReadMessage | null;
-      }>;
+      return telegram.getMessage(request, callOptions) as Promise<TelegramGetMessageOutput>;
     },
     listChatDirectory(request, callOptions) {
       return telegram.listChatDirectory(
@@ -295,14 +167,13 @@ export function createTrpcTelegramHistoryClient(
       return telegram.listChats(request, callOptions) as Promise<TelegramHistoryChat[]>;
     },
     listRecentMessages(request, callOptions) {
-      return telegram.listRecentMessages(request, callOptions) as Promise<{
-        messages: TelegramReadMessage[];
-      }>;
+      return telegram.listRecentMessages(
+        request,
+        callOptions
+      ) as Promise<TelegramListRecentMessagesOutput>;
     },
     searchMessages(request, callOptions) {
-      return telegram.searchMessages(request, callOptions) as Promise<{
-        messages: TelegramReadMessage[];
-      }>;
+      return telegram.searchMessages(request, callOptions) as Promise<TelegramSearchMessagesOutput>;
     }
   };
 }
@@ -323,7 +194,7 @@ export function createServiceDirectoryTelegramHistoryClient(
       return clientFor('telegram.countMessagesInIntervals').countMessagesInIntervals(
         request,
         callOptions
-      ) as Promise<{ counts: number[] }>;
+      ) as Promise<TelegramCountMessagesInIntervalsOutput>;
     },
     ensureHistoryCoverage(request, callOptions) {
       return clientFor('telegram.ensureHistoryCoverage').ensureHistoryCoverage(
@@ -338,9 +209,10 @@ export function createServiceDirectoryTelegramHistoryClient(
       ) as Promise<TelegramHistoryFetchPageResult>;
     },
     getChat(request, callOptions) {
-      return clientFor('telegram.getChat').getChat(request, callOptions) as Promise<{
-        chat: TelegramReadChat | null;
-      }>;
+      return clientFor('telegram.getChat').getChat(
+        request,
+        callOptions
+      ) as Promise<TelegramGetChatOutput>;
     },
     getChatHistoryFacts(request, callOptions) {
       return clientFor('telegram.getChatHistoryFacts').getChatHistoryFacts(
@@ -355,9 +227,10 @@ export function createServiceDirectoryTelegramHistoryClient(
       ) as Promise<TelegramGetHistoryCoverageResult>;
     },
     getMessage(request, callOptions) {
-      return clientFor('telegram.getMessage').getMessage(request, callOptions) as Promise<{
-        message: TelegramReadMessage | null;
-      }>;
+      return clientFor('telegram.getMessage').getMessage(
+        request,
+        callOptions
+      ) as Promise<TelegramGetMessageOutput>;
     },
     listChatDirectory(request, callOptions) {
       return clientFor('telegram.listChatDirectory').listChatDirectory(
@@ -374,12 +247,13 @@ export function createServiceDirectoryTelegramHistoryClient(
       return clientFor('telegram.listRecentMessages').listRecentMessages(
         request,
         callOptions
-      ) as Promise<{ messages: TelegramReadMessage[] }>;
+      ) as Promise<TelegramListRecentMessagesOutput>;
     },
     searchMessages(request, callOptions) {
-      return clientFor('telegram.searchMessages').searchMessages(request, callOptions) as Promise<{
-        messages: TelegramReadMessage[];
-      }>;
+      return clientFor('telegram.searchMessages').searchMessages(
+        request,
+        callOptions
+      ) as Promise<TelegramSearchMessagesOutput>;
     }
   };
 
