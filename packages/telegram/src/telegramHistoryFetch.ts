@@ -26,7 +26,6 @@ import type {
 } from './rpc/contracts.js';
 import type { TelegramRpcRuntime } from './rpc/runtime.js';
 import { parseLimit, requireDate } from './telegramProcedureInputs.js';
-import { getChatHistory, getChatMessageByDate } from './telegramTdlibOperations.js';
 import { telegramTdlibPriorities, type TelegramTdlibPriority } from './telegramTdlibPriority.js';
 import {
   telegramWireDate,
@@ -113,15 +112,13 @@ export async function fetchTelegramHistoryPage(
     cursorMessageId = anchorMessageId;
   }
 
-  const history = await getChatHistory(
-    runtime,
+  const history = await runtime.tdlib.getChatHistory(
     {
-      _: 'getChatHistory',
-      chat_id: chatId,
-      from_message_id: cursorMessageId,
+      chatId,
+      fromMessageId: cursorMessageId,
       limit,
       offset: 0,
-      only_local: false
+      onlyLocal: false
     },
     {
       priority: options.priority
@@ -505,11 +502,9 @@ async function getLastMessageNoLaterThan(
   options: { priority: TelegramTdlibPriority }
 ): Promise<TelegramWireMessage | undefined> {
   try {
-    return await getChatMessageByDate(
-      runtime,
+    return await runtime.tdlib.getChatMessageByDate(
       {
-        _: 'getChatMessageByDate',
-        chat_id: chatId,
+        chatId,
         date: Math.floor((end.getTime() - 1) / 1000)
       },
       options

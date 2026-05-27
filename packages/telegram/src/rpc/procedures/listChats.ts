@@ -19,7 +19,6 @@ import {
 import { telegramTdlibPriorities } from '../../telegramTdlibPriority.js';
 import { telegramWireJsonObject } from '../../telegramWire.js';
 import { parseLimit } from '../../telegramProcedureInputs.js';
-import { getChat, getChats, loadChats } from '../../telegramTdlibOperations.js';
 
 type ChatListKind =
   | {
@@ -167,11 +166,9 @@ async function loadChatsFromList(
 ): Promise<void> {
   for (;;) {
     try {
-      await loadChats(
-        context,
+      await context.tdlib.loadChats(
         {
-          _: 'loadChats',
-          chat_list: toTdChatList(chatList),
+          chatList: toTdChatList(chatList),
           limit: batchSize
         },
         { priority: telegramTdlibPriorities.maximum }
@@ -192,11 +189,9 @@ async function getChatIdsFromList(
   limit: number
 ): Promise<number[]> {
   try {
-    const chats = await getChats(
-      context,
+    const chats = await context.tdlib.getChats(
       {
-        _: 'getChats',
-        chat_list: toTdChatList(chatList),
+        chatList: toTdChatList(chatList),
         limit
       },
       { priority: telegramTdlibPriorities.maximum }
@@ -214,11 +209,10 @@ async function getChatIdsFromList(
 async function getChatOrUndefined(
   context: TelegramProcedureContext,
   chatId: number
-): Promise<Awaited<ReturnType<typeof getChat>> | undefined> {
+): Promise<Awaited<ReturnType<TelegramProcedureContext['tdlib']['getChat']>> | undefined> {
   try {
-    return await getChat(
-      context,
-      { _: 'getChat', chat_id: chatId },
+    return await context.tdlib.getChat(
+      { chatId },
       {
         priority: telegramTdlibPriorities.maximum
       }

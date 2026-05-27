@@ -6,14 +6,14 @@ import { createInternalTrpcHttpServer } from '@agentg/rpc/http-server';
 import { formatInternalTrpcBindAddress, type InternalTrpcBindConfig } from './config.js';
 import { createTelegramRouter } from './router.js';
 import { createTelegramRpcContext } from './trpc.js';
-import type { TelegramRpcRuntime } from './runtime.js';
+import type { TelegramRpcRuntimeDeps } from './runtime.js';
 
 export const TELEGRAM_CONTROL_PLANE_ASSETS_ROOT = fileURLToPath(
   new URL('../../dist-control-plane/', import.meta.url)
 );
 
 export async function startTelegramTrpcServer(
-  options: TelegramRpcRuntime & {
+  options: TelegramRpcRuntimeDeps & {
     bind: InternalTrpcBindConfig;
     filesDirectory: string;
   }

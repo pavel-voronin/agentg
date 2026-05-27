@@ -32,7 +32,6 @@ import type { TelegramProcedureContext } from '../../telegram-procedure-runtime/
 import { toTelegramDate } from '../../telegram-read-model/dates.js';
 import { readMessageSelection, toReadMessages } from '../../telegram-read-model/message.js';
 import { parseLimit } from '../../telegramProcedureInputs.js';
-import { getChatHistory } from '../../telegramTdlibOperations.js';
 
 export const fetchMessagesPage = mutation((runtime: TelegramRpcRuntime) =>
   rpc
@@ -68,15 +67,13 @@ async function runFetchMessagesPage(
       : await readMessagePageEndAt(context, input.chatId, input.beforeMessageId);
   const anchorMessageId = cursorMessageId ?? initialAnchor?.messageId ?? 0;
 
-  const history = await getChatHistory(
-    context,
+  const history = await context.tdlib.getChatHistory(
     {
-      _: 'getChatHistory',
-      chat_id: chatId,
-      from_message_id: anchorMessageId,
+      chatId,
+      fromMessageId: anchorMessageId,
       limit,
       offset: 0,
-      only_local: false
+      onlyLocal: false
     },
     {
       priority: telegramTdlibPriorities.high
