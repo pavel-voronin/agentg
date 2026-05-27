@@ -15,6 +15,7 @@ import {
 import {
   CONTROL_PLANE_STORAGE_KEYS,
   isPlainRecord,
+  readStoredBoolean,
   readStorage,
   writeStorage
 } from './controlPlaneStorage.js';
@@ -125,12 +126,13 @@ export const useEventsStore = defineStore('controlPlane.events', {
     },
     setEventsPaused(paused: boolean) {
       this.eventsPaused = paused;
+      writeStoredEventsPaused(paused);
     },
     setEventsPanelMode(mode: EventsPanelMode) {
       this.eventsPanelMode = mode;
     },
     toggleEventsPaused() {
-      this.eventsPaused = !this.eventsPaused;
+      this.setEventsPaused(!this.eventsPaused);
     },
     toggleEventsPanelMode(mode: Exclude<EventsPanelMode, 'events'>) {
       this.eventsPanelMode = this.eventsPanelMode === mode ? 'events' : mode;
@@ -144,7 +146,7 @@ export const useEventsStore = defineStore('controlPlane.events', {
     eventFilters: readStoredEventFilters(),
     eventLimit: readStoredEventLimit(),
     eventYamlListLimit: readStoredEventYamlListLimit(),
-    eventsPaused: false,
+    eventsPaused: readStoredBoolean(CONTROL_PLANE_STORAGE_KEYS.eventsPaused, false),
     events: [],
     eventsPanelMode: 'events'
   })
@@ -191,6 +193,10 @@ function readStoredEventYamlListLimit(): number {
   return normalizeEventYamlListLimit(
     readStorage(CONTROL_PLANE_STORAGE_KEYS.eventYamlListLimit) ?? DEFAULT_EVENT_YAML_LIST_LIMIT
   );
+}
+
+function writeStoredEventsPaused(paused: boolean): void {
+  writeStorage(CONTROL_PLANE_STORAGE_KEYS.eventsPaused, paused ? '1' : '0');
 }
 
 function eventStreamSnapshot(

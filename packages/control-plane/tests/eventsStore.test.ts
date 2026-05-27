@@ -47,17 +47,25 @@ describe('events store', () => {
     ]);
   });
 
-  it('does not persist the paused state', () => {
-    const store = useEventsStore();
+  it('persists and restores the paused state', () => {
     const storage = localStorage as Storage & {
+      getItem: ReturnType<typeof vi.fn>;
       setItem: ReturnType<typeof vi.fn>;
     };
 
+    vi.mocked(storage.getItem).mockImplementation((key: string) =>
+      key === CONTROL_PLANE_STORAGE_KEYS.eventsPaused ? '1' : null
+    );
+
+    const store = useEventsStore();
+
     vi.mocked(storage.setItem).mockClear();
 
-    store.setEventsPaused(true);
+    expect(store.eventsPaused).toBe(true);
 
-    expect(storage.setItem).not.toHaveBeenCalled();
+    store.setEventsPaused(false);
+
+    expect(storage.setItem).toHaveBeenCalledWith(CONTROL_PLANE_STORAGE_KEYS.eventsPaused, '0');
   });
 
   it('mutes future events without removing existing events of that type', () => {
