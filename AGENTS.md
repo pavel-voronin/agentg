@@ -68,6 +68,10 @@
 - Existing domain coupling must not be extended. If a requested change touches
   existing coupling, propose a replacement that removes or isolates the coupling
   through a neutral contract.
+- Do not export newly created types by default. Export only types that are an
+  intentional public surface and already have a real external consumer.
+  Speculative exports for future convenience, "just in case" access, or
+  broad type surface coverage are a hard architecture error.
 - A domain must not export procedure-specific `Input`/`Output` DTO types for
   other domains. Cross-domain procedure access must go through a typed client or
   a local domain port; procedure schemas and DTO names stay inside the owning
