@@ -187,7 +187,7 @@ async function loadInitialMessages(chatId: string, sequence: number): Promise<vo
   loadingInitial.value = true;
   lastError.value = null;
   try {
-    const result = await host.rpc<FetchMessagesPageResult>('telegram.fetchMessagesPage', {
+    const result = await host.rpc<FetchMessagesPageResult>('telegram.cp.messagesPage', {
       chatId,
       limit: MESSAGE_PAGE_SIZE
     });
@@ -233,7 +233,7 @@ async function loadOlderMessages(): Promise<void> {
   loadingOlder.value = true;
   lastError.value = null;
   try {
-    const result = await host.rpc<FetchMessagesPageResult>('telegram.fetchMessagesPage', {
+    const result = await host.rpc<FetchMessagesPageResult>('telegram.cp.messagesPage', {
       beforeMessageId,
       chatId,
       limit: MESSAGE_PAGE_SIZE
@@ -372,7 +372,7 @@ async function jumpToReply(target: MessageTarget | null): Promise<void> {
 }
 
 async function loadSingleLocalMessage(target: MessageTarget): Promise<void> {
-  const result = await host.rpc<GetMessageResult>('telegram.getMessage', {
+  const result = await host.rpc<GetMessageResult>('telegram.cp.message', {
     chatId: target.chatId,
     messageId: target.messageId
   });
@@ -579,7 +579,7 @@ async function requestMediaFile(file: TelegramFileRef): Promise<void> {
     return;
   }
   try {
-    const result = await host.rpc<RequestFileResult>('telegram.requestFile', {
+    const result = await host.rpc<RequestFileResult>('telegram.cp.requestFile', {
       owner: file.owner,
       slotKey: file.slotKey
     });

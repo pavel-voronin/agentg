@@ -56,7 +56,7 @@ function receiveEvent(event: ControlPlaneHostEvent): void {
 }
 
 async function loadInitialStats(): Promise<void> {
-  const result = await host.rpc<FileQueueStatsResult>('telegram.getFileQueueStats', {});
+  const result = await host.rpc<FileQueueStatsResult>('telegram.cp.fileQueueStats', {});
   applyStats(result.stats);
 }
 

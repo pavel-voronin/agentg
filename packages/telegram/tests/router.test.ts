@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { TelegramDatabase } from '../src/database.js';
 import { createTelegramRouter } from '../src/rpc/router.js';
 import { toTelegramChatStorageRow } from '../src/telegram-read-model/chat.js';
-import { toDirectoryEntries } from '../src/telegram-read-model/directory.js';
+import { toChatDirectoryEntries } from '../src/control-plane/backend/chatDirectory.js';
 import type { TelegramFileSubsystem } from '../src/telegramFileSubsystem.js';
 
 describe('Telegram history router chat listing', () => {
@@ -29,7 +29,7 @@ describe('Telegram history router chat listing', () => {
     ]);
     const caller = createCaller(database);
 
-    await expect(caller.listChatDirectory({})).resolves.toMatchObject({
+    await expect(caller['cp.chatDirectory']({})).resolves.toMatchObject({
       chats: [
         {
           id: 'chat-visible',
@@ -53,7 +53,7 @@ describe('Telegram history router chat listing', () => {
       []
     ]);
 
-    const entries = await toDirectoryEntries(database as unknown as TelegramDatabase, [
+    const entries = await toChatDirectoryEntries(database as unknown as TelegramDatabase, [
       toTelegramChatStorageRow({
         lastMessageId: '10',
         telegramChatId: '20',
@@ -133,7 +133,7 @@ describe('Telegram history router chat listing', () => {
       earliestMessageDate: null,
       messageCount: 0
     });
-    expect(database.selectCalls()).toBe(3);
+    expect(database.selectCalls()).toBe(2);
   });
 
   it('anchors the first message page from stored chat last_message_id', async () => {
@@ -158,7 +158,7 @@ describe('Telegram history router chat listing', () => {
     };
     const caller = createCaller(database, { client });
 
-    await expect(caller.fetchMessagesPage({ chatId: '20', limit: 50 })).resolves.toMatchObject({
+    await expect(caller['cp.messagesPage']({ chatId: '20', limit: 50 })).resolves.toMatchObject({
       messages: [
         { telegramMessageId: '10', text: 'latest' },
         { telegramMessageId: '9', text: 'older' }
@@ -205,7 +205,7 @@ describe('Telegram history router chat listing', () => {
     });
 
     const result = await Promise.race([
-      caller.fetchMessagesPage({ chatId: '20', limit: 50 }).then(() => 'resolved'),
+      caller['cp.messagesPage']({ chatId: '20', limit: 50 }).then(() => 'resolved'),
       delay(50).then(() => 'timeout')
     ]);
 

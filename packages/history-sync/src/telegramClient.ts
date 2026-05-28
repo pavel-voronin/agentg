@@ -1,23 +1,17 @@
 import {
   createTelegramRpcClient,
-  type TelegramChatDirectoryEntry,
-  type TelegramChatFolder,
-  type TelegramChatTypeCount,
   type TelegramCountMessagesInIntervalsOutput,
   type TelegramEnsureHistoryCoverageInput,
   type TelegramEnsureHistoryCoverageOutput,
   type TelegramGetChatHistoryFactsOutput,
   type TelegramGetChatOutput,
   type TelegramGetHistoryCoverageOutput,
-  type TelegramGetMessageOutput,
   type TelegramHistoryChat,
   type TelegramHistoryCoverageSegment,
   type TelegramHistoryFetchPageRequest,
   type TelegramHistoryFetchPageResult,
   type TelegramHistoryInterval,
   type TelegramHistoryListChatsRequest,
-  type TelegramListChatDirectoryInput,
-  type TelegramListChatDirectoryOutput,
   type TelegramListRecentMessagesInput,
   type TelegramListRecentMessagesOutput,
   type TelegramReadChat,
@@ -30,9 +24,6 @@ import type { InternalRpcCallOptions } from '@agentg/rpc/call-options';
 import type { InternalTrpcClientConfig } from './rpc/config.js';
 
 export type {
-  TelegramChatDirectoryEntry,
-  TelegramChatFolder,
-  TelegramChatTypeCount,
   TelegramHistoryChat,
   TelegramHistoryCoverageSegment,
   TelegramHistoryFetchPageRequest,
@@ -43,8 +34,6 @@ export type {
   TelegramReadMessage
 };
 
-export type TelegramChatDirectoryRequest = TelegramListChatDirectoryInput;
-export type TelegramChatDirectoryResult = TelegramListChatDirectoryOutput;
 export type TelegramChatHistoryFacts = TelegramGetChatHistoryFactsOutput;
 export type TelegramEnsureHistoryCoverageResult = TelegramEnsureHistoryCoverageOutput;
 export type TelegramGetHistoryCoverageResult = TelegramGetHistoryCoverageOutput;
@@ -70,17 +59,6 @@ export type TelegramReadClient = {
     request: { chatId: string },
     options?: InternalRpcCallOptions
   ): Promise<TelegramGetHistoryCoverageResult>;
-  getMessage(
-    request: {
-      chatId: string;
-      messageId: string;
-    },
-    options?: InternalRpcCallOptions
-  ): Promise<TelegramGetMessageOutput>;
-  listChatDirectory(
-    request: TelegramChatDirectoryRequest,
-    options?: InternalRpcCallOptions
-  ): Promise<TelegramChatDirectoryResult>;
   listRecentMessages(
     request: TelegramListRecentMessagesInput,
     options?: InternalRpcCallOptions
@@ -154,15 +132,6 @@ export function createTrpcTelegramHistoryClient(
         callOptions
       ) as Promise<TelegramGetHistoryCoverageResult>;
     },
-    getMessage(request, callOptions) {
-      return telegram.getMessage(request, callOptions) as Promise<TelegramGetMessageOutput>;
-    },
-    listChatDirectory(request, callOptions) {
-      return telegram.listChatDirectory(
-        request,
-        callOptions
-      ) as Promise<TelegramChatDirectoryResult>;
-    },
     listChats(request, callOptions) {
       return telegram.listChats(request, callOptions) as Promise<TelegramHistoryChat[]>;
     },
@@ -225,18 +194,6 @@ export function createServiceDirectoryTelegramHistoryClient(
         request,
         callOptions
       ) as Promise<TelegramGetHistoryCoverageResult>;
-    },
-    getMessage(request, callOptions) {
-      return clientFor('telegram.getMessage').getMessage(
-        request,
-        callOptions
-      ) as Promise<TelegramGetMessageOutput>;
-    },
-    listChatDirectory(request, callOptions) {
-      return clientFor('telegram.listChatDirectory').listChatDirectory(
-        request,
-        callOptions
-      ) as Promise<TelegramChatDirectoryResult>;
     },
     listChats(request, callOptions) {
       return clientFor('telegram.listChats').listChats(request, callOptions) as Promise<

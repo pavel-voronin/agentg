@@ -1,42 +1,35 @@
 import { query } from '@agentg/rpc/surface';
-import {
-  telegramListChatDirectoryInputSchema,
-  telegramListChatDirectoryOutputSchema
-} from '../contracts.js';
-import type { TelegramRpcRuntime } from '../runtime.js';
-import { rpc } from '../trpc.js';
+import { chatDirectoryInputSchema, chatDirectoryOutputSchema } from '../contracts.js';
+import type { TelegramRpcRuntime } from '../../../rpc/runtime.js';
+import { rpc } from '../../../rpc/trpc.js';
 import { asc, sql } from 'drizzle-orm';
-import type {
-  TelegramChatFolder,
-  TelegramListChatDirectoryInput,
-  TelegramListChatDirectoryOutput
-} from '../contracts.js';
-import { telegramChatFolderInfos, telegramChats } from '../../schema.js';
-import type { TelegramProcedureContext } from '../../telegram-procedure-runtime/context.js';
+import type { ChatDirectoryInput, ChatDirectoryOutput, ChatFolder } from '../contracts.js';
+import { telegramChatFolderInfos, telegramChats } from '../../../schema.js';
+import type { TelegramProcedureContext } from '../../../telegram-procedure-runtime/context.js';
 import {
   chatSearchWhere,
   readChatSelection,
   toTelegramChatStorageRow
-} from '../../telegram-read-model/chat.js';
+} from '../../../telegram-read-model/chat.js';
 import {
   chatFolderEntry,
   chatTypeCounts,
-  listableDirectoryEntries,
-  toDirectoryEntries
-} from '../../telegram-read-model/directory.js';
-import { andSql } from '../../telegram-read-model/sql.js';
+  listableChatDirectoryEntries,
+  toChatDirectoryEntries
+} from '../chatDirectory.js';
+import { andSql } from '../../../telegram-read-model/sql.js';
 
-export const listChatDirectory = query((runtime: TelegramRpcRuntime) =>
+export const chatDirectory = query((runtime: TelegramRpcRuntime) =>
   rpc
-    .input(telegramListChatDirectoryInputSchema)
-    .output(telegramListChatDirectoryOutputSchema)
-    .query(({ input }) => runListChatDirectory(runtime, input))
+    .input(chatDirectoryInputSchema)
+    .output(chatDirectoryOutputSchema)
+    .query(({ input }) => runChatDirectory(runtime, input))
 );
 
-async function runListChatDirectory(
+async function runChatDirectory(
   { database }: TelegramProcedureContext,
-  input: TelegramListChatDirectoryInput
-): Promise<TelegramListChatDirectoryOutput> {
+  input: ChatDirectoryInput
+): Promise<ChatDirectoryOutput> {
   const searchQuery = input.query?.trim();
   const type = input.type?.trim();
   const queryWhere =
@@ -71,13 +64,13 @@ async function runListChatDirectory(
       .from(telegramChatFolderInfos)
       .orderBy(asc(telegramChatFolderInfos.position), asc(telegramChatFolderInfos.id))
   ]);
-  const chatEntries = listableDirectoryEntries(
-    await toDirectoryEntries(database, matchingChats.map(toTelegramChatStorageRow))
+  const chatEntries = listableChatDirectoryEntries(
+    await toChatDirectoryEntries(database, matchingChats.map(toTelegramChatStorageRow))
   );
-  const navigationEntries = listableDirectoryEntries(
-    await toDirectoryEntries(database, navigationChats.map(toTelegramChatStorageRow))
+  const navigationEntries = listableChatDirectoryEntries(
+    await toChatDirectoryEntries(database, navigationChats.map(toTelegramChatStorageRow))
   );
-  const folderEntries: TelegramChatFolder[] = folders.map(chatFolderEntry);
+  const folderEntries: ChatFolder[] = folders.map(chatFolderEntry);
 
   return {
     chats: chatEntries,

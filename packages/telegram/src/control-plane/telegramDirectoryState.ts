@@ -53,7 +53,7 @@ export function useTelegramDirectoryState() {
 
 async function hydrateTelegramDirectory(host: ControlPlaneHost): Promise<void> {
   hydratePromise ??= host
-    .rpc<TelegramDirectoryResult>('telegram.listChatDirectory', {})
+    .rpc<TelegramDirectoryResult>('telegram.cp.chatDirectory', {})
     .then((directory) => {
       const directoryChats = asArray(directory.navigationChats ?? directory.chats)
         .map(normalizeDirectoryChat)

@@ -73,7 +73,7 @@ import type {
 import { invokeTdlibWithEvents, type TdlibInvoker } from './telegramOperationEvents.js';
 import { telegramTdlibPriorities, assertTelegramTdlibPriority } from './telegramTdlibPriority.js';
 import { isTelegramTdlibUnderNavigationPressure } from './telegramTdlibScheduler.js';
-import { getDirectoryEntryByChatId } from './telegram-read-model/directory.js';
+import { chatDirectoryEntryByChatId } from './control-plane/backend/chatDirectory.js';
 import { readMessageSelection, toReadMessages } from './telegram-read-model/message.js';
 import { readDefaultBackgroundSelection } from './telegram-store/defaultBackground.js';
 
@@ -1930,7 +1930,7 @@ async function publishTelegramFileOwnerUpdated(
   }
 
   if (owner.ownerModel === TELEGRAM_CHAT_MODEL) {
-    const chat = await getDirectoryEntryByChatId(options.database, owner.ownerId);
+    const chat = await chatDirectoryEntryByChatId(options.database, owner.ownerId);
     if (chat !== null) {
       options.eventBus.publish(createTelegramChatUpdatedEvent(chat));
     }

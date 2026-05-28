@@ -10,13 +10,14 @@ import type {
   TelegramGetChatHistoryFactsInput,
   TelegramGetChatHistoryFactsOutput
 } from '../contracts.js';
-import { telegramChats, telegramMessages } from '../../schema.js';
+import type { TelegramDatabase } from '../../database.js';
+import { telegramChatPositions, telegramChats, telegramMessages } from '../../schema.js';
 import type { TelegramProcedureContext } from '../../telegram-procedure-runtime/context.js';
 import { readChatSelection, toTelegramChatStorageRow } from '../../telegram-read-model/chat.js';
 import {
-  isListableDirectoryEntry,
-  toDirectoryEntries
-} from '../../telegram-read-model/directory.js';
+  readTelegramChatUsersByChat,
+  telegramChatUserId
+} from '../../telegram-read-model/chatUser.js';
 import { toNullableIsoString } from '../../telegram-read-model/dates.js';
 
 export const getChatHistoryFacts = query((runtime: TelegramRpcRuntime) =>
@@ -44,8 +45,8 @@ async function runGetChatHistoryFacts(
     };
   }
 
-  const [entry] = await toDirectoryEntries(database, [toTelegramChatStorageRow(chat)]);
-  if (entry === undefined || !isListableDirectoryEntry(entry)) {
+  const row = toTelegramChatStorageRow(chat);
+  if (!(await hasStoredChatPlacement(database, input.chatId))) {
     return {
       chat: null,
       earliestMessageDate: null,
@@ -71,8 +72,40 @@ async function runGetChatHistoryFacts(
   ]);
 
   return {
-    chat: entry,
+    chat: await historyFactsChat(database, row),
     earliestMessageDate: toNullableIsoString(earliestMessages[0]?.messageDate ?? null),
     messageCount: messageCounts[0]?.count ?? 0
+  };
+}
+
+async function hasStoredChatPlacement(
+  database: TelegramDatabase,
+  chatId: string
+): Promise<boolean> {
+  const [placement] = await database
+    .select({
+      chatId: telegramChatPositions.chatId
+    })
+    .from(telegramChatPositions)
+    .where(eq(telegramChatPositions.chatId, chatId))
+    .limit(1);
+
+  return placement !== undefined;
+}
+
+async function historyFactsChat(
+  database: TelegramDatabase,
+  chat: ReturnType<typeof toTelegramChatStorageRow>
+): Promise<TelegramGetChatHistoryFactsOutput['chat']> {
+  const usersById = await readTelegramChatUsersByChat(database, [chat.chat]);
+  const user = usersById.get(telegramChatUserId(chat.chat) ?? '');
+
+  return {
+    _model: 'telegram.chat',
+    id: chat.telegramChatId,
+    isBot: user?.isBot === true,
+    title: chat.title,
+    type: chat.type,
+    updatedAt: new Date(0).toISOString()
   };
 }

@@ -1,68 +1,46 @@
 import { telegramChatFolderRef } from '@agentg/telegram/model-refs';
 import type { JsonObject } from '@agentg/events/json';
-import { and, eq, inArray, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, or } from 'drizzle-orm';
 
-import type { TelegramDatabase } from '../database.js';
-import {
-  telegramChatPositions,
-  telegramChats,
-  telegramMessages,
-  telegramUsers
-} from '../schema.js';
+import type { TelegramDatabase } from '../../database.js';
+import { telegramChatPositions, telegramChats, telegramMessages } from '../../schema.js';
 import {
   ownerKey,
   readTelegramFileRefsForOwners,
   type TelegramFileOwnerKey
-} from '../telegramFileRead.js';
-import type {
-  TelegramChatDirectoryEntry,
-  TelegramChatFolder,
-  TelegramChatPlacement,
-  TelegramChatTypeCount,
-  TelegramFileRef,
-  TelegramReadMessage
-} from '../rpc/contracts.js';
+} from '../../telegramFileRead.js';
+import type { ChatDirectoryEntry, ChatFolder, ChatTypeCount } from './contracts.js';
+import type { TelegramFileRef, TelegramReadMessage } from '../../rpc/contracts.js';
 import {
   asPlainRecord,
-  parsePositiveBigInt,
   readChatSelection,
-  stringifyTelegramId,
   type TelegramChatStorageRow,
   toTelegramChatStorageRow
-} from './chat.js';
+} from '../../telegram-read-model/chat.js';
+import type { TelegramChatPlacement } from '../../telegram-read-model/chatPlacements.js';
+import {
+  readTelegramChatUsersByChat,
+  telegramChatUserId,
+  type TelegramChatUserInfo
+} from '../../telegram-read-model/chatUser.js';
 import {
   readMessageSelection,
   telegramOutgoingMessageRead,
   telegramReadMessagePreview,
   toReadMessages
-} from './message.js';
+} from '../../telegram-read-model/message.js';
 
-type TelegramUserInfo = {
-  isBot: boolean;
-  isPremium: boolean | null;
-  telegramUserId: string;
-};
-
-export async function toDirectoryEntries(
+export async function toChatDirectoryEntries(
   database: TelegramDatabase,
   chats: TelegramChatStorageRow[]
-): Promise<TelegramChatDirectoryEntry[]> {
-  const userIds = chats.map((chat) => telegramChatUserId(chat.chat)).filter(isDefined);
+): Promise<ChatDirectoryEntry[]> {
   const lastMessagesByChat = await readLastMessagesByChat(database, chats);
   const placementsByChat = await readChatPlacementsByChat(database, chats);
   const filesByOwner = await readTelegramFileRefsForOwners(database, chatFileOwners(chats));
-  const users =
-    userIds.length === 0
-      ? []
-      : await database
-          .select({
-            isBot: sqlBooleanUserIsBot(),
-            isPremium: telegramUsers.isPremium,
-            telegramUserId: telegramUsers.id
-          })
-          .from(telegramUsers)
-          .where(inArray(telegramUsers.id, userIds));
-  const usersById = new Map(users.map((user) => [user.telegramUserId, user]));
+  const usersById = await readTelegramChatUsersByChat(
+    database,
+    chats.map((chat) => chat.chat)
+  );
 
   return chats.map((chat) => {
     const user = usersById.get(telegramChatUserId(chat.chat) ?? '');
@@ -76,33 +54,31 @@ export async function toDirectoryEntries(
   });
 }
 
-export async function getDirectoryEntryByChatId(
+export async function chatDirectoryEntryByChatId(
   database: TelegramDatabase,
   chatId: string
-): Promise<TelegramChatDirectoryEntry | null> {
+): Promise<ChatDirectoryEntry | null> {
   const rows = await database
     .select(readChatSelection())
     .from(telegramChats)
     .where(eq(telegramChats.id, chatId))
     .limit(1);
 
-  const [entry] = listableDirectoryEntries(
-    await toDirectoryEntries(database, rows.map(toTelegramChatStorageRow))
+  const [entry] = listableChatDirectoryEntries(
+    await toChatDirectoryEntries(database, rows.map(toTelegramChatStorageRow))
   );
   return entry ?? null;
 }
 
-export function listableDirectoryEntries(
-  entries: TelegramChatDirectoryEntry[]
-): TelegramChatDirectoryEntry[] {
-  return entries.filter(isListableDirectoryEntry);
+export function listableChatDirectoryEntries(entries: ChatDirectoryEntry[]): ChatDirectoryEntry[] {
+  return entries.filter(isListableChatDirectoryEntry);
 }
 
-export function isListableDirectoryEntry(entry: TelegramChatDirectoryEntry): boolean {
+export function isListableChatDirectoryEntry(entry: ChatDirectoryEntry): boolean {
   return entry.placements.length > 0;
 }
 
-export function chatTypeCounts(entries: TelegramChatDirectoryEntry[]): TelegramChatTypeCount[] {
+export function chatTypeCounts(entries: ChatDirectoryEntry[]): ChatTypeCount[] {
   const counts = new Map<string, number>();
   for (const entry of entries) {
     counts.set(entry.type, (counts.get(entry.type) ?? 0) + 1);
@@ -117,7 +93,7 @@ export function chatFolderEntry(folder: {
   id: number;
   name: unknown;
   position: number;
-}): TelegramChatFolder {
+}): ChatFolder {
   return {
     ...telegramChatFolderRef(folder.id),
     folderId: folder.id,
@@ -125,51 +101,6 @@ export function chatFolderEntry(folder: {
     position: folder.position,
     title: chatFolderTitle(folder)
   };
-}
-
-export function telegramChatPlacements(chat: JsonObject): TelegramChatPlacement[] {
-  return chatPositions(chat)
-    .map((position) => {
-      const list = asPlainRecord(position.list);
-      const order = parsePositiveBigInt(position.order);
-      if (list === undefined || order === undefined) {
-        return undefined;
-      }
-
-      const type = typeof list._ === 'string' ? list._ : undefined;
-      if (type === 'chatListMain') {
-        return {
-          isPinned: position.is_pinned === true || position.isPinned === true,
-          kind: 'main' as const,
-          order: order.toString()
-        };
-      }
-      if (type === 'chatListArchive') {
-        return {
-          isPinned: position.is_pinned === true || position.isPinned === true,
-          kind: 'archive' as const,
-          order: order.toString()
-        };
-      }
-      if (type === 'chatListFolder') {
-        const folderId = chatFolderId(list);
-        return folderId === undefined
-          ? undefined
-          : {
-              folderId,
-              isPinned: position.is_pinned === true || position.isPinned === true,
-              kind: 'folder' as const,
-              order: order.toString()
-            };
-      }
-
-      return undefined;
-    })
-    .filter(isDefined);
-}
-
-export function telegramChatTypeCounts(databaseEntries: TelegramChatDirectoryEntry[]) {
-  return chatTypeCounts(databaseEntries);
 }
 
 async function readChatPlacementsByChat(
@@ -236,11 +167,11 @@ async function readLastMessagesByChat(
 
 function toDirectoryEntry(
   chat: TelegramChatStorageRow,
-  user: TelegramUserInfo | undefined,
+  user: TelegramChatUserInfo | undefined,
   files: TelegramFileRef[],
   lastMessage: TelegramReadMessage | null,
   placements: TelegramChatPlacement[]
-): TelegramChatDirectoryEntry {
+): ChatDirectoryEntry {
   const unreadCount = telegramChatUnreadCount(chat.chat);
   const notificationsEnabled = telegramChatNotificationsEnabled(chat.chat);
   return {
@@ -309,19 +240,10 @@ function telegramChatPlacementFromRow(row: {
   };
 }
 
-function chatPositions(chat: JsonObject): Record<string, unknown>[] {
-  return (Array.isArray(chat.positions) ? chat.positions : []).map(asPlainRecord).filter(isDefined);
-}
-
-function chatFolderId(list: Record<string, unknown> | undefined): number | undefined {
-  const value = list?.chat_folder_id ?? list?.chatFolderId;
-  return typeof value === 'number' && Number.isSafeInteger(value) ? value : undefined;
-}
-
 function telegramChatLastMessage(
   chat: JsonObject,
   message: TelegramReadMessage | null
-): TelegramChatDirectoryEntry['lastMessage'] {
+): ChatDirectoryEntry['lastMessage'] {
   if (message === null) {
     return null;
   }
@@ -383,12 +305,6 @@ function telegramChatNotificationsEnabled(chat: JsonObject): {
   };
 }
 
-function telegramChatUserId(chat: JsonObject): string | undefined {
-  const type = asPlainRecord(chat.type);
-  const userId = type?.user_id ?? type?.userId;
-  return stringifyTelegramId(userId);
-}
-
 function chatFolderTitle(folder: { id: number; name: unknown }): string {
   const name = asPlainRecord(folder.name);
   const text = asPlainRecord(name?.text);
@@ -398,12 +314,4 @@ function chatFolderTitle(folder: { id: number; name: unknown }): string {
 function chatFolderIconName(value: unknown): string | null {
   const icon = asPlainRecord(value);
   return typeof icon?.name === 'string' ? icon.name : null;
-}
-
-function sqlBooleanUserIsBot() {
-  return sql<boolean>`coalesce(${telegramUsers.type}->>'_' = 'userTypeBot', false)`;
-}
-
-function isDefined<T>(value: T | undefined): value is T {
-  return value !== undefined;
 }

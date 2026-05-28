@@ -1,43 +1,37 @@
 import { mutation } from '@agentg/rpc/surface';
-import {
-  telegramFetchMessagesPageInputSchema,
-  telegramFetchMessagesPageOutputSchema
-} from '../contracts.js';
-import type { TelegramRpcRuntime } from '../runtime.js';
-import { rpc } from '../trpc.js';
+import { messagesPageInputSchema, messagesPageOutputSchema } from '../contracts.js';
+import type { TelegramRpcRuntime } from '../../../rpc/runtime.js';
+import { rpc } from '../../../rpc/trpc.js';
 import { and, eq, inArray } from 'drizzle-orm';
-import { createTelegramHistoryCoverageChangedEvent } from '../../integrationEvents.js';
-import type {
-  TelegramFetchMessagesPageInput,
-  TelegramFetchMessagesPageOutput
-} from '../contracts.js';
-import { telegramChats, telegramMessages } from '../../schema.js';
-import { storeMessage } from '../../telegram-store/message.js';
+import { createTelegramHistoryCoverageChangedEvent } from '../../../integrationEvents.js';
+import type { MessagesPageInput, MessagesPageOutput } from '../contracts.js';
+import { telegramChats, telegramMessages } from '../../../schema.js';
+import { storeMessage } from '../../../telegram-store/message.js';
 import {
   normalizeCoverageWriteInput,
   withTelegramHistoryCoverageLocks,
   writeTelegramHistoryCoverageInTransaction,
   type TelegramHistoryCoverageInterval,
   type TelegramHistoryCoverageWriteSegment
-} from '../../telegramHistoryCoverage.js';
-import { countTelegramMessagesInIntervals } from '../../telegramMessageCounts.js';
-import { TELEGRAM_HISTORY_PAST_BOUNDARY } from '../../telegramHistoryTime.js';
-import { telegramTdlibPriorities } from '../../telegramTdlibPriority.js';
+} from '../../../telegramHistoryCoverage.js';
+import { countTelegramMessagesInIntervals } from '../../../telegramMessageCounts.js';
+import { TELEGRAM_HISTORY_PAST_BOUNDARY } from '../../../telegramHistoryTime.js';
+import { telegramTdlibPriorities } from '../../../telegramTdlibPriority.js';
 import {
   telegramWireDate,
   telegramWireIdNumber,
   type TelegramWireMessage
-} from '../../telegramWire.js';
-import type { TelegramProcedureContext } from '../../telegram-procedure-runtime/context.js';
-import { toTelegramDate } from '../../telegram-read-model/dates.js';
-import { readMessageSelection, toReadMessages } from '../../telegram-read-model/message.js';
-import { parseLimit } from '../../telegramProcedureInputs.js';
+} from '../../../telegramWire.js';
+import type { TelegramProcedureContext } from '../../../telegram-procedure-runtime/context.js';
+import { toTelegramDate } from '../../../telegram-read-model/dates.js';
+import { readMessageSelection, toReadMessages } from '../../../telegram-read-model/message.js';
+import { parseLimit } from '../../../telegramProcedureInputs.js';
 
-export const fetchMessagesPage = mutation((runtime: TelegramRpcRuntime) =>
+export const messagesPage = mutation((runtime: TelegramRpcRuntime) =>
   rpc
-    .input(telegramFetchMessagesPageInputSchema)
-    .output(telegramFetchMessagesPageOutputSchema)
-    .mutation(({ input }) => runFetchMessagesPage(runtime, input))
+    .input(messagesPageInputSchema)
+    .output(messagesPageOutputSchema)
+    .mutation(({ input }) => runMessagesPage(runtime, input))
 );
 
 const TELEGRAM_MESSAGE_PAGE_LIMIT = 100;
@@ -48,10 +42,10 @@ type TelegramHistoryCoverageEventInterval = TelegramHistoryCoverageWriteSegment 
   messageCount: number;
 };
 
-async function runFetchMessagesPage(
+async function runMessagesPage(
   context: TelegramProcedureContext,
-  input: TelegramFetchMessagesPageInput
-): Promise<TelegramFetchMessagesPageOutput> {
+  input: MessagesPageInput
+): Promise<MessagesPageOutput> {
   const limit = parseLimit(
     input.limit,
     TELEGRAM_MESSAGE_PAGE_LIMIT,

@@ -6,16 +6,12 @@ import type { TelegramRpcRuntime } from '../runtime.js';
 import { rpc } from '../trpc.js';
 import { asc } from 'drizzle-orm';
 import type { TelegramHistoryChat, TelegramHistoryListChatsRequest } from '../contracts.js';
-import { telegramChatFolderInfos, telegramChats } from '../../schema.js';
+import { telegramChatFolderInfos, telegramChatPositions, telegramChats } from '../../schema.js';
 import { storeChat, telegramChatType } from '../../telegram-store/chat.js';
 import { storeMessage } from '../../telegram-store/message.js';
 import type { TelegramProcedureContext } from '../../telegram-procedure-runtime/context.js';
 import { readChatSelection, toTelegramChatStorageRow } from '../../telegram-read-model/chat.js';
-import {
-  listableDirectoryEntries,
-  telegramChatPlacements,
-  toDirectoryEntries
-} from '../../telegram-read-model/directory.js';
+import { isListableTelegramChat } from '../../telegram-read-model/chatPlacements.js';
 import { telegramTdlibPriorities } from '../../telegramTdlibPriority.js';
 import { telegramWireJsonObject } from '../../telegramWire.js';
 import { parseLimit } from '../../telegramProcedureInputs.js';
@@ -98,17 +94,22 @@ async function listKnownHistoryChats({
     .select(readChatSelection())
     .from(telegramChats)
     .orderBy(asc(telegramChats.id));
-  const entries = listableDirectoryEntries(
-    await toDirectoryEntries(database, rows.map(toTelegramChatStorageRow))
-  );
+  const placementRows = await database
+    .select({
+      chatId: telegramChatPositions.chatId
+    })
+    .from(telegramChatPositions);
+  const listableChatIds = new Set(placementRows.map((row) => row.chatId));
 
-  return entries
-    .filter((entry) => isHistorySyncChatType(entry.type))
-    .map((entry) => ({
+  return rows
+    .map(toTelegramChatStorageRow)
+    .filter((chat) => listableChatIds.has(chat.telegramChatId))
+    .filter((chat) => isHistorySyncChatType(chat.type))
+    .map((chat) => ({
       _model: 'telegram.chat',
-      id: entry.id,
-      title: entry.title,
-      type: entry.type
+      id: chat.telegramChatId,
+      title: chat.title,
+      type: chat.type
     }));
 }
 
@@ -140,7 +141,7 @@ function isHistorySyncChatType(type: string): boolean {
 }
 
 function isListableChat(chat: ReturnType<typeof telegramWireJsonObject>): boolean {
-  return telegramChatPlacements(chat).length > 0;
+  return isListableTelegramChat(chat);
 }
 
 function dedupeTelegramIds(ids: number[]): number[] {

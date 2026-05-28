@@ -207,58 +207,6 @@ export const telegramGetChatOutputSchema = z.object({
   chat: telegramReadChatSchema.nullable()
 });
 
-export const telegramGetMessageInputSchema = z.object({
-  chatId: nonEmptyStringSchema,
-  messageId: nonEmptyStringSchema
-});
-
-export const telegramGetMessageOutputSchema = z.object({
-  message: telegramReadMessageSchema.nullable()
-});
-
-export const telegramRequestFileInputSchema = z.object({
-  owner: telegramFileOwnerModelRefSchema,
-  slotKey: nonEmptyStringSchema
-});
-
-export const telegramRequestFileOutputSchema = z.object({
-  decision: z.discriminatedUnion('action', [
-    z.object({
-      action: z.literal('record'),
-      reason: z.string()
-    }),
-    z.object({
-      action: z.literal('enqueue'),
-      reason: z.string()
-    }),
-    z.object({
-      action: z.literal('deny'),
-      reason: z.string()
-    })
-  ]),
-  file: telegramFileRefSchema.nullable()
-});
-
-export const telegramFileQueueStatsSchema = z.object({
-  downloadingCount: nonNegativeIntegerSchema,
-  failedCount: nonNegativeIntegerSchema,
-  knownCount: nonNegativeIntegerSchema,
-  knownDownloadedBytes: nonNegativeIntegerSchema,
-  knownRemainingBytes: nonNegativeIntegerSchema,
-  knownTotalBytes: nonNegativeIntegerSchema,
-  queuedCount: nonNegativeIntegerSchema,
-  readyCount: nonNegativeIntegerSchema,
-  remainingCount: nonNegativeIntegerSchema,
-  totalCount: nonNegativeIntegerSchema,
-  unknownRemainingCount: nonNegativeIntegerSchema
-});
-
-export const telegramGetFileQueueStatsInputSchema = z.object({}).default({});
-
-export const telegramGetFileQueueStatsOutputSchema = z.object({
-  stats: telegramFileQueueStatsSchema
-});
-
 export const telegramListRecentMessagesInputSchema = z
   .object({
     beforeMessageId: nonEmptyStringSchema.regex(/^[0-9]+$/).optional(),
@@ -271,17 +219,6 @@ export const telegramListRecentMessagesOutputSchema = z.object({
   messages: z.array(telegramReadMessageSchema)
 });
 
-export const telegramFetchMessagesPageInputSchema = z.object({
-  beforeMessageId: nonEmptyStringSchema.regex(/^[0-9]+$/).optional(),
-  chatId: nonEmptyStringSchema,
-  limit: positiveIntegerSchema.optional()
-});
-
-export const telegramFetchMessagesPageOutputSchema = z.object({
-  messages: z.array(telegramReadMessageSchema),
-  reachedStart: z.boolean()
-});
-
 export const telegramSearchMessagesInputSchema = z.object({
   chatId: nonEmptyStringSchema.optional(),
   limit: positiveIntegerSchema.optional(),
@@ -292,78 +229,13 @@ export const telegramSearchMessagesOutputSchema = z.object({
   messages: z.array(telegramReadMessageSchema)
 });
 
-export const telegramChatPlacementSchema = z.discriminatedUnion('kind', [
-  z.object({
-    isPinned: z.boolean(),
-    kind: z.literal('archive'),
-    order: z.string()
-  }),
-  z.object({
-    isPinned: z.boolean(),
-    kind: z.literal('main'),
-    order: z.string()
-  }),
-  z.object({
-    folderId: nonNegativeIntegerSchema,
-    isPinned: z.boolean(),
-    kind: z.literal('folder'),
-    order: z.string()
-  })
-]);
-
-export const telegramChatLastMessageSchema = z.object({
-  authorName: z.string().nullable(),
-  authorPlaceholder: z.boolean(),
-  date: isoDateTimeStringSchema.nullable(),
-  datePlaceholder: z.boolean(),
-  isForwarded: z.boolean(),
-  isOutgoing: z.boolean(),
-  isRead: z.boolean().nullable(),
-  readPlaceholder: z.boolean(),
-  text: z.string(),
-  textPlaceholder: z.boolean()
-});
-
-export const telegramChatDirectoryEntrySchema = telegramReadChatSchema.extend({
-  isBot: z.boolean(),
-  isPremium: z.boolean(),
-  isSelf: z.boolean(),
-  isUnread: z.boolean(),
-  lastMessage: telegramChatLastMessageSchema.nullable(),
-  lastMessageDate: isoDateTimeStringSchema.nullable(),
-  notificationsEnabled: z.boolean().nullable(),
-  notificationsPlaceholder: z.boolean(),
-  placements: z.array(telegramChatPlacementSchema),
-  unreadCount: nonNegativeIntegerSchema,
-  unreadCountPlaceholder: z.boolean()
-});
-
-export const telegramChatFolderSchema = z.object({
-  _model: z.literal('telegram.chatFolder'),
-  folderId: nonNegativeIntegerSchema,
-  iconName: z.string().nullable(),
+export const telegramChatHistoryFactsChatSchema = z.object({
+  _model: z.literal('telegram.chat'),
   id: z.string(),
-  position: nonNegativeIntegerSchema,
-  title: z.string()
-});
-
-export const telegramChatTypeCountSchema = z.object({
-  count: nonNegativeIntegerSchema,
-  type: z.string()
-});
-
-export const telegramListChatDirectoryInputSchema = z
-  .object({
-    query: nonEmptyStringSchema.optional(),
-    type: nonEmptyStringSchema.optional()
-  })
-  .default({});
-
-export const telegramListChatDirectoryOutputSchema = z.object({
-  chats: z.array(telegramChatDirectoryEntrySchema),
-  folders: z.array(telegramChatFolderSchema),
-  navigationChats: z.array(telegramChatDirectoryEntrySchema),
-  types: z.array(telegramChatTypeCountSchema)
+  isBot: z.boolean(),
+  title: z.string(),
+  type: z.string(),
+  updatedAt: isoDateTimeStringSchema
 });
 
 export const telegramGetChatHistoryFactsInputSchema = z.object({
@@ -371,7 +243,7 @@ export const telegramGetChatHistoryFactsInputSchema = z.object({
 });
 
 export const telegramGetChatHistoryFactsOutputSchema = z.object({
-  chat: telegramChatDirectoryEntrySchema.nullable(),
+  chat: telegramChatHistoryFactsChatSchema.nullable(),
   earliestMessageDate: isoDateTimeStringSchema.nullable(),
   messageCount: nonNegativeIntegerSchema
 });
@@ -433,26 +305,13 @@ export type TelegramMessageServiceAction = z.infer<typeof telegramMessageService
 export type TelegramReadMessage = z.infer<typeof telegramReadMessageSchema>;
 export type TelegramGetChatInput = z.infer<typeof telegramGetChatInputSchema>;
 export type TelegramGetChatOutput = z.infer<typeof telegramGetChatOutputSchema>;
-export type TelegramGetMessageInput = z.infer<typeof telegramGetMessageInputSchema>;
-export type TelegramGetMessageOutput = z.infer<typeof telegramGetMessageOutputSchema>;
-export type TelegramRequestFileInput = z.infer<typeof telegramRequestFileInputSchema>;
-export type TelegramRequestFileOutput = z.infer<typeof telegramRequestFileOutputSchema>;
-export type TelegramGetFileQueueStatsInput = z.infer<typeof telegramGetFileQueueStatsInputSchema>;
-export type TelegramGetFileQueueStatsOutput = z.infer<typeof telegramGetFileQueueStatsOutputSchema>;
 export type TelegramListRecentMessagesInput = z.infer<typeof telegramListRecentMessagesInputSchema>;
 export type TelegramListRecentMessagesOutput = z.infer<
   typeof telegramListRecentMessagesOutputSchema
 >;
-export type TelegramFetchMessagesPageInput = z.infer<typeof telegramFetchMessagesPageInputSchema>;
-export type TelegramFetchMessagesPageOutput = z.infer<typeof telegramFetchMessagesPageOutputSchema>;
 export type TelegramSearchMessagesInput = z.infer<typeof telegramSearchMessagesInputSchema>;
 export type TelegramSearchMessagesOutput = z.infer<typeof telegramSearchMessagesOutputSchema>;
-export type TelegramChatPlacement = z.infer<typeof telegramChatPlacementSchema>;
-export type TelegramChatDirectoryEntry = z.infer<typeof telegramChatDirectoryEntrySchema>;
-export type TelegramChatFolder = z.infer<typeof telegramChatFolderSchema>;
-export type TelegramChatTypeCount = z.infer<typeof telegramChatTypeCountSchema>;
-export type TelegramListChatDirectoryInput = z.infer<typeof telegramListChatDirectoryInputSchema>;
-export type TelegramListChatDirectoryOutput = z.infer<typeof telegramListChatDirectoryOutputSchema>;
+export type TelegramChatHistoryFactsChat = z.infer<typeof telegramChatHistoryFactsChatSchema>;
 export type TelegramGetChatHistoryFactsInput = z.infer<
   typeof telegramGetChatHistoryFactsInputSchema
 >;

@@ -18,7 +18,7 @@ import {
   type TelegramEventSourceUser
 } from '../integrationEvents.js';
 import type { TelegramMessageTextEntity } from '../rpc/contracts.js';
-import { getDirectoryEntryByChatId } from '../telegram-read-model/directory.js';
+import { chatDirectoryEntryByChatId } from '../control-plane/backend/chatDirectory.js';
 import { readMessageSelection } from '../telegram-read-model/message.js';
 import { telegramMessages } from '../schema.js';
 import {
@@ -685,7 +685,7 @@ export function createTelegramUpdateEventPublishers(
       );
     },
     async publishTelegramChatDirectoryUpdated(chatId: string): Promise<void> {
-      const chat = await getDirectoryEntryByChatId(database, chatId);
+      const chat = await chatDirectoryEntryByChatId(database, chatId);
       eventBus.publish(
         chat === null
           ? createIntegrationEvent({

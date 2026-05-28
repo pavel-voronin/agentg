@@ -11,10 +11,8 @@ import {
   telegramGetChatHistoryFactsInputSchema,
   telegramGetHistoryCoverageInputSchema,
   telegramGetChatInputSchema,
-  telegramGetMessageInputSchema,
   telegramHistoryFetchPageInputSchema,
   telegramHistoryListChatsInputSchema,
-  telegramListChatDirectoryInputSchema,
   telegramListRecentMessagesInputSchema,
   telegramSearchMessagesInputSchema
 } from './contracts.js';
@@ -36,8 +34,6 @@ type TelegramRpcClient = {
   getChat(input: unknown, options?: InternalRpcCallOptions): Promise<unknown>;
   getChatHistoryFacts(input: unknown, options?: InternalRpcCallOptions): Promise<unknown>;
   getHistoryCoverage(input: unknown, options?: InternalRpcCallOptions): Promise<unknown>;
-  getMessage(input: unknown, options?: InternalRpcCallOptions): Promise<unknown>;
-  listChatDirectory(input?: unknown, options?: InternalRpcCallOptions): Promise<unknown>;
   listChats(input?: unknown, options?: InternalRpcCallOptions): Promise<unknown>;
   listRecentMessages(input?: unknown, options?: InternalRpcCallOptions): Promise<unknown>;
   searchMessages(input: unknown, options?: InternalRpcCallOptions): Promise<unknown>;
@@ -119,26 +115,6 @@ export function createTelegramRpcClient(
         (signal) =>
           client.getHistoryCoverage.query(
             telegramGetHistoryCoverageInputSchema.parse(input),
-            internalRpcProcedureOptions(callOptions, signal)
-          ),
-        timeoutMs
-      );
-    },
-    getMessage(input, callOptions) {
-      return callTelegramProcedure(
-        (signal) =>
-          client.getMessage.query(
-            telegramGetMessageInputSchema.parse(input),
-            internalRpcProcedureOptions(callOptions, signal)
-          ),
-        timeoutMs
-      );
-    },
-    listChatDirectory(input = {}, callOptions) {
-      return callTelegramProcedure(
-        (signal) =>
-          client.listChatDirectory.query(
-            telegramListChatDirectoryInputSchema.parse(input),
             internalRpcProcedureOptions(callOptions, signal)
           ),
         timeoutMs

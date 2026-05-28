@@ -13,11 +13,10 @@ import {
 import { createIntegrationEvent, type IntegrationEvent } from '@agentg/events/envelope';
 import type {
   TelegramReadMessage,
-  TelegramChatDirectoryEntry,
-  TelegramChatFolder,
   TelegramMessageServiceAction,
   TelegramMessageTextEntity
 } from './rpc/contracts.js';
+import type { ChatDirectoryEntry, ChatFolder } from './control-plane/backend/contracts.js';
 
 export type TelegramEventPersistResult = {
   chat: boolean;
@@ -28,7 +27,7 @@ export type TelegramEventPersistResult = {
 
 export type TelegramChatDirectoryEvent =
   | {
-      chat: TelegramChatDirectoryEntry;
+      chat: ChatDirectoryEntry;
       kind: 'updated';
     }
   | {
@@ -255,7 +254,7 @@ export function createTelegramHistoryCoverageChangedEvent(
   });
 }
 
-export function createTelegramChatUpdatedEvent(chat: TelegramChatDirectoryEntry): IntegrationEvent {
+export function createTelegramChatUpdatedEvent(chat: ChatDirectoryEntry): IntegrationEvent {
   return createIntegrationEvent({
     data: {
       chat
@@ -288,7 +287,7 @@ export function createTelegramMessageCreatedEvent(
   return messageEvent('telegram.message.created', message);
 }
 
-type TelegramEventChatFolder = TelegramChatFolder;
+type TelegramEventChatFolder = ChatFolder;
 
 type TelegramEventUser = TelegramUserModelRef & {
   firstName: string;
