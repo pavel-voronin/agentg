@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { loadDatabaseCliConfig } from './config.js';
+import { loadDatabaseCliConfig } from '../src/config.js';
 
 describe('loadDatabaseCliConfig', () => {
   it('uses local development defaults', () => {

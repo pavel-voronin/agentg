@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { loadHistorySyncServiceConfig } from './config.js';
+import { loadHistorySyncServiceConfig } from '../../src/config.js';
 
 describe('loadHistorySyncServiceConfig', () => {
   it('uses local RPC defaults', () => {
