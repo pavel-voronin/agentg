@@ -3,7 +3,7 @@ import { createNatsEventBus } from '@agentg/events/bus';
 
 import { loadTelegramIngestionConfig } from './config.js';
 import { createTelegramDatabase } from './database/client.js';
-import { runTelegramIngestion } from './ingestion.js';
+import { runTelegramIngestion } from './tdlib/ingestion.js';
 import { configureTdlib } from './tdlib/client.js';
 
 const config = loadTelegramIngestionConfig();

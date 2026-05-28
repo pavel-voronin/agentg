@@ -420,7 +420,10 @@ function auditServiceDirectoryBootstrap() {
     }
   }
 
-  const telegramIngestion = readFileSync(join(root, 'packages/telegram/src/ingestion.ts'), 'utf8');
+  const telegramIngestion = readFileSync(
+    join(root, 'packages/telegram/src/tdlib/ingestion.ts'),
+    'utf8'
+  );
   if (!telegramIngestion.includes('createServiceDirectoryClient')) {
     failures.push('Telegram must join Service Directory');
   }
@@ -789,7 +792,7 @@ function auditTdlibContractGeneration(files) {
 
 function auditTelegramWireBoundary(files) {
   const boundaryPrefixes = [
-    'packages/telegram/src/ingestion.ts',
+    'packages/telegram/src/tdlib/ingestion.ts',
     'packages/telegram/src/rpc/',
     'packages/telegram/src/tdlib/update-handlers/',
     'packages/telegram/src/files/extractor.ts',
