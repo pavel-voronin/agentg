@@ -59,7 +59,7 @@ const USER_UPDATED: TelegramEventPersistResult = {
   user: true
 };
 
-export type TelegramMessagesDeletedEventInput = {
+type TelegramMessagesDeletedEventInput = {
   chatId: string;
   deletedAt: Date;
   fromCache: boolean;
@@ -67,92 +67,19 @@ export type TelegramMessagesDeletedEventInput = {
   messageIds: string[];
 };
 
-type TelegramWireActiveGiftAuctionsUpdate = TelegramWireUpdateByType<'updateActiveGiftAuctions'>;
-type TelegramWireAnimatedEmojiMessageClickedUpdate =
-  TelegramWireUpdateByType<'updateAnimatedEmojiMessageClicked'>;
-type TelegramWireApplicationRecaptchaVerificationRequiredUpdate =
-  TelegramWireUpdateByType<'updateApplicationRecaptchaVerificationRequired'>;
-type TelegramWireApplicationVerificationRequiredUpdate =
-  TelegramWireUpdateByType<'updateApplicationVerificationRequired'>;
-type TelegramWireCall = TelegramWireUpdateByType<'updateCall'>['call'];
-type TelegramWireCallSignalingDataUpdate = TelegramWireUpdateByType<'updateNewCallSignalingData'>;
-type TelegramWireChatActionUpdate = TelegramWireUpdateByType<'updateChatAction'>;
-type TelegramWireChatJoinRequestUpdate = TelegramWireUpdateByType<'updateNewChatJoinRequest'>;
-type TelegramWireChatMemberUpdate = TelegramWireUpdateByType<'updateChatMember'>;
-type TelegramWireChatOnlineMemberCountUpdate =
-  TelegramWireUpdateByType<'updateChatOnlineMemberCount'>;
-type TelegramWireChosenInlineResultUpdate = TelegramWireUpdateByType<'updateNewChosenInlineResult'>;
-type TelegramWireCallbackQueryUpdate = TelegramWireUpdateByType<'updateNewCallbackQuery'>;
-type TelegramWireConnectionStateUpdate = TelegramWireUpdateByType<'updateConnectionState'>;
-type TelegramWireCustomEventUpdate = TelegramWireUpdateByType<'updateNewCustomEvent'>;
-type TelegramWireCustomQueryUpdate = TelegramWireUpdateByType<'updateNewCustomQuery'>;
-type TelegramWireFileDownloadUpdate = TelegramWireUpdateByType<'updateFileDownload'>;
-type TelegramWireFileRemovedFromDownloadsUpdate =
-  TelegramWireUpdateByType<'updateFileRemovedFromDownloads'>;
-type TelegramWireGiftAuctionStateUpdate = TelegramWireUpdateByType<'updateGiftAuctionState'>;
-type TelegramWireGroupCall = TelegramWireUpdateByType<'updateGroupCall'>['group_call'];
-type TelegramWireNewGroupCallMessageUpdate = TelegramWireUpdateByType<'updateNewGroupCallMessage'>;
-type TelegramWireNewGroupCallPaidReactionUpdate =
-  TelegramWireUpdateByType<'updateNewGroupCallPaidReaction'>;
-type TelegramWireGroupCallParticipantsUpdate =
-  TelegramWireUpdateByType<'updateGroupCallParticipants'>;
-type TelegramWireGroupCallVerificationStateUpdate =
-  TelegramWireUpdateByType<'updateGroupCallVerificationState'>;
-type TelegramWireHavePendingNotificationsUpdate =
-  TelegramWireUpdateByType<'updateHavePendingNotifications'>;
-type TelegramWireInlineCallbackQueryUpdate =
-  TelegramWireUpdateByType<'updateNewInlineCallbackQuery'>;
-type TelegramWireInlineQueryUpdate = TelegramWireUpdateByType<'updateNewInlineQuery'>;
-type TelegramWireLiveStoryTopDonorsUpdate = TelegramWireUpdateByType<'updateLiveStoryTopDonors'>;
-type TelegramWireNewBusinessCallbackQueryUpdate =
-  TelegramWireUpdateByType<'updateNewBusinessCallbackQuery'>;
-type TelegramWireNewShippingQueryUpdate = TelegramWireUpdateByType<'updateNewShippingQuery'>;
-type TelegramWireOauthRequestUpdate = TelegramWireUpdateByType<'updateNewOauthRequest'>;
-type TelegramWirePaidMediaPurchasedUpdate = TelegramWireUpdateByType<'updatePaidMediaPurchased'>;
-type TelegramWirePendingTextMessageUpdate = TelegramWireUpdateByType<'updatePendingTextMessage'>;
-type TelegramWirePollAnswerUpdate = TelegramWireUpdateByType<'updatePollAnswer'>;
-type TelegramWirePollUpdate = TelegramWireUpdateByType<'updatePoll'>;
-type TelegramWirePreCheckoutQueryUpdate = TelegramWireUpdateByType<'updateNewPreCheckoutQuery'>;
-type TelegramWireQuickReplyShortcutDeletedUpdate =
-  TelegramWireUpdateByType<'updateQuickReplyShortcutDeleted'>;
-type TelegramWireQuickReplyShortcutMessagesUpdate =
-  TelegramWireUpdateByType<'updateQuickReplyShortcutMessages'>;
-type TelegramWireQuickReplyShortcutUpdate = TelegramWireUpdateByType<'updateQuickReplyShortcut'>;
-type TelegramWireSavedMessagesTagsUpdate = TelegramWireUpdateByType<'updateSavedMessagesTags'>;
-type TelegramWireSavedMessagesTopicUpdate = TelegramWireUpdateByType<'updateSavedMessagesTopic'>;
-type TelegramWireServiceNotificationUpdate = TelegramWireUpdateByType<'updateServiceNotification'>;
-type TelegramWireSpeedLimitNotificationUpdate =
-  TelegramWireUpdateByType<'updateSpeedLimitNotification'>;
-type TelegramWireStakeDiceStateUpdate = TelegramWireUpdateByType<'updateStakeDiceState'>;
-type TelegramWireStoryUpdate = TelegramWireUpdateByType<'updateStory'>;
-type TelegramWireStoryDeletedUpdate = TelegramWireUpdateByType<'updateStoryDeleted'>;
-type TelegramWireStoryPostFailedUpdate = TelegramWireUpdateByType<'updateStoryPostFailed'>;
-type TelegramWireStoryPostSucceededUpdate = TelegramWireUpdateByType<'updateStoryPostSucceeded'>;
-type TelegramWireStoryStealthModeUpdate = TelegramWireUpdateByType<'updateStoryStealthMode'>;
-type TelegramWireSuggestedActionsUpdate = TelegramWireUpdateByType<'updateSuggestedActions'>;
-type TelegramWireTermsOfServiceUpdate = TelegramWireUpdateByType<'updateTermsOfService'>;
-type TelegramWireTonRevenueStatusUpdate = TelegramWireUpdateByType<'updateTonRevenueStatus'>;
-type TelegramWireUnconfirmedSessionUpdate = TelegramWireUpdateByType<'updateUnconfirmedSession'>;
-type TelegramWireUnreadChatCountUpdate = TelegramWireUpdateByType<'updateUnreadChatCount'>;
-type TelegramWireUnreadMessageCountUpdate = TelegramWireUpdateByType<'updateUnreadMessageCount'>;
-type TelegramWireUserStatusUpdate = TelegramWireUpdateByType<'updateUserStatus'>;
-type TelegramWireUserPrivacySettingRulesUpdate =
-  TelegramWireUpdateByType<'updateUserPrivacySettingRules'>;
-type TelegramWireWebAppMessageSentUpdate = TelegramWireUpdateByType<'updateWebAppMessageSent'>;
-
-export type TelegramAutosaveSettingsUpdatedEventInput = {
+type TelegramAutosaveSettingsUpdatedEventInput = {
   hasSettings: boolean;
   scopeKey: string;
 };
 
-export type TelegramBusinessMessagesDeletedEventInput = {
+type TelegramBusinessMessagesDeletedEventInput = {
   chatId: string;
   connectionId: string;
   deletedAt: string;
   messageIds: string[];
 };
 
-export type TelegramChatMemberUpdatedEventInput = {
+type TelegramChatMemberUpdatedEventInput = {
   actorUserId: string;
   chatId: string;
   inviteLink: JsonValue | null;
@@ -163,12 +90,12 @@ export type TelegramChatMemberUpdatedEventInput = {
   viaJoinRequest: boolean;
 };
 
-export type TelegramDirectMessagesChatTopicUpdatedEventInput = {
+type TelegramDirectMessagesChatTopicUpdatedEventInput = {
   chatId: string;
   topicId: string;
 };
 
-export type TelegramFileDownloadsUpdatedEventInput =
+type TelegramFileDownloadsUpdatedEventInput =
   | {
       downloaded_size: number;
       total_count: number;
@@ -179,72 +106,72 @@ export type TelegramFileDownloadsUpdatedEventInput =
       fileId: number;
     };
 
-export type TelegramForumTopicInfoUpdatedEventInput = {
+type TelegramForumTopicInfoUpdatedEventInput = {
   chatId: string;
   forumTopicId: number;
 };
 
-export type TelegramForumTopicUpdatedEventInput = {
+type TelegramForumTopicUpdatedEventInput = {
   chatId: string;
   forumTopicId: number;
 };
 
-export type TelegramFreezeStateUpdatedEventInput = {
+type TelegramFreezeStateUpdatedEventInput = {
   appeal_link: string;
   deletion_date: number;
   freezing_date: number;
   is_frozen: boolean;
 };
 
-export type TelegramGroupCallMessagesDeletedEventInput = {
+type TelegramGroupCallMessagesDeletedEventInput = {
   groupCallId: number;
   messageIds: number[];
 };
 
-export type TelegramGroupCallMessageSendFailedEventInput = {
+type TelegramGroupCallMessageSendFailedEventInput = {
   error: JsonValue;
   groupCallId: number;
   messageId: number;
 };
 
-export type TelegramGroupCallParticipantUpdatedOrRemovedEventInput = {
+type TelegramGroupCallParticipantUpdatedOrRemovedEventInput = {
   groupCallId: number;
   participant: JsonValue;
   participantId: string;
   removed: boolean;
 };
 
-export type TelegramGuestQueryReceivedEventInput = {
+type TelegramGuestQueryReceivedEventInput = {
   id: string;
   message: TelegramWireMessage;
   referenceMessages: readonly TelegramWireMessage[];
 };
 
-export type TelegramManagedBotUpdatedEventInput = {
+type TelegramManagedBotUpdatedEventInput = {
   botUserId: string;
   creatorUserId: string;
 };
 
-export type TelegramMessageSendFailedEventInput = {
+type TelegramMessageSendFailedEventInput = {
   chatId: string;
   error: JsonValue;
   messageId: string;
   oldMessageId: string;
 };
 
-export type TelegramMessageSendSucceededEventInput = {
+type TelegramMessageSendSucceededEventInput = {
   chatId: string;
   message: TelegramWireMessage;
   messageId: string;
   oldMessageId: string;
 };
 
-export type TelegramStoredMessageUpdatedEventInput = {
+type TelegramStoredMessageUpdatedEventInput = {
   chatId: string;
   messageId: string;
 };
 
-export type TelegramUserFullInfoUpdatedEventInput = {
+type TelegramUserFullInfoUpdatedEventInput = {
   userId: string;
 };
 
@@ -264,7 +191,7 @@ const TELEGRAM_CHAT_ACTION_EVENT_TYPES = {
   chatActionUploadingVideoNote: 'telegram.chat_action_uploading_video_note',
   chatActionUploadingVoiceNote: 'telegram.chat_action_uploading_voice_note',
   chatActionWatchingAnimations: 'telegram.chat_action_watching_animations'
-} as const satisfies Record<TelegramWireChatActionUpdate['action']['_'], string>;
+} as const satisfies Record<TelegramWireUpdateByType<'updateChatAction'>['action']['_'], string>;
 
 const TELEGRAM_CONNECTION_STATE_EVENT_TYPES = {
   connectionStateConnecting: 'telegram.connection_state_connecting',
@@ -272,7 +199,10 @@ const TELEGRAM_CONNECTION_STATE_EVENT_TYPES = {
   connectionStateReady: 'telegram.connection_state_ready',
   connectionStateUpdating: 'telegram.connection_state_updating',
   connectionStateWaitingForNetwork: 'telegram.connection_state_waiting_for_network'
-} as const satisfies Record<TelegramWireConnectionStateUpdate['state']['_'], string>;
+} as const satisfies Record<
+  TelegramWireUpdateByType<'updateConnectionState'>['state']['_'],
+  string
+>;
 
 export function createTelegramUpdateEventPublishers(
   eventBus: EventBus,
@@ -288,7 +218,9 @@ export function createTelegramUpdateEventPublishers(
   }
 
   return {
-    publishTelegramActiveGiftAuctionsUpdated(update: TelegramWireActiveGiftAuctionsUpdate): void {
+    publishTelegramActiveGiftAuctionsUpdated(
+      update: TelegramWireUpdateByType<'updateActiveGiftAuctions'>
+    ): void {
       eventBus.publish(
         createIntegrationEvent({
           data: { states: telegramWireJsonValue(update.states) ?? [] },
@@ -305,7 +237,7 @@ export function createTelegramUpdateEventPublishers(
       );
     },
     publishTelegramAnimatedEmojiMessageClicked(
-      update: TelegramWireAnimatedEmojiMessageClickedUpdate
+      update: TelegramWireUpdateByType<'updateAnimatedEmojiMessageClicked'>
     ): void {
       eventBus.publish(
         createIntegrationEvent({
@@ -323,7 +255,7 @@ export function createTelegramUpdateEventPublishers(
       );
     },
     publishTelegramApplicationRecaptchaVerificationRequired(
-      update: TelegramWireApplicationRecaptchaVerificationRequiredUpdate
+      update: TelegramWireUpdateByType<'updateApplicationRecaptchaVerificationRequired'>
     ): void {
       eventBus.publish(
         createIntegrationEvent({
@@ -337,7 +269,7 @@ export function createTelegramUpdateEventPublishers(
       );
     },
     publishTelegramApplicationVerificationRequired(
-      update: TelegramWireApplicationVerificationRequiredUpdate
+      update: TelegramWireUpdateByType<'updateApplicationVerificationRequired'>
     ): void {
       eventBus.publish(
         createIntegrationEvent({
@@ -387,7 +319,7 @@ export function createTelegramUpdateEventPublishers(
         })
       );
     },
-    publishTelegramCallUpdated(call: TelegramWireCall): void {
+    publishTelegramCallUpdated(call: TelegramWireUpdateByType<'updateCall'>['call']): void {
       eventBus.publish(
         createIntegrationEvent({
           data: {
@@ -406,7 +338,9 @@ export function createTelegramUpdateEventPublishers(
         })
       );
     },
-    publishTelegramCallSignalingDataReceived(update: TelegramWireCallSignalingDataUpdate): void {
+    publishTelegramCallSignalingDataReceived(
+      update: TelegramWireUpdateByType<'updateNewCallSignalingData'>
+    ): void {
       const callId = String(update.call_id);
       eventBus.publish(
         createIntegrationEvent({
@@ -421,7 +355,9 @@ export function createTelegramUpdateEventPublishers(
         })
       );
     },
-    publishTelegramCallbackQueryReceived(update: TelegramWireCallbackQueryUpdate): void {
+    publishTelegramCallbackQueryReceived(
+      update: TelegramWireUpdateByType<'updateNewCallbackQuery'>
+    ): void {
       const chatId = String(update.chat_id);
       const messageId = String(update.message_id);
       const senderUserId = String(update.sender_user_id);
@@ -444,7 +380,9 @@ export function createTelegramUpdateEventPublishers(
         })
       );
     },
-    publishTelegramChatJoinRequestCreated(update: TelegramWireChatJoinRequestUpdate): void {
+    publishTelegramChatJoinRequestCreated(
+      update: TelegramWireUpdateByType<'updateNewChatJoinRequest'>
+    ): void {
       const chatId = String(update.chat_id);
       const userId = String(update.request.user_id);
       eventBus.publish(
@@ -464,7 +402,9 @@ export function createTelegramUpdateEventPublishers(
         })
       );
     },
-    publishTelegramConnectionState(update: TelegramWireConnectionStateUpdate): void {
+    publishTelegramConnectionState(
+      update: TelegramWireUpdateByType<'updateConnectionState'>
+    ): void {
       eventBus.publish(
         createIntegrationEvent({
           data: {
@@ -474,7 +414,9 @@ export function createTelegramUpdateEventPublishers(
         })
       );
     },
-    publishTelegramChosenInlineResultReceived(update: TelegramWireChosenInlineResultUpdate): void {
+    publishTelegramChosenInlineResultReceived(
+      update: TelegramWireUpdateByType<'updateNewChosenInlineResult'>
+    ): void {
       const senderUserId = String(update.sender_user_id);
       eventBus.publish(
         createIntegrationEvent({
@@ -492,7 +434,9 @@ export function createTelegramUpdateEventPublishers(
         })
       );
     },
-    publishTelegramCustomEventReceived(update: TelegramWireCustomEventUpdate): void {
+    publishTelegramCustomEventReceived(
+      update: TelegramWireUpdateByType<'updateNewCustomEvent'>
+    ): void {
       eventBus.publish(
         createIntegrationEvent({
           data: {
@@ -502,7 +446,9 @@ export function createTelegramUpdateEventPublishers(
         })
       );
     },
-    publishTelegramCustomQueryReceived(update: TelegramWireCustomQueryUpdate): void {
+    publishTelegramCustomQueryReceived(
+      update: TelegramWireUpdateByType<'updateNewCustomQuery'>
+    ): void {
       const queryId = requiredEventId(update.id);
       eventBus.publish(
         createIntegrationEvent({
@@ -519,7 +465,7 @@ export function createTelegramUpdateEventPublishers(
       );
     },
     publishTelegramInlineCallbackQueryReceived(
-      update: TelegramWireInlineCallbackQueryUpdate
+      update: TelegramWireUpdateByType<'updateNewInlineCallbackQuery'>
     ): void {
       const senderUserId = String(update.sender_user_id);
       eventBus.publish(
@@ -539,7 +485,9 @@ export function createTelegramUpdateEventPublishers(
         })
       );
     },
-    publishTelegramInlineQueryReceived(update: TelegramWireInlineQueryUpdate): void {
+    publishTelegramInlineQueryReceived(
+      update: TelegramWireUpdateByType<'updateNewInlineQuery'>
+    ): void {
       const queryId = requiredEventId(update.id);
       const senderUserId = String(update.sender_user_id);
       eventBus.publish(
@@ -560,7 +508,9 @@ export function createTelegramUpdateEventPublishers(
         })
       );
     },
-    publishTelegramGroupCallUpdated(groupCall: TelegramWireGroupCall): void {
+    publishTelegramGroupCallUpdated(
+      groupCall: TelegramWireUpdateByType<'updateGroupCall'>['group_call']
+    ): void {
       const groupCallId = String(groupCall.id);
       eventBus.publish(
         createIntegrationEvent({
@@ -570,7 +520,9 @@ export function createTelegramUpdateEventPublishers(
         })
       );
     },
-    publishTelegramGroupCallMessageCreated(update: TelegramWireNewGroupCallMessageUpdate): void {
+    publishTelegramGroupCallMessageCreated(
+      update: TelegramWireUpdateByType<'updateNewGroupCallMessage'>
+    ): void {
       const groupCallId = update.group_call_id;
       eventBus.publish(
         createIntegrationEvent({
@@ -602,7 +554,7 @@ export function createTelegramUpdateEventPublishers(
       );
     },
     publishTelegramGroupCallPaidReactionReceived(
-      update: TelegramWireNewGroupCallPaidReactionUpdate
+      update: TelegramWireUpdateByType<'updateNewGroupCallPaidReaction'>
     ): void {
       const groupCallId = update.group_call_id;
       eventBus.publish(
@@ -633,7 +585,7 @@ export function createTelegramUpdateEventPublishers(
         })
       );
     },
-    publishTelegramChatAction(update: TelegramWireChatActionUpdate): void {
+    publishTelegramChatAction(update: TelegramWireUpdateByType<'updateChatAction'>): void {
       eventBus.publish(
         createIntegrationEvent({
           data: {
@@ -650,7 +602,7 @@ export function createTelegramUpdateEventPublishers(
         })
       );
     },
-    publishTelegramChatMemberUpdated(update: TelegramWireChatMemberUpdate): void {
+    publishTelegramChatMemberUpdated(update: TelegramWireUpdateByType<'updateChatMember'>): void {
       const input: TelegramChatMemberUpdatedEventInput = {
         actorUserId: String(update.actor_user_id),
         chatId: String(update.chat_id),
@@ -673,7 +625,7 @@ export function createTelegramUpdateEventPublishers(
       );
     },
     publishTelegramChatOnlineMemberCountUpdated(
-      update: TelegramWireChatOnlineMemberCountUpdate
+      update: TelegramWireUpdateByType<'updateChatOnlineMemberCount'>
     ): void {
       const chatId = String(update.chat_id);
       eventBus.publish(
@@ -725,7 +677,9 @@ export function createTelegramUpdateEventPublishers(
         })
       );
     },
-    publishTelegramFileDownloadRemoved(update: TelegramWireFileRemovedFromDownloadsUpdate): void {
+    publishTelegramFileDownloadRemoved(
+      update: TelegramWireUpdateByType<'updateFileRemovedFromDownloads'>
+    ): void {
       eventBus.publish(
         createIntegrationEvent({
           data: {
@@ -740,7 +694,7 @@ export function createTelegramUpdateEventPublishers(
       );
     },
     publishTelegramFileDownloadUpdated(
-      update: TelegramWireFileDownloadUpdate,
+      update: TelegramWireUpdateByType<'updateFileDownload'>,
       options: { downloadRowPatched: boolean }
     ): void {
       const completeDate = telegramWireDate(update.complete_date);
@@ -800,7 +754,9 @@ export function createTelegramUpdateEventPublishers(
         })
       );
     },
-    publishTelegramGiftAuctionStateUpdated(update: TelegramWireGiftAuctionStateUpdate): void {
+    publishTelegramGiftAuctionStateUpdated(
+      update: TelegramWireUpdateByType<'updateGiftAuctionState'>
+    ): void {
       const auctionInfo = update.state.gift.auction_info;
       if (auctionInfo === undefined) {
         throw new Error('Expected GiftAuctionState gift auction_info');
@@ -837,7 +793,7 @@ export function createTelegramUpdateEventPublishers(
       );
     },
     publishTelegramGroupCallEncryptedParticipantUsersUpdated(
-      update: TelegramWireGroupCallParticipantsUpdate
+      update: TelegramWireUpdateByType<'updateGroupCallParticipants'>
     ): void {
       const groupCallId = String(update.group_call_id);
       eventBus.publish(
@@ -854,7 +810,7 @@ export function createTelegramUpdateEventPublishers(
       );
     },
     publishTelegramGroupCallVerificationStateUpdated(
-      update: TelegramWireGroupCallVerificationStateUpdate
+      update: TelegramWireUpdateByType<'updateGroupCallVerificationState'>
     ): void {
       const groupCallId = String(update.group_call_id);
       eventBus.publish(
@@ -895,7 +851,9 @@ export function createTelegramUpdateEventPublishers(
         })
       );
     },
-    publishTelegramLiveStoryTopDonorsUpdated(update: TelegramWireLiveStoryTopDonorsUpdate): void {
+    publishTelegramLiveStoryTopDonorsUpdated(
+      update: TelegramWireUpdateByType<'updateLiveStoryTopDonors'>
+    ): void {
       const groupCallId = String(update.group_call_id);
       eventBus.publish(
         createIntegrationEvent({
@@ -923,7 +881,7 @@ export function createTelegramUpdateEventPublishers(
       );
     },
     publishTelegramPendingNotificationsUpdated(
-      update: TelegramWireHavePendingNotificationsUpdate
+      update: TelegramWireUpdateByType<'updateHavePendingNotifications'>
     ): void {
       eventBus.publish(
         createIntegrationEvent({
@@ -937,7 +895,9 @@ export function createTelegramUpdateEventPublishers(
         })
       );
     },
-    publishTelegramPaidMediaPurchased(update: TelegramWirePaidMediaPurchasedUpdate): void {
+    publishTelegramPaidMediaPurchased(
+      update: TelegramWireUpdateByType<'updatePaidMediaPurchased'>
+    ): void {
       const userId = String(update.user_id);
       eventBus.publish(
         createIntegrationEvent({
@@ -952,7 +912,9 @@ export function createTelegramUpdateEventPublishers(
         })
       );
     },
-    publishTelegramPendingTextMessageUpdated(update: TelegramWirePendingTextMessageUpdate): void {
+    publishTelegramPendingTextMessageUpdated(
+      update: TelegramWireUpdateByType<'updatePendingTextMessage'>
+    ): void {
       const chatId = String(update.chat_id);
       const draftId = requiredEventId(update.draft_id);
       eventBus.publish(
@@ -971,7 +933,9 @@ export function createTelegramUpdateEventPublishers(
         })
       );
     },
-    publishTelegramOauthRequestReceived(update: TelegramWireOauthRequestUpdate): void {
+    publishTelegramOauthRequestReceived(
+      update: TelegramWireUpdateByType<'updateNewOauthRequest'>
+    ): void {
       eventBus.publish(
         createIntegrationEvent({
           data: {
@@ -983,7 +947,9 @@ export function createTelegramUpdateEventPublishers(
         })
       );
     },
-    publishTelegramPreCheckoutQueryReceived(update: TelegramWirePreCheckoutQueryUpdate): void {
+    publishTelegramPreCheckoutQueryReceived(
+      update: TelegramWireUpdateByType<'updateNewPreCheckoutQuery'>
+    ): void {
       const queryId = requiredEventId(update.id);
       const senderUserId = String(update.sender_user_id);
       eventBus.publish(
@@ -1005,7 +971,7 @@ export function createTelegramUpdateEventPublishers(
         })
       );
     },
-    publishTelegramPollUpdated(update: TelegramWirePollUpdate): void {
+    publishTelegramPollUpdated(update: TelegramWireUpdateByType<'updatePoll'>): void {
       const pollId = requiredEventId(update.poll.id);
       eventBus.publish(
         createIntegrationEvent({
@@ -1019,7 +985,7 @@ export function createTelegramUpdateEventPublishers(
         })
       );
     },
-    publishTelegramPollAnswerUpdated(update: TelegramWirePollAnswerUpdate): void {
+    publishTelegramPollAnswerUpdated(update: TelegramWireUpdateByType<'updatePollAnswer'>): void {
       const pollId = requiredEventId(update.poll_id);
       eventBus.publish(
         createIntegrationEvent({
@@ -1036,7 +1002,9 @@ export function createTelegramUpdateEventPublishers(
         })
       );
     },
-    publishTelegramQuickReplyShortcutUpdated(update: TelegramWireQuickReplyShortcutUpdate): void {
+    publishTelegramQuickReplyShortcutUpdated(
+      update: TelegramWireUpdateByType<'updateQuickReplyShortcut'>
+    ): void {
       const shortcutId = String(update.shortcut.id);
       eventBus.publish(
         createIntegrationEvent({
@@ -1054,7 +1022,7 @@ export function createTelegramUpdateEventPublishers(
       );
     },
     publishTelegramQuickReplyShortcutDeleted(
-      update: TelegramWireQuickReplyShortcutDeletedUpdate
+      update: TelegramWireUpdateByType<'updateQuickReplyShortcutDeleted'>
     ): void {
       const shortcutId = String(update.shortcut_id);
       eventBus.publish(
@@ -1070,7 +1038,7 @@ export function createTelegramUpdateEventPublishers(
       );
     },
     publishTelegramQuickReplyShortcutMessagesUpdated(
-      update: TelegramWireQuickReplyShortcutMessagesUpdate
+      update: TelegramWireUpdateByType<'updateQuickReplyShortcutMessages'>
     ): void {
       const shortcutId = String(update.shortcut_id);
       eventBus.publish(
@@ -1086,7 +1054,9 @@ export function createTelegramUpdateEventPublishers(
         })
       );
     },
-    publishTelegramSavedMessagesTagsUpdated(update: TelegramWireSavedMessagesTagsUpdate): void {
+    publishTelegramSavedMessagesTagsUpdated(
+      update: TelegramWireUpdateByType<'updateSavedMessagesTags'>
+    ): void {
       const savedMessagesTopicId = String(update.saved_messages_topic_id);
       eventBus.publish(
         createIntegrationEvent({
@@ -1100,7 +1070,9 @@ export function createTelegramUpdateEventPublishers(
         })
       );
     },
-    publishTelegramSavedMessagesTopicUpdated(update: TelegramWireSavedMessagesTopicUpdate): void {
+    publishTelegramSavedMessagesTopicUpdated(
+      update: TelegramWireUpdateByType<'updateSavedMessagesTopic'>
+    ): void {
       const savedMessagesTopicId = String(update.topic.id);
       eventBus.publish(
         createIntegrationEvent({
@@ -1128,7 +1100,7 @@ export function createTelegramUpdateEventPublishers(
       );
     },
     publishTelegramServiceNotificationReceived(
-      update: TelegramWireServiceNotificationUpdate
+      update: TelegramWireUpdateByType<'updateServiceNotification'>
     ): void {
       eventBus.publish(
         createIntegrationEvent({
@@ -1141,7 +1113,9 @@ export function createTelegramUpdateEventPublishers(
         })
       );
     },
-    publishTelegramShippingQueryReceived(update: TelegramWireNewShippingQueryUpdate): void {
+    publishTelegramShippingQueryReceived(
+      update: TelegramWireUpdateByType<'updateNewShippingQuery'>
+    ): void {
       const queryId = requiredEventId(update.id);
       const senderUserId = String(update.sender_user_id);
       eventBus.publish(
@@ -1161,7 +1135,7 @@ export function createTelegramUpdateEventPublishers(
       );
     },
     publishTelegramSpeedLimitNotificationReceived(
-      update: TelegramWireSpeedLimitNotificationUpdate
+      update: TelegramWireUpdateByType<'updateSpeedLimitNotification'>
     ): void {
       eventBus.publish(
         createIntegrationEvent({
@@ -1173,7 +1147,9 @@ export function createTelegramUpdateEventPublishers(
         })
       );
     },
-    publishTelegramStakeDiceStateUpdated(update: TelegramWireStakeDiceStateUpdate): void {
+    publishTelegramStakeDiceStateUpdated(
+      update: TelegramWireUpdateByType<'updateStakeDiceState'>
+    ): void {
       eventBus.publish(
         createIntegrationEvent({
           data: {
@@ -1183,7 +1159,7 @@ export function createTelegramUpdateEventPublishers(
         })
       );
     },
-    publishTelegramStoryUpdated(update: TelegramWireStoryUpdate): void {
+    publishTelegramStoryUpdated(update: TelegramWireUpdateByType<'updateStory'>): void {
       const posterChatId = String(update.story.poster_chat_id);
       eventBus.publish(
         createIntegrationEvent({
@@ -1199,7 +1175,7 @@ export function createTelegramUpdateEventPublishers(
         })
       );
     },
-    publishTelegramStoryDeleted(update: TelegramWireStoryDeletedUpdate): void {
+    publishTelegramStoryDeleted(update: TelegramWireUpdateByType<'updateStoryDeleted'>): void {
       const posterChatId = String(update.story_poster_chat_id);
       eventBus.publish(
         createIntegrationEvent({
@@ -1215,7 +1191,9 @@ export function createTelegramUpdateEventPublishers(
         })
       );
     },
-    publishTelegramStoryPostFailed(update: TelegramWireStoryPostFailedUpdate): void {
+    publishTelegramStoryPostFailed(
+      update: TelegramWireUpdateByType<'updateStoryPostFailed'>
+    ): void {
       const posterChatId = String(update.story.poster_chat_id);
       eventBus.publish(
         createIntegrationEvent({
@@ -1233,7 +1211,9 @@ export function createTelegramUpdateEventPublishers(
         })
       );
     },
-    publishTelegramStoryPostSucceeded(update: TelegramWireStoryPostSucceededUpdate): void {
+    publishTelegramStoryPostSucceeded(
+      update: TelegramWireUpdateByType<'updateStoryPostSucceeded'>
+    ): void {
       const posterChatId = String(update.story.poster_chat_id);
       eventBus.publish(
         createIntegrationEvent({
@@ -1251,7 +1231,9 @@ export function createTelegramUpdateEventPublishers(
         })
       );
     },
-    publishTelegramStoryStealthModeUpdated(update: TelegramWireStoryStealthModeUpdate): void {
+    publishTelegramStoryStealthModeUpdated(
+      update: TelegramWireUpdateByType<'updateStoryStealthMode'>
+    ): void {
       eventBus.publish(
         createIntegrationEvent({
           data: {
@@ -1262,7 +1244,9 @@ export function createTelegramUpdateEventPublishers(
         })
       );
     },
-    publishTelegramSuggestedActionsUpdated(update: TelegramWireSuggestedActionsUpdate): void {
+    publishTelegramSuggestedActionsUpdated(
+      update: TelegramWireUpdateByType<'updateSuggestedActions'>
+    ): void {
       eventBus.publish(
         createIntegrationEvent({
           data: {
@@ -1273,7 +1257,9 @@ export function createTelegramUpdateEventPublishers(
         })
       );
     },
-    publishTelegramTermsOfServiceRequired(update: TelegramWireTermsOfServiceUpdate): void {
+    publishTelegramTermsOfServiceRequired(
+      update: TelegramWireUpdateByType<'updateTermsOfService'>
+    ): void {
       eventBus.publish(
         createIntegrationEvent({
           data: {
@@ -1287,7 +1273,9 @@ export function createTelegramUpdateEventPublishers(
         })
       );
     },
-    publishTelegramTonRevenueStatusUpdated(update: TelegramWireTonRevenueStatusUpdate): void {
+    publishTelegramTonRevenueStatusUpdated(
+      update: TelegramWireUpdateByType<'updateTonRevenueStatus'>
+    ): void {
       eventBus.publish(
         createIntegrationEvent({
           data: {
@@ -1297,7 +1285,9 @@ export function createTelegramUpdateEventPublishers(
         })
       );
     },
-    publishTelegramUnconfirmedSessionUpdated(update: TelegramWireUnconfirmedSessionUpdate): void {
+    publishTelegramUnconfirmedSessionUpdated(
+      update: TelegramWireUpdateByType<'updateUnconfirmedSession'>
+    ): void {
       eventBus.publish(
         createIntegrationEvent({
           data: {
@@ -1307,7 +1297,9 @@ export function createTelegramUpdateEventPublishers(
         })
       );
     },
-    publishTelegramUnreadChatCountUpdated(update: TelegramWireUnreadChatCountUpdate): void {
+    publishTelegramUnreadChatCountUpdated(
+      update: TelegramWireUpdateByType<'updateUnreadChatCount'>
+    ): void {
       eventBus.publish(
         createIntegrationEvent({
           data: {
@@ -1322,7 +1314,9 @@ export function createTelegramUpdateEventPublishers(
         })
       );
     },
-    publishTelegramUnreadMessageCountUpdated(update: TelegramWireUnreadMessageCountUpdate): void {
+    publishTelegramUnreadMessageCountUpdated(
+      update: TelegramWireUpdateByType<'updateUnreadMessageCount'>
+    ): void {
       eventBus.publish(
         createIntegrationEvent({
           data: {
@@ -1334,7 +1328,7 @@ export function createTelegramUpdateEventPublishers(
         })
       );
     },
-    publishTelegramUserStatusUpdated(update: TelegramWireUserStatusUpdate): void {
+    publishTelegramUserStatusUpdated(update: TelegramWireUpdateByType<'updateUserStatus'>): void {
       const userId = String(update.user_id);
       eventBus.publish(
         createIntegrationEvent({
@@ -1361,7 +1355,7 @@ export function createTelegramUpdateEventPublishers(
       );
     },
     publishTelegramUserPrivacySettingRulesUpdated(
-      update: TelegramWireUserPrivacySettingRulesUpdate
+      update: TelegramWireUpdateByType<'updateUserPrivacySettingRules'>
     ): void {
       eventBus.publish(
         createIntegrationEvent({
@@ -1373,7 +1367,9 @@ export function createTelegramUpdateEventPublishers(
         })
       );
     },
-    publishTelegramWebAppCloseRequested(update: TelegramWireWebAppMessageSentUpdate): void {
+    publishTelegramWebAppCloseRequested(
+      update: TelegramWireUpdateByType<'updateWebAppMessageSent'>
+    ): void {
       const webAppLaunchId = requiredEventId(update.web_app_launch_id);
       eventBus.publish(
         createIntegrationEvent({
@@ -1414,7 +1410,7 @@ export function createTelegramUpdateEventPublishers(
       );
     },
     publishTelegramBusinessCallbackQueryReceived(
-      update: TelegramWireNewBusinessCallbackQueryUpdate
+      update: TelegramWireUpdateByType<'updateNewBusinessCallbackQuery'>
     ): void {
       const chatId = String(update.message.message.chat_id);
       const messageId = String(update.message.message.id);
