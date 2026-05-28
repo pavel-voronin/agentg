@@ -3,8 +3,12 @@ import { createInterface } from 'node:readline/promises';
 
 import type { LoginDetails } from 'tdl';
 
-import { loadTelegramIngestionConfig } from './config.js';
-import { configureTdlib, createTelegramClient, hasTelegramCredentials } from '../tdlib/client.js';
+import { loadTelegramIngestionConfig } from '../packages/telegram/src/app/config.js';
+import {
+  configureTdlib,
+  createTelegramClient,
+  hasTelegramCredentials
+} from '../packages/telegram/src/tdlib/client.js';
 
 const config = loadTelegramIngestionConfig();
 

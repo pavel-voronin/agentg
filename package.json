@@ -32,7 +32,7 @@
     "dev:claude": "npm --workspace @agentg/claude-plugin run start",
     "dev:telegram-control-plane": "npm --workspace @agentg/telegram run dev:control-plane-assets",
     "dev:telegram": "npm --workspace @agentg/telegram run dev",
-    "telegram:auth": "npm --workspace @agentg/telegram run auth",
+    "telegram:auth": "tsx scripts/telegramAuth.ts",
     "dev:tdlib-docs": "npm --workspace @agentg/tdlib-docs run dev",
     "build": "npm --workspaces --if-present run build",
     "db:up": "docker compose up -d postgres --quiet-pull",
@@ -62,6 +62,7 @@
     "@iconify-json/solar": "^1.2.5",
     "eslint": "10.2.1",
     "prettier": "3.8.3",
+    "tsx": "4.21.0",
     "typescript": "6.0.3",
     "typescript-eslint": "8.59.0",
     "unplugin-icons": "^23.0.1"
