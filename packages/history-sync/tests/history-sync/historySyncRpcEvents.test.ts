@@ -3,14 +3,14 @@ import type { EventBus, EventSubscription } from '@agentg/events/bus';
 import type { IntegrationEvent } from '@agentg/events/envelope';
 import { describe, expect, it } from 'vitest';
 
-import { historySyncRpc } from '../../src/rpc/setup.js';
+import { historySyncDomain } from '../../src/domain.js';
 
 describe('History Sync RPC event behavior', () => {
   it('wakes History Sync directly and publishes a notification event for manual sync', async () => {
     const publishedEvents: IntegrationEvent[] = [];
     const syncRequests: { chatId?: string; reason: string }[] = [];
     const eventBus = createRecordingEventBus(publishedEvents);
-    const router = historySyncRpc.createRouter({
+    const router = historySyncDomain.createRpcRouter({
       database: {} as AppDatabase,
       eventBus,
       requestSync(reason, chatId) {

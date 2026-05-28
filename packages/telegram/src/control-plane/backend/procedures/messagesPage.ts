@@ -1,7 +1,7 @@
-import { mutation } from '@agentg/rpc/domain';
+import { mutation } from '@agentg/framework/domain';
 import { z } from 'zod';
 
-import type { TelegramRpcRuntime } from '../../../rpc/setup.js';
+import type { TelegramRpcRuntime } from '../../../domain.js';
 import { and, eq, inArray } from 'drizzle-orm';
 import { createTelegramHistoryCoverageChangedEvent } from '../../../events/contracts.js';
 import { telegramChats, telegramMessages } from '../../../database/schema.js';
@@ -23,7 +23,7 @@ import {
 } from '../../../tdlib/wire.js';
 import { toTelegramDate } from '../../../read-model/dates.js';
 import { readMessageSelection, toReadMessages } from '../../../read-model/message.js';
-import { parseLimit } from '@agentg/rpc/input';
+import { parseLimit } from '@agentg/framework/input';
 import {
   nonEmptyStringSchema,
   positiveIntegerSchema,

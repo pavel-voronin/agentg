@@ -8,7 +8,7 @@ import {
   parseControlPlaneProviderRegistration,
   type ControlPlaneProviderCatalogResponse
 } from '@agentg/control-plane-sdk/manifest';
-import { createInternalTrpcProcedureProxy } from '@agentg/rpc/trpc-proxy';
+import { createInternalTrpcProcedureProxy } from '@agentg/framework/trpc-proxy';
 import {
   createServiceDirectoryClient,
   type ServiceDirectoryClient

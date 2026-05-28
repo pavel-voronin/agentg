@@ -1,10 +1,10 @@
-import { mutation } from '@agentg/rpc/domain';
+import { mutation } from '@agentg/framework/domain';
 import { z } from 'zod';
 
-import type { TelegramRpcRuntime } from '../setup.js';
-import { fetchTelegramHistoryPage } from '../../history/fetch.js';
-import { telegramTdlibPriorities } from '../../tdlib/priority.js';
-import { isoDateTimeStringSchema, telegramHistoryIntervalSchema } from '../../read-model/api.js';
+import type { TelegramRpcRuntime } from '../domain.js';
+import { fetchTelegramHistoryPage } from '../history/fetch.js';
+import { telegramTdlibPriorities } from '../tdlib/priority.js';
+import { isoDateTimeStringSchema, telegramHistoryIntervalSchema } from '../read-model/api.js';
 
 export const telegramHistoryFetchPageInputSchema = z.object({
   chatId: z.string().min(1),

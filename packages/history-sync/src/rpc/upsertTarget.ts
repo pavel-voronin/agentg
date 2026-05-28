@@ -1,12 +1,12 @@
 import { createIntegrationEvent } from '@agentg/events/envelope';
-import { mutation } from '@agentg/rpc/domain';
+import { mutation, runtimeForInternalRpcCall } from '@agentg/framework/domain';
 import { z } from 'zod';
 
-import { historySyncRangeSchema, nonEmptyStringSchema } from '../../rangeSchema.js';
-import { upsertManualHistorySyncTargetFromCommand } from '../../targetCommands.js';
-import { runtimeForCall, type CreateHistorySyncRouterOptions } from '../setup.js';
+import { historySyncRangeSchema, nonEmptyStringSchema } from '../rangeSchema.js';
+import { upsertManualHistorySyncTargetFromCommand } from '../targetCommands.js';
+import type { HistorySyncRuntime } from '../domain.js';
 import { historySyncStoredTargetOutputSchema } from './deleteTarget.js';
-import { currentHistorySyncProjectionContext, historySyncTargetToResponse } from './support.js';
+import { currentHistorySyncProjectionContext, historySyncTargetToResponse } from '../readModel.js';
 
 export const historySyncUpsertTargetInputSchema = z
   .object({
@@ -40,12 +40,12 @@ export const historySyncTargetMutationOutputSchema = z.object({
 export type HistorySyncUpsertTargetInput = z.infer<typeof historySyncUpsertTargetInputSchema>;
 export type HistorySyncTargetMutationOutput = z.infer<typeof historySyncTargetMutationOutputSchema>;
 
-export const upsertTarget = mutation((options: CreateHistorySyncRouterOptions, procedure) =>
+export const upsertTarget = mutation((options: HistorySyncRuntime, procedure) =>
   procedure
     .input(historySyncUpsertTargetInputSchema)
     .output(historySyncTargetMutationOutputSchema)
     .mutation(async ({ ctx, input }) => {
-      const runtime = runtimeForCall(options, ctx);
+      const runtime = runtimeForInternalRpcCall(options, ctx);
       const target = await upsertManualHistorySyncTargetFromCommand(runtime.database, input);
 
       runtime.eventBus.publish(

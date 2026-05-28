@@ -2,7 +2,7 @@ import type { Server } from 'node:http';
 
 import type { EventBus, EventSubscription } from '@agentg/events/bus';
 import type { IntegrationEvent } from '@agentg/events/envelope';
-import { collectModelRefs } from '@agentg/rpc/model-refs';
+import { collectModelRefs } from '@agentg/framework/model-refs';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { createServiceDirectory } from '../src/registry.js';

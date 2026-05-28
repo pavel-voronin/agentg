@@ -18,7 +18,7 @@
   "dependencies": {
     "@agentg/control-plane-sdk": "file:../control-plane-sdk",
     "@agentg/events": "file:../events",
-    "@agentg/rpc": "file:../rpc",
+    "@agentg/framework": "file:../framework",
     "@agentg/service-directory": "file:../service-directory",
     "dotenv": "17.4.2",
     "nats": "^2.29.3",

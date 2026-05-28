@@ -17,7 +17,7 @@
   "dependencies": {
     "@agentg/events": "file:../events",
     "@agentg/infra": "file:../infra",
-    "@agentg/rpc": "file:../rpc",
+    "@agentg/framework": "file:../framework",
     "@trpc/client": "^11.17.0",
     "@trpc/server": "^11.17.0",
     "zod": "^4.4.1"

@@ -1,12 +1,9 @@
-import { query } from '@agentg/rpc/domain';
+import { query } from '@agentg/framework/domain';
 import { z } from 'zod';
 
-import type { TelegramRpcRuntime } from '../setup.js';
-import { listTelegramHistoryCoverage } from '../../history/coverage.js';
-import {
-  nonEmptyStringSchema,
-  telegramHistoryCoverageSegmentSchema
-} from '../../read-model/api.js';
+import type { TelegramRpcRuntime } from '../domain.js';
+import { listTelegramHistoryCoverage } from '../history/coverage.js';
+import { nonEmptyStringSchema, telegramHistoryCoverageSegmentSchema } from '../read-model/api.js';
 
 export const telegramGetHistoryCoverageInputSchema = z.object({
   chatId: nonEmptyStringSchema

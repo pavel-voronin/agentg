@@ -1,10 +1,10 @@
 import { createIntegrationEvent } from '@agentg/events/envelope';
-import { mutation } from '@agentg/rpc/domain';
+import { mutation, runtimeForInternalRpcCall } from '@agentg/framework/domain';
 import { z } from 'zod';
 
-import { historySyncRangeSchema, nonEmptyStringSchema } from '../../rangeSchema.js';
-import { deleteManualHistorySyncTargetFromCommand } from '../../targetCommands.js';
-import { runtimeForCall, type CreateHistorySyncRouterOptions } from '../setup.js';
+import { historySyncRangeSchema, nonEmptyStringSchema } from '../rangeSchema.js';
+import { deleteManualHistorySyncTargetFromCommand } from '../targetCommands.js';
+import type { HistorySyncRuntime } from '../domain.js';
 
 export const historySyncDeleteTargetInputSchema = z.object({
   targetId: nonEmptyStringSchema
@@ -27,12 +27,12 @@ export type HistorySyncDeleteTargetInput = z.infer<typeof historySyncDeleteTarge
 export type HistorySyncStoredTargetOutput = z.infer<typeof historySyncStoredTargetOutputSchema>;
 export type HistorySyncTargetMutationOutput = z.infer<typeof historySyncTargetMutationOutputSchema>;
 
-export const deleteTarget = mutation((options: CreateHistorySyncRouterOptions, procedure) =>
+export const deleteTarget = mutation((options: HistorySyncRuntime, procedure) =>
   procedure
     .input(historySyncDeleteTargetInputSchema)
     .output(historySyncTargetMutationOutputSchema)
     .mutation(async ({ ctx, input }) => {
-      const runtime = runtimeForCall(options, ctx);
+      const runtime = runtimeForInternalRpcCall(options, ctx);
       const target = await deleteManualHistorySyncTargetFromCommand(runtime.database, input);
 
       runtime.eventBus.publish(

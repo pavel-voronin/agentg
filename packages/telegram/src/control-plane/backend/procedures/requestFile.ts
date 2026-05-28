@@ -1,7 +1,7 @@
-import { mutation } from '@agentg/rpc/domain';
+import { mutation } from '@agentg/framework/domain';
 import { z } from 'zod';
 
-import type { TelegramRpcRuntime } from '../../../rpc/setup.js';
+import type { TelegramRpcRuntime } from '../../../domain.js';
 import {
   nonEmptyStringSchema,
   telegramFileOwnerModelRefSchema,

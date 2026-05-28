@@ -1,8 +1,8 @@
 import type { Server } from 'node:http';
 
-import { createInternalTrpcClient } from '@agentg/rpc/client';
-import { createInternalTrpcHttpServer } from '@agentg/rpc/http-server';
-import { createInternalTrpcService } from '@agentg/rpc/trpc';
+import { createInternalTrpcClient } from '@agentg/framework/client';
+import { createInternalTrpcHttpServer } from '@agentg/framework/http-server';
+import { createInternalTrpcService } from '@agentg/framework/trpc';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 

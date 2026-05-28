@@ -1,5 +1,25 @@
-import { telegramRpc } from '../rpc/setup.js';
-import { createTelegramControlPlane } from '../control-plane/manifest.js';
+import type { EventBus } from '@agentg/events/bus';
+import { defineDomain } from '@agentg/framework/domain';
+
+import type { TelegramDatabase } from './database/client.js';
+import { createTelegramControlPlane } from './control-plane/manifest.js';
+import { chatDirectory } from './control-plane/backend/procedures/chatDirectory.js';
+import { fileQueueStats } from './control-plane/backend/procedures/fileQueueStats.js';
+import { message } from './control-plane/backend/procedures/message.js';
+import { messagesPage } from './control-plane/backend/procedures/messagesPage.js';
+import { requestFile } from './control-plane/backend/procedures/requestFile.js';
+import type { TelegramFileSubsystem } from './files/subsystem.js';
+import { countMessagesInIntervals } from './rpc/countMessagesInIntervals.js';
+import { ensureHistoryCoverage } from './rpc/ensureHistoryCoverage.js';
+import { fetchPage } from './rpc/fetchPage.js';
+import { getChat } from './rpc/getChat.js';
+import { getChatHistoryFacts } from './rpc/getChatHistoryFacts.js';
+import { getHistoryCoverage } from './rpc/getHistoryCoverage.js';
+import { listChats } from './rpc/listChats.js';
+import { listRecentMessages } from './rpc/listRecentMessages.js';
+import { searchMessages } from './rpc/searchMessages.js';
+import { createTelegramTdlibOperations, type TelegramTdlibOperations } from './tdlib/operations.js';
+import type { TdlibInvoker } from './tdlib/operationEvents.js';
 
 const TELEGRAM_OPERATION_EVENT_TYPES = [
   'telegram.login.completed',
@@ -144,21 +164,55 @@ export const TELEGRAM_EVENT_TYPES = [
   ...TELEGRAM_TDLIB_EVENT_TYPES
 ].sort();
 
-export function createTelegramServiceManifest(config: {
-  controlPlaneAssetVersion: string;
-  controlPlaneAssetVersions: Readonly<Record<string, string>>;
-  rpcUrl: string;
-}) {
+export type TelegramRpcRuntimeDeps = {
+  client: TdlibInvoker;
+  database: TelegramDatabase;
+  eventBus: EventBus;
+  files: TelegramFileSubsystem;
+};
+
+export type TelegramRpcRuntime = TelegramRpcRuntimeDeps & {
+  tdlib: TelegramTdlibOperations;
+};
+
+export const telegramDomain = defineDomain({
+  controlPlane: ({ assetVersion, assetVersions }) =>
+    createTelegramControlPlane(assetVersion, assetVersions),
+  createRuntime: createTelegramRpcRuntime,
+  events: TELEGRAM_EVENT_TYPES,
+  procedures: {
+    'cp.chatDirectory': chatDirectory,
+    'cp.fileQueueStats': fileQueueStats,
+    'cp.message': message,
+    'cp.messagesPage': messagesPage,
+    'cp.requestFile': requestFile,
+    countMessagesInIntervals,
+    ensureHistoryCoverage,
+    fetchPage,
+    getChat,
+    getChatHistoryFacts,
+    getHistoryCoverage,
+    listChats,
+    listRecentMessages,
+    searchMessages
+  },
+  required: true,
+  slug: 'telegram'
+});
+
+export const createTelegramRpcClient = telegramDomain.createRpcClient;
+export type TelegramRpcClient = ReturnType<typeof createTelegramRpcClient>;
+export const createTelegramServiceManifest = (
+  config: Parameters<typeof telegramDomain.createServiceManifest>[0]
+) => telegramDomain.createServiceManifest(config);
+export type TelegramRouter = ReturnType<typeof telegramDomain.createRpcRouter>;
+
+function createTelegramRpcRuntime(deps: TelegramRpcRuntimeDeps): TelegramRpcRuntime {
   return {
-    controlPlane: createTelegramControlPlane(
-      config.controlPlaneAssetVersion,
-      config.controlPlaneAssetVersions
-    ),
-    events: TELEGRAM_EVENT_TYPES,
-    extensions: [],
-    procedures: telegramRpc.procedures(),
-    required: true,
-    rpcUrl: config.rpcUrl,
-    slug: 'telegram'
+    ...deps,
+    tdlib: createTelegramTdlibOperations({
+      client: deps.client,
+      eventBus: deps.eventBus
+    })
   };
 }

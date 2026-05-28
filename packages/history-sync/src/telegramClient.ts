@@ -1,7 +1,7 @@
-import { createTelegramRpcClient, type TelegramRpcClient } from '@agentg/telegram/rpc';
-import type { InternalRpcCallOptions } from '@agentg/rpc/call-options';
+import { createTelegramRpcClient, type TelegramRpcClient } from '@agentg/telegram/domain';
+import type { InternalRpcCallOptions } from '@agentg/framework/call-options';
 
-import type { InternalTrpcClientConfig } from '@agentg/rpc/config';
+import type { InternalTrpcClientConfig } from '@agentg/framework/config';
 
 type TelegramRpcProcedureName = Exclude<keyof TelegramRpcClient, 'close'>;
 

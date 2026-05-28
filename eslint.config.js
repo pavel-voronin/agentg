@@ -33,7 +33,7 @@ export default tseslint.config(
     files: ['packages/**/*.ts'],
     ignores: [
       'packages/*/src/rpc/trpc.ts',
-      'packages/rpc/src/trpc.ts',
+      'packages/framework/src/trpc.ts',
       'packages/*/tests/trpcTest.ts'
     ],
     rules: {

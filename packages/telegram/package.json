@@ -7,10 +7,10 @@
     "./control-plane": "./src/control-plane/index.ts",
     "./integration-events": "./src/events/contracts.ts",
     "./model-refs": "./src/model/refs.ts",
-    "./rpc": "./src/rpc/index.ts"
+    "./domain": "./src/domain.ts"
   },
   "scripts": {
-    "dev": "tsx watch --clear-screen=false src/app/main.ts",
+    "dev": "tsx watch --clear-screen=false src/main.ts",
     "dev:control-plane-assets": "vite build --watch --config viteControlPlane.config.ts",
     "db:generate": "node ../../scripts/telegramDbSchemaGenerate.mjs",
     "db:migrate": "tsx src/database/migrateMain.ts",
@@ -27,7 +27,7 @@
     "@agentg/database": "file:../database",
     "@agentg/events": "file:../events",
     "@agentg/infra": "file:../infra",
-    "@agentg/rpc": "file:../rpc",
+    "@agentg/framework": "file:../framework",
     "@agentg/service-directory": "file:../service-directory",
     "@prebuilt-tdlib/types": "0.1008063.0",
     "dotenv": "17.4.2",

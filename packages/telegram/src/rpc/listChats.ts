@@ -1,20 +1,20 @@
-import { query } from '@agentg/rpc/domain';
+import { query } from '@agentg/framework/domain';
 import { z } from 'zod';
 import type { ChatList$Input } from 'tdlib-types';
-import type { TelegramRpcRuntime } from '../setup.js';
+import type { TelegramRpcRuntime } from '../domain.js';
 import { asc } from 'drizzle-orm';
 import {
   telegramChatFolderInfos,
   telegramChatPositions,
   telegramChats
-} from '../../database/schema.js';
-import { storeChat, telegramChatType } from '../../store/chat.js';
-import { storeMessage } from '../../store/message.js';
-import { readChatSelection, toTelegramChatStorageRow } from '../../read-model/chat.js';
-import { isListableTelegramChat } from '../../read-model/chatPlacements.js';
-import { telegramTdlibPriorities } from '../../tdlib/priority.js';
-import { telegramWireJsonObject } from '../../tdlib/wire.js';
-import { parseLimit } from '@agentg/rpc/input';
+} from '../database/schema.js';
+import { storeChat, telegramChatType } from '../store/chat.js';
+import { storeMessage } from '../store/message.js';
+import { readChatSelection, toTelegramChatStorageRow } from '../read-model/chat.js';
+import { isListableTelegramChat } from '../read-model/chatPlacements.js';
+import { telegramTdlibPriorities } from '../tdlib/priority.js';
+import { telegramWireJsonObject } from '../tdlib/wire.js';
+import { parseLimit } from '@agentg/framework/input';
 
 export const telegramHistoryChatSchema = z.object({
   _model: z.literal('telegram.chat'),

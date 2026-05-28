@@ -6,7 +6,7 @@ import {
   createTelegramServiceManifest,
   TELEGRAM_EVENT_TYPES,
   TELEGRAM_TDLIB_EVENT_TYPES
-} from '../src/app/registrations.js';
+} from '../src/domain.js';
 
 describe('Telegram service manifest', () => {
   it('lists exact Telegram events without wildcard types', () => {
@@ -17,9 +17,11 @@ describe('Telegram service manifest', () => {
       },
       rpcUrl: 'http://telegram.local'
     });
+    const controlPlane = manifest.controlPlane;
 
-    expect(manifest.controlPlane.assetVersion).toBe('asset-v1');
-    expect(manifest.controlPlane.assetVersions).toEqual({
+    expect(controlPlane).toBeDefined();
+    expect(controlPlane?.assetVersion).toBe('asset-v1');
+    expect(controlPlane?.assetVersions).toEqual({
       'workspace.js': 'workspace-v1'
     });
     expect(manifest.events).toEqual(TELEGRAM_EVENT_TYPES);

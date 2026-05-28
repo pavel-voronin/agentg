@@ -1,14 +1,14 @@
-import { mutation } from '@agentg/rpc/domain';
+import { mutation } from '@agentg/framework/domain';
 import { z } from 'zod';
 
-import type { TelegramRpcRuntime } from '../setup.js';
-import { ensureTelegramHistoryCoverage } from '../../history/fetch.js';
+import type { TelegramRpcRuntime } from '../domain.js';
+import { ensureTelegramHistoryCoverage } from '../history/fetch.js';
 import {
   isoDateTimeStringSchema,
   nonNegativeIntegerSchema,
   positiveIntegerSchema,
   telegramHistoryIntervalSchema
-} from '../../read-model/api.js';
+} from '../read-model/api.js';
 
 export const telegramEnsureHistoryCoverageInputSchema = z.object({
   chatId: z.string().min(1),

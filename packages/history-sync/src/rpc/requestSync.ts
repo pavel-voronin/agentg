@@ -1,9 +1,9 @@
 import { createIntegrationEvent } from '@agentg/events/envelope';
-import { mutation } from '@agentg/rpc/domain';
+import { mutation, runtimeForInternalRpcCall } from '@agentg/framework/domain';
 import { z } from 'zod';
 
-import { nonEmptyStringSchema } from '../../rangeSchema.js';
-import { runtimeForCall, type CreateHistorySyncRouterOptions } from '../setup.js';
+import { nonEmptyStringSchema } from '../rangeSchema.js';
+import type { HistorySyncRuntime } from '../domain.js';
 
 export const historySyncRequestSyncInputSchema = z
   .object({
@@ -18,12 +18,12 @@ export const historySyncRequestSyncOutputSchema = z.object({
 export type HistorySyncRequestSyncInput = z.infer<typeof historySyncRequestSyncInputSchema>;
 export type HistorySyncRequestSyncOutput = z.infer<typeof historySyncRequestSyncOutputSchema>;
 
-export const requestSync = mutation((options: CreateHistorySyncRouterOptions, procedure) =>
+export const requestSync = mutation((options: HistorySyncRuntime, procedure) =>
   procedure
     .input(historySyncRequestSyncInputSchema)
     .output(historySyncRequestSyncOutputSchema)
     .mutation(({ ctx, input }) => {
-      const runtime = runtimeForCall(options, ctx);
+      const runtime = runtimeForInternalRpcCall(options, ctx);
       runtime.eventBus.publish(
         createIntegrationEvent({
           data: {

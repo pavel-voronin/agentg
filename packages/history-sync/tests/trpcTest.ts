@@ -1,4 +1,4 @@
-import { createInternalTrpcService } from '@agentg/rpc/trpc';
+import { createInternalTrpcService } from '@agentg/framework/trpc';
 
 const testRpcService = createInternalTrpcService('test');
 

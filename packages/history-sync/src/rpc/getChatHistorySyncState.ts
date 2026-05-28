@@ -1,16 +1,16 @@
-import { query } from '@agentg/rpc/domain';
+import { query, runtimeForInternalRpcCall } from '@agentg/framework/domain';
 import { asc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 
-import { subtractIntervals } from '../../ranges.js';
+import { subtractIntervals } from '../ranges.js';
 import {
   historySyncRangeSchema,
   isoDateTimeStringSchema,
   nonEmptyStringSchema
-} from '../../rangeSchema.js';
-import { projectTargetsForChat } from '../../reconciler.js';
-import { historySyncTargets } from '../../schema.js';
-import { runtimeForCall, type CreateHistorySyncRouterOptions } from '../setup.js';
+} from '../rangeSchema.js';
+import { projectTargetsForChat } from '../reconciler.js';
+import { historySyncTargets } from '../schema.js';
+import type { HistorySyncRuntime } from '../domain.js';
 import {
   clipIntervalsForDisplay,
   currentHistorySyncProjectionContext,
@@ -20,7 +20,7 @@ import {
   requireTelegramReadClient,
   toHistorySyncTarget,
   toTargetResponse
-} from './support.js';
+} from '../readModel.js';
 
 export const historySyncGetChatHistorySyncStateInputSchema = z.object({
   chatId: nonEmptyStringSchema
@@ -70,12 +70,12 @@ export type HistorySyncChatHistorySyncStateOutput = z.infer<
 export type HistorySyncIntervalOutput = z.infer<typeof historySyncIntervalOutputSchema>;
 export type HistorySyncTargetOutput = z.infer<typeof historySyncTargetOutputSchema>;
 
-export const getChatHistorySyncState = query((options: CreateHistorySyncRouterOptions, procedure) =>
+export const getChatHistorySyncState = query((options: HistorySyncRuntime, procedure) =>
   procedure
     .input(historySyncGetChatHistorySyncStateInputSchema)
     .output(historySyncChatHistorySyncStateOutputSchema)
     .query(async ({ ctx, input }) => {
-      const runtime = runtimeForCall(options, ctx);
+      const runtime = runtimeForInternalRpcCall(options, ctx);
       const telegram = requireTelegramReadClient(runtime);
       const chatId = input.chatId;
       const [facts, telegramCoverage] = await Promise.all([

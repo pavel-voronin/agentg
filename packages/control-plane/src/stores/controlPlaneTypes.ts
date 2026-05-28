@@ -3,8 +3,8 @@ import {
   rpcCallEventTarget,
   rpcCallEventTypesForProcedure,
   rpcCallEventType
-} from '@agentg/rpc/call-event-types';
-import type { RpcCallEventSuffix } from '@agentg/rpc/call-event-types';
+} from '@agentg/framework/call-event-types';
+import type { RpcCallEventSuffix } from '@agentg/framework/call-event-types';
 
 export const DEFAULT_EVENT_LIMIT = 200;
 export const DEFAULT_EVENT_YAML_LIST_LIMIT = 12;

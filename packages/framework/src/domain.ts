@@ -85,6 +85,44 @@ export type InternalRpcDomainClient<
   [Name in keyof Procedures]: InternalRpcClientProcedure<ReturnType<Procedures[Name]['create']>>;
 };
 
+export type DomainControlPlaneConfig = {
+  assetVersion: string;
+  assetVersions: Readonly<Record<string, string>>;
+};
+
+export type DomainServiceManifestConfig = {
+  controlPlaneAssetVersion: string;
+  controlPlaneAssetVersions: Readonly<Record<string, string>>;
+  rpcUrl: string;
+};
+
+export type DomainExtension = {
+  extension: string;
+  target: string;
+};
+
+export type DomainServiceManifest<ControlPlane> = {
+  controlPlane?: ControlPlane | undefined;
+  events: string[];
+  extensions: DomainExtension[];
+  procedures: InternalRpcProcedureRecord[];
+  required: boolean;
+  rpcUrl: string;
+  slug: string;
+};
+
+export type DomainDefinitionOptions<
+  Deps,
+  Runtime,
+  Procedures extends InternalRpcProcedureMap<Runtime>,
+  ControlPlane
+> = InternalRpcDomainOptions<Deps, Runtime, Procedures> & {
+  controlPlane?(config: DomainControlPlaneConfig): ControlPlane;
+  events: readonly string[];
+  extensions?: readonly DomainExtension[];
+  required?: boolean;
+};
+
 type InternalTrpcClientProcedure = {
   mutate(
     input: unknown,
@@ -203,6 +241,61 @@ export function defineInternalRpcDomain<
     },
     startServer,
     stopServer
+  };
+}
+
+export function defineDomain<
+  Deps,
+  Runtime,
+  const Procedures extends InternalRpcProcedureMap<Runtime>,
+  ControlPlane = unknown
+>(options: DomainDefinitionOptions<Deps, Runtime, Procedures, ControlPlane>) {
+  const rpc = defineInternalRpcDomain(options);
+
+  return {
+    createContext: rpc.createContext,
+    createRpcClient: rpc.createClient,
+    createRpcRouter: rpc.createRouter,
+    createServiceManifest(
+      config: DomainServiceManifestConfig
+    ): DomainServiceManifest<ControlPlane> {
+      return {
+        ...(options.controlPlane === undefined
+          ? {}
+          : {
+              controlPlane: options.controlPlane({
+                assetVersion: config.controlPlaneAssetVersion,
+                assetVersions: config.controlPlaneAssetVersions
+              })
+            }),
+        events: [...options.events].sort(),
+        extensions: [...(options.extensions ?? [])],
+        procedures: rpc.procedures(),
+        required: options.required ?? true,
+        rpcUrl: config.rpcUrl,
+        slug: options.slug
+      };
+    },
+    events: [...options.events].sort(),
+    rpcProcedures: () => rpc.procedures(),
+    slug: options.slug,
+    startRpcServer: (serverOptions: InternalRpcDomainServerOptions<Deps>) =>
+      rpc.startServer(serverOptions),
+    stopRpcServer: (server: Server) => rpc.stopServer(server)
+  };
+}
+
+export function runtimeForInternalRpcCall<Runtime extends { eventBus: EventBus }>(
+  runtime: Runtime,
+  ctx: InternalTrpcContext
+): Runtime {
+  if (ctx.eventBus === undefined || ctx.eventBus === runtime.eventBus) {
+    return runtime;
+  }
+
+  return {
+    ...runtime,
+    eventBus: ctx.eventBus
   };
 }
 

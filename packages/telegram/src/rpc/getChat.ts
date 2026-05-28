@@ -1,16 +1,16 @@
-import { query } from '@agentg/rpc/domain';
+import { query } from '@agentg/framework/domain';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
-import type { TelegramRpcRuntime } from '../setup.js';
-import { telegramChats } from '../../database/schema.js';
-import { readTelegramFileRefsForOwners } from '../../files/read.js';
-import { readChatSelection, toTelegramChatStorageRow } from '../../read-model/chat.js';
+import type { TelegramRpcRuntime } from '../domain.js';
+import { telegramChats } from '../database/schema.js';
+import { readTelegramFileRefsForOwners } from '../files/read.js';
+import { readChatSelection, toTelegramChatStorageRow } from '../read-model/chat.js';
 import {
   nonEmptyStringSchema,
   telegramReadChatSchema,
   type TelegramFileRef
-} from '../../read-model/api.js';
+} from '../read-model/api.js';
 
 export const telegramGetChatInputSchema = z.object({
   chatId: nonEmptyStringSchema

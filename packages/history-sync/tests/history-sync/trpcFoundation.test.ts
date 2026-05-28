@@ -8,10 +8,10 @@ import {
   RPC_CALL_PROGRESS_EVENT_SUFFIX,
   RPC_CALL_STARTED_EVENT_SUFFIX,
   rpcCallEventType
-} from '@agentg/rpc/call-events';
-import { createInternalTrpcClient } from '@agentg/rpc/client';
-import { createInternalTrpcHttpServer } from '@agentg/rpc/http-server';
-import { createInternalTrpcService } from '@agentg/rpc/trpc';
+} from '@agentg/framework/call-events';
+import { createInternalTrpcClient } from '@agentg/framework/client';
+import { createInternalTrpcHttpServer } from '@agentg/framework/http-server';
+import { createInternalTrpcService } from '@agentg/framework/trpc';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 

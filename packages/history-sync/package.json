@@ -5,7 +5,7 @@
   "type": "module",
   "exports": {
     "./control-plane": "./src/control-plane/index.ts",
-    "./rpc": "./src/rpc/index.ts"
+    "./domain": "./src/domain.ts"
   },
   "scripts": {
     "dev": "tsx watch --clear-screen=false src/main.ts",
@@ -25,7 +25,7 @@
     "@agentg/database": "file:../database",
     "@agentg/events": "file:../events",
     "@agentg/infra": "file:../infra",
-    "@agentg/rpc": "file:../rpc",
+    "@agentg/framework": "file:../framework",
     "@agentg/service-directory": "file:../service-directory",
     "@agentg/telegram": "file:../telegram",
     "dotenv": "17.4.2",

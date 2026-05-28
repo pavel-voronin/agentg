@@ -1,14 +1,14 @@
-import { query } from '@agentg/rpc/domain';
+import { query } from '@agentg/framework/domain';
 import { z } from 'zod';
 
-import type { TelegramRpcRuntime } from '../setup.js';
-import { countTelegramMessagesInIntervals } from '../../history/messageCounts.js';
-import { requireDate } from '../../history/time.js';
+import type { TelegramRpcRuntime } from '../domain.js';
+import { countTelegramMessagesInIntervals } from '../history/messageCounts.js';
+import { requireDate } from '../history/time.js';
 import {
   isoDateTimeStringSchema,
   nonEmptyStringSchema,
   nonNegativeIntegerSchema
-} from '../../read-model/api.js';
+} from '../read-model/api.js';
 
 export const telegramCountMessagesInIntervalsInputSchema = z.object({
   chatId: nonEmptyStringSchema,

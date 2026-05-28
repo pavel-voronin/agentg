@@ -1,20 +1,20 @@
-import { query } from '@agentg/rpc/domain';
+import { query } from '@agentg/framework/domain';
 import { z } from 'zod';
 
-import type { TelegramRpcRuntime } from '../setup.js';
+import type { TelegramRpcRuntime } from '../domain.js';
 import { and, desc, eq, ilike, sql } from 'drizzle-orm';
-import { telegramMessages } from '../../database/schema.js';
+import { telegramMessages } from '../database/schema.js';
 import {
   messageTextExpression,
   readMessageSelection,
   toReadMessages
-} from '../../read-model/message.js';
-import { parseLimit } from '@agentg/rpc/input';
+} from '../read-model/message.js';
+import { parseLimit } from '@agentg/framework/input';
 import {
   nonEmptyStringSchema,
   positiveIntegerSchema,
   telegramReadMessageSchema
-} from '../../read-model/api.js';
+} from '../read-model/api.js';
 
 export const telegramSearchMessagesInputSchema = z.object({
   chatId: nonEmptyStringSchema.optional(),

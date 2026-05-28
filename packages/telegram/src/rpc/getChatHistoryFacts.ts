@@ -1,18 +1,18 @@
-import { query } from '@agentg/rpc/domain';
+import { query } from '@agentg/framework/domain';
 import { z } from 'zod';
 
-import type { TelegramRpcRuntime } from '../setup.js';
+import type { TelegramRpcRuntime } from '../domain.js';
 import { and, asc, eq, isNotNull, sql } from 'drizzle-orm';
-import type { TelegramDatabase } from '../../database/client.js';
-import { telegramChatPositions, telegramChats, telegramMessages } from '../../database/schema.js';
-import { readChatSelection, toTelegramChatStorageRow } from '../../read-model/chat.js';
-import { readTelegramChatUsersByChat, telegramChatUserId } from '../../read-model/chatUser.js';
-import { toNullableIsoString } from '../../read-model/dates.js';
+import type { TelegramDatabase } from '../database/client.js';
+import { telegramChatPositions, telegramChats, telegramMessages } from '../database/schema.js';
+import { readChatSelection, toTelegramChatStorageRow } from '../read-model/chat.js';
+import { readTelegramChatUsersByChat, telegramChatUserId } from '../read-model/chatUser.js';
+import { toNullableIsoString } from '../read-model/dates.js';
 import {
   isoDateTimeStringSchema,
   nonEmptyStringSchema,
   nonNegativeIntegerSchema
-} from '../../read-model/api.js';
+} from '../read-model/api.js';
 
 export const telegramChatHistoryFactsChatSchema = z.object({
   _model: z.literal('telegram.chat'),

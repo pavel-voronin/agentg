@@ -48,7 +48,7 @@ exposes only:
 
 It does not expose request/reply, responder, inbox, or service APIs. Source audit
 after the tRPC migration found no runtime use of NATS request/reply APIs in
-Telegram, History Sync, Gateway, Control Plane, `@agentg/events`, `@agentg/rpc`,
+Telegram, History Sync, Gateway, Control Plane, `@agentg/events`, `@agentg/framework`,
 or `@agentg/infra`.
 
 ## Current Subjects
@@ -149,15 +149,14 @@ After reconnecting, consumers must rebuild state through these surfaces:
 
 Internal RPC contracts are owned by the serving domain package:
 
-- Telegram owns `@agentg/telegram/rpc`, whose only public export is
-  `createTelegramRpcClient`. The helper returns the explicit Telegram
-  procedures used by typed internal callers. The
-  Telegram schemas, router, server bind config, storage schema, ingestion,
-  normalization, and TDLib plumbing remain package-internal.
-- History Sync owns `@agentg/history-sync/rpc`, whose only public export is
-  `createHistorySyncRpcClient`. The helper returns the explicit History Sync procedures
-  used by typed internal callers. The History Sync schemas, router, server bind config,
-  storage schema, commands, and domain types remain package-internal.
+- Telegram owns `@agentg/telegram/domain`, whose public domain entry exposes
+  the typed RPC client and service manifest factory. The Telegram schemas,
+  router, server bind config, storage schema, ingestion, normalization, and
+  TDLib plumbing remain package-internal.
+- History Sync owns `@agentg/history-sync/domain`, whose public domain entry
+  exposes the typed RPC client and service manifest factory. The History Sync
+  schemas, router, server bind config, storage schema, commands, and domain
+  types remain package-internal.
 - Modules own package-local RPC contracts. Module schemas, routers, server bind
   config, storage schema, registrations, and service runtime remain
   package-internal.
@@ -169,7 +168,7 @@ directly.
 
 There is no shared internal domain RPC contracts package. Cross-cutting helpers
 are split by owner: `@agentg/events` owns the event bus, event envelope, and
-JSON value helpers; `@agentg/rpc` owns RPC call lifecycle helpers and model
+JSON value helpers; `@agentg/framework` owns RPC call lifecycle helpers and model
 markers; `@agentg/infra` owns runtime config helpers.
 
 ## Removed Command Subjects

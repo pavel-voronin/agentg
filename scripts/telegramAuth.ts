@@ -3,7 +3,7 @@ import { createInterface } from 'node:readline/promises';
 
 import type { LoginDetails } from 'tdl';
 
-import { loadTelegramIngestionConfig } from '../packages/telegram/src/app/config.js';
+import { loadTelegramIngestionConfig } from '../packages/telegram/src/config.js';
 import {
   configureTdlib,
   createTelegramClient,

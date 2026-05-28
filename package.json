@@ -5,7 +5,7 @@
   "type": "module",
   "workspaces": [
     "packages/events",
-    "packages/rpc",
+    "packages/framework",
     "packages/infra",
     "packages/control-plane-sdk",
     "packages/database",

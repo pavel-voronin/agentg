@@ -2,7 +2,7 @@ FROM node:24-bookworm-slim AS deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
 COPY packages/events/package.json packages/events/package.json
-COPY packages/rpc/package.json packages/rpc/package.json
+COPY packages/framework/package.json packages/framework/package.json
 COPY packages/infra/package.json packages/infra/package.json
 COPY packages/control-plane-sdk/package.json packages/control-plane-sdk/package.json
 COPY packages/database/package.json packages/database/package.json
@@ -25,7 +25,7 @@ WORKDIR /app
 RUN groupadd --system agentg && useradd --system --gid agentg --home-dir /app agentg
 COPY package.json package-lock.json* ./
 COPY packages/events/package.json packages/events/package.json
-COPY packages/rpc/package.json packages/rpc/package.json
+COPY packages/framework/package.json packages/framework/package.json
 COPY packages/infra/package.json packages/infra/package.json
 COPY packages/control-plane-sdk/package.json packages/control-plane-sdk/package.json
 COPY packages/database/package.json packages/database/package.json
