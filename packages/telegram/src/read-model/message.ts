@@ -8,14 +8,15 @@ import { inArray, sql } from 'drizzle-orm';
 
 import type { TelegramDatabase } from '../database.js';
 import { telegramChats, telegramMessages, telegramUsers } from '../schema.js';
-import {
-  ownerKey,
-  readTelegramFileRefsForOwners,
-  type TelegramFileOwnerKey
-} from '../fileRead.js';
-import type { TelegramFileRef, TelegramReadMessage } from '../rpc/contracts.js';
+import { ownerKey, readTelegramFileRefsForOwners, type TelegramFileOwnerKey } from '../fileRead.js';
+import type {
+  TelegramFileRef,
+  TelegramMessageTextEntity,
+  TelegramReadMessage
+} from '../rpc/contracts.js';
 import { toNullableIsoString, type TelegramDateLike } from './dates.js';
 import { asPlainRecord, parseNonNegativeBigInt, stringifyTelegramId } from './chat.js';
+import { extractFormattedTextLinkEntities, formattedTextValue } from '../messageText.js';
 
 export type TelegramMessageStorageRow = {
   contentType: string;
@@ -30,6 +31,7 @@ export type TelegramMessageStorageRow = {
   telegramChatId: string;
   telegramMessageId: string;
   text: string | null;
+  textEntities: JsonValue | null;
 };
 
 type TelegramSenderRow = {
@@ -56,12 +58,26 @@ export function readMessageSelection() {
     senderType: sql<string | null>`${telegramMessages.senderId}->>'_'`,
     telegramChatId: telegramMessages.chatId,
     telegramMessageId: telegramMessages.id,
-    text: messageTextExpression()
+    text: messageTextExpression(),
+    textEntities: messageTextEntitiesExpression()
   };
 }
 
 export function messageTextExpression() {
-  return sql<string | null>`${telegramMessages.content}->'text'->>'text'`;
+  return sql<string | null>`coalesce(
+    ${telegramMessages.content}->'text'->>'text',
+    ${telegramMessages.content}->'caption'->>'text'
+  )`;
+}
+
+export function messageTextEntitiesExpression() {
+  return sql<JsonValue | null>`case
+    when ${telegramMessages.content}->'text'->>'text' is not null
+      then ${telegramMessages.content}->'text'->'entities'
+    when ${telegramMessages.content}->'caption'->>'text' is not null
+      then ${telegramMessages.content}->'caption'->'entities'
+    else null
+  end`;
 }
 
 export function toReadMessage(
@@ -92,8 +108,21 @@ export function toReadMessage(
     serviceAction: null,
     telegramMessageId: message.telegramMessageId,
     text: message.text,
-    textEntities: []
+    textEntities: messageTextEntitiesFromStorage(message.text, message.textEntities)
   };
+}
+
+export function messageTextEntitiesFromStorage(
+  text: string | null,
+  entities: JsonValue | null | undefined
+): TelegramMessageTextEntity[] {
+  if (text === null) {
+    return [];
+  }
+  return extractFormattedTextLinkEntities({
+    entities: Array.isArray(entities) ? entities : [],
+    text
+  });
 }
 
 export async function toReadMessages(
@@ -308,12 +337,6 @@ function telegramMessageContentLabel(content: Record<string, unknown>): string |
     default:
       return null;
   }
-}
-
-function formattedTextValue(value: unknown): string | null {
-  const formattedText = asPlainRecord(value);
-  const text = typeof formattedText?.text === 'string' ? formattedText.text.trim() : '';
-  return text.length === 0 ? null : text;
 }
 
 function nestedTitle(value: unknown, fallback: string): string {
