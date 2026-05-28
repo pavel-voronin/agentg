@@ -1,4 +1,4 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 
 import type { JsonObject, JsonValue } from '@agentg/events/json';
 
@@ -187,21 +187,42 @@ export async function replaceMessageReactionSummaries(
       )
     );
 
-  const rows = input.reactions.map((reaction) => ({
-    chatId: input.chatId,
-    isChosen: reaction.is_chosen,
-    messageId: input.messageId,
-    reactionType: reactionTypeKey(reaction.type),
-    recentSenderIds: requiredTelegramWireJsonValue(reaction.recent_sender_ids),
-    totalCount: reaction.total_count,
-    usedSenderId: requiredTelegramWireJsonValue(reaction.used_sender_id ?? null)
-  }));
+  const rowsByReactionType = new Map<string, typeof telegramMessageReactions.$inferInsert>();
+  for (const reaction of input.reactions) {
+    const reactionType = reactionTypeKey(reaction.type);
+    rowsByReactionType.set(reactionType, {
+      chatId: input.chatId,
+      isChosen: reaction.is_chosen,
+      messageId: input.messageId,
+      reactionType,
+      recentSenderIds: requiredTelegramWireJsonValue(reaction.recent_sender_ids),
+      totalCount: reaction.total_count,
+      usedSenderId: requiredTelegramWireJsonValue(reaction.used_sender_id ?? null)
+    });
+  }
+
+  const rows = [...rowsByReactionType.values()];
 
   if (rows.length === 0) {
     return;
   }
 
-  await database.insert(telegramMessageReactions).values(rows);
+  await database
+    .insert(telegramMessageReactions)
+    .values(rows)
+    .onConflictDoUpdate({
+      set: {
+        isChosen: sql`excluded.is_chosen`,
+        recentSenderIds: sql`excluded.recent_sender_ids`,
+        totalCount: sql`excluded.total_count`,
+        usedSenderId: sql`excluded.used_sender_id`
+      },
+      target: [
+        telegramMessageReactions.chatId,
+        telegramMessageReactions.messageId,
+        telegramMessageReactions.reactionType
+      ]
+    });
 }
 
 export async function replaceActiveLiveLocationMessageSet(
