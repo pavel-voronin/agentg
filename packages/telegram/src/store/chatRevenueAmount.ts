@@ -1,5 +1,5 @@
-import type { TelegramDatabase } from '../database.js';
-import { telegramChatRevenueAmounts } from '../schema.js';
+import type { TelegramDatabase } from '../database/client.js';
+import { telegramChatRevenueAmounts } from '../database/schema.js';
 import type { TelegramWireUpdateByType } from '../tdlib/wire.js';
 
 type TelegramWireChatRevenueAmountUpdate = TelegramWireUpdateByType<'updateChatRevenueAmount'>;

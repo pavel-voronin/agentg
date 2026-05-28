@@ -1,13 +1,13 @@
 import type { JsonValue } from '@agentg/events/json';
 
-import type { TelegramDatabase } from '../database.js';
+import type { TelegramDatabase } from '../database/client.js';
 import {
   telegramFiles,
   telegramGiftAuctionStates,
   telegramGiftAuctions,
   telegramGifts,
   telegramStickers
-} from '../schema.js';
+} from '../database/schema.js';
 import {
   telegramWireJsonObject,
   telegramWireJsonValue,

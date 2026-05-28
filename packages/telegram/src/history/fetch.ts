@@ -1,6 +1,6 @@
-import { createTelegramHistoryCoverageChangedEvent } from './integrationEvents.js';
+import { createTelegramHistoryCoverageChangedEvent } from '../events/contracts.js';
 
-import { recordMessageFiles, storeMessage } from './store/message.js';
+import { recordMessageFiles, storeMessage } from '../store/message.js';
 import {
   addTelegramHistoryCoverageBatch,
   listTelegramHistoryCoverage,
@@ -10,7 +10,7 @@ import {
   withTelegramHistoryCoverageLocks,
   writeTelegramHistoryCoverageInTransaction,
   type TelegramHistoryCoverageInterval
-} from './historyCoverage.js';
+} from './coverage.js';
 import { countTelegramMessagesInIntervals } from './messageCounts.js';
 import {
   floorToTelegramSecond,
@@ -18,16 +18,16 @@ import {
   TELEGRAM_HISTORY_PAST_BOUNDARY,
   TELEGRAM_HISTORY_TICK_MS,
   type TelegramHistoryInterval
-} from './historyTime.js';
+} from './time.js';
 import type {
   TelegramEnsureHistoryCoverageOutput,
   TelegramHistoryFetchPageRequest,
   TelegramHistoryFetchPageResult
-} from './rpc/contracts.js';
-import type { TelegramRpcRuntime } from './rpc/runtime.js';
-import { parseLimit, requireDate } from './procedureInputs.js';
-import { telegramTdlibPriorities, type TelegramTdlibPriority } from './tdlib/priority.js';
-import { telegramWireDate, telegramWireIdNumber, type TelegramWireMessage } from './tdlib/wire.js';
+} from '../rpc/contracts.js';
+import type { TelegramRpcRuntime } from '../rpc/runtime.js';
+import { parseLimit, requireDate } from '../procedure-runtime/inputs.js';
+import { telegramTdlibPriorities, type TelegramTdlibPriority } from '../tdlib/priority.js';
+import { telegramWireDate, telegramWireIdNumber, type TelegramWireMessage } from '../tdlib/wire.js';
 
 export type TelegramHistoryPageCheckpointInput = {
   crossedStart: boolean;

@@ -1,5 +1,5 @@
-import type { TelegramDatabase } from '../database.js';
-import { telegramUsers } from '../schema.js';
+import type { TelegramDatabase } from '../database/client.js';
+import { telegramUsers } from '../database/schema.js';
 import { telegramWireJsonObject, type TelegramWireUpdateByType } from '../tdlib/wire.js';
 
 type TelegramWireUserStatus = TelegramWireUpdateByType<'updateUserStatus'>['status'];

@@ -4,7 +4,7 @@ import {
   telegramFileMediaKinds,
   telegramFileRenderKinds,
   telegramFileStatuses
-} from '../fileTypes.js';
+} from '../files/types.js';
 
 const nonEmptyStringSchema = z.string().trim().min(1);
 const nonNegativeIntegerSchema = z.number().int().nonnegative();

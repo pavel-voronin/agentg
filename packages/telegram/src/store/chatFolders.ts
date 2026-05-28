@@ -1,5 +1,5 @@
-import type { TelegramDatabase } from '../database.js';
-import { telegramChatFolderInfos } from '../schema.js';
+import type { TelegramDatabase } from '../database/client.js';
+import { telegramChatFolderInfos } from '../database/schema.js';
 import { telegramWireJsonObject, type TelegramWireChatFoldersUpdate } from '../tdlib/wire.js';
 
 export async function replaceChatFolders(

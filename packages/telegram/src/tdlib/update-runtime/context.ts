@@ -1,6 +1,6 @@
-import type { TelegramDatabase } from '../../database.js';
-import type { TelegramFileSubsystem } from '../../fileSubsystem.js';
-import type { TelegramLiveCoverageObserver } from '../../liveCoverage.js';
+import type { TelegramDatabase } from '../../database/client.js';
+import type { TelegramFileSubsystem } from '../../files/subsystem.js';
+import type { TelegramLiveCoverageObserver } from '../../history/liveCoverage.js';
 import type { TelegramUpdateEventPublishers } from '../../events/updateEventPublishers.js';
 
 export type TelegramTdlibStatusHandler = {

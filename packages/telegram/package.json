@@ -5,16 +5,16 @@
   "type": "module",
   "exports": {
     "./control-plane": "./src/control-plane/index.ts",
-    "./integration-events": "./src/integrationEvents.ts",
-    "./model-refs": "./src/modelRefs.ts",
+    "./integration-events": "./src/events/contracts.ts",
+    "./model-refs": "./src/model/refs.ts",
     "./rpc": "./src/rpc/index.ts"
   },
   "scripts": {
-    "auth": "tsx src/authMain.ts",
-    "dev": "tsx watch --clear-screen=false src/main.ts",
+    "auth": "tsx src/app/authMain.ts",
+    "dev": "tsx watch --clear-screen=false src/app/main.ts",
     "dev:control-plane-assets": "vite build --watch --config viteControlPlane.config.ts",
     "db:generate": "node ../../scripts/telegramDbSchemaGenerate.mjs",
-    "db:migrate": "tsx src/migrateMain.ts",
+    "db:migrate": "tsx src/database/migrateMain.ts",
     "build": "npm run build:server && npm run build:control-plane",
     "build:control-plane": "vite build --config viteControlPlane.config.ts",
     "build:server": "vite build",

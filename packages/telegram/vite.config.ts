@@ -5,7 +5,7 @@ export default defineConfig({
   build: {
     emptyOutDir: true,
     outDir: 'dist',
-    ssr: 'src/main.ts',
+    ssr: 'src/app/main.ts',
     target: 'node24',
     rollupOptions: {
       output: {

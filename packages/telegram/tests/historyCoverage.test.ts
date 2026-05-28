@@ -4,7 +4,7 @@ import {
   normalizeCoverageSegments,
   planTelegramHistoryCoverageMerge,
   subtractTelegramHistoryIntervals
-} from '../src/historyCoverage.js';
+} from '../src/history/coverage.js';
 
 describe('Telegram history coverage', () => {
   it('keeps operational coverage compact and takes the latest covered timestamp', () => {

@@ -2,8 +2,8 @@ import { eq } from 'drizzle-orm';
 
 import type { JsonValue } from '@agentg/events/json';
 
-import type { TelegramDatabase } from '../database.js';
-import { telegramKv } from '../schema.js';
+import type { TelegramDatabase } from '../database/client.js';
+import { telegramKv } from '../database/schema.js';
 import type { TelegramWireUpdateByType } from '../tdlib/wire.js';
 import { storeTelegramBackground } from './chatBackground.js';
 import { deleteTelegramKv, upsertTelegramKv } from './kv.js';

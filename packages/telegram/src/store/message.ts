@@ -2,14 +2,14 @@ import { and, eq, inArray, sql } from 'drizzle-orm';
 
 import type { JsonObject, JsonValue } from '@agentg/events/json';
 
-import { TELEGRAM_MESSAGE_MODEL, telegramMessageModelId } from '../modelRefs.js';
-import type { TelegramDatabase } from '../database.js';
+import { TELEGRAM_MESSAGE_MODEL, telegramMessageModelId } from '../model/refs.js';
+import type { TelegramDatabase } from '../database/client.js';
 import {
   telegramActiveLiveLocationMessages,
   telegramFileSlots,
   telegramMessageReactions,
   telegramMessages
-} from '../schema.js';
+} from '../database/schema.js';
 import {
   telegramWireDate,
   telegramWireId,
@@ -18,8 +18,8 @@ import {
   type TelegramWireMessage,
   type TelegramWireMessageContentUpdate
 } from '../tdlib/wire.js';
-import type { TelegramFileSubsystem } from '../fileSubsystem.js';
-import type { TelegramMediaDownloadPolicyCause } from '../filePolicy.js';
+import type { TelegramFileSubsystem } from '../files/subsystem.js';
+import type { TelegramMediaDownloadPolicyCause } from '../files/policy.js';
 import { reactionTypeKey } from './reaction.js';
 
 type StoreMessageConflict = 'ignore' | 'update';

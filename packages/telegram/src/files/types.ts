@@ -8,8 +8,8 @@ import type {
   TelegramStickerSetModelRef,
   TelegramStoryModelRef,
   TelegramUserModelRef
-} from './modelRefs.js';
-import type { TelegramWireFile } from './tdlib/wire.js';
+} from '../model/refs.js';
+import type { TelegramWireFile } from '../tdlib/wire.js';
 
 export const telegramFileStatuses = ['known', 'queued', 'downloading', 'ready', 'failed'] as const;
 export const telegramFileMediaKinds = [

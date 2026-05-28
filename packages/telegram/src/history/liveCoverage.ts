@@ -5,9 +5,9 @@ import {
   openTelegramHistoryLiveWindow,
   recoverTelegramHistoryLiveWindows,
   registerTelegramHistoryLiveChats
-} from './historyCoverage.js';
-import { ceilToTelegramSecond, floorToTelegramSecond } from './historyTime.js';
-import type { TelegramDatabase as AppDatabase } from './database.js';
+} from './coverage.js';
+import { ceilToTelegramSecond, floorToTelegramSecond } from './time.js';
+import type { TelegramDatabase as AppDatabase } from '../database/client.js';
 
 export type TelegramLiveCoverageObserver = {
   markConnected(at?: Date): Promise<void>;

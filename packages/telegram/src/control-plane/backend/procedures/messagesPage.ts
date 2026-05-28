@@ -3,9 +3,9 @@ import { messagesPageInputSchema, messagesPageOutputSchema } from '../contracts.
 import type { TelegramRpcRuntime } from '../../../rpc/runtime.js';
 import { rpc } from '../../../rpc/trpc.js';
 import { and, eq, inArray } from 'drizzle-orm';
-import { createTelegramHistoryCoverageChangedEvent } from '../../../integrationEvents.js';
+import { createTelegramHistoryCoverageChangedEvent } from '../../../events/contracts.js';
 import type { MessagesPageInput, MessagesPageOutput } from '../contracts.js';
-import { telegramChats, telegramMessages } from '../../../schema.js';
+import { telegramChats, telegramMessages } from '../../../database/schema.js';
 import { storeMessage } from '../../../store/message.js';
 import {
   normalizeCoverageWriteInput,
@@ -13,9 +13,9 @@ import {
   writeTelegramHistoryCoverageInTransaction,
   type TelegramHistoryCoverageInterval,
   type TelegramHistoryCoverageWriteSegment
-} from '../../../historyCoverage.js';
-import { countTelegramMessagesInIntervals } from '../../../messageCounts.js';
-import { TELEGRAM_HISTORY_PAST_BOUNDARY } from '../../../historyTime.js';
+} from '../../../history/coverage.js';
+import { countTelegramMessagesInIntervals } from '../../../history/messageCounts.js';
+import { TELEGRAM_HISTORY_PAST_BOUNDARY } from '../../../history/time.js';
 import { telegramTdlibPriorities } from '../../../tdlib/priority.js';
 import {
   telegramWireDate,
@@ -25,7 +25,7 @@ import {
 import type { TelegramProcedureContext } from '../../../procedure-runtime/context.js';
 import { toTelegramDate } from '../../../read-model/dates.js';
 import { readMessageSelection, toReadMessages } from '../../../read-model/message.js';
-import { parseLimit } from '../../../procedureInputs.js';
+import { parseLimit } from '../../../procedure-runtime/inputs.js';
 
 export const messagesPage = mutation((runtime: TelegramRpcRuntime) =>
   rpc

@@ -1,7 +1,11 @@
 import { and, eq } from 'drizzle-orm';
 
-import { TELEGRAM_MESSAGE_MODEL, telegramMessageModelId } from '../../modelRefs.js';
-import { telegramFileSlots, telegramMessageReactions, telegramMessages } from '../../schema.js';
+import { TELEGRAM_MESSAGE_MODEL, telegramMessageModelId } from '../../model/refs.js';
+import {
+  telegramFileSlots,
+  telegramMessageReactions,
+  telegramMessages
+} from '../../database/schema.js';
 import { recordMessageFiles, storeMessage } from '../../store/message.js';
 import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import { telegramWireJsonObject, type TelegramWireUpdateByType } from '../wire.js';

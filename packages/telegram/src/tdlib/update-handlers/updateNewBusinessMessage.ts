@@ -1,5 +1,5 @@
-import { telegramBusinessMessages } from '../../schema.js';
-import type { TelegramDatabase } from '../../database.js';
+import { telegramBusinessMessages } from '../../database/schema.js';
+import type { TelegramDatabase } from '../../database/client.js';
 import { recordMessageFiles, storeMessage } from '../../store/message.js';
 import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import type { TelegramWireUpdateByType } from '../wire.js';

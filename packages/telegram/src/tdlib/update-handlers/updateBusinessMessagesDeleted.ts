@@ -1,6 +1,6 @@
 import { and, eq, inArray } from 'drizzle-orm';
 
-import { telegramBusinessMessages } from '../../schema.js';
+import { telegramBusinessMessages } from '../../database/schema.js';
 import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import type { TelegramWireUpdateByType } from '../wire.js';
 

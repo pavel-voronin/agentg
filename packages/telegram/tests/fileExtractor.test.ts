@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { extractTelegramFileSlots, type TelegramFileSlotUpdate } from '../src/fileExtractor.js';
-import { decideTelegramFilePolicy } from '../src/filePolicy.js';
+import { extractTelegramFileSlots, type TelegramFileSlotUpdate } from '../src/files/extractor.js';
+import { decideTelegramFilePolicy } from '../src/files/policy.js';
 import { telegramWireJsonObject } from '../src/tdlib/wire.js';
 
 describe('Telegram file extraction', () => {

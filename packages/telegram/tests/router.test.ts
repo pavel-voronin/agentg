@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { TelegramDatabase } from '../src/database.js';
+import type { TelegramDatabase } from '../src/database/client.js';
 import { createTelegramRouter } from '../src/rpc/router.js';
 import { toTelegramChatStorageRow } from '../src/read-model/chat.js';
 import { toChatDirectoryEntries } from '../src/control-plane/backend/chatDirectory.js';
-import type { TelegramFileSubsystem } from '../src/fileSubsystem.js';
+import type { TelegramFileSubsystem } from '../src/files/subsystem.js';
 
 describe('Telegram history router chat listing', () => {
   it('filters chats without TDLib list placements from the chat directory', async () => {

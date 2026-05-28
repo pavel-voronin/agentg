@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 
-import type { TelegramDatabase } from '../database.js';
-import { telegramAutosaveSettings } from '../schema.js';
+import type { TelegramDatabase } from '../database/client.js';
+import { telegramAutosaveSettings } from '../database/schema.js';
 import type { TelegramWireUpdateByType } from '../tdlib/wire.js';
 
 type TelegramWireAutosaveSettingsUpdate = TelegramWireUpdateByType<'updateAutosaveSettings'>;

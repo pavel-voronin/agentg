@@ -1,5 +1,5 @@
-import { telegramRpcSurface } from './rpc/surface.js';
-import { createTelegramControlPlane } from './control-plane/manifest.js';
+import { telegramRpcSurface } from '../rpc/surface.js';
+import { createTelegramControlPlane } from '../control-plane/manifest.js';
 
 const TELEGRAM_OPERATION_EVENT_TYPES = [
   'telegram.login.completed',

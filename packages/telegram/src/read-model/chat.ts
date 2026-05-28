@@ -1,7 +1,7 @@
 import type { JsonObject, JsonValue } from '@agentg/events/json';
 import { ilike } from 'drizzle-orm';
 
-import { telegramChats } from '../schema.js';
+import { telegramChats } from '../database/schema.js';
 import { orSql } from './sql.js';
 
 export type TelegramChatStorageRow = {

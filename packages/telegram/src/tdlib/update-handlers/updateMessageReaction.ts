@@ -2,7 +2,7 @@ import { and, eq } from 'drizzle-orm';
 
 import type { JsonObject, JsonValue } from '@agentg/events/json';
 
-import { telegramMessageReactions } from '../../schema.js';
+import { telegramMessageReactions } from '../../database/schema.js';
 import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import { telegramWireJsonValue, type TelegramWireUpdateByType } from '../wire.js';
 

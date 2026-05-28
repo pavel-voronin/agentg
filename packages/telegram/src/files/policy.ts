@@ -3,8 +3,8 @@ import {
   telegramExplicitDownloadPolicyRules,
   type TelegramMediaDownloadPolicyCause,
   type TelegramMediaDownloadPolicyRule
-} from './filePolicyRules.js';
-import type { ExtractedTelegramFileSlot } from './fileTypes.js';
+} from './policyRules.js';
+import type { ExtractedTelegramFileSlot } from './types.js';
 
 export type TelegramFilePolicyInput = {
   cause: TelegramMediaDownloadPolicyCause;
@@ -30,7 +30,7 @@ export type TelegramFilePolicyDecision =
       reason: string;
     };
 
-export type { TelegramMediaDownloadPolicyCause } from './filePolicyRules.js';
+export type { TelegramMediaDownloadPolicyCause } from './policyRules.js';
 
 export function decideTelegramFilePolicy(
   input: TelegramFilePolicyInput

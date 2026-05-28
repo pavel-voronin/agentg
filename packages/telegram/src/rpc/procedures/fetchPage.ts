@@ -9,7 +9,7 @@ import type {
   TelegramHistoryFetchPageRequest,
   TelegramHistoryFetchPageResult
 } from '../contracts.js';
-import { fetchTelegramHistoryPage } from '../../historyFetch.js';
+import { fetchTelegramHistoryPage } from '../../history/fetch.js';
 import { telegramTdlibPriorities } from '../../tdlib/priority.js';
 import type { TelegramProcedureContext } from '../../procedure-runtime/context.js';
 

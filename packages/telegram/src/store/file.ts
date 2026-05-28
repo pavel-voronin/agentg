@@ -1,4 +1,4 @@
-import type { TelegramFileSubsystem } from '../fileSubsystem.js';
+import type { TelegramFileSubsystem } from '../files/subsystem.js';
 import type { TelegramWireFileUpdate } from '../tdlib/wire.js';
 
 export function storeFileUpdate(

@@ -1,5 +1,5 @@
-import type { TelegramDatabase } from '../database.js';
-import { telegramNotificationSettings } from '../schema.js';
+import type { TelegramDatabase } from '../database/client.js';
+import { telegramNotificationSettings } from '../database/schema.js';
 import type { TelegramWireUpdateByType } from '../tdlib/wire.js';
 
 type TelegramWireNotificationSettingsScope =

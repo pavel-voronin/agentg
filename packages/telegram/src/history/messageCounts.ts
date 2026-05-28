@@ -1,7 +1,7 @@
 import { and, eq, gte, isNotNull, lt, sql } from 'drizzle-orm';
 
-import type { TelegramDatabase as AppDatabase } from './database.js';
-import { telegramMessages } from './schema.js';
+import type { TelegramDatabase as AppDatabase } from '../database/client.js';
+import { telegramMessages } from '../database/schema.js';
 
 export type TelegramMessageCountInterval = {
   chatId: string;

@@ -1,5 +1,5 @@
-import type { TelegramDatabase } from '../database.js';
-import { telegramBusinessConnections } from '../schema.js';
+import type { TelegramDatabase } from '../database/client.js';
+import { telegramBusinessConnections } from '../database/schema.js';
 import {
   telegramWireDate,
   telegramWireJsonValue,

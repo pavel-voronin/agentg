@@ -1,4 +1,4 @@
-import type { TelegramFileMediaKind } from './fileTypes.js';
+import type { TelegramFileMediaKind } from './types.js';
 
 export const TELEGRAM_MEDIA_MEGABYTE = 1024 * 1024;
 

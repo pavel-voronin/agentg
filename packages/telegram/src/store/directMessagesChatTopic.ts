@@ -1,5 +1,5 @@
-import type { TelegramDatabase } from '../database.js';
-import { telegramDirectMessagesChatTopics } from '../schema.js';
+import type { TelegramDatabase } from '../database/client.js';
+import { telegramDirectMessagesChatTopics } from '../database/schema.js';
 import {
   telegramWireJsonObject,
   telegramWireJsonValue,

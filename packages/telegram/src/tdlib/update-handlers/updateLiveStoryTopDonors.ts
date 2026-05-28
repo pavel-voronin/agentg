@@ -1,4 +1,4 @@
-import { telegramLiveStoryDonors } from '../../schema.js';
+import { telegramLiveStoryDonors } from '../../database/schema.js';
 import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import { telegramWireJsonValue, type TelegramWireUpdateByType } from '../wire.js';
 

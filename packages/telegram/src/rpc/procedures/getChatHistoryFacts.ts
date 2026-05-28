@@ -10,8 +10,8 @@ import type {
   TelegramGetChatHistoryFactsInput,
   TelegramGetChatHistoryFactsOutput
 } from '../contracts.js';
-import type { TelegramDatabase } from '../../database.js';
-import { telegramChatPositions, telegramChats, telegramMessages } from '../../schema.js';
+import type { TelegramDatabase } from '../../database/client.js';
+import { telegramChatPositions, telegramChats, telegramMessages } from '../../database/schema.js';
 import type { TelegramProcedureContext } from '../../procedure-runtime/context.js';
 import { readChatSelection, toTelegramChatStorageRow } from '../../read-model/chat.js';
 import { readTelegramChatUsersByChat, telegramChatUserId } from '../../read-model/chatUser.js';

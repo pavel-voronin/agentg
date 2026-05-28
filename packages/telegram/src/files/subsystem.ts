@@ -9,13 +9,13 @@ import type { EventBus } from '@agentg/events/bus';
 import { createIntegrationEvent } from '@agentg/events/envelope';
 import { and, eq, notInArray, sql } from 'drizzle-orm';
 
-import type { TelegramDatabase } from './database.js';
+import type { TelegramDatabase } from '../database/client.js';
 import {
   createTelegramDefaultBackgroundUpdatedEvent,
   createTelegramChatUpdatedEvent,
   createTelegramFileQueueUpdatedEvent,
   createTelegramReadMessageUpdatedEvent
-} from './integrationEvents.js';
+} from '../events/contracts.js';
 import {
   TELEGRAM_ACTIVE_NOTIFICATION_MODEL,
   TELEGRAM_CHAT_MODEL,
@@ -34,14 +34,14 @@ import {
   telegramStickerSetRef,
   telegramStoryRef,
   telegramUserRef
-} from './modelRefs.js';
+} from '../model/refs.js';
 import {
   telegramFileAssets,
   telegramFileDownloadJobs,
   telegramFileSlots,
   telegramMessages,
   telegramTdlibFiles
-} from './schema.js';
+} from '../database/schema.js';
 import {
   telegramWireFileOrUndefined,
   telegramWireJsonObject,
@@ -51,31 +51,31 @@ import {
   type TelegramWireMessage,
   type TelegramWireMessageContentUpdate,
   type TelegramWireUpdateByType
-} from './tdlib/wire.js';
-import { extractTelegramFileSlots, type TelegramFileSlotUpdate } from './fileExtractor.js';
+} from '../tdlib/wire.js';
+import { extractTelegramFileSlots, type TelegramFileSlotUpdate } from './extractor.js';
 import {
   ownerKey,
   readTelegramFileOwnersForAssets,
   readTelegramFileQueueStats,
   readTelegramFileRef
-} from './fileRead.js';
+} from './read.js';
 import {
   decideTelegramFilePolicy,
   type TelegramFilePolicyDecision,
   type TelegramMediaDownloadPolicyCause
-} from './filePolicy.js';
+} from './policy.js';
 import type {
   ExtractedTelegramFileSlot,
   TelegramFileOwner,
   TelegramFileOwnerKey,
   TelegramFileRef
-} from './fileTypes.js';
-import { invokeTdlibWithEvents, type TdlibInvoker } from './tdlib/operationEvents.js';
-import { telegramTdlibPriorities, assertTelegramTdlibPriority } from './tdlib/priority.js';
-import { isTelegramTdlibUnderNavigationPressure } from './tdlib/scheduler.js';
-import { chatDirectoryEntryByChatId } from './control-plane/backend/chatDirectory.js';
-import { readMessageSelection, toReadMessages } from './read-model/message.js';
-import { readDefaultBackgroundSelection } from './store/defaultBackground.js';
+} from './types.js';
+import { invokeTdlibWithEvents, type TdlibInvoker } from '../tdlib/operationEvents.js';
+import { telegramTdlibPriorities, assertTelegramTdlibPriority } from '../tdlib/priority.js';
+import { isTelegramTdlibUnderNavigationPressure } from '../tdlib/scheduler.js';
+import { chatDirectoryEntryByChatId } from '../control-plane/backend/chatDirectory.js';
+import { readMessageSelection, toReadMessages } from '../read-model/message.js';
+import { readDefaultBackgroundSelection } from '../store/defaultBackground.js';
 
 export type TelegramFileSubsystem = {
   close(): void;

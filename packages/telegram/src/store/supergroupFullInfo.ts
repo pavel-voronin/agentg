@@ -2,8 +2,8 @@ import { eq } from 'drizzle-orm';
 
 import type { JsonValue } from '@agentg/events/json';
 
-import type { TelegramDatabase } from '../database.js';
-import { telegramChatPhotos, telegramFiles, telegramSupergroups } from '../schema.js';
+import type { TelegramDatabase } from '../database/client.js';
+import { telegramChatPhotos, telegramFiles, telegramSupergroups } from '../database/schema.js';
 import {
   telegramWireId,
   telegramWireJsonObject,

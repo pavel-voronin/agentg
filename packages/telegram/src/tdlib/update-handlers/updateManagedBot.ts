@@ -1,4 +1,4 @@
-import { telegramManagedBots } from '../../schema.js';
+import { telegramManagedBots } from '../../database/schema.js';
 import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import type { TelegramWireUpdateByType } from '../wire.js';
 

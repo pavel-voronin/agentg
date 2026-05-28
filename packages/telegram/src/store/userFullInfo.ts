@@ -1,7 +1,7 @@
 import type { JsonValue } from '@agentg/events/json';
 
-import type { TelegramDatabase } from '../database.js';
-import { telegramChatPhotos, telegramFiles, telegramUsers } from '../schema.js';
+import type { TelegramDatabase } from '../database/client.js';
+import { telegramChatPhotos, telegramFiles, telegramUsers } from '../database/schema.js';
 import {
   telegramWireDate,
   telegramWireId,

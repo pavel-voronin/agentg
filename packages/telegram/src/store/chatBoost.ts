@@ -1,5 +1,5 @@
-import type { TelegramDatabase } from '../database.js';
-import { telegramChatBoosts } from '../schema.js';
+import type { TelegramDatabase } from '../database/client.js';
+import { telegramChatBoosts } from '../database/schema.js';
 import { telegramWireJsonObject, type TelegramWireUpdateByType } from '../tdlib/wire.js';
 
 type TelegramWireChatBoostUpdate = TelegramWireUpdateByType<'updateChatBoost'>;

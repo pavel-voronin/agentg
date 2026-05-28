@@ -3,7 +3,7 @@ import { createIntegrationEvent } from '@agentg/events/envelope';
 import type { JsonValue } from '@agentg/events/json';
 import { and, eq } from 'drizzle-orm';
 
-import type { TelegramDatabase } from '../database.js';
+import type { TelegramDatabase } from '../database/client.js';
 import {
   createTelegramDefaultBackgroundUpdatedEvent,
   createTelegramChatUpdatedEvent,
@@ -16,7 +16,7 @@ import {
   type TelegramEventSourceMessageServiceAction,
   type TelegramEventSourceUpdate,
   type TelegramEventSourceUser
-} from '../integrationEvents.js';
+} from './contracts.js';
 import type { TelegramMessageTextEntity } from '../rpc/contracts.js';
 import { chatDirectoryEntryByChatId } from '../control-plane/backend/chatDirectory.js';
 import { messageTextEntitiesFromStorage, readMessageSelection } from '../read-model/message.js';
@@ -24,8 +24,8 @@ import {
   extractFormattedTextLinkEntities,
   formattedTextString,
   telegramMessageContentFormattedText
-} from '../messageText.js';
-import { telegramMessages } from '../schema.js';
+} from '../read-model/messageText.js';
+import { telegramMessages } from '../database/schema.js';
 import {
   telegramWireDate,
   telegramWireId,

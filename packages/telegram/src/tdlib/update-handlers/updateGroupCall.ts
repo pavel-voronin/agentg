@@ -1,4 +1,4 @@
-import { telegramGroupCalls } from '../../schema.js';
+import { telegramGroupCalls } from '../../database/schema.js';
 import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import { telegramWireJsonValue, type TelegramWireUpdateByType } from '../wire.js';
 

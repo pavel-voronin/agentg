@@ -2,13 +2,13 @@ import { telegramChatFolderRef } from '@agentg/telegram/model-refs';
 import type { JsonObject } from '@agentg/events/json';
 import { and, eq, inArray, or } from 'drizzle-orm';
 
-import type { TelegramDatabase } from '../../database.js';
-import { telegramChatPositions, telegramChats, telegramMessages } from '../../schema.js';
+import type { TelegramDatabase } from '../../database/client.js';
+import { telegramChatPositions, telegramChats, telegramMessages } from '../../database/schema.js';
 import {
   ownerKey,
   readTelegramFileRefsForOwners,
   type TelegramFileOwnerKey
-} from '../../fileRead.js';
+} from '../../files/read.js';
 import type { ChatDirectoryEntry, ChatFolder, ChatTypeCount } from './contracts.js';
 import type { TelegramFileRef, TelegramReadMessage } from '../../rpc/contracts.js';
 import {

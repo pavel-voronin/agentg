@@ -6,7 +6,11 @@ import type { TelegramRpcRuntime } from '../runtime.js';
 import { rpc } from '../trpc.js';
 import { asc } from 'drizzle-orm';
 import type { TelegramHistoryChat, TelegramHistoryListChatsRequest } from '../contracts.js';
-import { telegramChatFolderInfos, telegramChatPositions, telegramChats } from '../../schema.js';
+import {
+  telegramChatFolderInfos,
+  telegramChatPositions,
+  telegramChats
+} from '../../database/schema.js';
 import { storeChat, telegramChatType } from '../../store/chat.js';
 import { storeMessage } from '../../store/message.js';
 import type { TelegramProcedureContext } from '../../procedure-runtime/context.js';
@@ -14,7 +18,7 @@ import { readChatSelection, toTelegramChatStorageRow } from '../../read-model/ch
 import { isListableTelegramChat } from '../../read-model/chatPlacements.js';
 import { telegramTdlibPriorities } from '../../tdlib/priority.js';
 import { telegramWireJsonObject } from '../../tdlib/wire.js';
-import { parseLimit } from '../../procedureInputs.js';
+import { parseLimit } from '../../procedure-runtime/inputs.js';
 
 type ChatListKind =
   | {

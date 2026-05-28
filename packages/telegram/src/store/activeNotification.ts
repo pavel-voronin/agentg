@@ -1,7 +1,10 @@
 import { and, eq, inArray } from 'drizzle-orm';
 
-import type { TelegramDatabase } from '../database.js';
-import { telegramActiveNotificationGroups, telegramActiveNotifications } from '../schema.js';
+import type { TelegramDatabase } from '../database/client.js';
+import {
+  telegramActiveNotificationGroups,
+  telegramActiveNotifications
+} from '../database/schema.js';
 import {
   telegramWireDate,
   telegramWireId,

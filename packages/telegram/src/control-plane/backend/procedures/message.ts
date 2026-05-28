@@ -4,7 +4,7 @@ import type { TelegramRpcRuntime } from '../../../rpc/runtime.js';
 import { rpc } from '../../../rpc/trpc.js';
 import { and, eq } from 'drizzle-orm';
 import type { MessageLookupInput, MessageLookupOutput } from '../contracts.js';
-import { telegramMessages } from '../../../schema.js';
+import { telegramMessages } from '../../../database/schema.js';
 import type { TelegramProcedureContext } from '../../../procedure-runtime/context.js';
 import { readMessageSelection, toReadMessages } from '../../../read-model/message.js';
 

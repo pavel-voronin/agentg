@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 
-import { telegramFileDownloads } from '../../schema.js';
+import { telegramFileDownloads } from '../../database/schema.js';
 import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import { upsertTelegramKv } from '../../store/kv.js';
 import type { TelegramWireUpdateByType } from '../wire.js';

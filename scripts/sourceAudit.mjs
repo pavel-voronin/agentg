@@ -176,7 +176,7 @@ function auditTablePrefixes() {
       prefix: 'history_sync_'
     },
     {
-      file: join(root, 'packages/telegram/src/schema.ts'),
+      file: join(root, 'packages/telegram/src/database/schema.ts'),
       prefix: 'telegram_'
     }
   ];
@@ -364,11 +364,14 @@ function auditServiceDirectoryBootstrap() {
     }
   }
 
-  const telegramIngestion = readFileSync(join(root, 'packages/telegram/src/ingestion.ts'), 'utf8');
+  const telegramIngestion = readFileSync(
+    join(root, 'packages/telegram/src/app/ingestion.ts'),
+    'utf8'
+  );
   if (!telegramIngestion.includes('createServiceDirectoryClient')) {
     failures.push('Telegram must join Service Directory');
   }
-  auditRequiredManifest('packages/telegram/src/registrations.ts', true);
+  auditRequiredManifest('packages/telegram/src/app/registrations.ts', true);
 
   const historySyncService = readFileSync(
     join(root, 'packages/history-sync/src/service.ts'),
@@ -621,7 +624,7 @@ function auditTelegramDateStorageContract() {
 
   for (const rel of [
     'packages/telegram/src/store/message.ts',
-    'packages/telegram/src/messageCounts.ts'
+    'packages/telegram/src/history/messageCounts.ts'
   ]) {
     const source = readFileSync(join(root, rel), 'utf8');
     if (/getTime\(\)\s*\/\s*1000/.test(source)) {
@@ -731,13 +734,13 @@ function auditTdlibContractGeneration(files) {
 
 function auditTelegramWireBoundary(files) {
   const boundaryPrefixes = [
-    'packages/telegram/src/ingestion.ts',
+    'packages/telegram/src/app/ingestion.ts',
     'packages/telegram/src/rpc/procedures/fetchMessagesPage.ts',
     'packages/telegram/src/rpc/procedures/support.ts',
     'packages/telegram/src/tdlib/update-handlers/',
-    'packages/telegram/src/fileExtractor.ts',
-    'packages/telegram/src/fileSubsystem.ts',
-    'packages/telegram/src/historyFetch.ts',
+    'packages/telegram/src/files/extractor.ts',
+    'packages/telegram/src/files/subsystem.ts',
+    'packages/telegram/src/history/fetch.ts',
     'packages/telegram/src/store/'
   ];
 

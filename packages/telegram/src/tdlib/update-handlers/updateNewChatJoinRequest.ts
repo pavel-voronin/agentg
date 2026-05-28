@@ -1,4 +1,4 @@
-import { telegramChatJoinRequests } from '../../schema.js';
+import { telegramChatJoinRequests } from '../../database/schema.js';
 import { upsertChatInviteLink } from '../../store/chatMember.js';
 import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import { telegramWireDate, type TelegramWireUpdateByType } from '../wire.js';

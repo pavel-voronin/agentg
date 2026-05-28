@@ -1,9 +1,9 @@
 import { and, eq } from 'drizzle-orm';
 
-import type { TelegramDatabase } from '../database.js';
-import { telegramChatPositions, telegramChats } from '../schema.js';
-import type { TelegramFileSubsystem } from '../fileSubsystem.js';
-import type { TelegramMediaDownloadPolicyCause } from '../filePolicy.js';
+import type { TelegramDatabase } from '../database/client.js';
+import { telegramChatPositions, telegramChats } from '../database/schema.js';
+import type { TelegramFileSubsystem } from '../files/subsystem.js';
+import type { TelegramMediaDownloadPolicyCause } from '../files/policy.js';
 import {
   telegramWireId,
   telegramWireJsonObject,

@@ -1,7 +1,11 @@
 import { and, eq } from 'drizzle-orm';
 
-import { TELEGRAM_MESSAGE_MODEL, telegramMessageModelId } from '../../modelRefs.js';
-import { telegramFileSlots, telegramMessageReactions, telegramMessages } from '../../schema.js';
+import { TELEGRAM_MESSAGE_MODEL, telegramMessageModelId } from '../../model/refs.js';
+import {
+  telegramFileSlots,
+  telegramMessageReactions,
+  telegramMessages
+} from '../../database/schema.js';
 import {
   recordMessageFiles,
   replaceMessageReactionSummaries,

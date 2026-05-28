@@ -1,5 +1,5 @@
 import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
-import { telegramForumTopicInfos } from '../../schema.js';
+import { telegramForumTopicInfos } from '../../database/schema.js';
 import { telegramWireJsonObject, type TelegramWireUpdateByType } from '../wire.js';
 
 type TelegramWireForumTopicInfoUpdate = TelegramWireUpdateByType<'updateForumTopicInfo'>;

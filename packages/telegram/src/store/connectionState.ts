@@ -1,4 +1,4 @@
-import type { TelegramLiveCoverageObserver } from '../liveCoverage.js';
+import type { TelegramLiveCoverageObserver } from '../history/liveCoverage.js';
 import type { TelegramWireConnectionStateUpdate } from '../tdlib/wire.js';
 
 type TelegramConnectionStateTracker = {

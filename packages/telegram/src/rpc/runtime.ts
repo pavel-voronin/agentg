@@ -1,8 +1,8 @@
 import type { EventBus } from '@agentg/events/bus';
 
-import type { TelegramDatabase as AppDatabase } from '../database.js';
+import type { TelegramDatabase as AppDatabase } from '../database/client.js';
 import type { TdlibInvoker } from '../tdlib/operationEvents.js';
-import type { TelegramFileSubsystem } from '../fileSubsystem.js';
+import type { TelegramFileSubsystem } from '../files/subsystem.js';
 import {
   createTelegramTdlibOperations,
   type TelegramTdlibOperations

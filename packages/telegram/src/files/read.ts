@@ -1,7 +1,7 @@
 import { and, eq, inArray, sql } from 'drizzle-orm';
 
-import type { TelegramDatabase } from './database.js';
-import type { TelegramFileQueueStats } from './integrationEvents.js';
+import type { TelegramDatabase } from '../database/client.js';
+import type { TelegramFileQueueStats } from '../events/contracts.js';
 import {
   TELEGRAM_ACTIVE_NOTIFICATION_MODEL,
   TELEGRAM_CHAT_MODEL,
@@ -23,8 +23,12 @@ import {
   telegramStickerSetRef,
   telegramStoryRef,
   telegramUserRef
-} from './modelRefs.js';
-import { telegramFileAssets, telegramFileDownloadJobs, telegramFileSlots } from './schema.js';
+} from '../model/refs.js';
+import {
+  telegramFileAssets,
+  telegramFileDownloadJobs,
+  telegramFileSlots
+} from '../database/schema.js';
 import type {
   TelegramFileMediaKind,
   TelegramFileOwner,
@@ -33,10 +37,10 @@ import type {
   TelegramFileRef,
   TelegramFileRenderKind,
   TelegramFileStatus
-} from './fileTypes.js';
-import { telegramFileRefId } from './fileTypes.js';
+} from './types.js';
+import { telegramFileRefId } from './types.js';
 
-export type { TelegramFileOwnerKey } from './fileTypes.js';
+export type { TelegramFileOwnerKey } from './types.js';
 
 type TelegramFileRefRow = {
   assetByteSize: number | null;

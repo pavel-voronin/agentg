@@ -1,4 +1,4 @@
-import type { TelegramDatabase } from '../database.js';
+import type { TelegramDatabase } from '../database/client.js';
 import type { TelegramWireUpdateByType } from '../tdlib/wire.js';
 import { storeTelegramBackground } from './chatBackground.js';
 import { upsertTelegramKv } from './kv.js';

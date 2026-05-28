@@ -1,13 +1,13 @@
 import type { JsonValue } from '@agentg/events/json';
 import { and, eq, inArray } from 'drizzle-orm';
 
-import type { TelegramDatabase } from '../database.js';
-import { TELEGRAM_QUICK_REPLY_MESSAGE_MODEL } from '../modelRefs.js';
+import type { TelegramDatabase } from '../database/client.js';
+import { TELEGRAM_QUICK_REPLY_MESSAGE_MODEL } from '../model/refs.js';
 import {
   telegramFileSlots,
   telegramQuickReplyMessages,
   telegramQuickReplyShortcuts
-} from '../schema.js';
+} from '../database/schema.js';
 import {
   telegramWireId,
   telegramWireJsonValue,

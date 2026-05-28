@@ -1,8 +1,8 @@
 import type { JsonValue } from '@agentg/events/json';
 import { and, eq, sql, type SQL } from 'drizzle-orm';
 
-import type { TelegramDatabase } from '../database.js';
-import { telegramChatPositions, telegramChats } from '../schema.js';
+import type { TelegramDatabase } from '../database/client.js';
+import { telegramChatPositions, telegramChats } from '../database/schema.js';
 import {
   telegramWireJsonObject,
   type TelegramWireChatAddedToListUpdate,

@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 
-import type { TelegramDatabase } from '../database.js';
-import { telegramFileDownloads } from '../schema.js';
+import type { TelegramDatabase } from '../database/client.js';
+import { telegramFileDownloads } from '../database/schema.js';
 import { telegramWireDate, type TelegramWireMessage } from '../tdlib/wire.js';
 
 type TelegramWireFileDownload = {

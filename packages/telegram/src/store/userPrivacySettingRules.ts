@@ -1,7 +1,7 @@
 import type { JsonValue } from '@agentg/events/json';
 
-import type { TelegramDatabase } from '../database.js';
-import { telegramUserPrivacySettingRules } from '../schema.js';
+import type { TelegramDatabase } from '../database/client.js';
+import { telegramUserPrivacySettingRules } from '../database/schema.js';
 import { telegramWireJsonValue, type TelegramWireUpdateByType } from '../tdlib/wire.js';
 
 type TelegramWireUserPrivacySettingRulesUpdate =

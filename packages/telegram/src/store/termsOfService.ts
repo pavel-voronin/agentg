@@ -1,7 +1,7 @@
 import type { JsonValue } from '@agentg/events/json';
 
-import type { TelegramDatabase } from '../database.js';
-import { telegramTermsOfService } from '../schema.js';
+import type { TelegramDatabase } from '../database/client.js';
+import { telegramTermsOfService } from '../database/schema.js';
 import { telegramWireJsonValue, type TelegramWireUpdateByType } from '../tdlib/wire.js';
 
 type TelegramWireTermsOfServiceUpdate = TelegramWireUpdateByType<'updateTermsOfService'>;

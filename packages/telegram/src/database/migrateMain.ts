@@ -1,7 +1,7 @@
 import { loadDatabaseCliConfig } from '@agentg/database/config';
 import { checkDatabase, createDatabasePool } from '@agentg/database/database';
 
-import { createTelegramDatabase } from './database.js';
+import { createTelegramDatabase } from './client.js';
 import { runTelegramMigrations } from './migrate.js';
 
 const config = loadDatabaseCliConfig();

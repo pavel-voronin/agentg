@@ -6,7 +6,7 @@ import {
   createTelegramServiceManifest,
   TELEGRAM_EVENT_TYPES,
   TELEGRAM_TDLIB_EVENT_TYPES
-} from '../src/registrations.js';
+} from '../src/app/registrations.js';
 
 describe('Telegram service manifest', () => {
   it('lists exact Telegram events without wildcard types', () => {

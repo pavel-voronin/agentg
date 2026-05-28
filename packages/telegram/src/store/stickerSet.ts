@@ -1,7 +1,7 @@
 import type { JsonValue } from '@agentg/events/json';
 
-import type { TelegramDatabase } from '../database.js';
-import { telegramStickerSets } from '../schema.js';
+import type { TelegramDatabase } from '../database/client.js';
+import { telegramStickerSets } from '../database/schema.js';
 import { telegramWireJsonValue, type TelegramWireUpdateByType } from '../tdlib/wire.js';
 
 type TelegramWireStickerSet = TelegramWireUpdateByType<'updateStickerSet'>['sticker_set'];

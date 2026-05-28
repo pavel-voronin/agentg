@@ -7,11 +7,11 @@ import {
   openTelegramHistoryLiveWindow,
   recoverTelegramHistoryLiveWindows,
   registerTelegramHistoryLiveChats
-} from '../src/historyCoverage.js';
-import { createTelegramLiveCoverageObserver } from '../src/liveCoverage.js';
-import type { TelegramDatabase } from '../src/database.js';
+} from '../src/history/coverage.js';
+import { createTelegramLiveCoverageObserver } from '../src/history/liveCoverage.js';
+import type { TelegramDatabase } from '../src/database/client.js';
 
-vi.mock('../src/historyCoverage.js', () => ({
+vi.mock('../src/history/coverage.js', () => ({
   closeTelegramHistoryLiveWindow: vi.fn(() => Promise.resolve(undefined)),
   extendTelegramHistoryLiveWindow: vi.fn(() => Promise.resolve(undefined)),
   listTelegramHistoryChatIds: vi.fn(() => Promise.resolve(['chat-a', 'chat-b'])),

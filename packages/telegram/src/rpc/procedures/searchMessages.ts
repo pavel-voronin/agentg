@@ -7,14 +7,14 @@ import type { TelegramRpcRuntime } from '../runtime.js';
 import { rpc } from '../trpc.js';
 import { and, desc, eq, ilike, sql } from 'drizzle-orm';
 import type { TelegramSearchMessagesInput, TelegramSearchMessagesOutput } from '../contracts.js';
-import { telegramMessages } from '../../schema.js';
+import { telegramMessages } from '../../database/schema.js';
 import type { TelegramProcedureContext } from '../../procedure-runtime/context.js';
 import {
   messageTextExpression,
   readMessageSelection,
   toReadMessages
 } from '../../read-model/message.js';
-import { parseLimit } from '../../procedureInputs.js';
+import { parseLimit } from '../../procedure-runtime/inputs.js';
 
 export const searchMessages = query((runtime: TelegramRpcRuntime) =>
   rpc

@@ -10,14 +10,14 @@ import {
   telegramStickerSetRef,
   telegramStoryRef,
   telegramUserRef
-} from './modelRefs.js';
-import { telegramWireFileOrUndefined, type TelegramWireFile } from './tdlib/wire.js';
+} from '../model/refs.js';
+import { telegramWireFileOrUndefined, type TelegramWireFile } from '../tdlib/wire.js';
 import type {
   ExtractedTelegramFileSlot,
   TelegramFileOwner,
   TelegramFileMediaKind,
   TelegramFileRenderKind
-} from './fileTypes.js';
+} from './types.js';
 
 export type TelegramFileSlotUpdate = {
   chat?: {

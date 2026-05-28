@@ -11,7 +11,7 @@ import {
   timestamp
 } from 'drizzle-orm/pg-core';
 
-export * from './tdlib/databaseSchema.js';
+export * from '../tdlib/databaseSchema.js';
 
 export const telegramHistoryCoverage = pgTable(
   'telegram_history_coverage',

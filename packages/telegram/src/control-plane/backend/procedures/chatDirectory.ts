@@ -4,7 +4,7 @@ import type { TelegramRpcRuntime } from '../../../rpc/runtime.js';
 import { rpc } from '../../../rpc/trpc.js';
 import { asc, sql } from 'drizzle-orm';
 import type { ChatDirectoryInput, ChatDirectoryOutput, ChatFolder } from '../contracts.js';
-import { telegramChatFolderInfos, telegramChats } from '../../../schema.js';
+import { telegramChatFolderInfos, telegramChats } from '../../../database/schema.js';
 import type { TelegramProcedureContext } from '../../../procedure-runtime/context.js';
 import {
   chatSearchWhere,

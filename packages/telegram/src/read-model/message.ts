@@ -6,9 +6,13 @@ import {
 import type { JsonValue } from '@agentg/events/json';
 import { inArray, sql } from 'drizzle-orm';
 
-import type { TelegramDatabase } from '../database.js';
-import { telegramChats, telegramMessages, telegramUsers } from '../schema.js';
-import { ownerKey, readTelegramFileRefsForOwners, type TelegramFileOwnerKey } from '../fileRead.js';
+import type { TelegramDatabase } from '../database/client.js';
+import { telegramChats, telegramMessages, telegramUsers } from '../database/schema.js';
+import {
+  ownerKey,
+  readTelegramFileRefsForOwners,
+  type TelegramFileOwnerKey
+} from '../files/read.js';
 import type {
   TelegramFileRef,
   TelegramMessageTextEntity,
@@ -16,7 +20,7 @@ import type {
 } from '../rpc/contracts.js';
 import { toNullableIsoString, type TelegramDateLike } from './dates.js';
 import { asPlainRecord, parseNonNegativeBigInt, stringifyTelegramId } from './chat.js';
-import { extractFormattedTextLinkEntities, formattedTextValue } from '../messageText.js';
+import { extractFormattedTextLinkEntities, formattedTextValue } from './messageText.js';
 
 export type TelegramMessageStorageRow = {
   contentType: string;

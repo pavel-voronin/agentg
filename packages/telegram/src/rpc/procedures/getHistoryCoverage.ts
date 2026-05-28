@@ -5,7 +5,7 @@ import {
 } from '../contracts.js';
 import type { TelegramRpcRuntime } from '../runtime.js';
 import { rpc } from '../trpc.js';
-import { listTelegramHistoryCoverage } from '../../historyCoverage.js';
+import { listTelegramHistoryCoverage } from '../../history/coverage.js';
 import type {
   TelegramGetHistoryCoverageInput,
   TelegramGetHistoryCoverageOutput

@@ -1,4 +1,4 @@
-import type { TelegramMessageTextEntity } from './rpc/contracts.js';
+import type { TelegramMessageTextEntity } from '../rpc/contracts.js';
 
 export function telegramMessageContentFormattedText(content: unknown): unknown {
   const object = recordValue(content);

@@ -1,5 +1,5 @@
-import type { TelegramDatabase } from '../database.js';
-import { telegramChatInviteLinks, telegramChatMembers } from '../schema.js';
+import type { TelegramDatabase } from '../database/client.js';
+import { telegramChatInviteLinks, telegramChatMembers } from '../database/schema.js';
 import {
   telegramWireId,
   telegramWireJsonObject,

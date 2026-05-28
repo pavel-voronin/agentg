@@ -9,14 +9,14 @@ import {
   type TelegramMessageModelRef,
   type TelegramSenderModelRef,
   type TelegramUserModelRef
-} from './modelRefs.js';
+} from '../model/refs.js';
 import { createIntegrationEvent, type IntegrationEvent } from '@agentg/events/envelope';
 import type {
   TelegramReadMessage,
   TelegramMessageServiceAction,
   TelegramMessageTextEntity
-} from './rpc/contracts.js';
-import type { ChatDirectoryEntry, ChatFolder } from './control-plane/backend/contracts.js';
+} from '../rpc/contracts.js';
+import type { ChatDirectoryEntry, ChatFolder } from '../control-plane/backend/contracts.js';
 
 export type TelegramEventPersistResult = {
   chat: boolean;

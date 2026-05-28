@@ -1,17 +1,17 @@
 import { and, asc, eq, gt, gte, inArray, isNull, lt, lte, sql } from 'drizzle-orm';
 
-import type { TelegramDatabase as AppDatabase } from './database.js';
+import type { TelegramDatabase as AppDatabase } from '../database/client.js';
 import {
   telegramChats,
   telegramHistoryCoverage,
   telegramHistoryLiveChats,
   telegramHistoryLiveWindows
-} from './schema.js';
+} from '../database/schema.js';
 import {
   normalizeTelegramHistoryInterval,
   TELEGRAM_HISTORY_TICK_MS,
   type TelegramHistoryInterval
-} from './historyTime.js';
+} from './time.js';
 
 export type TelegramHistoryCoverageInterval = TelegramHistoryInterval & {
   chatId: string;
