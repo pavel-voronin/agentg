@@ -2,7 +2,7 @@ import { resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { loadTelegramIngestionConfig } from './config.js';
+import { loadTelegramIngestionConfig } from '../src/app/config.js';
 
 const repositoryRoot = resolve(process.cwd(), '../..');
 
