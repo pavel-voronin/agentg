@@ -9,7 +9,7 @@ import {
   readMessageSelection,
   toReadMessages
 } from '../../read-model/message.js';
-import { parseLimit } from '../input.js';
+import { parseLimit } from '@agentg/rpc/input';
 import {
   nonEmptyStringSchema,
   positiveIntegerSchema,

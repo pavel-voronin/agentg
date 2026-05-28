@@ -23,7 +23,7 @@ import {
 } from '../../../tdlib/wire.js';
 import { toTelegramDate } from '../../../read-model/dates.js';
 import { readMessageSelection, toReadMessages } from '../../../read-model/message.js';
-import { parseLimit } from '../../../rpc/input.js';
+import { parseLimit } from '@agentg/rpc/input';
 import {
   nonEmptyStringSchema,
   positiveIntegerSchema,

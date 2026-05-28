@@ -26,7 +26,7 @@ import type {
   TelegramHistoryFetchPageResult
 } from '../rpc/procedures/fetchPage.js';
 import type { TelegramRpcRuntime } from '../rpc/setup.js';
-import { parseLimit } from '../rpc/input.js';
+import { parseLimit } from '@agentg/rpc/input';
 import { telegramTdlibPriorities, type TelegramTdlibPriority } from '../tdlib/priority.js';
 import { telegramWireDate, telegramWireIdNumber, type TelegramWireMessage } from '../tdlib/wire.js';
 

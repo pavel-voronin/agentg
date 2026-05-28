@@ -6,7 +6,7 @@ import { desc, eq, sql } from 'drizzle-orm';
 import { telegramMessages } from '../../database/schema.js';
 import { andSql } from '../../read-model/sql.js';
 import { readMessageSelection, toReadMessages } from '../../read-model/message.js';
-import { parseLimit } from '../input.js';
+import { parseLimit } from '@agentg/rpc/input';
 import {
   nonEmptyStringSchema,
   positiveIntegerSchema,

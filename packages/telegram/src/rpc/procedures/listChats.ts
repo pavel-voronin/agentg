@@ -14,7 +14,7 @@ import { readChatSelection, toTelegramChatStorageRow } from '../../read-model/ch
 import { isListableTelegramChat } from '../../read-model/chatPlacements.js';
 import { telegramTdlibPriorities } from '../../tdlib/priority.js';
 import { telegramWireJsonObject } from '../../tdlib/wire.js';
-import { parseLimit } from '../input.js';
+import { parseLimit } from '@agentg/rpc/input';
 
 export const telegramHistoryChatSchema = z.object({
   _model: z.literal('telegram.chat'),

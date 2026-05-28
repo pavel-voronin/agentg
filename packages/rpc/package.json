@@ -11,6 +11,7 @@
     "./config": "./src/config.ts",
     "./domain": "./src/domain.ts",
     "./http-server": "./src/httpServer.ts",
+    "./input": "./src/input.ts",
     "./trpc": "./src/trpc.ts",
     "./trpc-proxy": "./src/trpcProxy.ts",
     "./model-refs": "./src/modelRefs.ts"
