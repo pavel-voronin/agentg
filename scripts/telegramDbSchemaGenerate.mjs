@@ -25,6 +25,13 @@ const PG_TYPES = new Set([
   'text',
   'timestamp with time zone'
 ]);
+const FOREIGN_KEY_ACTIONS = new Set([
+  'cascade',
+  'no action',
+  'restrict',
+  'set default',
+  'set null'
+]);
 
 const reviewState = JSON.parse(await readFile(reviewPath, 'utf8'));
 const tables = sortTablesByDependencies(parseReviewTables(reviewState));
@@ -95,11 +102,16 @@ function parseReviewColumn(tableName, column) {
 }
 
 function parseReviewForeignKey(tableName, foreignKey) {
+  const onDelete = optionalForeignKeyAction(
+    foreignKey.onDelete,
+    `${tableName}.foreignKeys.onDelete`
+  );
   return {
     columns: requiredArray(foreignKey.columns, `${tableName}.foreignKeys.columns`).map((columnId) =>
       requiredString(columnId, `${tableName}.foreignKeys.columns[]`)
     ),
     id: requiredString(foreignKey.id, `${tableName}.foreignKeys.id`),
+    ...(onDelete === undefined ? {} : { onDelete }),
     referencedColumns: requiredArray(
       foreignKey.referencedColumns,
       `${tableName}.foreignKeys.referencedColumns`
@@ -334,7 +346,7 @@ function renderForeignKeyConfig(table, foreignKey, context) {
       )
       .join(', ')}],`,
     `      name: '${constraintName(foreignKey.id)}'`,
-    `    })`
+    `    })${foreignKey.onDelete === undefined ? '' : `.onDelete('${foreignKey.onDelete}')`}`
   ].join('\n');
 }
 
@@ -421,7 +433,7 @@ function renderForeignKeySql(table, foreignKey) {
     `  CONSTRAINT ${quoteIdent(constraintName(foreignKey.id))}`,
     `FOREIGN KEY (${localColumns.join(', ')})`,
     `REFERENCES ${quoteIdent(foreignKey.referencedTable)}`,
-    `(${referencedColumns.join(', ')})`
+    `(${referencedColumns.join(', ')})${foreignKey.onDelete === undefined ? '' : ` ON DELETE ${sqlForeignKeyAction(foreignKey.onDelete)}`}`
   ].join(' ');
 }
 
@@ -473,6 +485,21 @@ function requiredString(value, label) {
     throw new Error(`TDLib storage review field must be a non-empty string: ${label}`);
   }
   return value;
+}
+
+function optionalForeignKeyAction(value, label) {
+  if (value === undefined) {
+    return undefined;
+  }
+  const action = requiredString(value, label);
+  if (!FOREIGN_KEY_ACTIONS.has(action)) {
+    throw new Error(`Unsupported foreign key action: ${label}=${action}`);
+  }
+  return action;
+}
+
+function sqlForeignKeyAction(action) {
+  return action.toUpperCase();
 }
 
 function quoteIdent(identifier) {

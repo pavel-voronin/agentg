@@ -44,6 +44,13 @@ const supportedPgTypes = new Set([
   'text',
   'timestamp with time zone'
 ]);
+const supportedForeignKeyActions = new Set([
+  'cascade',
+  'no action',
+  'restrict',
+  'set default',
+  'set null'
+]);
 
 export type SchemaDesignValidationIssue = {
   message: string;
@@ -440,6 +447,13 @@ function validateForeignKey(
         `unknown referenced column ${columnId}`
       );
     }
+  }
+  if (foreignKey.onDelete !== undefined && !supportedForeignKeyActions.has(foreignKey.onDelete)) {
+    addIssue(
+      issues,
+      `${foreignKeyPath}.onDelete`,
+      `unsupported foreign key delete action ${foreignKey.onDelete}`
+    );
   }
   for (const sourceField of foreignKey.sourceFields) {
     validateSourceField(sourceField, `${foreignKeyPath}.sourceFields`, context, issues);

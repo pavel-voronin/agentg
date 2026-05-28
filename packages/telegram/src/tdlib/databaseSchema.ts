@@ -455,7 +455,7 @@ export const telegramChats = pgTable(
       columns: [table.lastMessageChatId, table.lastMessageId],
       foreignColumns: [telegramMessages.chatId, telegramMessages.id],
       name: 'telegram_chats_last_message_fk'
-    })
+    }).onDelete('set null')
   ]
 );
 
@@ -508,7 +508,7 @@ export const telegramDirectMessagesChatTopics = pgTable(
       columns: [table.lastMessageChatId, table.lastMessageId],
       foreignColumns: [telegramMessages.chatId, telegramMessages.id],
       name: 'telegram_direct_messages_chat_topics_last_message_fk'
-    })
+    }).onDelete('set null')
   ]
 );
 
@@ -592,7 +592,7 @@ export const telegramForumTopics = pgTable(
       columns: [table.lastMessageChatId, table.lastMessageId],
       foreignColumns: [telegramMessages.chatId, telegramMessages.id],
       name: 'telegram_forum_topics_last_message_fk'
-    })
+    }).onDelete('set null')
   ]
 );
 
@@ -1111,7 +1111,7 @@ export const telegramSavedMessagesTopics = pgTable(
       columns: [table.lastMessageChatId, table.lastMessageId],
       foreignColumns: [telegramMessages.chatId, telegramMessages.id],
       name: 'telegram_saved_messages_topics_last_message_fk'
-    })
+    }).onDelete('set null')
   ]
 );
 

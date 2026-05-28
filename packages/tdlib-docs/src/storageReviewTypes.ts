@@ -139,10 +139,18 @@ export type StorageSchemaForeignKey = {
   columns: string[];
   id: string;
   notes: string[];
+  onDelete?: StorageSchemaForeignKeyAction;
   referencedColumns: string[];
   referencedTable: string;
   sourceFields: string[];
 };
+
+export type StorageSchemaForeignKeyAction =
+  | 'cascade'
+  | 'no action'
+  | 'restrict'
+  | 'set default'
+  | 'set null';
 
 export type StorageSchemaTable = {
   columnLayout?: StorageSchemaColumnLayout;

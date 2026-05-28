@@ -338,7 +338,7 @@ CREATE TABLE "telegram_chats" (
   "video_chat" jsonb,
   "view_as_topics" boolean,
   CONSTRAINT "telegram_chats_pk" PRIMARY KEY ("id"),
-  CONSTRAINT "telegram_chats_last_message_fk" FOREIGN KEY ("last_message_chat_id", "last_message_id") REFERENCES "telegram_messages" ("chat_id", "id")
+  CONSTRAINT "telegram_chats_last_message_fk" FOREIGN KEY ("last_message_chat_id", "last_message_id") REFERENCES "telegram_messages" ("chat_id", "id") ON DELETE SET NULL
 );
 
 --> statement-breakpoint
@@ -378,7 +378,7 @@ CREATE TABLE "telegram_direct_messages_chat_topics" (
   "unread_count" bigint NOT NULL,
   "unread_reaction_count" bigint NOT NULL,
   CONSTRAINT "telegram_direct_messages_chat_topics_pk" PRIMARY KEY ("chat_id", "id"),
-  CONSTRAINT "telegram_direct_messages_chat_topics_last_message_fk" FOREIGN KEY ("last_message_chat_id", "last_message_id") REFERENCES "telegram_messages" ("chat_id", "id")
+  CONSTRAINT "telegram_direct_messages_chat_topics_last_message_fk" FOREIGN KEY ("last_message_chat_id", "last_message_id") REFERENCES "telegram_messages" ("chat_id", "id") ON DELETE SET NULL
 );
 
 --> statement-breakpoint
@@ -439,7 +439,7 @@ CREATE TABLE "telegram_forum_topics" (
   "unread_poll_vote_count" integer,
   "unread_reaction_count" integer,
   CONSTRAINT "telegram_forum_topics_pk" PRIMARY KEY ("chat_id", "forum_topic_id"),
-  CONSTRAINT "telegram_forum_topics_last_message_fk" FOREIGN KEY ("last_message_chat_id", "last_message_id") REFERENCES "telegram_messages" ("chat_id", "id")
+  CONSTRAINT "telegram_forum_topics_last_message_fk" FOREIGN KEY ("last_message_chat_id", "last_message_id") REFERENCES "telegram_messages" ("chat_id", "id") ON DELETE SET NULL
 );
 
 --> statement-breakpoint
@@ -822,7 +822,7 @@ CREATE TABLE "telegram_saved_messages_topics" (
   "order" bigint NOT NULL,
   "type" jsonb NOT NULL,
   CONSTRAINT "telegram_saved_messages_topics_pk" PRIMARY KEY ("id"),
-  CONSTRAINT "telegram_saved_messages_topics_last_message_fk" FOREIGN KEY ("last_message_chat_id", "last_message_id") REFERENCES "telegram_messages" ("chat_id", "id")
+  CONSTRAINT "telegram_saved_messages_topics_last_message_fk" FOREIGN KEY ("last_message_chat_id", "last_message_id") REFERENCES "telegram_messages" ("chat_id", "id") ON DELETE SET NULL
 );
 
 --> statement-breakpoint

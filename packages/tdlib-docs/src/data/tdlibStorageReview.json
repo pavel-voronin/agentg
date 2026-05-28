@@ -2609,6 +2609,7 @@
           "notes": [
             "Nullable hard FK because Chat.last_message is a nested Message payload when present."
           ],
+          "onDelete": "set null",
           "referencedColumns": ["telegram_messages.chat_id", "telegram_messages.id"],
           "referencedTable": "telegram_messages",
           "sourceFields": ["Chat.chat.last_message"]
@@ -3079,6 +3080,7 @@
           "notes": [
             "Nullable hard FK because DirectMessagesChatTopic.last_message is a nested Message payload when present."
           ],
+          "onDelete": "set null",
           "referencedColumns": ["telegram_messages.chat_id", "telegram_messages.id"],
           "referencedTable": "telegram_messages",
           "sourceFields": [
@@ -3872,6 +3874,7 @@
           "referencedTable": "telegram_messages",
           "referencedColumns": ["telegram_messages.chat_id", "telegram_messages.id"],
           "notes": ["Nullable reference because ForumTopic.last_message may be null or unknown."],
+          "onDelete": "set null",
           "sourceFields": ["ForumTopic.forumTopic.last_message"]
         }
       ],
@@ -7957,6 +7960,7 @@
           "notes": [
             "Nullable hard FK because SavedMessagesTopic.last_message is a nested Message payload when present."
           ],
+          "onDelete": "set null",
           "referencedColumns": ["telegram_messages.chat_id", "telegram_messages.id"],
           "referencedTable": "telegram_messages",
           "sourceFields": ["SavedMessagesTopic.savedMessagesTopic.last_message"]

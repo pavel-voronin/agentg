@@ -6,6 +6,7 @@ import type { Plugin, ViteDevServer } from 'vite';
 
 import type {
   StorageSchemaColumnLayout,
+  StorageSchemaForeignKeyAction,
   StorageSchemaUpdateDesign,
   StorageSchemaUpdateEffectKind,
   StorageSchemaUpdateHandlerPlan,
@@ -595,7 +596,15 @@ function parseStorageSchemaForeignKeys(
     }
     assertKnownKeys(
       foreignKey,
-      ['id', 'columns', 'referencedTable', 'referencedColumns', 'sourceFields', 'notes'],
+      [
+        'id',
+        'columns',
+        'referencedTable',
+        'referencedColumns',
+        'onDelete',
+        'sourceFields',
+        'notes'
+      ],
       itemFieldName
     );
     const id = parseRequiredString(foreignKey.id, `${itemFieldName}.id`);
@@ -608,6 +617,9 @@ function parseStorageSchemaForeignKeys(
       columns: parseStringList(foreignKey.columns, `${itemFieldName}.columns`),
       id,
       notes: parseStringList(foreignKey.notes, `${itemFieldName}.notes`),
+      ...(foreignKey.onDelete === undefined
+        ? {}
+        : { onDelete: parseForeignKeyAction(foreignKey.onDelete, `${itemFieldName}.onDelete`) }),
       referencedColumns: parseStringList(
         foreignKey.referencedColumns,
         `${itemFieldName}.referencedColumns`
@@ -619,6 +631,20 @@ function parseStorageSchemaForeignKeys(
       sourceFields: parseStringList(foreignKey.sourceFields, `${itemFieldName}.sourceFields`)
     };
   });
+}
+
+function parseForeignKeyAction(value: unknown, fieldName: string): StorageSchemaForeignKeyAction {
+  const action = parseRequiredString(value, fieldName);
+  if (
+    action !== 'cascade' &&
+    action !== 'no action' &&
+    action !== 'restrict' &&
+    action !== 'set default' &&
+    action !== 'set null'
+  ) {
+    throw new Error(`${fieldName} must be a supported foreign key action`);
+  }
+  return action;
 }
 
 function parseStorageSchemaTableColumns(
