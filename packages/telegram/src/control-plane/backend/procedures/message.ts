@@ -1,15 +1,27 @@
-import { query } from '@agentg/rpc/surface';
-import { messageLookupInputSchema, messageLookupOutputSchema } from '../contracts.js';
-import type { TelegramRpcRuntime } from '../../../rpc/runtime.js';
-import { rpc } from '../../../rpc/trpc.js';
+import { query } from '@agentg/rpc/domain';
+import { z } from 'zod';
+
+import type { TelegramRpcRuntime } from '../../../rpc/setup.js';
 import { and, eq } from 'drizzle-orm';
-import type { MessageLookupInput, MessageLookupOutput } from '../contracts.js';
 import { telegramMessages } from '../../../database/schema.js';
 import type { TelegramProcedureContext } from '../../../procedure-runtime/context.js';
 import { readMessageSelection, toReadMessages } from '../../../read-model/message.js';
+import { nonEmptyStringSchema, telegramReadMessageSchema } from '../../../read-model/api.js';
 
-export const message = query((runtime: TelegramRpcRuntime) =>
-  rpc
+export const messageLookupInputSchema = z.object({
+  chatId: nonEmptyStringSchema,
+  messageId: nonEmptyStringSchema
+});
+
+export const messageLookupOutputSchema = z.object({
+  message: telegramReadMessageSchema.nullable()
+});
+
+export type MessageLookupInput = z.infer<typeof messageLookupInputSchema>;
+export type MessageLookupOutput = z.infer<typeof messageLookupOutputSchema>;
+
+export const message = query((runtime: TelegramRpcRuntime, procedure) =>
+  procedure
     .input(messageLookupInputSchema)
     .output(messageLookupOutputSchema)
     .query(({ input }) => runMessage(runtime, input))

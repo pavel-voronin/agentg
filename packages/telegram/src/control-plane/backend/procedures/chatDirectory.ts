@@ -1,9 +1,8 @@
-import { query } from '@agentg/rpc/surface';
-import { chatDirectoryInputSchema, chatDirectoryOutputSchema } from '../contracts.js';
-import type { TelegramRpcRuntime } from '../../../rpc/runtime.js';
-import { rpc } from '../../../rpc/trpc.js';
+import { query } from '@agentg/rpc/domain';
+import { z } from 'zod';
+
+import type { TelegramRpcRuntime } from '../../../rpc/setup.js';
 import { asc, sql } from 'drizzle-orm';
-import type { ChatDirectoryInput, ChatDirectoryOutput, ChatFolder } from '../contracts.js';
 import { telegramChatFolderInfos, telegramChats } from '../../../database/schema.js';
 import type { TelegramProcedureContext } from '../../../procedure-runtime/context.js';
 import {
@@ -18,9 +17,33 @@ import {
   toChatDirectoryEntries
 } from '../chatDirectory.js';
 import { andSql } from '../../../read-model/sql.js';
+import { nonEmptyStringSchema } from '../../../read-model/api.js';
+import {
+  chatDirectoryEntrySchema,
+  chatFolderSchema,
+  chatTypeCountSchema,
+  type ChatFolder
+} from '../chatDirectoryModels.js';
 
-export const chatDirectory = query((runtime: TelegramRpcRuntime) =>
-  rpc
+export const chatDirectoryInputSchema = z
+  .object({
+    query: nonEmptyStringSchema.optional(),
+    type: nonEmptyStringSchema.optional()
+  })
+  .default({});
+
+export const chatDirectoryOutputSchema = z.object({
+  chats: z.array(chatDirectoryEntrySchema),
+  folders: z.array(chatFolderSchema),
+  navigationChats: z.array(chatDirectoryEntrySchema),
+  types: z.array(chatTypeCountSchema)
+});
+
+export type ChatDirectoryInput = z.infer<typeof chatDirectoryInputSchema>;
+export type ChatDirectoryOutput = z.infer<typeof chatDirectoryOutputSchema>;
+
+export const chatDirectory = query((runtime: TelegramRpcRuntime, procedure) =>
+  procedure
     .input(chatDirectoryInputSchema)
     .output(chatDirectoryOutputSchema)
     .query(({ input }) => runChatDirectory(runtime, input))

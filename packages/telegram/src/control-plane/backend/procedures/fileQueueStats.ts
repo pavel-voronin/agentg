@@ -1,12 +1,34 @@
-import { query } from '@agentg/rpc/surface';
-import { fileQueueStatsInputSchema, fileQueueStatsOutputSchema } from '../contracts.js';
-import type { TelegramRpcRuntime } from '../../../rpc/runtime.js';
-import { rpc } from '../../../rpc/trpc.js';
-import type { FileQueueStatsOutput } from '../contracts.js';
-import type { TelegramProcedureContext } from '../../../procedure-runtime/context.js';
+import { query } from '@agentg/rpc/domain';
+import { z } from 'zod';
 
-export const fileQueueStats = query((runtime: TelegramRpcRuntime) =>
-  rpc
+import type { TelegramRpcRuntime } from '../../../rpc/setup.js';
+import type { TelegramProcedureContext } from '../../../procedure-runtime/context.js';
+import { nonNegativeIntegerSchema } from '../../../read-model/api.js';
+
+export const fileQueueStatsSchema = z.object({
+  downloadingCount: nonNegativeIntegerSchema,
+  failedCount: nonNegativeIntegerSchema,
+  knownCount: nonNegativeIntegerSchema,
+  knownDownloadedBytes: nonNegativeIntegerSchema,
+  knownRemainingBytes: nonNegativeIntegerSchema,
+  knownTotalBytes: nonNegativeIntegerSchema,
+  queuedCount: nonNegativeIntegerSchema,
+  readyCount: nonNegativeIntegerSchema,
+  remainingCount: nonNegativeIntegerSchema,
+  totalCount: nonNegativeIntegerSchema,
+  unknownRemainingCount: nonNegativeIntegerSchema
+});
+
+export const fileQueueStatsInputSchema = z.object({}).default({});
+
+export const fileQueueStatsOutputSchema = z.object({
+  stats: fileQueueStatsSchema
+});
+
+export type FileQueueStatsOutput = z.infer<typeof fileQueueStatsOutputSchema>;
+
+export const fileQueueStats = query((runtime: TelegramRpcRuntime, procedure) =>
+  procedure
     .input(fileQueueStatsInputSchema)
     .output(fileQueueStatsOutputSchema)
     .query(() => runFileQueueStats(runtime))

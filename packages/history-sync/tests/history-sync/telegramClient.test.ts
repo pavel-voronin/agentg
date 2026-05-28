@@ -1,6 +1,6 @@
 import type { Server } from 'node:http';
 
-import { createHTTPServer } from '@trpc/server/adapters/standalone';
+import { createInternalTrpcHttpServer } from '@agentg/rpc/http-server';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
@@ -40,8 +40,7 @@ describe('createTrpcTelegramHistoryClient', () => {
         }
       ])
     });
-    const server = createHTTPServer({
-      allowMethodOverride: true,
+    const server = createInternalTrpcHttpServer({
       router
     });
     const port = await listenEphemeral(server);

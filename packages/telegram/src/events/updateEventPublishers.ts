@@ -17,7 +17,7 @@ import {
   type TelegramEventSourceUpdate,
   type TelegramEventSourceUser
 } from './contracts.js';
-import type { TelegramMessageTextEntity } from '../rpc/contracts.js';
+import type { TelegramMessageTextEntity } from '../read-model/api.js';
 import { chatDirectoryEntryByChatId } from '../control-plane/backend/chatDirectory.js';
 import { messageTextEntitiesFromStorage, readMessageSelection } from '../read-model/message.js';
 import {

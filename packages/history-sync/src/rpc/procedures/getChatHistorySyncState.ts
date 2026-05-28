@@ -1,15 +1,16 @@
-import { query } from '@agentg/rpc/surface';
+import { query } from '@agentg/rpc/domain';
 import { asc, eq } from 'drizzle-orm';
+import { z } from 'zod';
 
 import { subtractIntervals } from '../../ranges.js';
+import {
+  historySyncRangeSchema,
+  isoDateTimeStringSchema,
+  nonEmptyStringSchema
+} from '../../rangeSchema.js';
 import { projectTargetsForChat } from '../../reconciler.js';
 import { historySyncTargets } from '../../schema.js';
-import {
-  historySyncChatHistorySyncStateOutputSchema,
-  historySyncGetChatHistorySyncStateInputSchema
-} from '../historySyncContracts.js';
-import { runtimeForCall, type CreateHistorySyncRouterOptions } from '../runtime.js';
-import { rpc } from '../trpc.js';
+import { runtimeForCall, type CreateHistorySyncRouterOptions } from '../setup.js';
 import {
   clipIntervalsForDisplay,
   currentHistorySyncProjectionContext,
@@ -21,8 +22,56 @@ import {
   toTargetResponse
 } from './support.js';
 
-export const getChatHistorySyncState = query((options: CreateHistorySyncRouterOptions) =>
-  rpc
+export const historySyncGetChatHistorySyncStateInputSchema = z.object({
+  chatId: nonEmptyStringSchema
+});
+
+export const historySyncSelectedChatOutputSchema = z.object({
+  _model: z.literal('telegram.chat'),
+  historySyncBeginningReached: z.boolean(),
+  historySyncStartAt: isoDateTimeStringSchema.nullable(),
+  id: z.string(),
+  isBot: z.boolean(),
+  messageCount: z.number().int().nonnegative(),
+  title: z.string(),
+  type: z.string(),
+  updatedAt: isoDateTimeStringSchema
+});
+
+export const historySyncIntervalOutputSchema = z.object({
+  coveredAt: isoDateTimeStringSchema.optional(),
+  endAt: isoDateTimeStringSchema,
+  messageCount: z.number().int().nonnegative().optional(),
+  startAt: isoDateTimeStringSchema
+});
+
+export const historySyncTargetOutputSchema = z.object({
+  chatId: z.string(),
+  id: z.string(),
+  projected: historySyncIntervalOutputSchema.optional(),
+  range: historySyncRangeSchema,
+  templateId: z.string().nullable().optional()
+});
+
+export const historySyncChatHistorySyncStateOutputSchema = z.object({
+  chat: historySyncSelectedChatOutputSchema.nullable(),
+  coverage: z.array(historySyncIntervalOutputSchema),
+  desired: z.array(historySyncIntervalOutputSchema),
+  missing: z.array(historySyncIntervalOutputSchema),
+  targets: z.array(historySyncTargetOutputSchema)
+});
+
+export type HistorySyncGetChatHistorySyncStateInput = z.infer<
+  typeof historySyncGetChatHistorySyncStateInputSchema
+>;
+export type HistorySyncChatHistorySyncStateOutput = z.infer<
+  typeof historySyncChatHistorySyncStateOutputSchema
+>;
+export type HistorySyncIntervalOutput = z.infer<typeof historySyncIntervalOutputSchema>;
+export type HistorySyncTargetOutput = z.infer<typeof historySyncTargetOutputSchema>;
+
+export const getChatHistorySyncState = query((options: CreateHistorySyncRouterOptions, procedure) =>
+  procedure
     .input(historySyncGetChatHistorySyncStateInputSchema)
     .output(historySyncChatHistorySyncStateOutputSchema)
     .query(async ({ ctx, input }) => {

@@ -15,8 +15,11 @@ import type {
   TelegramReadMessage,
   TelegramMessageServiceAction,
   TelegramMessageTextEntity
-} from '../rpc/contracts.js';
-import type { ChatDirectoryEntry, ChatFolder } from '../control-plane/backend/contracts.js';
+} from '../read-model/api.js';
+import type {
+  ChatDirectoryEntry,
+  ChatFolder
+} from '../control-plane/backend/chatDirectoryModels.js';
 
 export type TelegramEventPersistResult = {
   chat: boolean;

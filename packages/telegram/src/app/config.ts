@@ -8,7 +8,7 @@ import {
   readInternalTrpcClientConfig,
   type InternalTrpcBindConfig,
   type InternalTrpcClientConfig
-} from '../rpc/config.js';
+} from '@agentg/rpc/config';
 import type { TelegramClientConfig } from '../tdlib/client.js';
 
 const dotenvDirectory = loadNearestDotenv();

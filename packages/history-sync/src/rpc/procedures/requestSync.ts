@@ -1,15 +1,25 @@
 import { createIntegrationEvent } from '@agentg/events/envelope';
-import { mutation } from '@agentg/rpc/surface';
+import { mutation } from '@agentg/rpc/domain';
+import { z } from 'zod';
 
-import {
-  historySyncRequestSyncInputSchema,
-  historySyncRequestSyncOutputSchema
-} from '../historySyncContracts.js';
-import { runtimeForCall, type CreateHistorySyncRouterOptions } from '../runtime.js';
-import { rpc } from '../trpc.js';
+import { nonEmptyStringSchema } from '../../rangeSchema.js';
+import { runtimeForCall, type CreateHistorySyncRouterOptions } from '../setup.js';
 
-export const requestSync = mutation((options: CreateHistorySyncRouterOptions) =>
-  rpc
+export const historySyncRequestSyncInputSchema = z
+  .object({
+    chatId: nonEmptyStringSchema.optional()
+  })
+  .default({});
+
+export const historySyncRequestSyncOutputSchema = z.object({
+  requested: z.boolean()
+});
+
+export type HistorySyncRequestSyncInput = z.infer<typeof historySyncRequestSyncInputSchema>;
+export type HistorySyncRequestSyncOutput = z.infer<typeof historySyncRequestSyncOutputSchema>;
+
+export const requestSync = mutation((options: CreateHistorySyncRouterOptions, procedure) =>
+  procedure
     .input(historySyncRequestSyncInputSchema)
     .output(historySyncRequestSyncOutputSchema)
     .mutation(({ ctx, input }) => {

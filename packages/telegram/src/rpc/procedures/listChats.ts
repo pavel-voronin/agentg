@@ -1,11 +1,8 @@
-import { query } from '@agentg/rpc/surface';
+import { query } from '@agentg/rpc/domain';
 import { z } from 'zod';
 import type { ChatList$Input } from 'tdlib-types';
-import { telegramHistoryChatSchema, telegramHistoryListChatsInputSchema } from '../contracts.js';
-import type { TelegramRpcRuntime } from '../runtime.js';
-import { rpc } from '../trpc.js';
+import type { TelegramRpcRuntime } from '../setup.js';
 import { asc } from 'drizzle-orm';
-import type { TelegramHistoryChat, TelegramHistoryListChatsRequest } from '../contracts.js';
 import {
   telegramChatFolderInfos,
   telegramChatPositions,
@@ -20,6 +17,21 @@ import { telegramTdlibPriorities } from '../../tdlib/priority.js';
 import { telegramWireJsonObject } from '../../tdlib/wire.js';
 import { parseLimit } from '../../procedure-runtime/inputs.js';
 
+export const telegramHistoryChatSchema = z.object({
+  _model: z.literal('telegram.chat'),
+  id: z.string(),
+  title: z.string(),
+  type: z.string()
+});
+
+export const telegramHistoryListChatsInputSchema = z.object({
+  discover: z.boolean().optional(),
+  loadBatchSize: z.number().int().positive().optional()
+});
+
+export type TelegramHistoryChat = z.infer<typeof telegramHistoryChatSchema>;
+export type TelegramHistoryListChatsRequest = z.infer<typeof telegramHistoryListChatsInputSchema>;
+
 type ChatListKind =
   | {
       kind: 'archive' | 'main';
@@ -29,8 +41,8 @@ type ChatListKind =
       kind: 'folder';
     };
 
-export const listChats = query((runtime: TelegramRpcRuntime) =>
-  rpc
+export const listChats = query((runtime: TelegramRpcRuntime, procedure) =>
+  procedure
     .input(telegramHistoryListChatsInputSchema)
     .output(z.array(telegramHistoryChatSchema))
     .query(({ input }) => runListChats(runtime, input))

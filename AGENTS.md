@@ -68,6 +68,12 @@
 - Existing domain coupling must not be extended. If a requested change touches
   existing coupling, propose a replacement that removes or isolates the coupling
   through a neutral contract.
+- A domain must not export procedure-specific `Input`/`Output` DTO types for
+  other domains. Cross-domain procedure access must go through a typed client or
+  a local domain port; procedure schemas and DTO names stay inside the owning
+  domain.
+- Domain RPC clients must be produced by `defineInternalRpcDomain`. Do not add
+  domain-owned client facade files that mechanically wrap every procedure.
 - If every apparent implementation path requires domain mixing, stop and re-plan
   instead of offering it as an option.
 

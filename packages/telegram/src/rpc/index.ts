@@ -1,27 +1,2 @@
-export { createTelegramRpcClient } from './client.js';
-export type {
-  TelegramChatHistoryFactsChat,
-  TelegramCountMessagesInIntervalsInput,
-  TelegramCountMessagesInIntervalsOutput,
-  TelegramEnsureHistoryCoverageInput,
-  TelegramEnsureHistoryCoverageOutput,
-  TelegramFileRef,
-  TelegramGetChatHistoryFactsInput,
-  TelegramGetChatHistoryFactsOutput,
-  TelegramGetChatInput,
-  TelegramGetChatOutput,
-  TelegramGetHistoryCoverageInput,
-  TelegramGetHistoryCoverageOutput,
-  TelegramHistoryChat,
-  TelegramHistoryCoverageSegment,
-  TelegramHistoryFetchPageRequest,
-  TelegramHistoryFetchPageResult,
-  TelegramHistoryInterval,
-  TelegramHistoryListChatsRequest,
-  TelegramListRecentMessagesOutput,
-  TelegramListRecentMessagesInput,
-  TelegramReadChat,
-  TelegramReadMessage,
-  TelegramSearchMessagesInput,
-  TelegramSearchMessagesOutput
-} from './contracts.js';
+export { createTelegramRpcClient } from './setup.js';
+export type { TelegramRpcClient } from './setup.js';

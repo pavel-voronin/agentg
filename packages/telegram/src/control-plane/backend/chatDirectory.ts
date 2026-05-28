@@ -9,8 +9,8 @@ import {
   readTelegramFileRefsForOwners,
   type TelegramFileOwnerKey
 } from '../../files/read.js';
-import type { ChatDirectoryEntry, ChatFolder, ChatTypeCount } from './contracts.js';
-import type { TelegramFileRef, TelegramReadMessage } from '../../rpc/contracts.js';
+import type { ChatDirectoryEntry, ChatFolder, ChatTypeCount } from './chatDirectoryModels.js';
+import type { TelegramFileRef, TelegramReadMessage } from '../../read-model/api.js';
 import {
   asPlainRecord,
   readChatSelection,

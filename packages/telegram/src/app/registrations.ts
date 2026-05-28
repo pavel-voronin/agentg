@@ -1,4 +1,4 @@
-import { telegramRpcSurface } from '../rpc/surface.js';
+import { telegramRpc } from '../rpc/setup.js';
 import { createTelegramControlPlane } from '../control-plane/manifest.js';
 
 const TELEGRAM_OPERATION_EVENT_TYPES = [
@@ -156,7 +156,7 @@ export function createTelegramServiceManifest(config: {
     ),
     events: TELEGRAM_EVENT_TYPES,
     extensions: [],
-    procedures: telegramRpcSurface.procedures(),
+    procedures: telegramRpc.procedures(),
     required: true,
     rpcUrl: config.rpcUrl,
     slug: 'telegram'

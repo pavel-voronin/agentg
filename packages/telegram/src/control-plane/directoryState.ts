@@ -7,7 +7,7 @@ import {
 } from '@agentg/control-plane-sdk/host';
 
 import type { ChatPlacement, TelegramDirectoryChat, TelegramDirectoryFolder } from './views.js';
-import type { TelegramFileRef } from '../rpc/contracts.js';
+import type { TelegramFileRef } from '../read-model/api.js';
 
 type TelegramDirectoryResult = {
   chats?: unknown;

@@ -1,24 +1,49 @@
-import { query } from '@agentg/rpc/surface';
-import {
-  telegramGetChatHistoryFactsInputSchema,
-  telegramGetChatHistoryFactsOutputSchema
-} from '../contracts.js';
-import type { TelegramRpcRuntime } from '../runtime.js';
-import { rpc } from '../trpc.js';
+import { query } from '@agentg/rpc/domain';
+import { z } from 'zod';
+
+import type { TelegramRpcRuntime } from '../setup.js';
 import { and, asc, eq, isNotNull, sql } from 'drizzle-orm';
-import type {
-  TelegramGetChatHistoryFactsInput,
-  TelegramGetChatHistoryFactsOutput
-} from '../contracts.js';
 import type { TelegramDatabase } from '../../database/client.js';
 import { telegramChatPositions, telegramChats, telegramMessages } from '../../database/schema.js';
 import type { TelegramProcedureContext } from '../../procedure-runtime/context.js';
 import { readChatSelection, toTelegramChatStorageRow } from '../../read-model/chat.js';
 import { readTelegramChatUsersByChat, telegramChatUserId } from '../../read-model/chatUser.js';
 import { toNullableIsoString } from '../../read-model/dates.js';
+import {
+  isoDateTimeStringSchema,
+  nonEmptyStringSchema,
+  nonNegativeIntegerSchema
+} from '../../read-model/api.js';
 
-export const getChatHistoryFacts = query((runtime: TelegramRpcRuntime) =>
-  rpc
+export const telegramChatHistoryFactsChatSchema = z.object({
+  _model: z.literal('telegram.chat'),
+  id: z.string(),
+  isBot: z.boolean(),
+  title: z.string(),
+  type: z.string(),
+  updatedAt: isoDateTimeStringSchema
+});
+
+export const telegramGetChatHistoryFactsInputSchema = z.object({
+  chatId: nonEmptyStringSchema
+});
+
+export const telegramGetChatHistoryFactsOutputSchema = z.object({
+  chat: telegramChatHistoryFactsChatSchema.nullable(),
+  earliestMessageDate: isoDateTimeStringSchema.nullable(),
+  messageCount: nonNegativeIntegerSchema
+});
+
+export type TelegramChatHistoryFactsChat = z.infer<typeof telegramChatHistoryFactsChatSchema>;
+export type TelegramGetChatHistoryFactsInput = z.infer<
+  typeof telegramGetChatHistoryFactsInputSchema
+>;
+export type TelegramGetChatHistoryFactsOutput = z.infer<
+  typeof telegramGetChatHistoryFactsOutputSchema
+>;
+
+export const getChatHistoryFacts = query((runtime: TelegramRpcRuntime, procedure) =>
+  procedure
     .input(telegramGetChatHistoryFactsInputSchema)
     .output(telegramGetChatHistoryFactsOutputSchema)
     .query(({ input }) => runGetChatHistoryFacts(runtime, input))

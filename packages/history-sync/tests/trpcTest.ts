@@ -1,6 +1,6 @@
-import { initTRPC } from '@trpc/server';
+import { createInternalTrpcService } from '@agentg/rpc/trpc';
 
-const testTrpc = initTRPC.create();
+const testRpcService = createInternalTrpcService('test');
 
-export const testRpc = testTrpc.procedure;
-export const testRpcRouter = testTrpc.router;
+export const testRpc = testRpcService.procedure;
+export const testRpcRouter = testRpcService.router;

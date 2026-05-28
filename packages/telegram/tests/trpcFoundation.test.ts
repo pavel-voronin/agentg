@@ -1,50 +1,36 @@
 import type { Server } from 'node:http';
 
-import { createTRPCClient, httpBatchLink } from '@trpc/client';
-import { createHTTPServer } from '@trpc/server/adapters/standalone';
+import { createInternalTrpcClient } from '@agentg/rpc/client';
+import { createInternalTrpcHttpServer } from '@agentg/rpc/http-server';
+import { createInternalTrpcService } from '@agentg/rpc/trpc';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
-import {
-  createTelegramRpcContext,
-  INTERNAL_RPC_CORRELATION_ID_HEADER,
-  rpc,
-  telegramRpcRouter
-} from '../src/rpc/trpc.js';
-
 describe('Telegram tRPC foundation', () => {
   it('performs a package-local tRPC client/server round trip', async () => {
-    const testRouter = telegramRpcRouter({
-      domainError: rpc.output(z.object({ value: z.string() })).query(() => {
+    const testRpc = createInternalTrpcService('telegram-test');
+    const testRouter = testRpc.router({
+      domainError: testRpc.procedure.output(z.object({ value: z.string() })).query(() => {
         throw new Error('Telegram value was not found');
       }),
-      echo: rpc
+      echo: testRpc.procedure
         .input(z.object({ value: z.string() }))
-        .output(z.object({ correlationId: z.string().optional(), value: z.string() }))
-        .query(({ ctx, input }) => ({
-          ...(ctx.correlationId === undefined ? {} : { correlationId: ctx.correlationId }),
+        .output(z.object({ value: z.string() }))
+        .query(({ input }) => ({
           value: input.value
         }))
     });
-    const server = createHTTPServer({
-      createContext: createTelegramRpcContext,
+    const server = createInternalTrpcHttpServer({
+      createContext: testRpc.createContext,
       router: testRouter
     });
     const port = await listenEphemeral(server);
-    const client = createTRPCClient<typeof testRouter>({
-      links: [
-        httpBatchLink({
-          headers: {
-            [INTERNAL_RPC_CORRELATION_ID_HEADER]: 'telegram-stage-1'
-          },
-          url: `http://127.0.0.1:${String(port)}`
-        })
-      ]
+    const client = createInternalTrpcClient<typeof testRouter>({
+      url: `http://127.0.0.1:${String(port)}`
     });
 
     try {
       await expect(client.echo.query({ value: 'telegram' })).resolves.toEqual({
-        correlationId: 'telegram-stage-1',
         value: 'telegram'
       });
       await expect(client.domainError.query()).rejects.toThrow('Telegram value was not found');

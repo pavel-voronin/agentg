@@ -19,12 +19,12 @@ import {
   TELEGRAM_HISTORY_TICK_MS,
   type TelegramHistoryInterval
 } from './time.js';
+import type { TelegramEnsureHistoryCoverageOutput } from '../rpc/procedures/ensureHistoryCoverage.js';
 import type {
-  TelegramEnsureHistoryCoverageOutput,
   TelegramHistoryFetchPageRequest,
   TelegramHistoryFetchPageResult
-} from '../rpc/contracts.js';
-import type { TelegramRpcRuntime } from '../rpc/runtime.js';
+} from '../rpc/procedures/fetchPage.js';
+import type { TelegramRpcRuntime } from '../rpc/setup.js';
 import { parseLimit, requireDate } from '../procedure-runtime/inputs.js';
 import { telegramTdlibPriorities, type TelegramTdlibPriority } from '../tdlib/priority.js';
 import { telegramWireDate, telegramWireIdNumber, type TelegramWireMessage } from '../tdlib/wire.js';

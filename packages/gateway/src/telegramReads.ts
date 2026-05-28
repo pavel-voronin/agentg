@@ -75,8 +75,24 @@ function callTelegramMethod(
 ): Promise<unknown> {
   switch (method) {
     case 'telegram.getChat':
-      return telegram.getChat(params);
+      return telegram.getChat(requireTelegramGetChatParams(params));
     default:
       return Promise.resolve(undefined);
   }
+}
+
+function requireTelegramGetChatParams(params: unknown): { chatId: string } {
+  if (
+    typeof params === 'object' &&
+    params !== null &&
+    'chatId' in params &&
+    typeof params.chatId === 'string' &&
+    params.chatId.trim() !== ''
+  ) {
+    return {
+      chatId: params.chatId
+    };
+  }
+
+  throw new Error('telegram.getChat requires chatId');
 }

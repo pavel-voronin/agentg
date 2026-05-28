@@ -1,19 +1,29 @@
-import { query } from '@agentg/rpc/surface';
-import {
-  telegramGetHistoryCoverageInputSchema,
-  telegramGetHistoryCoverageOutputSchema
-} from '../contracts.js';
-import type { TelegramRpcRuntime } from '../runtime.js';
-import { rpc } from '../trpc.js';
-import { listTelegramHistoryCoverage } from '../../history/coverage.js';
-import type {
-  TelegramGetHistoryCoverageInput,
-  TelegramGetHistoryCoverageOutput
-} from '../contracts.js';
-import type { TelegramProcedureContext } from '../../procedure-runtime/context.js';
+import { query } from '@agentg/rpc/domain';
+import { z } from 'zod';
 
-export const getHistoryCoverage = query((runtime: TelegramRpcRuntime) =>
-  rpc
+import type { TelegramRpcRuntime } from '../setup.js';
+import { listTelegramHistoryCoverage } from '../../history/coverage.js';
+import type { TelegramProcedureContext } from '../../procedure-runtime/context.js';
+import {
+  nonEmptyStringSchema,
+  telegramHistoryCoverageSegmentSchema
+} from '../../read-model/api.js';
+
+export const telegramGetHistoryCoverageInputSchema = z.object({
+  chatId: nonEmptyStringSchema
+});
+
+export const telegramGetHistoryCoverageOutputSchema = z.object({
+  coverage: z.array(telegramHistoryCoverageSegmentSchema)
+});
+
+export type TelegramGetHistoryCoverageInput = z.infer<typeof telegramGetHistoryCoverageInputSchema>;
+export type TelegramGetHistoryCoverageOutput = z.infer<
+  typeof telegramGetHistoryCoverageOutputSchema
+>;
+
+export const getHistoryCoverage = query((runtime: TelegramRpcRuntime, procedure) =>
+  procedure
     .input(telegramGetHistoryCoverageInputSchema)
     .output(telegramGetHistoryCoverageOutputSchema)
     .query(({ input }) => runGetHistoryCoverage(runtime, input))

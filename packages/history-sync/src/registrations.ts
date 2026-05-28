@@ -1,5 +1,5 @@
 import { createHistorySyncControlPlane } from './control-plane/manifest.js';
-import { historySyncRpcSurface } from './rpc/surface.js';
+import { historySyncRpc } from './rpc/setup.js';
 
 export function createHistorySyncServiceManifest(config: {
   controlPlaneAssetVersion: string;
@@ -22,7 +22,7 @@ export function createHistorySyncServiceManifest(config: {
       'history-sync.target.upserted'
     ],
     extensions: [],
-    procedures: historySyncRpcSurface.procedures(),
+    procedures: historySyncRpc.procedures(),
     required: true,
     rpcUrl: config.rpcUrl,
     slug: 'history-sync'

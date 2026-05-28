@@ -1,16 +1,34 @@
 import { createIntegrationEvent } from '@agentg/events/envelope';
-import { mutation } from '@agentg/rpc/surface';
+import { mutation } from '@agentg/rpc/domain';
+import { z } from 'zod';
 
+import { historySyncRangeSchema, nonEmptyStringSchema } from '../../rangeSchema.js';
 import { deleteManualHistorySyncTargetFromCommand } from '../../targetCommands.js';
-import {
-  historySyncDeleteTargetInputSchema,
-  historySyncTargetMutationOutputSchema
-} from '../historySyncContracts.js';
-import { runtimeForCall, type CreateHistorySyncRouterOptions } from '../runtime.js';
-import { rpc } from '../trpc.js';
+import { runtimeForCall, type CreateHistorySyncRouterOptions } from '../setup.js';
 
-export const deleteTarget = mutation((options: CreateHistorySyncRouterOptions) =>
-  rpc
+export const historySyncDeleteTargetInputSchema = z.object({
+  targetId: nonEmptyStringSchema
+});
+
+export const historySyncStoredTargetOutputSchema = z.object({
+  chatId: z.string(),
+  id: z.string(),
+  range: historySyncRangeSchema,
+  templateId: z.string().optional()
+});
+
+export const historySyncTargetMutationOutputSchema = z.object({
+  deleted: z.boolean(),
+  target: historySyncStoredTargetOutputSchema.optional(),
+  upserted: z.boolean()
+});
+
+export type HistorySyncDeleteTargetInput = z.infer<typeof historySyncDeleteTargetInputSchema>;
+export type HistorySyncStoredTargetOutput = z.infer<typeof historySyncStoredTargetOutputSchema>;
+export type HistorySyncTargetMutationOutput = z.infer<typeof historySyncTargetMutationOutputSchema>;
+
+export const deleteTarget = mutation((options: CreateHistorySyncRouterOptions, procedure) =>
+  procedure
     .input(historySyncDeleteTargetInputSchema)
     .output(historySyncTargetMutationOutputSchema)
     .mutation(async ({ ctx, input }) => {

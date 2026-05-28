@@ -1,12 +1,8 @@
-import { query } from '@agentg/rpc/surface';
-import {
-  telegramSearchMessagesInputSchema,
-  telegramSearchMessagesOutputSchema
-} from '../contracts.js';
-import type { TelegramRpcRuntime } from '../runtime.js';
-import { rpc } from '../trpc.js';
+import { query } from '@agentg/rpc/domain';
+import { z } from 'zod';
+
+import type { TelegramRpcRuntime } from '../setup.js';
 import { and, desc, eq, ilike, sql } from 'drizzle-orm';
-import type { TelegramSearchMessagesInput, TelegramSearchMessagesOutput } from '../contracts.js';
 import { telegramMessages } from '../../database/schema.js';
 import type { TelegramProcedureContext } from '../../procedure-runtime/context.js';
 import {
@@ -15,9 +11,27 @@ import {
   toReadMessages
 } from '../../read-model/message.js';
 import { parseLimit } from '../../procedure-runtime/inputs.js';
+import {
+  nonEmptyStringSchema,
+  positiveIntegerSchema,
+  telegramReadMessageSchema
+} from '../../read-model/api.js';
 
-export const searchMessages = query((runtime: TelegramRpcRuntime) =>
-  rpc
+export const telegramSearchMessagesInputSchema = z.object({
+  chatId: nonEmptyStringSchema.optional(),
+  limit: positiveIntegerSchema.optional(),
+  query: nonEmptyStringSchema
+});
+
+export const telegramSearchMessagesOutputSchema = z.object({
+  messages: z.array(telegramReadMessageSchema)
+});
+
+export type TelegramSearchMessagesInput = z.infer<typeof telegramSearchMessagesInputSchema>;
+export type TelegramSearchMessagesOutput = z.infer<typeof telegramSearchMessagesOutputSchema>;
+
+export const searchMessages = query((runtime: TelegramRpcRuntime, procedure) =>
+  procedure
     .input(telegramSearchMessagesInputSchema)
     .output(telegramSearchMessagesOutputSchema)
     .query(({ input }) => runSearchMessages(runtime, input))

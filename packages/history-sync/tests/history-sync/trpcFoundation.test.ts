@@ -1,6 +1,5 @@
 import type { Server } from 'node:http';
 
-import { createTRPCClient, httpBatchLink } from '@trpc/client';
 import type { EventBus, EventSubscription } from '@agentg/events/bus';
 import { createIntegrationEvent, type IntegrationEvent } from '@agentg/events/envelope';
 import {
@@ -10,54 +9,37 @@ import {
   RPC_CALL_STARTED_EVENT_SUFFIX,
   rpcCallEventType
 } from '@agentg/rpc/call-events';
-import { createInternalRpcCallOptionsHeaders } from '@agentg/rpc/call-options';
-import { createHTTPServer } from '@trpc/server/adapters/standalone';
+import { createInternalTrpcClient } from '@agentg/rpc/client';
+import { createInternalTrpcHttpServer } from '@agentg/rpc/http-server';
+import { createInternalTrpcService } from '@agentg/rpc/trpc';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
-import {
-  createHistorySyncRpcContext,
-  historySyncRpcRouter,
-  INTERNAL_RPC_CORRELATION_ID_HEADER,
-  rpc
-} from '../../src/rpc/trpc.js';
-
 describe('History Sync tRPC foundation', () => {
   it('performs a package-local tRPC client/server round trip', async () => {
-    const testRouter = historySyncRpcRouter({
-      domainError: rpc.output(z.object({ value: z.string() })).query(() => {
+    const testRpc = createInternalTrpcService('history-sync-test');
+    const testRouter = testRpc.router({
+      domainError: testRpc.procedure.output(z.object({ value: z.string() })).query(() => {
         throw new Error('History Sync value was not found');
       }),
-      echo: rpc
+      echo: testRpc.procedure
         .input(z.object({ value: z.string() }))
-        .output(z.object({ correlationId: z.string().optional(), value: z.string() }))
-        .query(({ ctx, input }) => ({
-          ...(ctx.correlationId === undefined ? {} : { correlationId: ctx.correlationId }),
+        .output(z.object({ value: z.string() }))
+        .query(({ input }) => ({
           value: input.value
         }))
     });
-    const server = createHTTPServer({
-      createContext: createHistorySyncRpcContext,
+    const server = createInternalTrpcHttpServer({
+      createContext: testRpc.createContext,
       router: testRouter
     });
     const port = await listenEphemeral(server);
-    const client = createTRPCClient<typeof testRouter>({
-      links: [
-        httpBatchLink({
-          headers({ opList }) {
-            return {
-              [INTERNAL_RPC_CORRELATION_ID_HEADER]: 'history-sync-stage-1',
-              ...createInternalRpcCallOptionsHeaders(opList)
-            };
-          },
-          url: `http://127.0.0.1:${String(port)}`
-        })
-      ]
+    const client = createInternalTrpcClient<typeof testRouter>({
+      url: `http://127.0.0.1:${String(port)}`
     });
 
     try {
       await expect(client.echo.query({ value: 'history' })).resolves.toEqual({
-        correlationId: 'history-sync-stage-1',
         value: 'history'
       });
       await expect(client.domainError.query()).rejects.toThrow('History Sync value was not found');
@@ -68,32 +50,35 @@ describe('History Sync tRPC foundation', () => {
 
   it('publishes lifecycle, progress, and failed events by default', async () => {
     const publishedEvents: IntegrationEvent[] = [];
-    const caller = historySyncRpcRouter({
-      domainError: rpc
-        .input(z.object({ value: z.string() }))
-        .output(z.object({ value: z.string() }))
-        .query(() => {
-          throw new Error('History Sync value was denied');
-        }),
-      echo: rpc
-        .input(z.object({ value: z.string() }))
-        .output(z.object({ callId: z.string(), value: z.string() }))
-        .query(({ ctx, input }) => {
-          ctx.progress?.({
-            step: 'loaded'
-          });
+    const testRpc = createInternalTrpcService('history-sync');
+    const caller = testRpc
+      .router({
+        domainError: testRpc.procedure
+          .input(z.object({ value: z.string() }))
+          .output(z.object({ value: z.string() }))
+          .query(() => {
+            throw new Error('History Sync value was denied');
+          }),
+        echo: testRpc.procedure
+          .input(z.object({ value: z.string() }))
+          .output(z.object({ callId: z.string(), value: z.string() }))
+          .query(({ ctx, input }) => {
+            ctx.progress?.({
+              step: 'loaded'
+            });
 
-          return {
-            callId: ctx.callId ?? '',
-            value: input.value
-          };
-        }),
-      throwing: rpc.output(z.object({ value: z.string() })).query(() => {
-        throw new Error('lifecycle boom');
+            return {
+              callId: ctx.callId ?? '',
+              value: input.value
+            };
+          }),
+        throwing: testRpc.procedure.output(z.object({ value: z.string() })).query(() => {
+          throw new Error('lifecycle boom');
+        })
       })
-    }).createCaller({
-      eventBus: createRecordingEventBus(publishedEvents)
-    });
+      .createCaller({
+        eventBus: createRecordingEventBus(publishedEvents)
+      });
 
     await expect(caller.echo({ value: 'ok' })).resolves.toMatchObject({
       value: 'ok'
@@ -173,8 +158,9 @@ describe('History Sync tRPC foundation', () => {
 
   it('applies per-call observable and silent options from batched HTTP headers', async () => {
     const publishedEvents: IntegrationEvent[] = [];
-    const testRouter = historySyncRpcRouter({
-      defaultFact: rpc
+    const testRpc = createInternalTrpcService('history-sync');
+    const testRouter = testRpc.router({
+      defaultFact: testRpc.procedure
         .input(z.object({ value: z.string() }))
         .output(z.object({ value: z.string() }))
         .query(({ ctx, input }) => {
@@ -183,7 +169,7 @@ describe('History Sync tRPC foundation', () => {
             value: input.value
           };
         }),
-      quietFact: rpc
+      quietFact: testRpc.procedure
         .input(z.object({ value: z.string() }))
         .output(z.object({ value: z.string() }))
         .query(({ ctx, input }) => {
@@ -195,7 +181,7 @@ describe('History Sync tRPC foundation', () => {
             value: input.value
           };
         }),
-      silentFact: rpc
+      silentFact: testRpc.procedure
         .input(z.object({ value: z.string() }))
         .output(z.object({ value: z.string() }))
         .query(({ ctx, input }) => {
@@ -208,21 +194,16 @@ describe('History Sync tRPC foundation', () => {
           };
         })
     });
-    const server = createHTTPServer({
+    const server = createInternalTrpcHttpServer({
       createContext: (options) =>
-        createHistorySyncRpcContext(options, {
+        testRpc.createContext(options, {
           eventBus: createRecordingEventBus(publishedEvents)
         }),
       router: testRouter
     });
     const port = await listenEphemeral(server);
-    const client = createTRPCClient<typeof testRouter>({
-      links: [
-        httpBatchLink({
-          headers: ({ opList }) => createInternalRpcCallOptionsHeaders(opList),
-          url: `http://127.0.0.1:${String(port)}`
-        })
-      ]
+    const client = createInternalTrpcClient<typeof testRouter>({
+      url: `http://127.0.0.1:${String(port)}`
     });
 
     try {

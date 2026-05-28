@@ -1,10 +1,9 @@
-import { mutation } from '@agentg/rpc/surface';
-import { messagesPageInputSchema, messagesPageOutputSchema } from '../contracts.js';
-import type { TelegramRpcRuntime } from '../../../rpc/runtime.js';
-import { rpc } from '../../../rpc/trpc.js';
+import { mutation } from '@agentg/rpc/domain';
+import { z } from 'zod';
+
+import type { TelegramRpcRuntime } from '../../../rpc/setup.js';
 import { and, eq, inArray } from 'drizzle-orm';
 import { createTelegramHistoryCoverageChangedEvent } from '../../../events/contracts.js';
-import type { MessagesPageInput, MessagesPageOutput } from '../contracts.js';
 import { telegramChats, telegramMessages } from '../../../database/schema.js';
 import { storeMessage } from '../../../store/message.js';
 import {
@@ -26,9 +25,28 @@ import type { TelegramProcedureContext } from '../../../procedure-runtime/contex
 import { toTelegramDate } from '../../../read-model/dates.js';
 import { readMessageSelection, toReadMessages } from '../../../read-model/message.js';
 import { parseLimit } from '../../../procedure-runtime/inputs.js';
+import {
+  nonEmptyStringSchema,
+  positiveIntegerSchema,
+  telegramReadMessageSchema
+} from '../../../read-model/api.js';
 
-export const messagesPage = mutation((runtime: TelegramRpcRuntime) =>
-  rpc
+export const messagesPageInputSchema = z.object({
+  beforeMessageId: nonEmptyStringSchema.regex(/^[0-9]+$/).optional(),
+  chatId: nonEmptyStringSchema,
+  limit: positiveIntegerSchema.optional()
+});
+
+export const messagesPageOutputSchema = z.object({
+  messages: z.array(telegramReadMessageSchema),
+  reachedStart: z.boolean()
+});
+
+export type MessagesPageInput = z.infer<typeof messagesPageInputSchema>;
+export type MessagesPageOutput = z.infer<typeof messagesPageOutputSchema>;
+
+export const messagesPage = mutation((runtime: TelegramRpcRuntime, procedure) =>
+  procedure
     .input(messagesPageInputSchema)
     .output(messagesPageOutputSchema)
     .mutation(({ input }) => runMessagesPage(runtime, input))

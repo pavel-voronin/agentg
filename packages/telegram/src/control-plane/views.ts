@@ -1,4 +1,4 @@
-import type { TelegramFileRef } from '../rpc/contracts.js';
+import type { TelegramFileRef } from '../read-model/api.js';
 
 export type ChatListMode = 'archive' | 'folder' | 'main';
 

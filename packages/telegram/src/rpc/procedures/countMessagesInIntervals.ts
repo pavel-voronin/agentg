@@ -1,17 +1,39 @@
-import { query } from '@agentg/rpc/surface';
-import {
-  telegramCountMessagesInIntervalsInputSchema,
-  telegramCountMessagesInIntervalsOutputSchema
-} from '../contracts.js';
-import type { TelegramRpcRuntime } from '../runtime.js';
-import { rpc } from '../trpc.js';
+import { query } from '@agentg/rpc/domain';
+import { z } from 'zod';
+
+import type { TelegramRpcRuntime } from '../setup.js';
 import { countTelegramMessagesInIntervals } from '../../history/messageCounts.js';
-import type { TelegramCountMessagesInIntervalsInput } from '../contracts.js';
 import type { TelegramProcedureContext } from '../../procedure-runtime/context.js';
 import { requireDate } from '../../procedure-runtime/inputs.js';
+import {
+  isoDateTimeStringSchema,
+  nonEmptyStringSchema,
+  nonNegativeIntegerSchema
+} from '../../read-model/api.js';
 
-export const countMessagesInIntervals = query((runtime: TelegramRpcRuntime) =>
-  rpc
+export const telegramCountMessagesInIntervalsInputSchema = z.object({
+  chatId: nonEmptyStringSchema,
+  intervals: z.array(
+    z.object({
+      endAt: isoDateTimeStringSchema,
+      startAt: isoDateTimeStringSchema
+    })
+  )
+});
+
+export const telegramCountMessagesInIntervalsOutputSchema = z.object({
+  counts: z.array(nonNegativeIntegerSchema)
+});
+
+export type TelegramCountMessagesInIntervalsInput = z.infer<
+  typeof telegramCountMessagesInIntervalsInputSchema
+>;
+export type TelegramCountMessagesInIntervalsOutput = z.infer<
+  typeof telegramCountMessagesInIntervalsOutputSchema
+>;
+
+export const countMessagesInIntervals = query((runtime: TelegramRpcRuntime, procedure) =>
+  procedure
     .input(telegramCountMessagesInIntervalsInputSchema)
     .output(telegramCountMessagesInIntervalsOutputSchema)
     .query(({ input }) => runCountMessagesInIntervals(runtime, input))

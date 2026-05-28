@@ -13,11 +13,7 @@ import {
   readTelegramFileRefsForOwners,
   type TelegramFileOwnerKey
 } from '../files/read.js';
-import type {
-  TelegramFileRef,
-  TelegramMessageTextEntity,
-  TelegramReadMessage
-} from '../rpc/contracts.js';
+import type { TelegramFileRef, TelegramMessageTextEntity, TelegramReadMessage } from './api.js';
 import { toNullableIsoString, type TelegramDateLike } from './dates.js';
 import { asPlainRecord, parseNonNegativeBigInt, stringifyTelegramId } from './chat.js';
 import { extractFormattedTextLinkEntities, formattedTextValue } from './messageText.js';

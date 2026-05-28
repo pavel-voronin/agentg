@@ -1,23 +1,38 @@
-import { query } from '@agentg/rpc/surface';
-import {
-  telegramListRecentMessagesInputSchema,
-  telegramListRecentMessagesOutputSchema
-} from '../contracts.js';
-import type { TelegramRpcRuntime } from '../runtime.js';
-import { rpc } from '../trpc.js';
+import { query } from '@agentg/rpc/domain';
+import { z } from 'zod';
+
+import type { TelegramRpcRuntime } from '../setup.js';
 import { desc, eq, sql } from 'drizzle-orm';
-import type {
-  TelegramListRecentMessagesInput,
-  TelegramListRecentMessagesOutput
-} from '../contracts.js';
 import { telegramMessages } from '../../database/schema.js';
 import type { TelegramProcedureContext } from '../../procedure-runtime/context.js';
 import { andSql } from '../../read-model/sql.js';
 import { readMessageSelection, toReadMessages } from '../../read-model/message.js';
 import { parseLimit } from '../../procedure-runtime/inputs.js';
+import {
+  nonEmptyStringSchema,
+  positiveIntegerSchema,
+  telegramReadMessageSchema
+} from '../../read-model/api.js';
 
-export const listRecentMessages = query((runtime: TelegramRpcRuntime) =>
-  rpc
+export const telegramListRecentMessagesInputSchema = z
+  .object({
+    beforeMessageId: nonEmptyStringSchema.regex(/^[0-9]+$/).optional(),
+    chatId: nonEmptyStringSchema.optional(),
+    limit: positiveIntegerSchema.optional()
+  })
+  .default({});
+
+export const telegramListRecentMessagesOutputSchema = z.object({
+  messages: z.array(telegramReadMessageSchema)
+});
+
+export type TelegramListRecentMessagesInput = z.infer<typeof telegramListRecentMessagesInputSchema>;
+export type TelegramListRecentMessagesOutput = z.infer<
+  typeof telegramListRecentMessagesOutputSchema
+>;
+
+export const listRecentMessages = query((runtime: TelegramRpcRuntime, procedure) =>
+  procedure
     .input(telegramListRecentMessagesInputSchema)
     .output(telegramListRecentMessagesOutputSchema)
     .query(({ input }) => runListRecentMessages(runtime, input))

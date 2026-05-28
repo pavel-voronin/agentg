@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { TelegramDatabase } from '../src/database/client.js';
-import { createTelegramRouter } from '../src/rpc/router.js';
+import { telegramRpc } from '../src/rpc/setup.js';
 import { toTelegramChatStorageRow } from '../src/read-model/chat.js';
 import { toChatDirectoryEntries } from '../src/control-plane/backend/chatDirectory.js';
 import type { TelegramFileSubsystem } from '../src/files/subsystem.js';
@@ -292,12 +292,14 @@ function createCaller(
     ...options.files
   };
 
-  return createTelegramRouter({
-    client: options.client ?? { invoke: vi.fn() },
-    database: database as unknown as TelegramDatabase,
-    eventBus: { publish: vi.fn() } as never,
-    files
-  }).createCaller({});
+  return telegramRpc
+    .createRouter({
+      client: options.client ?? { invoke: vi.fn() },
+      database: database as unknown as TelegramDatabase,
+      eventBus: { publish: vi.fn() } as never,
+      files
+    })
+    .createCaller({});
 }
 
 function delay(milliseconds: number): Promise<void> {
