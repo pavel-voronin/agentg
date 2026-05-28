@@ -2,7 +2,6 @@ import { mutation } from '@agentg/rpc/domain';
 import { z } from 'zod';
 
 import type { TelegramRpcRuntime } from '../../../rpc/setup.js';
-import type { TelegramProcedureContext } from '../../../procedure-runtime/context.js';
 import {
   nonEmptyStringSchema,
   telegramFileOwnerModelRefSchema,
@@ -43,7 +42,7 @@ export const requestFile = mutation((runtime: TelegramRpcRuntime, procedure) =>
 );
 
 async function runRequestFile(
-  { files }: TelegramProcedureContext,
+  { files }: TelegramRpcRuntime,
   input: FileRequestInput
 ): Promise<FileRequestOutput> {
   return files.requestFile(input);

@@ -3,8 +3,7 @@ import { z } from 'zod';
 
 import type { TelegramRpcRuntime } from '../setup.js';
 import { countTelegramMessagesInIntervals } from '../../history/messageCounts.js';
-import type { TelegramProcedureContext } from '../../procedure-runtime/context.js';
-import { requireDate } from '../../procedure-runtime/inputs.js';
+import { requireDate } from '../../history/time.js';
 import {
   isoDateTimeStringSchema,
   nonEmptyStringSchema,
@@ -40,7 +39,7 @@ export const countMessagesInIntervals = query((runtime: TelegramRpcRuntime, proc
 );
 
 async function runCountMessagesInIntervals(
-  { database }: TelegramProcedureContext,
+  { database }: TelegramRpcRuntime,
   input: TelegramCountMessagesInIntervalsInput
 ): Promise<{ counts: number[] }> {
   const intervals = input.intervals.map((interval) => ({

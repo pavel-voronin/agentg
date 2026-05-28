@@ -23,3 +23,16 @@ export function normalizeTelegramHistoryInterval<T extends TelegramHistoryInterv
     startAt: floorToTelegramSecond(interval.startAt)
   };
 }
+
+export function requireDate(value: unknown, message: string): Date {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw new Error(message);
+  }
+
+  const date = new Date(value.trim());
+  if (Number.isNaN(date.getTime())) {
+    throw new Error(message);
+  }
+
+  return date;
+}

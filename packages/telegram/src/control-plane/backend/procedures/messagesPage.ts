@@ -21,10 +21,9 @@ import {
   telegramWireIdNumber,
   type TelegramWireMessage
 } from '../../../tdlib/wire.js';
-import type { TelegramProcedureContext } from '../../../procedure-runtime/context.js';
 import { toTelegramDate } from '../../../read-model/dates.js';
 import { readMessageSelection, toReadMessages } from '../../../read-model/message.js';
-import { parseLimit } from '../../../procedure-runtime/inputs.js';
+import { parseLimit } from '../../../rpc/input.js';
 import {
   nonEmptyStringSchema,
   positiveIntegerSchema,
@@ -61,7 +60,7 @@ type TelegramHistoryCoverageEventInterval = TelegramHistoryCoverageWriteSegment 
 };
 
 async function runMessagesPage(
-  context: TelegramProcedureContext,
+  context: TelegramRpcRuntime,
   input: MessagesPageInput
 ): Promise<MessagesPageOutput> {
   const limit = parseLimit(
@@ -125,7 +124,7 @@ async function runMessagesPage(
 }
 
 async function readInitialPageAnchor(
-  context: TelegramProcedureContext,
+  context: TelegramRpcRuntime,
   chatId: string
 ): Promise<{ messageId: number; messageIdText: string; pageEndAt: Date | undefined } | undefined> {
   const [chat] = await context.database
@@ -153,7 +152,7 @@ async function readInitialPageAnchor(
 }
 
 async function readMessagePageEndAt(
-  { database }: TelegramProcedureContext,
+  { database }: TelegramRpcRuntime,
   chatId: string,
   messageId: string | undefined
 ): Promise<Date | undefined> {
@@ -177,7 +176,7 @@ async function readMessagePageEndAt(
 }
 
 async function persistMessagesAndCoverage(
-  context: TelegramProcedureContext,
+  context: TelegramRpcRuntime,
   input: {
     coverage: TelegramHistoryCoverageInterval | undefined;
     messages: TelegramWireMessage[];
@@ -217,7 +216,7 @@ async function persistMessagesAndCoverage(
 }
 
 function scheduleOperatorPageFileRecording(
-  context: TelegramProcedureContext,
+  context: TelegramRpcRuntime,
   messages: TelegramWireMessage[]
 ): void {
   if (messages.length === 0) {
@@ -238,7 +237,7 @@ function scheduleOperatorPageFileRecording(
 }
 
 async function recordOperatorPageFiles(
-  context: TelegramProcedureContext,
+  context: TelegramRpcRuntime,
   messages: TelegramWireMessage[]
 ): Promise<void> {
   for (const message of messages) {
@@ -247,7 +246,7 @@ async function recordOperatorPageFiles(
 }
 
 async function addCoverageMessageCounts(
-  { database }: TelegramProcedureContext,
+  { database }: TelegramRpcRuntime,
   intervals: TelegramHistoryCoverageWriteSegment[]
 ): Promise<TelegramHistoryCoverageEventInterval[]> {
   const counts =
@@ -259,7 +258,7 @@ async function addCoverageMessageCounts(
 }
 
 async function readPersistedMessages(
-  { database }: TelegramProcedureContext,
+  { database }: TelegramRpcRuntime,
   chatId: string,
   messageIds: string[]
 ) {

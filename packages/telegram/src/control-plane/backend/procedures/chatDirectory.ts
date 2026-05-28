@@ -4,7 +4,6 @@ import { z } from 'zod';
 import type { TelegramRpcRuntime } from '../../../rpc/setup.js';
 import { asc, sql } from 'drizzle-orm';
 import { telegramChatFolderInfos, telegramChats } from '../../../database/schema.js';
-import type { TelegramProcedureContext } from '../../../procedure-runtime/context.js';
 import {
   chatSearchWhere,
   readChatSelection,
@@ -50,7 +49,7 @@ export const chatDirectory = query((runtime: TelegramRpcRuntime, procedure) =>
 );
 
 async function runChatDirectory(
-  { database }: TelegramProcedureContext,
+  { database }: TelegramRpcRuntime,
   input: ChatDirectoryInput
 ): Promise<ChatDirectoryOutput> {
   const searchQuery = input.query?.trim();

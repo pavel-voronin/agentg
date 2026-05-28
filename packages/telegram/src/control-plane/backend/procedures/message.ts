@@ -4,7 +4,6 @@ import { z } from 'zod';
 import type { TelegramRpcRuntime } from '../../../rpc/setup.js';
 import { and, eq } from 'drizzle-orm';
 import { telegramMessages } from '../../../database/schema.js';
-import type { TelegramProcedureContext } from '../../../procedure-runtime/context.js';
 import { readMessageSelection, toReadMessages } from '../../../read-model/message.js';
 import { nonEmptyStringSchema, telegramReadMessageSchema } from '../../../read-model/api.js';
 
@@ -28,7 +27,7 @@ export const message = query((runtime: TelegramRpcRuntime, procedure) =>
 );
 
 async function runMessage(
-  { database }: TelegramProcedureContext,
+  { database }: TelegramRpcRuntime,
   input: MessageLookupInput
 ): Promise<MessageLookupOutput> {
   const [message] = await database

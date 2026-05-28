@@ -5,7 +5,6 @@ import { z } from 'zod';
 import type { TelegramRpcRuntime } from '../setup.js';
 import { telegramChats } from '../../database/schema.js';
 import { readTelegramFileRefsForOwners } from '../../files/read.js';
-import type { TelegramProcedureContext } from '../../procedure-runtime/context.js';
 import { readChatSelection, toTelegramChatStorageRow } from '../../read-model/chat.js';
 import {
   nonEmptyStringSchema,
@@ -32,7 +31,7 @@ export const getChat = query((runtime: TelegramRpcRuntime, procedure) =>
 );
 
 async function runGetChat(
-  { database }: TelegramProcedureContext,
+  { database }: TelegramRpcRuntime,
   input: TelegramGetChatInput
 ): Promise<TelegramGetChatOutput> {
   const [chat] = await database

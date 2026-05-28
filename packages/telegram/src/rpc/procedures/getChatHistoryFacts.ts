@@ -5,7 +5,6 @@ import type { TelegramRpcRuntime } from '../setup.js';
 import { and, asc, eq, isNotNull, sql } from 'drizzle-orm';
 import type { TelegramDatabase } from '../../database/client.js';
 import { telegramChatPositions, telegramChats, telegramMessages } from '../../database/schema.js';
-import type { TelegramProcedureContext } from '../../procedure-runtime/context.js';
 import { readChatSelection, toTelegramChatStorageRow } from '../../read-model/chat.js';
 import { readTelegramChatUsersByChat, telegramChatUserId } from '../../read-model/chatUser.js';
 import { toNullableIsoString } from '../../read-model/dates.js';
@@ -50,7 +49,7 @@ export const getChatHistoryFacts = query((runtime: TelegramRpcRuntime, procedure
 );
 
 async function runGetChatHistoryFacts(
-  { database }: TelegramProcedureContext,
+  { database }: TelegramRpcRuntime,
   input: TelegramGetChatHistoryFactsInput
 ): Promise<TelegramGetChatHistoryFactsOutput> {
   const [chat] = await database

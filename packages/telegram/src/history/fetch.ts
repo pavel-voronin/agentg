@@ -15,6 +15,7 @@ import { countTelegramMessagesInIntervals } from './messageCounts.js';
 import {
   floorToTelegramSecond,
   normalizeTelegramHistoryInterval,
+  requireDate,
   TELEGRAM_HISTORY_PAST_BOUNDARY,
   TELEGRAM_HISTORY_TICK_MS,
   type TelegramHistoryInterval
@@ -25,7 +26,7 @@ import type {
   TelegramHistoryFetchPageResult
 } from '../rpc/procedures/fetchPage.js';
 import type { TelegramRpcRuntime } from '../rpc/setup.js';
-import { parseLimit, requireDate } from '../procedure-runtime/inputs.js';
+import { parseLimit } from '../rpc/input.js';
 import { telegramTdlibPriorities, type TelegramTdlibPriority } from '../tdlib/priority.js';
 import { telegramWireDate, telegramWireIdNumber, type TelegramWireMessage } from '../tdlib/wire.js';
 

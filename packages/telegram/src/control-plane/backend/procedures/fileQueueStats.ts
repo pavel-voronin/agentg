@@ -2,7 +2,6 @@ import { query } from '@agentg/rpc/domain';
 import { z } from 'zod';
 
 import type { TelegramRpcRuntime } from '../../../rpc/setup.js';
-import type { TelegramProcedureContext } from '../../../procedure-runtime/context.js';
 import { nonNegativeIntegerSchema } from '../../../read-model/api.js';
 
 export const fileQueueStatsSchema = z.object({
@@ -34,9 +33,7 @@ export const fileQueueStats = query((runtime: TelegramRpcRuntime, procedure) =>
     .query(() => runFileQueueStats(runtime))
 );
 
-async function runFileQueueStats({
-  files
-}: TelegramProcedureContext): Promise<FileQueueStatsOutput> {
+async function runFileQueueStats({ files }: TelegramRpcRuntime): Promise<FileQueueStatsOutput> {
   return {
     stats: await files.getQueueStats()
   };

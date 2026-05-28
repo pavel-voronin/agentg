@@ -4,7 +4,6 @@ import { z } from 'zod';
 import type { TelegramRpcRuntime } from '../setup.js';
 import { fetchTelegramHistoryPage } from '../../history/fetch.js';
 import { telegramTdlibPriorities } from '../../tdlib/priority.js';
-import type { TelegramProcedureContext } from '../../procedure-runtime/context.js';
 import { isoDateTimeStringSchema, telegramHistoryIntervalSchema } from '../../read-model/api.js';
 
 export const telegramHistoryFetchPageInputSchema = z.object({
@@ -52,7 +51,7 @@ export const fetchPage = mutation((runtime: TelegramRpcRuntime, procedure) =>
 );
 
 function runFetchPage(
-  context: TelegramProcedureContext,
+  context: TelegramRpcRuntime,
   input: TelegramHistoryFetchPageRequest
 ): Promise<TelegramHistoryFetchPageResult> {
   return fetchTelegramHistoryPage(context, input, { priority: telegramTdlibPriorities.low });

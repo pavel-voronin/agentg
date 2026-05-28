@@ -4,13 +4,12 @@ import { z } from 'zod';
 import type { TelegramRpcRuntime } from '../setup.js';
 import { and, desc, eq, ilike, sql } from 'drizzle-orm';
 import { telegramMessages } from '../../database/schema.js';
-import type { TelegramProcedureContext } from '../../procedure-runtime/context.js';
 import {
   messageTextExpression,
   readMessageSelection,
   toReadMessages
 } from '../../read-model/message.js';
-import { parseLimit } from '../../procedure-runtime/inputs.js';
+import { parseLimit } from '../input.js';
 import {
   nonEmptyStringSchema,
   positiveIntegerSchema,
@@ -38,7 +37,7 @@ export const searchMessages = query((runtime: TelegramRpcRuntime, procedure) =>
 );
 
 async function runSearchMessages(
-  { database }: TelegramProcedureContext,
+  { database }: TelegramRpcRuntime,
   input: TelegramSearchMessagesInput
 ): Promise<TelegramSearchMessagesOutput> {
   const text = input.query.trim();

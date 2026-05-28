@@ -3,7 +3,6 @@ import { z } from 'zod';
 
 import type { TelegramRpcRuntime } from '../setup.js';
 import { ensureTelegramHistoryCoverage } from '../../history/fetch.js';
-import type { TelegramProcedureContext } from '../../procedure-runtime/context.js';
 import {
   isoDateTimeStringSchema,
   nonNegativeIntegerSchema,
@@ -45,7 +44,7 @@ export const ensureHistoryCoverage = mutation((runtime: TelegramRpcRuntime, proc
 );
 
 function runEnsureHistoryCoverage(
-  context: TelegramProcedureContext,
+  context: TelegramRpcRuntime,
   input: TelegramEnsureHistoryCoverageInput
 ): Promise<TelegramEnsureHistoryCoverageOutput> {
   return ensureTelegramHistoryCoverage(context, input);

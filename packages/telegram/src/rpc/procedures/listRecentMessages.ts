@@ -4,10 +4,9 @@ import { z } from 'zod';
 import type { TelegramRpcRuntime } from '../setup.js';
 import { desc, eq, sql } from 'drizzle-orm';
 import { telegramMessages } from '../../database/schema.js';
-import type { TelegramProcedureContext } from '../../procedure-runtime/context.js';
 import { andSql } from '../../read-model/sql.js';
 import { readMessageSelection, toReadMessages } from '../../read-model/message.js';
-import { parseLimit } from '../../procedure-runtime/inputs.js';
+import { parseLimit } from '../input.js';
 import {
   nonEmptyStringSchema,
   positiveIntegerSchema,
@@ -39,7 +38,7 @@ export const listRecentMessages = query((runtime: TelegramRpcRuntime, procedure)
 );
 
 async function runListRecentMessages(
-  { database }: TelegramProcedureContext,
+  { database }: TelegramRpcRuntime,
   input: TelegramListRecentMessagesInput
 ): Promise<TelegramListRecentMessagesOutput> {
   const limit = parseLimit(input.limit, 50, 200);

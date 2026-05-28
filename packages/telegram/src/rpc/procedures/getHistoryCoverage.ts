@@ -3,7 +3,6 @@ import { z } from 'zod';
 
 import type { TelegramRpcRuntime } from '../setup.js';
 import { listTelegramHistoryCoverage } from '../../history/coverage.js';
-import type { TelegramProcedureContext } from '../../procedure-runtime/context.js';
 import {
   nonEmptyStringSchema,
   telegramHistoryCoverageSegmentSchema
@@ -30,7 +29,7 @@ export const getHistoryCoverage = query((runtime: TelegramRpcRuntime, procedure)
 );
 
 async function runGetHistoryCoverage(
-  { database }: TelegramProcedureContext,
+  { database }: TelegramRpcRuntime,
   input: TelegramGetHistoryCoverageInput
 ): Promise<TelegramGetHistoryCoverageOutput> {
   const coverage = await listTelegramHistoryCoverage(database, input.chatId);
