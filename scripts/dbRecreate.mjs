@@ -41,6 +41,7 @@ try {
   );
   await client.query(`DROP DATABASE IF EXISTS ${quoteIdent(targetDatabase)} WITH (FORCE)`);
   await client.query(createDatabaseSql(targetDatabase, decodeURIComponent(targetUrl.username)));
+  await createDatabaseExtensions(targetUrl);
   console.log(
     JSON.stringify({
       database: targetDatabase,
@@ -66,6 +67,19 @@ function createDatabaseSql(database, owner) {
 
 function quoteIdent(value) {
   return `"${value.replaceAll('"', '""')}"`;
+}
+
+async function createDatabaseExtensions(url) {
+  const targetClient = new Client({
+    connectionString: url.toString()
+  });
+
+  try {
+    await targetClient.connect();
+    await targetClient.query('CREATE EXTENSION IF NOT EXISTS pg_stat_statements');
+  } finally {
+    await targetClient.end();
+  }
 }
 
 function runChecked(command, args) {

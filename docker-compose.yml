@@ -164,6 +164,7 @@ services:
 
   postgres:
     image: postgres:18-alpine
+    command: ['postgres', '-c', 'shared_preload_libraries=pg_stat_statements']
     environment:
       POSTGRES_DB: agentg
       POSTGRES_USER: agentg
