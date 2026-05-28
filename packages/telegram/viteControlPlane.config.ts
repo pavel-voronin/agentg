@@ -20,11 +20,11 @@ export default defineConfig({
     lib: {
       cssFileName: 'style',
       entry: {
-        'chat-messages': entry('./src/control-plane/telegramChatMessagesContent.vue'),
-        'dashboard-chats': entry('./src/control-plane/telegramDashboardChatsContent.vue'),
-        'dashboard-file-queue': entry('./src/control-plane/telegramFileQueueContent.vue'),
-        status: entry('./src/control-plane/telegramStatusContent.vue'),
-        workspace: entry('./src/control-plane/telegramWorkspaceContent.vue')
+        'chat-messages': entry('./src/control-plane/chatMessagesContent.vue'),
+        'dashboard-chats': entry('./src/control-plane/dashboardChatsContent.vue'),
+        'dashboard-file-queue': entry('./src/control-plane/fileQueueContent.vue'),
+        status: entry('./src/control-plane/statusContent.vue'),
+        workspace: entry('./src/control-plane/workspaceContent.vue')
       },
       formats: ['es']
     },

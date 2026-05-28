@@ -5,19 +5,19 @@ import { rpc } from '../../../rpc/trpc.js';
 import { asc, sql } from 'drizzle-orm';
 import type { ChatDirectoryInput, ChatDirectoryOutput, ChatFolder } from '../contracts.js';
 import { telegramChatFolderInfos, telegramChats } from '../../../schema.js';
-import type { TelegramProcedureContext } from '../../../telegram-procedure-runtime/context.js';
+import type { TelegramProcedureContext } from '../../../procedure-runtime/context.js';
 import {
   chatSearchWhere,
   readChatSelection,
   toTelegramChatStorageRow
-} from '../../../telegram-read-model/chat.js';
+} from '../../../read-model/chat.js';
 import {
   chatFolderEntry,
   chatTypeCounts,
   listableChatDirectoryEntries,
   toChatDirectoryEntries
 } from '../chatDirectory.js';
-import { andSql } from '../../../telegram-read-model/sql.js';
+import { andSql } from '../../../read-model/sql.js';
 
 export const chatDirectory = query((runtime: TelegramRpcRuntime) =>
   rpc

@@ -1,4 +1,4 @@
-export { createTelegramRpcClient } from './telegramClient.js';
+export { createTelegramRpcClient } from './client.js';
 export type {
   TelegramChatHistoryFactsChat,
   TelegramCountMessagesInIntervalsInput,

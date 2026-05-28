@@ -7,14 +7,14 @@ import { rpc } from '../trpc.js';
 import { asc } from 'drizzle-orm';
 import type { TelegramHistoryChat, TelegramHistoryListChatsRequest } from '../contracts.js';
 import { telegramChatFolderInfos, telegramChatPositions, telegramChats } from '../../schema.js';
-import { storeChat, telegramChatType } from '../../telegram-store/chat.js';
-import { storeMessage } from '../../telegram-store/message.js';
-import type { TelegramProcedureContext } from '../../telegram-procedure-runtime/context.js';
-import { readChatSelection, toTelegramChatStorageRow } from '../../telegram-read-model/chat.js';
-import { isListableTelegramChat } from '../../telegram-read-model/chatPlacements.js';
-import { telegramTdlibPriorities } from '../../telegramTdlibPriority.js';
-import { telegramWireJsonObject } from '../../telegramWire.js';
-import { parseLimit } from '../../telegramProcedureInputs.js';
+import { storeChat, telegramChatType } from '../../store/chat.js';
+import { storeMessage } from '../../store/message.js';
+import type { TelegramProcedureContext } from '../../procedure-runtime/context.js';
+import { readChatSelection, toTelegramChatStorageRow } from '../../read-model/chat.js';
+import { isListableTelegramChat } from '../../read-model/chatPlacements.js';
+import { telegramTdlibPriorities } from '../../tdlib/priority.js';
+import { telegramWireJsonObject } from '../../tdlib/wire.js';
+import { parseLimit } from '../../procedureInputs.js';
 
 type ChatListKind =
   | {

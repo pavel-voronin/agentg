@@ -4,7 +4,7 @@ import { createNatsEventBus } from '@agentg/events/bus';
 import { loadTelegramIngestionConfig } from './config.js';
 import { createTelegramDatabase } from './database.js';
 import { runTelegramIngestion } from './ingestion.js';
-import { configureTdlib } from './tdlib.js';
+import { configureTdlib } from './tdlib/client.js';
 
 const config = loadTelegramIngestionConfig();
 const pool = createDatabasePool(config.databaseUrl);

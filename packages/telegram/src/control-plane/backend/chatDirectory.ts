@@ -8,7 +8,7 @@ import {
   ownerKey,
   readTelegramFileRefsForOwners,
   type TelegramFileOwnerKey
-} from '../../telegramFileRead.js';
+} from '../../fileRead.js';
 import type { ChatDirectoryEntry, ChatFolder, ChatTypeCount } from './contracts.js';
 import type { TelegramFileRef, TelegramReadMessage } from '../../rpc/contracts.js';
 import {
@@ -16,19 +16,19 @@ import {
   readChatSelection,
   type TelegramChatStorageRow,
   toTelegramChatStorageRow
-} from '../../telegram-read-model/chat.js';
-import type { TelegramChatPlacement } from '../../telegram-read-model/chatPlacements.js';
+} from '../../read-model/chat.js';
+import type { TelegramChatPlacement } from '../../read-model/chatPlacements.js';
 import {
   readTelegramChatUsersByChat,
   telegramChatUserId,
   type TelegramChatUserInfo
-} from '../../telegram-read-model/chatUser.js';
+} from '../../read-model/chatUser.js';
 import {
   readMessageSelection,
   telegramOutgoingMessageRead,
   telegramReadMessagePreview,
   toReadMessages
-} from '../../telegram-read-model/message.js';
+} from '../../read-model/message.js';
 
 export async function toChatDirectoryEntries(
   database: TelegramDatabase,

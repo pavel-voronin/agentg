@@ -9,8 +9,8 @@ import type {
   TelegramEnsureHistoryCoverageInput,
   TelegramEnsureHistoryCoverageOutput
 } from '../contracts.js';
-import { ensureTelegramHistoryCoverage } from '../../telegramHistoryFetch.js';
-import type { TelegramProcedureContext } from '../../telegram-procedure-runtime/context.js';
+import { ensureTelegramHistoryCoverage } from '../../historyFetch.js';
+import type { TelegramProcedureContext } from '../../procedure-runtime/context.js';
 
 export const ensureHistoryCoverage = mutation((runtime: TelegramRpcRuntime) =>
   rpc

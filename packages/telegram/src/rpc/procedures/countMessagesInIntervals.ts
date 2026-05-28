@@ -5,10 +5,10 @@ import {
 } from '../contracts.js';
 import type { TelegramRpcRuntime } from '../runtime.js';
 import { rpc } from '../trpc.js';
-import { countTelegramMessagesInIntervals } from '../../telegramMessageCounts.js';
+import { countTelegramMessagesInIntervals } from '../../messageCounts.js';
 import type { TelegramCountMessagesInIntervalsInput } from '../contracts.js';
-import type { TelegramProcedureContext } from '../../telegram-procedure-runtime/context.js';
-import { requireDate } from '../../telegramProcedureInputs.js';
+import type { TelegramProcedureContext } from '../../procedure-runtime/context.js';
+import { requireDate } from '../../procedureInputs.js';
 
 export const countMessagesInIntervals = query((runtime: TelegramRpcRuntime) =>
   rpc

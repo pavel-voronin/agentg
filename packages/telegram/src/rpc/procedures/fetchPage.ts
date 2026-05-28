@@ -9,9 +9,9 @@ import type {
   TelegramHistoryFetchPageRequest,
   TelegramHistoryFetchPageResult
 } from '../contracts.js';
-import { fetchTelegramHistoryPage } from '../../telegramHistoryFetch.js';
-import { telegramTdlibPriorities } from '../../telegramTdlibPriority.js';
-import type { TelegramProcedureContext } from '../../telegram-procedure-runtime/context.js';
+import { fetchTelegramHistoryPage } from '../../historyFetch.js';
+import { telegramTdlibPriorities } from '../../tdlib/priority.js';
+import type { TelegramProcedureContext } from '../../procedure-runtime/context.js';
 
 export const fetchPage = mutation((runtime: TelegramRpcRuntime) =>
   rpc

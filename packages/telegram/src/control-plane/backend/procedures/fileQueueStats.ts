@@ -3,7 +3,7 @@ import { fileQueueStatsInputSchema, fileQueueStatsOutputSchema } from '../contra
 import type { TelegramRpcRuntime } from '../../../rpc/runtime.js';
 import { rpc } from '../../../rpc/trpc.js';
 import type { FileQueueStatsOutput } from '../contracts.js';
-import type { TelegramProcedureContext } from '../../../telegram-procedure-runtime/context.js';
+import type { TelegramProcedureContext } from '../../../procedure-runtime/context.js';
 
 export const fileQueueStats = query((runtime: TelegramRpcRuntime) =>
   rpc

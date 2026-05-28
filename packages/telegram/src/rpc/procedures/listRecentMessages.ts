@@ -11,10 +11,10 @@ import type {
   TelegramListRecentMessagesOutput
 } from '../contracts.js';
 import { telegramMessages } from '../../schema.js';
-import type { TelegramProcedureContext } from '../../telegram-procedure-runtime/context.js';
-import { andSql } from '../../telegram-read-model/sql.js';
-import { readMessageSelection, toReadMessages } from '../../telegram-read-model/message.js';
-import { parseLimit } from '../../telegramProcedureInputs.js';
+import type { TelegramProcedureContext } from '../../procedure-runtime/context.js';
+import { andSql } from '../../read-model/sql.js';
+import { readMessageSelection, toReadMessages } from '../../read-model/message.js';
+import { parseLimit } from '../../procedureInputs.js';
 
 export const listRecentMessages = query((runtime: TelegramRpcRuntime) =>
   rpc

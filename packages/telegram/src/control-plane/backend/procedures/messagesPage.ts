@@ -6,26 +6,26 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { createTelegramHistoryCoverageChangedEvent } from '../../../integrationEvents.js';
 import type { MessagesPageInput, MessagesPageOutput } from '../contracts.js';
 import { telegramChats, telegramMessages } from '../../../schema.js';
-import { storeMessage } from '../../../telegram-store/message.js';
+import { storeMessage } from '../../../store/message.js';
 import {
   normalizeCoverageWriteInput,
   withTelegramHistoryCoverageLocks,
   writeTelegramHistoryCoverageInTransaction,
   type TelegramHistoryCoverageInterval,
   type TelegramHistoryCoverageWriteSegment
-} from '../../../telegramHistoryCoverage.js';
-import { countTelegramMessagesInIntervals } from '../../../telegramMessageCounts.js';
-import { TELEGRAM_HISTORY_PAST_BOUNDARY } from '../../../telegramHistoryTime.js';
-import { telegramTdlibPriorities } from '../../../telegramTdlibPriority.js';
+} from '../../../historyCoverage.js';
+import { countTelegramMessagesInIntervals } from '../../../messageCounts.js';
+import { TELEGRAM_HISTORY_PAST_BOUNDARY } from '../../../historyTime.js';
+import { telegramTdlibPriorities } from '../../../tdlib/priority.js';
 import {
   telegramWireDate,
   telegramWireIdNumber,
   type TelegramWireMessage
-} from '../../../telegramWire.js';
-import type { TelegramProcedureContext } from '../../../telegram-procedure-runtime/context.js';
-import { toTelegramDate } from '../../../telegram-read-model/dates.js';
-import { readMessageSelection, toReadMessages } from '../../../telegram-read-model/message.js';
-import { parseLimit } from '../../../telegramProcedureInputs.js';
+} from '../../../tdlib/wire.js';
+import type { TelegramProcedureContext } from '../../../procedure-runtime/context.js';
+import { toTelegramDate } from '../../../read-model/dates.js';
+import { readMessageSelection, toReadMessages } from '../../../read-model/message.js';
+import { parseLimit } from '../../../procedureInputs.js';
 
 export const messagesPage = mutation((runtime: TelegramRpcRuntime) =>
   rpc

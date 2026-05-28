@@ -12,13 +12,10 @@ import type {
 } from '../contracts.js';
 import type { TelegramDatabase } from '../../database.js';
 import { telegramChatPositions, telegramChats, telegramMessages } from '../../schema.js';
-import type { TelegramProcedureContext } from '../../telegram-procedure-runtime/context.js';
-import { readChatSelection, toTelegramChatStorageRow } from '../../telegram-read-model/chat.js';
-import {
-  readTelegramChatUsersByChat,
-  telegramChatUserId
-} from '../../telegram-read-model/chatUser.js';
-import { toNullableIsoString } from '../../telegram-read-model/dates.js';
+import type { TelegramProcedureContext } from '../../procedure-runtime/context.js';
+import { readChatSelection, toTelegramChatStorageRow } from '../../read-model/chat.js';
+import { readTelegramChatUsersByChat, telegramChatUserId } from '../../read-model/chatUser.js';
+import { toNullableIsoString } from '../../read-model/dates.js';
 
 export const getChatHistoryFacts = query((runtime: TelegramRpcRuntime) =>
   rpc

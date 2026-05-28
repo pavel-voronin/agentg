@@ -9,7 +9,7 @@ import { format, resolveConfig } from 'prettier';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const reviewPath = resolve(repoRoot, 'packages/tdlib-docs/src/data/tdlibStorageReview.json');
-const schemaPath = resolve(repoRoot, 'packages/telegram/src/tdlibDbSchema.ts');
+const schemaPath = resolve(repoRoot, 'packages/telegram/src/tdlib/databaseSchema.ts');
 const drizzleDir = resolve(repoRoot, 'packages/telegram/drizzle');
 const drizzleMetaDir = resolve(drizzleDir, 'meta');
 const migrationTag = '0000_telegram_tdlib_schema';
@@ -41,7 +41,7 @@ console.log(
     event: 'telegram.db_schema.generated',
     foreignKeys: tables.reduce((total, table) => total + table.foreignKeys.length, 0),
     migration: `packages/telegram/drizzle/${migrationTag}.sql`,
-    schema: 'packages/telegram/src/tdlibDbSchema.ts',
+    schema: 'packages/telegram/src/tdlib/databaseSchema.ts',
     source: 'packages/tdlib-docs/src/data/tdlibStorageReview.json',
     tables: tables.length
   })

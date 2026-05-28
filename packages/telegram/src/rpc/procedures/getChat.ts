@@ -5,9 +5,9 @@ import { rpc } from '../trpc.js';
 import { eq } from 'drizzle-orm';
 import type { TelegramFileRef, TelegramGetChatInput, TelegramGetChatOutput } from '../contracts.js';
 import { telegramChats } from '../../schema.js';
-import { readTelegramFileRefsForOwners } from '../../telegramFileRead.js';
-import type { TelegramProcedureContext } from '../../telegram-procedure-runtime/context.js';
-import { readChatSelection, toTelegramChatStorageRow } from '../../telegram-read-model/chat.js';
+import { readTelegramFileRefsForOwners } from '../../fileRead.js';
+import type { TelegramProcedureContext } from '../../procedure-runtime/context.js';
+import { readChatSelection, toTelegramChatStorageRow } from '../../read-model/chat.js';
 
 export const getChat = query((runtime: TelegramRpcRuntime) =>
   rpc

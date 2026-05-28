@@ -603,7 +603,7 @@ function auditDateContract(files) {
 
 function auditTelegramDateStorageContract() {
   const telegramGeneratedSchema = readFileSync(
-    join(root, 'packages/telegram/src/tdlibDbSchema.ts'),
+    join(root, 'packages/telegram/src/tdlib/databaseSchema.ts'),
     'utf8'
   );
   const telegramGeneratedMigration = readFileSync(
@@ -620,8 +620,8 @@ function auditTelegramDateStorageContract() {
   }
 
   for (const rel of [
-    'packages/telegram/src/telegram-store/message.ts',
-    'packages/telegram/src/telegramMessageCounts.ts'
+    'packages/telegram/src/store/message.ts',
+    'packages/telegram/src/messageCounts.ts'
   ]) {
     const source = readFileSync(join(root, rel), 'utf8');
     if (/getTime\(\)\s*\/\s*1000/.test(source)) {
@@ -734,11 +734,11 @@ function auditTelegramWireBoundary(files) {
     'packages/telegram/src/ingestion.ts',
     'packages/telegram/src/rpc/procedures/fetchMessagesPage.ts',
     'packages/telegram/src/rpc/procedures/support.ts',
-    'packages/telegram/src/tdlib-update-handlers/',
-    'packages/telegram/src/telegramFileExtractor.ts',
-    'packages/telegram/src/telegramFileSubsystem.ts',
-    'packages/telegram/src/telegramHistoryFetch.ts',
-    'packages/telegram/src/telegram-store/'
+    'packages/telegram/src/tdlib/update-handlers/',
+    'packages/telegram/src/fileExtractor.ts',
+    'packages/telegram/src/fileSubsystem.ts',
+    'packages/telegram/src/historyFetch.ts',
+    'packages/telegram/src/store/'
   ];
 
   for (const file of files) {

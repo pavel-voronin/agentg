@@ -5,12 +5,12 @@ import {
 } from '../contracts.js';
 import type { TelegramRpcRuntime } from '../runtime.js';
 import { rpc } from '../trpc.js';
-import { listTelegramHistoryCoverage } from '../../telegramHistoryCoverage.js';
+import { listTelegramHistoryCoverage } from '../../historyCoverage.js';
 import type {
   TelegramGetHistoryCoverageInput,
   TelegramGetHistoryCoverageOutput
 } from '../contracts.js';
-import type { TelegramProcedureContext } from '../../telegram-procedure-runtime/context.js';
+import type { TelegramProcedureContext } from '../../procedure-runtime/context.js';
 
 export const getHistoryCoverage = query((runtime: TelegramRpcRuntime) =>
   rpc

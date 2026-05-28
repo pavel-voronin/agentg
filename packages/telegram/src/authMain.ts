@@ -4,7 +4,7 @@ import { createInterface } from 'node:readline/promises';
 import type { LoginDetails } from 'tdl';
 
 import { loadTelegramIngestionConfig } from './config.js';
-import { configureTdlib, createTelegramClient, hasTelegramCredentials } from './tdlib.js';
+import { configureTdlib, createTelegramClient, hasTelegramCredentials } from './tdlib/client.js';
 
 const config = loadTelegramIngestionConfig();
 
