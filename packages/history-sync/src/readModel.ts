@@ -9,7 +9,7 @@ import {
 import type { TelegramReadClient } from './telegramClient.js';
 import { floorToTelegramSecond, normalizeTelegramHistoryInterval } from './time.js';
 import type { HistorySyncInterval, HistorySyncRange, HistorySyncTarget } from './types.js';
-import type { HistorySyncRuntime } from './domain.js';
+import type { HistorySyncRuntime } from './main.js';
 
 export type HistorySyncTargetResponse = {
   chatId: string;

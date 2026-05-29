@@ -4,8 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./control-plane": "./src/control-plane/index.ts",
-    "./domain": "./src/domain.ts"
+    "./control-plane": "./src/control-plane/index.ts"
   },
   "scripts": {
     "dev": "tsx watch --clear-screen=false src/main.ts",

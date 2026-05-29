@@ -2,7 +2,7 @@ import { query } from '@agentg/framework/domain';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
-import type { TelegramRpcRuntime } from '../domain.js';
+import type { TelegramRpcRuntime } from '../main.js';
 import { telegramChats } from '../database/schema.js';
 import { readTelegramFileRefsForOwners } from '../files/read.js';
 import { readChatSelection, toTelegramChatStorageRow } from '../read-model/chat.js';

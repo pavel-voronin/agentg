@@ -1,7 +1,7 @@
 import { query } from '@agentg/framework/domain';
 import { z } from 'zod';
 
-import type { TelegramRpcRuntime } from '../../../domain.js';
+import type { TelegramRpcRuntime } from '../../../main.js';
 import { asc, sql } from 'drizzle-orm';
 import { telegramChatFolderInfos, telegramChats } from '../../../database/schema.js';
 import {

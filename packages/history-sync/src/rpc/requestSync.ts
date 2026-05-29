@@ -3,7 +3,7 @@ import { mutation, runtimeForInternalRpcCall } from '@agentg/framework/domain';
 import { z } from 'zod';
 
 import { nonEmptyStringSchema } from '../rangeSchema.js';
-import type { HistorySyncRuntime } from '../domain.js';
+import type { HistorySyncRuntime } from '../main.js';
 
 export const historySyncRequestSyncInputSchema = z
   .object({

@@ -1,7 +1,7 @@
 import { mutation } from '@agentg/framework/domain';
 import { z } from 'zod';
 
-import type { TelegramRpcRuntime } from '../../../domain.js';
+import type { TelegramRpcRuntime } from '../../../main.js';
 import { and, eq, inArray } from 'drizzle-orm';
 import { createTelegramHistoryCoverageChangedEvent } from '../../../events/contracts.js';
 import { telegramChats, telegramMessages } from '../../../database/schema.js';

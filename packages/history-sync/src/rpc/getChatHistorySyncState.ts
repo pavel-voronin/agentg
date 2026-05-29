@@ -10,7 +10,7 @@ import {
 } from '../rangeSchema.js';
 import { projectTargetsForChat } from '../reconciler.js';
 import { historySyncTargets } from '../schema.js';
-import type { HistorySyncRuntime } from '../domain.js';
+import type { HistorySyncRuntime } from '../main.js';
 import {
   clipIntervalsForDisplay,
   currentHistorySyncProjectionContext,

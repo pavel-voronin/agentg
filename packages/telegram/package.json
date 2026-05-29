@@ -4,10 +4,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    ".": "./src/main.ts",
     "./control-plane": "./src/control-plane/index.ts",
     "./integration-events": "./src/events/contracts.ts",
-    "./model-refs": "./src/model/refs.ts",
-    "./domain": "./src/domain.ts"
+    "./model-refs": "./src/model/refs.ts"
   },
   "scripts": {
     "dev": "tsx watch --clear-screen=false src/main.ts",

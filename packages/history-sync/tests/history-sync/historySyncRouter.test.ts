@@ -3,13 +3,13 @@ import type { EventBus, EventSubscription } from '@agentg/events/bus';
 import type { IntegrationEvent } from '@agentg/events/envelope';
 import { describe, expect, it } from 'vitest';
 
-import { historySyncDomain } from '../../src/domain.js';
+import { createHistorySyncRpcRouter } from '../../src/main.js';
 
 describe('History Sync router', () => {
   it('applies call-scoped event suppression to History Sync domain fact events', async () => {
     const publishedEvents: IntegrationEvent[] = [];
     const eventBus = createRecordingEventBus(publishedEvents);
-    const router = historySyncDomain.createRpcRouter({
+    const router = createHistorySyncRpcRouter({
       database: {} as AppDatabase,
       eventBus
     });

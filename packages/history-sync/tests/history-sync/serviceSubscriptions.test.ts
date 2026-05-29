@@ -2,7 +2,7 @@ import type { EventBus, EventSubscription } from '@agentg/events/bus';
 import type { IntegrationEvent } from '@agentg/events/envelope';
 import { describe, expect, it, vi } from 'vitest';
 
-import { subscribeHistorySyncService } from '../../src/service.js';
+import { subscribeHistorySyncService } from '../../src/service/runService.js';
 
 describe('history sync service subscriptions', () => {
   it('does not request a sync pass from Telegram coverage changes', () => {

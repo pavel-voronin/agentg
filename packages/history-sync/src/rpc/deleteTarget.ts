@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 import { historySyncRangeSchema, nonEmptyStringSchema } from '../rangeSchema.js';
 import { deleteManualHistorySyncTargetFromCommand } from '../targetCommands.js';
-import type { HistorySyncRuntime } from '../domain.js';
+import type { HistorySyncRuntime } from '../main.js';
 
 export const historySyncDeleteTargetInputSchema = z.object({
   targetId: nonEmptyStringSchema

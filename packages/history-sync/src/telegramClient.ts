@@ -1,4 +1,4 @@
-import { createTelegramRpcClient, type TelegramRpcClient } from '@agentg/telegram/domain';
+import { createTelegramRpcClient, type TelegramRpcClient } from '@agentg/telegram';
 import type { InternalRpcCallOptions } from '@agentg/framework/call-options';
 
 import type { InternalTrpcClientConfig } from '@agentg/framework/config';

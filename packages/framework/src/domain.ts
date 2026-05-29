@@ -111,17 +111,91 @@ export type DomainServiceManifest<ControlPlane> = {
   slug: string;
 };
 
-export type DomainDefinitionOptions<
+export type Domain<
   Deps,
   Runtime,
   Procedures extends InternalRpcProcedureMap<Runtime>,
-  ControlPlane
-> = InternalRpcDomainOptions<Deps, Runtime, Procedures> & {
-  controlPlane?(config: DomainControlPlaneConfig): ControlPlane;
-  events: readonly string[];
-  extensions?: readonly DomainExtension[];
-  required?: boolean;
+  ControlPlane,
+  RunOptions
+> = {
+  createContext: ReturnType<
+    typeof defineInternalRpcDomain<Deps, Runtime, Procedures>
+  >['createContext'];
+  createRpcClient: ReturnType<
+    typeof defineInternalRpcDomain<Deps, Runtime, Procedures>
+  >['createClient'];
+  createRpcRouter: ReturnType<
+    typeof defineInternalRpcDomain<Deps, Runtime, Procedures>
+  >['createRouter'];
+  createServiceManifest(config: DomainServiceManifestConfig): DomainServiceManifest<ControlPlane>;
+  events: string[];
+  rpcProcedures(): InternalRpcProcedureRecord[];
+  run(options: RunOptions): Promise<void>;
+  slug: string;
+  startRpcServer: ReturnType<
+    typeof defineInternalRpcDomain<Deps, Runtime, Procedures>
+  >['startServer'];
+  stopRpcServer: ReturnType<
+    typeof defineInternalRpcDomain<Deps, Runtime, Procedures>
+  >['stopServer'];
 };
+
+export type Subsystem<RunOptions, Context> = {
+  init?(): void;
+  start(options: RunOptions, domain: Context): Promise<void>;
+};
+
+export type ControlPlaneSubsystem<ControlPlane, Runtime = unknown> = {
+  createControlPlane(config: DomainControlPlaneConfig): ControlPlane;
+  createProcedureRouter?(): DomainProcedureRouter<Runtime>;
+};
+
+type ControlPlaneSubsystemWithProcedures<
+  ControlPlane,
+  Runtime,
+  Router extends DomainProcedureRouter<Runtime>
+> = ControlPlaneSubsystem<ControlPlane, Runtime> & {
+  createProcedureRouter(): Router;
+};
+
+type DomainProcedureSource<Runtime> =
+  | InternalRpcProcedure<Runtime, AnyProcedure>
+  | DomainProcedureRouter<Runtime>;
+
+type DomainProcedureSources<Runtime> = Record<string, DomainProcedureSource<Runtime>>;
+
+export type PrefixedProcedureMap<Prefix extends string, Procedures> = {
+  [Name in keyof Procedures as `${Prefix}.${Name & string}`]: Procedures[Name];
+};
+
+export type DomainProcedureRouter<
+  Runtime,
+  Procedures extends InternalRpcProcedureMap<Runtime> = InternalRpcProcedureMap<Runtime>
+> = {
+  kind: 'procedureRouter';
+  name: string;
+  procedures: Procedures;
+};
+
+type DomainProcedureRouterBuilder<Runtime> = DomainProcedureRouter<Runtime> & {
+  defineProcedures(procedures: InternalRpcProcedureMap<Runtime>): void;
+};
+
+type DomainSetupState = {
+  controlPlane?: ControlPlaneSubsystem<unknown> | undefined;
+  createRuntime?: ((deps: unknown) => unknown) | undefined;
+  events: Set<string>;
+  extensions: DomainExtension[];
+  procedures: Record<string, InternalRpcProcedure<unknown, AnyProcedure>>;
+  required: boolean;
+  slug: string;
+  subsystems: {
+    name: string;
+    subsystem: Subsystem<unknown, unknown>;
+  }[];
+};
+
+type DomainRuntimeFactory<Deps, Runtime> = (deps: Deps) => Runtime;
 
 type InternalTrpcClientProcedure = {
   mutate(
@@ -248,11 +322,37 @@ export function defineDomain<
   Deps,
   Runtime,
   const Procedures extends InternalRpcProcedureMap<Runtime>,
-  ControlPlane = unknown
->(options: DomainDefinitionOptions<Deps, Runtime, Procedures, ControlPlane>) {
-  const rpc = defineInternalRpcDomain(options);
+  ControlPlane,
+  RunOptions
+>(slug: string, setup: () => void): Domain<Deps, Runtime, Procedures, ControlPlane, RunOptions> {
+  const previousState = currentDomainState;
+  const state: DomainSetupState = {
+    events: new Set(),
+    extensions: [],
+    procedures: {},
+    required: true,
+    slug,
+    subsystems: []
+  };
+  currentDomainState = state;
+  try {
+    setup();
+  } finally {
+    currentDomainState = previousState;
+  }
 
-  return {
+  if (state.createRuntime === undefined) {
+    throw new Error(`Domain ${slug} must define runtime`);
+  }
+
+  const rpc = defineInternalRpcDomain<Deps, Runtime, Procedures>({
+    createRuntime: state.createRuntime as (deps: Deps) => Runtime,
+    procedures: state.procedures as Procedures,
+    slug
+  });
+  const events = [...state.events].sort();
+
+  const domain = {
     createContext: rpc.createContext,
     createRpcClient: rpc.createClient,
     createRpcRouter: rpc.createRouter,
@@ -260,29 +360,159 @@ export function defineDomain<
       config: DomainServiceManifestConfig
     ): DomainServiceManifest<ControlPlane> {
       return {
-        ...(options.controlPlane === undefined
+        ...(state.controlPlane === undefined
           ? {}
           : {
-              controlPlane: options.controlPlane({
+              controlPlane: state.controlPlane.createControlPlane({
                 assetVersion: config.controlPlaneAssetVersion,
                 assetVersions: config.controlPlaneAssetVersions
-              })
+              }) as ControlPlane
             }),
-        events: [...options.events].sort(),
-        extensions: [...(options.extensions ?? [])],
+        events,
+        extensions: state.extensions,
         procedures: rpc.procedures(),
-        required: options.required ?? true,
+        required: state.required,
         rpcUrl: config.rpcUrl,
-        slug: options.slug
+        slug
       };
     },
-    events: [...options.events].sort(),
+    events,
     rpcProcedures: () => rpc.procedures(),
-    slug: options.slug,
+    slug,
     startRpcServer: (serverOptions: InternalRpcDomainServerOptions<Deps>) =>
       rpc.startServer(serverOptions),
-    stopRpcServer: (server: Server) => rpc.stopServer(server)
+    stopRpcServer: (server: Server) => rpc.stopServer(server),
+    async run(options: RunOptions): Promise<void> {
+      if (state.subsystems.length === 0) {
+        throw new Error(`Domain ${slug} has no subsystem runner`);
+      }
+
+      await Promise.all(state.subsystems.map(({ subsystem }) => subsystem.start(options, domain)));
+    }
+  } satisfies Domain<Deps, Runtime, Procedures, ControlPlane, RunOptions>;
+
+  return domain;
+}
+
+let currentDomainState: DomainSetupState | undefined;
+
+export function createRouter<Runtime = unknown>(
+  name: string
+): DomainProcedureRouterBuilder<Runtime> {
+  const router: DomainProcedureRouterBuilder<Runtime> = {
+    defineProcedures(procedures) {
+      router.procedures = prefixProcedures(name, procedures);
+    },
+    kind: 'procedureRouter',
+    name,
+    procedures: {}
   };
+  return router;
+}
+
+export function createProcedureRouter<
+  Runtime,
+  const Name extends string,
+  const Procedures extends InternalRpcProcedureMap<Runtime>
+>(
+  name: Name,
+  procedures: Procedures
+): DomainProcedureRouter<Runtime, PrefixedProcedureMap<Name, Procedures>> {
+  return {
+    kind: 'procedureRouter',
+    name,
+    procedures: prefixProcedures(name, procedures) as PrefixedProcedureMap<Name, Procedures>
+  };
+}
+
+export function defineControlPlane<
+  ControlPlane,
+  Runtime,
+  Router extends DomainProcedureRouter<Runtime>
+>(
+  controlPlane: ControlPlaneSubsystemWithProcedures<ControlPlane, Runtime, Router>
+): { procedures: Router };
+export function defineControlPlane<ControlPlane>(
+  controlPlane: ControlPlaneSubsystem<ControlPlane>
+): Record<string, never>;
+export function defineControlPlane<ControlPlane, Runtime>(
+  controlPlane: ControlPlaneSubsystem<ControlPlane, Runtime>
+): { procedures: DomainProcedureRouter<Runtime> } | Record<string, never> {
+  activeDomainState().controlPlane = controlPlane;
+  const controlPlaneProcedures = controlPlane.createProcedureRouter?.();
+  return controlPlaneProcedures === undefined ? {} : { procedures: controlPlaneProcedures };
+}
+
+export function defineEvent(event: string): void {
+  activeDomainState().events.add(event);
+}
+
+export function defineEvents(events: readonly string[]): void {
+  for (const event of events) {
+    defineEvent(event);
+  }
+}
+
+export function defineExtensions(extensions: readonly DomainExtension[]): void {
+  activeDomainState().extensions.push(...extensions);
+}
+
+export function defineProcedures<Runtime>(procedures: DomainProcedureSources<Runtime>): void {
+  const state = activeDomainState();
+  for (const [name, procedure] of Object.entries(procedures)) {
+    if (isDomainProcedureRouter(procedure)) {
+      Object.assign(state.procedures, procedure.procedures);
+      continue;
+    }
+    state.procedures[name] = procedure;
+  }
+}
+
+export function defineRuntime<Deps, Runtime>(
+  createRuntime: DomainRuntimeFactory<Deps, Runtime>
+): void {
+  activeDomainState().createRuntime = createRuntime as (deps: unknown) => unknown;
+}
+
+export function defineSubsystem<RunOptions, Context>(
+  name: string,
+  subsystem: Subsystem<RunOptions, Context>
+): void {
+  subsystem.init?.();
+  activeDomainState().subsystems.push({
+    name,
+    subsystem
+  });
+}
+
+export function setRequired(required: boolean): void {
+  activeDomainState().required = required;
+}
+
+function activeDomainState(): DomainSetupState {
+  if (currentDomainState === undefined) {
+    throw new Error('Domain composition function called outside defineDomain setup');
+  }
+
+  return currentDomainState;
+}
+
+function isDomainProcedureRouter<Runtime>(
+  procedure: DomainProcedureSource<Runtime>
+): procedure is DomainProcedureRouter<Runtime> {
+  return 'kind' in procedure && procedure.kind === 'procedureRouter';
+}
+
+function prefixProcedures<Runtime>(
+  prefix: string,
+  procedures: InternalRpcProcedureMap<Runtime>
+): InternalRpcProcedureMap<Runtime> {
+  return Object.fromEntries(
+    Object.entries(procedures).map(([name, procedure]) => [
+      name.startsWith(`${prefix}.`) ? name : `${prefix}.${name}`,
+      procedure
+    ])
+  );
 }
 
 export function runtimeForInternalRpcCall<Runtime extends { eventBus: EventBus }>(

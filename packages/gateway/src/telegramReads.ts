@@ -1,4 +1,4 @@
-import { createTelegramRpcClient } from '@agentg/telegram/domain';
+import { createTelegramRpcClient } from '@agentg/telegram';
 
 export type GatewayTelegramClient = {
   call(method: string, params: unknown): Promise<unknown>;

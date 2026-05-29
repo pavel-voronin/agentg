@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 import { historySyncRangeSchema, nonEmptyStringSchema } from '../rangeSchema.js';
 import { upsertManualHistorySyncTargetFromCommand } from '../targetCommands.js';
-import type { HistorySyncRuntime } from '../domain.js';
+import type { HistorySyncRuntime } from '../main.js';
 import { historySyncStoredTargetOutputSchema } from './deleteTarget.js';
 import { currentHistorySyncProjectionContext, historySyncTargetToResponse } from '../readModel.js';
 

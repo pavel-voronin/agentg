@@ -1,6 +1,7 @@
+import type { Server } from 'node:http';
 import { fileURLToPath } from 'node:url';
 
-import type { HistorySyncDatabase as AppDatabase } from './database.js';
+import type { HistorySyncDatabase as AppDatabase } from '../database.js';
 import {
   readControlPlaneAssetVersions,
   watchControlPlaneAssetVersion,
@@ -15,10 +16,14 @@ import {
   createHistorySyncController,
   type HistorySyncControllerOptions,
   type HistorySyncController
-} from './controller.js';
+} from '../controller.js';
 import type { InternalTrpcBindConfig } from '@agentg/framework/config';
-import { createHistorySyncServiceManifest, historySyncDomain } from './domain.js';
-import { createServiceDirectoryTelegramHistoryClient } from './telegramClient.js';
+import type {
+  DomainServiceManifest,
+  DomainServiceManifestConfig,
+  InternalRpcDomainServerOptions
+} from '@agentg/framework/domain';
+import { createServiceDirectoryTelegramHistoryClient } from '../telegramClient.js';
 
 export type HistorySyncServiceOptions = {
   database: AppDatabase;
@@ -33,22 +38,40 @@ export type HistorySyncServiceOptions = {
   sync: HistorySyncControllerOptions;
 };
 
+type HistorySyncServiceRpcDeps = {
+  database: AppDatabase;
+  eventBus: EventBus;
+  requestSync(reason: string, chatId?: string): void;
+  telegram: ReturnType<typeof createServiceDirectoryTelegramHistoryClient>;
+};
+
+export type HistorySyncServiceDomain = {
+  createServiceManifest(config: DomainServiceManifestConfig): DomainServiceManifest<unknown>;
+  startRpcServer(
+    serverOptions: InternalRpcDomainServerOptions<HistorySyncServiceRpcDeps>
+  ): Promise<Server>;
+  stopRpcServer(server: Server): Promise<void>;
+};
+
 const HISTORY_SYNC_SHUTDOWN_FORCE_EXIT_MS = 4500;
 const HISTORY_SYNC_SHUTDOWN_STEP_TIMEOUT_MS = 2000;
 const HISTORY_SYNC_CONTROL_PLANE_ASSETS_ROOT = fileURLToPath(
-  new URL('../dist-control-plane/', import.meta.url)
+  new URL('../../dist-control-plane/', import.meta.url)
 );
 
-export async function runHistorySyncService(options: HistorySyncServiceOptions): Promise<void> {
+export async function runHistorySyncService(
+  options: HistorySyncServiceOptions,
+  domain: HistorySyncServiceDomain
+): Promise<void> {
   let shuttingDown = false;
   let historySyncRpcServer:
-    | Awaited<ReturnType<typeof historySyncDomain.startRpcServer>>
+    | Awaited<ReturnType<HistorySyncServiceDomain['startRpcServer']>>
     | undefined;
   let controlPlaneAssets: ControlPlaneAssetVersionSubscription | undefined;
   const initialControlPlaneAssets = await readControlPlaneAssetVersions(
     HISTORY_SYNC_CONTROL_PLANE_ASSETS_ROOT
   );
-  const serviceManifest = createHistorySyncServiceManifest({
+  const serviceManifest = domain.createServiceManifest({
     controlPlaneAssetVersion: initialControlPlaneAssets.version,
     controlPlaneAssetVersions: initialControlPlaneAssets.assets,
     rpcUrl: options.serviceRpcUrl
@@ -79,7 +102,7 @@ export async function runHistorySyncService(options: HistorySyncServiceOptions):
       controller,
       eventBus
     });
-    historySyncRpcServer = await historySyncDomain.startRpcServer({
+    historySyncRpcServer = await domain.startRpcServer({
       bind: options.internalRpc,
       eventBus,
       deps: {
@@ -103,7 +126,7 @@ export async function runHistorySyncService(options: HistorySyncServiceOptions):
       },
       onVersion: async (nextControlPlaneAssets) => {
         await serviceDirectory.join(
-          createHistorySyncServiceManifest({
+          domain.createServiceManifest({
             controlPlaneAssetVersion: nextControlPlaneAssets.version,
             controlPlaneAssetVersions: nextControlPlaneAssets.assets,
             rpcUrl: options.serviceRpcUrl
@@ -123,6 +146,7 @@ export async function runHistorySyncService(options: HistorySyncServiceOptions):
     await cleanupHistorySyncStartupFailure({
       controlPlaneAssets,
       controller,
+      domain,
       eventBus,
       historySyncRpcServer,
       serviceDirectory,
@@ -146,7 +170,7 @@ export async function runHistorySyncService(options: HistorySyncServiceOptions):
       activeHistorySyncRpcServer === undefined
         ? true
         : await runShutdownStep('history-sync.rpc_close', () =>
-            historySyncDomain.stopRpcServer(activeHistorySyncRpcServer)
+            domain.stopRpcServer(activeHistorySyncRpcServer)
           );
     if (historySyncRpcStopped) {
       historySyncRpcServer = undefined;
@@ -168,8 +192,9 @@ export async function runHistorySyncService(options: HistorySyncServiceOptions):
 async function cleanupHistorySyncStartupFailure(options: {
   controlPlaneAssets: ControlPlaneAssetVersionSubscription | undefined;
   controller: HistorySyncController;
+  domain: HistorySyncServiceDomain;
   eventBus: EventBus;
-  historySyncRpcServer: Awaited<ReturnType<typeof historySyncDomain.startRpcServer>> | undefined;
+  historySyncRpcServer: Awaited<ReturnType<HistorySyncServiceDomain['startRpcServer']>> | undefined;
   serviceDirectory: ReturnType<typeof createServiceDirectoryClient>;
   subscriptions: EventSubscription[];
   telegram: ReturnType<typeof createServiceDirectoryTelegramHistoryClient>;
@@ -192,7 +217,7 @@ async function cleanupHistorySyncStartupFailure(options: {
   const historySyncRpcServer = options.historySyncRpcServer;
   if (historySyncRpcServer !== undefined) {
     await runShutdownStep('history-sync.rpc_startup_close', () =>
-      historySyncDomain.stopRpcServer(historySyncRpcServer)
+      options.domain.stopRpcServer(historySyncRpcServer)
     );
   }
 

@@ -219,9 +219,51 @@ function auditDomainRpcFolders(files) {
     'packages/telegram/package.json'
   ]) {
     const packageJson = JSON.parse(readFileSync(join(root, packagePath), 'utf8'));
-    if (packageJson.exports?.['./rpc'] !== undefined) {
-      failures.push(`${packagePath} must expose domain entry instead of ./rpc`);
+    if (packageJson.exports?.['./domain'] !== undefined) {
+      failures.push(`${packagePath} must not expose domain runner entrypoint`);
     }
+    if (packageJson.exports?.['./rpc'] !== undefined) {
+      failures.push(`${packagePath} must not expose generic ./rpc entrypoint`);
+    }
+    if (packageJson.exports?.['./rpc-client'] !== undefined) {
+      failures.push(`${packagePath} must not expose RPC client through a subpath`);
+    }
+    if (
+      packagePath === 'packages/telegram/package.json' &&
+      packageJson.exports?.['.'] !== './src/main.ts'
+    ) {
+      failures.push('packages/telegram/package.json must expose Telegram public surface at "."');
+    }
+  }
+
+  const forbiddenRunnerExports = [
+    ['packages/history-sync/src/main.ts', 'export const historySync ='],
+    ['packages/telegram/src/main.ts', 'export const telegram =']
+  ];
+
+  for (const [file, token] of forbiddenRunnerExports) {
+    const source = readFileSync(join(root, file), 'utf8');
+    if (source.includes(token)) {
+      failures.push(`${file} must not export domain runner object`);
+    }
+  }
+
+  for (const file of ['packages/history-sync/src/main.ts', 'packages/telegram/src/main.ts']) {
+    const source = readFileSync(join(root, file), 'utf8');
+    if (/class\s+\w*Subsystem\b/.test(source)) {
+      failures.push(`${file} must not declare subsystem classes in domain entrypoint`);
+    }
+    if (source.includes('createRouter')) {
+      failures.push(`${file} must not create procedure routers in domain entrypoint`);
+    }
+    if (/defineControlPlane\(\s*(?:\(|\{)/.test(source)) {
+      failures.push(`${file} must define Control Plane through a framework subsystem`);
+    }
+  }
+
+  const telegramMain = readFileSync(join(root, 'packages/telegram/src/main.ts'), 'utf8');
+  if (!telegramMain.includes('const { procedures } = defineControlPlane')) {
+    failures.push('Telegram main must receive Control Plane procedures from defineControlPlane');
   }
 }
 
@@ -427,16 +469,16 @@ function auditServiceDirectoryBootstrap() {
   if (!telegramIngestion.includes('createServiceDirectoryClient')) {
     failures.push('Telegram must join Service Directory');
   }
-  auditRequiredManifest('packages/telegram/src/domain.ts', true);
+  auditRequiredManifest('packages/telegram/src/main.ts', true);
 
   const historySyncService = readFileSync(
-    join(root, 'packages/history-sync/src/service.ts'),
+    join(root, 'packages/history-sync/src/service/runService.ts'),
     'utf8'
   );
   if (!historySyncService.includes('createServiceDirectoryClient')) {
     failures.push('History Sync must join Service Directory');
   }
-  auditRequiredManifest('packages/history-sync/src/domain.ts', true);
+  auditRequiredManifest('packages/history-sync/src/main.ts', true);
 
   const gatewaySource = readFileSync(join(root, 'packages/gateway/src/agentGateway.ts'), 'utf8');
   if (!gatewaySource.includes('createGatewayServiceManifest')) {
@@ -477,7 +519,8 @@ function auditServiceDirectoryBootstrap() {
 function auditRequiredManifest(file, required) {
   const source = readFileSync(join(root, file), 'utf8');
   const token = `required: ${String(required)}`;
-  if (!source.includes(token)) {
+  const compositionToken = `setRequired(${String(required)})`;
+  if (!source.includes(token) && !source.includes(compositionToken)) {
     failures.push(`${file} must declare ${token}`);
   }
 }
