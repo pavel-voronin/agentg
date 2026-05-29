@@ -12,6 +12,11 @@
   `docker-compose.yml`, `vite.config.ts`, `drizzle.config.ts`, dotfiles, and
   generated Drizzle migration/meta files. Do not add new exceptions or
   differently-cased names; rename the file or directory instead.
+- Do not leak a package or domain name into variable, constant, function, or
+  local type names inside that same package or domain. Use local role names
+  such as `database`, `events`, or `useDatabase` instead of package-prefixed
+  names. A package-qualified local identifier is allowed only when it marks a
+  real external boundary and the user has explicitly approved it.
 - Do not introduce technical debt, fallback paths, compatibility paths, legacy
   paths, or parallel old/new implementations.
 - Do not keep alternative architecture artifacts or documentation for replaced
