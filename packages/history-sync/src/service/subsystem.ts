@@ -1,7 +1,7 @@
-import { bindSubsystemContext, defineSubsystem } from '@agentg/framework/domain';
+import { bindSubsystemContext, defineSubsystem } from '@agentg/framework';
 
 import { runHistorySyncService } from './runService.js';
-import type { HistorySyncServiceDomain, HistorySyncServiceOptions } from './runService.js';
+import type { HistorySyncServiceModule, HistorySyncServiceOptions } from './runService.js';
 
 type ServiceResource = {
   requestSync: (reason: string, chatId?: string) => void;
@@ -19,8 +19,8 @@ export const useService = defineSubsystem('service', () => {
     requestSync: (reason: string, chatId?: string): void => {
       requestSyncHandler?.(reason, chatId);
     },
-    start(options: HistorySyncServiceOptions, domain: HistorySyncServiceDomain): Promise<void> {
-      return runHistorySyncService(options, domain);
+    start(options: HistorySyncServiceOptions, module: HistorySyncServiceModule): Promise<void> {
+      return runHistorySyncService(options, module);
     }
   };
 });

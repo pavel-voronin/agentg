@@ -5,7 +5,7 @@ import {
   readInternalTrpcClientConfig,
   type InternalTrpcBindConfig,
   type InternalTrpcClientConfig
-} from '@agentg/framework/config';
+} from '@agentg/framework';
 
 loadNearestDotenv();
 

@@ -1,9 +1,9 @@
 import type { EventBus } from '@agentg/events/bus';
-import { bindSubsystemContext, defineSubsystem } from '@agentg/framework/domain';
+import { bindSubsystemContext, defineSubsystem } from '@agentg/framework';
 
 import { runTelegramIngestion } from './ingestion.js';
 import { createTelegramTdlibOperations, type TelegramTdlibOperations } from './operations.js';
-import type { TelegramIngestionDomain, TelegramIngestionOptions } from './ingestion.js';
+import type { TelegramIngestionModule, TelegramIngestionOptions } from './ingestion.js';
 import type { TdlibInvoker } from './operationEvents.js';
 
 const TELEGRAM_TDLIB_METHODS = [
@@ -35,8 +35,8 @@ export const useTdlib = defineSubsystem('tdlib', () => ({
   },
   eventTypes: TELEGRAM_TDLIB_EVENT_TYPES,
   ...createTdlibOperationSurface(() => operations),
-  start: (options: TelegramIngestionOptions, domain: TelegramIngestionDomain) =>
-    runTelegramIngestion(options, domain, {
+  start: (options: TelegramIngestionOptions, module: TelegramIngestionModule) =>
+    runTelegramIngestion(options, module, {
       configureOperations
     })
 }));

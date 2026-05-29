@@ -1,12 +1,12 @@
-import { defineResourceSubsystem } from '@agentg/framework/domain';
+import { defineResourceSubsystem } from '@agentg/framework';
 
 import type { HistorySyncDatabase } from '../database.js';
-import type { HistorySyncServiceDomain, HistorySyncServiceOptions } from '../service/runService.js';
+import type { HistorySyncServiceModule, HistorySyncServiceOptions } from '../service/runService.js';
 
 export const useDatabase = defineResourceSubsystem<
   HistorySyncDatabase,
   HistorySyncServiceOptions,
-  HistorySyncServiceDomain
+  HistorySyncServiceModule
 >('database', {
   fromContext(context) {
     return isDatabaseContext(context) ? context.database : undefined;

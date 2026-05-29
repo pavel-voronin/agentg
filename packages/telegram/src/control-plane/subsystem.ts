@@ -1,10 +1,10 @@
 import {
   createProcedureRouter,
   type ControlPlaneSubsystem,
-  type DomainControlPlaneConfig,
-  type DomainProcedureRouter,
+  type ModuleControlPlaneConfig,
+  type ModuleProcedureRouter,
   type PrefixedProcedureMap
-} from '@agentg/framework/domain';
+} from '@agentg/framework';
 
 import { chatDirectory } from './backend/procedures/chatDirectory.js';
 import { fileQueueStats } from './backend/procedures/fileQueueStats.js';
@@ -32,11 +32,11 @@ export class TelegramControlPlaneSubsystem implements ControlPlaneSubsystem<
   TelegramControlPlane,
   object
 > {
-  createControlPlane(config: DomainControlPlaneConfig): TelegramControlPlane {
+  createControlPlane(config: ModuleControlPlaneConfig): TelegramControlPlane {
     return createTelegramControlPlane(config.assetVersion, config.assetVersions);
   }
 
-  createProcedureRouter(): DomainProcedureRouter<object, TelegramControlPlaneProcedures> {
+  createProcedureRouter(): ModuleProcedureRouter<object, TelegramControlPlaneProcedures> {
     return createProcedureRouter('cp', telegramControlPlaneProcedures);
   }
 }

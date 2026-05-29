@@ -1,10 +1,10 @@
-import { defineResourceSubsystem } from '@agentg/framework/domain';
+import { defineResourceSubsystem } from '@agentg/framework';
 
-import type { TelegramIngestionDomain, TelegramIngestionOptions } from '../tdlib/ingestion.js';
+import type { TelegramIngestionModule, TelegramIngestionOptions } from '../tdlib/ingestion.js';
 import type { TelegramLiveCoverageObserver } from './liveCoverage.js';
 
 export const useLiveCoverage = defineResourceSubsystem<
   TelegramLiveCoverageObserver,
   TelegramIngestionOptions,
-  TelegramIngestionDomain
+  TelegramIngestionModule
 >('live-coverage', {});

@@ -4,17 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./call-event-types": "./src/callEventTypes.ts",
-    "./call-events": "./src/callEvents.ts",
-    "./call-options": "./src/callOptions.ts",
-    "./client": "./src/client.ts",
-    "./config": "./src/config.ts",
-    "./domain": "./src/domain.ts",
-    "./http-server": "./src/httpServer.ts",
-    "./input": "./src/input.ts",
-    "./trpc": "./src/trpc.ts",
-    "./trpc-proxy": "./src/trpcProxy.ts",
-    "./model-refs": "./src/modelRefs.ts"
+    ".": "./src/index.ts"
   },
   "scripts": {
     "test": "vitest run",

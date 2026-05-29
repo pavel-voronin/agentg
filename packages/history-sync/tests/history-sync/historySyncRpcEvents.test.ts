@@ -3,7 +3,7 @@ import type { EventBus, EventSubscription } from '@agentg/events/bus';
 import type { IntegrationEvent } from '@agentg/events/envelope';
 import { describe, expect, it } from 'vitest';
 
-import { createHistorySyncRpcRouter } from '../../src/main.js';
+import { createHistorySyncRpcRouter } from '../../src/module.js';
 
 describe('History Sync RPC event behavior', () => {
   it('wakes History Sync directly and publishes a notification event for manual sync', async () => {

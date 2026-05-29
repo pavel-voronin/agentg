@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { TelegramDatabase } from '../src/database/client.js';
-import { createTelegramRpcRouter } from '../src/main.js';
+import { createTelegramRpcRouter } from '../src/module.js';
 import { toTelegramChatStorageRow } from '../src/read-model/chat.js';
 import { toChatDirectoryEntries } from '../src/control-plane/backend/chatDirectory.js';
 import type { TelegramFileSubsystem } from '../src/files/subsystem.js';

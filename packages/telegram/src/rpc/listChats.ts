@@ -1,4 +1,4 @@
-import { query } from '@agentg/framework/domain';
+import { query } from '@agentg/framework';
 import { z } from 'zod';
 import type { ChatList$Input } from 'tdlib-types';
 import { asc } from 'drizzle-orm';
@@ -15,7 +15,7 @@ import { isListableTelegramChat } from '../read-model/chatPlacements.js';
 import { telegramTdlibPriorities } from '../tdlib/priority.js';
 import { useTdlib } from '../tdlib/subsystem.js';
 import { telegramWireJsonObject } from '../tdlib/wire.js';
-import { parseLimit } from '@agentg/framework/input';
+import { parseLimit } from '@agentg/framework';
 
 export const telegramHistoryChatSchema = z.object({
   _model: z.literal('telegram.chat'),

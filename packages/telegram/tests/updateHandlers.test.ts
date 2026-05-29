@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import '../src/main.js';
+import '../src/module.js';
 import type { TelegramDatabase } from '../src/database/client.js';
 import { telegramChats, telegramFileSlots, telegramMessages } from '../src/database/schema.js';
 import { useDatabase } from '../src/database/subsystem.js';

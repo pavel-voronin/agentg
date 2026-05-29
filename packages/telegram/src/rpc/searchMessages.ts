@@ -1,4 +1,4 @@
-import { query } from '@agentg/framework/domain';
+import { query } from '@agentg/framework';
 import { z } from 'zod';
 
 import { useDatabase } from '../database/subsystem.js';
@@ -9,7 +9,7 @@ import {
   readMessageSelection,
   toReadMessages
 } from '../read-model/message.js';
-import { parseLimit } from '@agentg/framework/input';
+import { parseLimit } from '@agentg/framework';
 import {
   nonEmptyStringSchema,
   positiveIntegerSchema,

@@ -28,7 +28,7 @@ import type {
 import { useDatabase } from '../database/subsystem.js';
 import { useEvents } from '../events/subsystem.js';
 import { useFiles } from '../files/subsystem.js';
-import { parseLimit } from '@agentg/framework/input';
+import { parseLimit } from '@agentg/framework';
 import { telegramTdlibPriorities, type TelegramTdlibPriority } from '../tdlib/priority.js';
 import { useTdlib } from '../tdlib/subsystem.js';
 import { telegramWireDate, telegramWireIdNumber, type TelegramWireMessage } from '../tdlib/wire.js';

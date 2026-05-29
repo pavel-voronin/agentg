@@ -1,6 +1,6 @@
 import type { Server } from 'node:http';
 
-import { createInternalTrpcHttpServer } from '@agentg/framework/http-server';
+import { createInternalTrpcHttpServer } from '@agentg/framework';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 

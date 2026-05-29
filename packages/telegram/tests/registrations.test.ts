@@ -2,7 +2,7 @@ import { createIntegrationEvent } from '@agentg/events/envelope';
 import { createValidatedEventBus } from '@agentg/events/validated-bus';
 import { describe, expect, it } from 'vitest';
 
-import { createTelegramServiceManifest, TELEGRAM_EVENT_TYPES } from '../src/main.js';
+import { createTelegramServiceManifest, TELEGRAM_EVENT_TYPES } from '../src/module.js';
 
 describe('Telegram service manifest', () => {
   it('lists exact Telegram events without wildcard types', () => {

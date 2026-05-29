@@ -42,7 +42,7 @@ type InternalRpcRouterRecord<Context, Procedures extends InternalRpcProcedureMap
   [Name in keyof Procedures]: ReturnType<Procedures[Name]['create']>;
 };
 
-export type InternalRpcDomainOptions<
+export type InternalRpcModuleOptions<
   Deps,
   Context,
   Procedures extends InternalRpcProcedureMap<Context>
@@ -52,7 +52,7 @@ export type InternalRpcDomainOptions<
   slug: string;
 };
 
-export type InternalRpcDomainServerOptions<Deps> = {
+export type InternalRpcModuleServerOptions<Deps> = {
   bind: InternalTrpcBindConfig;
   deps: Deps;
   eventBus?: EventBus | undefined;
@@ -60,7 +60,7 @@ export type InternalRpcDomainServerOptions<Deps> = {
   staticAssets?: InternalTrpcStaticAssetConfig | InternalTrpcStaticAssetConfig[] | undefined;
 };
 
-export type InternalRpcDomainClientOptions = {
+export type InternalRpcModuleClientOptions = {
   timeoutMessage?: string;
   timeoutMs?: number;
 };
@@ -76,7 +76,7 @@ type InternalRpcClientProcedure<Procedure extends AnyProcedure> =
         options?: InternalRpcCallOptions
       ) => Promise<inferProcedureOutput<Procedure>>;
 
-export type InternalRpcDomainClient<
+export type InternalRpcModuleClient<
   Context,
   Procedures extends InternalRpcProcedureMap<Context>
 > = {
@@ -85,33 +85,33 @@ export type InternalRpcDomainClient<
   [Name in keyof Procedures]: InternalRpcClientProcedure<ReturnType<Procedures[Name]['create']>>;
 };
 
-export type DomainControlPlaneConfig = {
+export type ModuleControlPlaneConfig = {
   assetVersion: string;
   assetVersions: Readonly<Record<string, string>>;
 };
 
-export type DomainServiceManifestConfig = {
+export type ModuleServiceManifestConfig = {
   controlPlaneAssetVersion: string;
   controlPlaneAssetVersions: Readonly<Record<string, string>>;
   rpcUrl: string;
 };
 
-export type DomainExtension = {
+export type ModuleExtension = {
   extension: string;
   target: string;
 };
 
-export type DomainServiceManifest<ControlPlane> = {
+export type ModuleServiceManifest<ControlPlane> = {
   controlPlane?: ControlPlane | undefined;
   events: string[];
-  extensions: DomainExtension[];
+  extensions: ModuleExtension[];
   procedures: InternalRpcProcedureRecord[];
   required: boolean;
   rpcUrl: string;
   slug: string;
 };
 
-export type Domain<
+export type Module<
   Deps,
   Context,
   Procedures extends InternalRpcProcedureMap<Context>,
@@ -119,24 +119,24 @@ export type Domain<
   RunOptions
 > = {
   createContext: ReturnType<
-    typeof defineInternalRpcDomain<Deps, Context, Procedures>
+    typeof defineInternalRpcModule<Deps, Context, Procedures>
   >['createContext'];
   createRpcClient: ReturnType<
-    typeof defineInternalRpcDomain<Deps, Context, Procedures>
+    typeof defineInternalRpcModule<Deps, Context, Procedures>
   >['createClient'];
   createRpcRouter: ReturnType<
-    typeof defineInternalRpcDomain<Deps, Context, Procedures>
+    typeof defineInternalRpcModule<Deps, Context, Procedures>
   >['createRouter'];
-  createServiceManifest(config: DomainServiceManifestConfig): DomainServiceManifest<ControlPlane>;
+  createServiceManifest(config: ModuleServiceManifestConfig): ModuleServiceManifest<ControlPlane>;
   events: string[];
   rpcProcedures(): InternalRpcProcedureRecord[];
   run(options: RunOptions): Promise<void>;
   slug: string;
   startRpcServer: ReturnType<
-    typeof defineInternalRpcDomain<Deps, Context, Procedures>
+    typeof defineInternalRpcModule<Deps, Context, Procedures>
   >['startServer'];
   stopRpcServer: ReturnType<
-    typeof defineInternalRpcDomain<Deps, Context, Procedures>
+    typeof defineInternalRpcModule<Deps, Context, Procedures>
   >['stopServer'];
 };
 
@@ -145,7 +145,7 @@ export const bindSubsystemContext: unique symbol = Symbol('agentg.bindSubsystemC
 export type Subsystem<RunOptions, Context> = {
   [bindSubsystemContext]?(context: unknown): void;
   init?(): void;
-  start(options: RunOptions, domain: Context): Promise<void>;
+  start(options: RunOptions, module: Context): Promise<void>;
 };
 
 export type UseSubsystem<TSubsystem extends Subsystem<unknown, unknown>> = () => TSubsystem;
@@ -156,29 +156,29 @@ export type ResourceSubsystem<TResource extends object, RunOptions, Context> = T
   };
 
 export type ControlPlaneSubsystem<ControlPlane, Context = unknown> = {
-  createControlPlane(config: DomainControlPlaneConfig): ControlPlane;
-  createProcedureRouter?(): DomainProcedureRouter<Context>;
+  createControlPlane(config: ModuleControlPlaneConfig): ControlPlane;
+  createProcedureRouter?(): ModuleProcedureRouter<Context>;
 };
 
 type ControlPlaneSubsystemWithProcedures<
   ControlPlane,
   Context,
-  Router extends DomainProcedureRouter<Context>
+  Router extends ModuleProcedureRouter<Context>
 > = ControlPlaneSubsystem<ControlPlane, Context> & {
   createProcedureRouter(): Router;
 };
 
-type DomainProcedureSource<Context> =
+type ModuleProcedureSource<Context> =
   | InternalRpcProcedure<Context, AnyProcedure>
-  | DomainProcedureRouter<Context>;
+  | ModuleProcedureRouter<Context>;
 
-type DomainProcedureSources<Context> = Record<string, DomainProcedureSource<Context>>;
+type ModuleProcedureSources<Context> = Record<string, ModuleProcedureSource<Context>>;
 
 export type PrefixedProcedureMap<Prefix extends string, Procedures> = {
   [Name in keyof Procedures as `${Prefix}.${Name & string}`]: Procedures[Name];
 };
 
-export type DomainProcedureRouter<
+export type ModuleProcedureRouter<
   Context,
   Procedures extends InternalRpcProcedureMap<Context> = InternalRpcProcedureMap<Context>
 > = {
@@ -187,15 +187,15 @@ export type DomainProcedureRouter<
   procedures: Procedures;
 };
 
-type DomainProcedureRouterBuilder<Context> = DomainProcedureRouter<Context> & {
+type ModuleProcedureRouterBuilder<Context> = ModuleProcedureRouter<Context> & {
   defineProcedures(procedures: InternalRpcProcedureMap<Context>): void;
 };
 
-type DomainSetupState = {
+type ModuleSetupState = {
   controlPlane?: ControlPlaneSubsystem<unknown> | undefined;
   createdSubsystemsByName: Record<string, Subsystem<unknown, unknown>>;
   events: Set<string>;
-  extensions: DomainExtension[];
+  extensions: ModuleExtension[];
   procedures: Record<string, InternalRpcProcedure<unknown, AnyProcedure>>;
   required: boolean;
   slug: string;
@@ -237,11 +237,11 @@ export function mutation<Procedure>(
   };
 }
 
-export function defineInternalRpcDomain<
+export function defineInternalRpcModule<
   Deps,
   Context,
   const Procedures extends InternalRpcProcedureMap<Context>
->(options: InternalRpcDomainOptions<Deps, Context, Procedures>) {
+>(options: InternalRpcModuleOptions<Deps, Context, Procedures>) {
   const service = createInternalTrpcService(options.slug);
 
   function createRouter(deps: Deps) {
@@ -256,7 +256,7 @@ export function defineInternalRpcDomain<
     );
   }
 
-  async function startServer(serverOptions: InternalRpcDomainServerOptions<Deps>): Promise<Server> {
+  async function startServer(serverOptions: InternalRpcModuleServerOptions<Deps>): Promise<Server> {
     const httpServerOptions = {
       createContext: (contextOptions: Parameters<typeof createInternalTrpcContext>[0]) =>
         createInternalTrpcContext(contextOptions, {
@@ -285,14 +285,14 @@ export function defineInternalRpcDomain<
 
   function createClient(
     config: InternalTrpcClientConfig,
-    clientOptions: InternalRpcDomainClientOptions = {}
-  ): InternalRpcDomainClient<Context, Procedures> {
+    clientOptions: InternalRpcModuleClientOptions = {}
+  ): InternalRpcModuleClient<Context, Procedures> {
     const client = createInternalTrpcClient<ReturnType<typeof createRouter>>(config);
     const procedures = Object.fromEntries(
       Object.entries(options.procedures).map(([name, procedure]) => [
         name,
         (input: unknown, callOptions?: InternalRpcCallOptions) =>
-          callInternalRpcDomainProcedure({
+          callInternalRpcModuleProcedure({
             callOptions,
             client,
             input,
@@ -308,7 +308,7 @@ export function defineInternalRpcDomain<
         return;
       },
       ...procedures
-    } as InternalRpcDomainClient<Context, Procedures>;
+    } as InternalRpcModuleClient<Context, Procedures>;
   }
 
   return {
@@ -329,15 +329,15 @@ export function defineInternalRpcDomain<
   };
 }
 
-export function defineDomain<
+export function defineModule<
   Deps,
   Context,
   const Procedures extends InternalRpcProcedureMap<Context>,
   ControlPlane,
   RunOptions
->(slug: string, setup: () => void): Domain<Deps, Context, Procedures, ControlPlane, RunOptions> {
-  const previousState = currentDomainState;
-  const state: DomainSetupState = {
+>(slug: string, setup: () => void): Module<Deps, Context, Procedures, ControlPlane, RunOptions> {
+  const previousState = currentModuleState;
+  const state: ModuleSetupState = {
     createdSubsystemsByName: {},
     events: new Set(),
     extensions: [],
@@ -347,27 +347,27 @@ export function defineDomain<
     subsystems: [],
     subsystemsByName: {}
   };
-  currentDomainState = state;
+  currentModuleState = state;
   try {
     setup();
   } finally {
-    currentDomainState = previousState;
+    currentModuleState = previousState;
   }
 
-  const rpc = defineInternalRpcDomain<Deps, Context, Procedures>({
-    createProcedureContext: createDomainProcedureContext(slug, state) as (deps: Deps) => Context,
+  const rpc = defineInternalRpcModule<Deps, Context, Procedures>({
+    createProcedureContext: createModuleProcedureContext(slug, state) as (deps: Deps) => Context,
     procedures: state.procedures as Procedures,
     slug
   });
   const events = [...state.events].sort();
 
-  const domain = {
+  const module = {
     createContext: rpc.createContext,
     createRpcClient: rpc.createClient,
     createRpcRouter: rpc.createRouter,
     createServiceManifest(
-      config: DomainServiceManifestConfig
-    ): DomainServiceManifest<ControlPlane> {
+      config: ModuleServiceManifestConfig
+    ): ModuleServiceManifest<ControlPlane> {
       return {
         ...(state.controlPlane === undefined
           ? {}
@@ -388,28 +388,28 @@ export function defineDomain<
     events,
     rpcProcedures: () => rpc.procedures(),
     slug,
-    startRpcServer: (serverOptions: InternalRpcDomainServerOptions<Deps>) =>
+    startRpcServer: (serverOptions: InternalRpcModuleServerOptions<Deps>) =>
       rpc.startServer(serverOptions),
     stopRpcServer: (server: Server) => rpc.stopServer(server),
     async run(options: RunOptions): Promise<void> {
       if (state.subsystems.length === 0) {
-        throw new Error(`Domain ${slug} has no subsystem runner`);
+        throw new Error(`Module ${slug} has no subsystem runner`);
       }
 
-      await Promise.all(state.subsystems.map(({ subsystem }) => subsystem.start(options, domain)));
+      await Promise.all(state.subsystems.map(({ subsystem }) => subsystem.start(options, module)));
     }
-  } satisfies Domain<Deps, Context, Procedures, ControlPlane, RunOptions>;
+  } satisfies Module<Deps, Context, Procedures, ControlPlane, RunOptions>;
 
-  return domain;
+  return module;
 }
 
-let currentDomainState: DomainSetupState | undefined;
+let currentModuleState: ModuleSetupState | undefined;
 const subsystemNames = new WeakMap<Subsystem<unknown, unknown>, string>();
 
 export function createRouter<Context = unknown>(
   name: string
-): DomainProcedureRouterBuilder<Context> {
-  const router: DomainProcedureRouterBuilder<Context> = {
+): ModuleProcedureRouterBuilder<Context> {
+  const router: ModuleProcedureRouterBuilder<Context> = {
     defineProcedures(procedures) {
       router.procedures = prefixProcedures(name, procedures);
     },
@@ -427,7 +427,7 @@ export function createProcedureRouter<
 >(
   name: Name,
   procedures: Procedures
-): DomainProcedureRouter<Context, PrefixedProcedureMap<Name, Procedures>> {
+): ModuleProcedureRouter<Context, PrefixedProcedureMap<Name, Procedures>> {
   return {
     kind: 'procedureRouter',
     name,
@@ -438,7 +438,7 @@ export function createProcedureRouter<
 export function defineControlPlane<
   ControlPlane,
   Context,
-  Router extends DomainProcedureRouter<Context>
+  Router extends ModuleProcedureRouter<Context>
 >(
   controlPlane: ControlPlaneSubsystemWithProcedures<ControlPlane, Context, Router>
 ): { procedures: Router };
@@ -447,14 +447,14 @@ export function defineControlPlane<ControlPlane>(
 ): Record<string, never>;
 export function defineControlPlane<ControlPlane, Context>(
   controlPlane: ControlPlaneSubsystem<ControlPlane, Context>
-): { procedures: DomainProcedureRouter<Context> } | Record<string, never> {
-  activeDomainState().controlPlane = controlPlane;
+): { procedures: ModuleProcedureRouter<Context> } | Record<string, never> {
+  activeModuleState().controlPlane = controlPlane;
   const controlPlaneProcedures = controlPlane.createProcedureRouter?.();
   return controlPlaneProcedures === undefined ? {} : { procedures: controlPlaneProcedures };
 }
 
 export function defineEvent(event: string): void {
-  activeDomainState().events.add(event);
+  activeModuleState().events.add(event);
 }
 
 export function defineEvents(events: readonly string[]): void {
@@ -463,14 +463,14 @@ export function defineEvents(events: readonly string[]): void {
   }
 }
 
-export function defineExtensions(extensions: readonly DomainExtension[]): void {
-  activeDomainState().extensions.push(...extensions);
+export function defineExtensions(extensions: readonly ModuleExtension[]): void {
+  activeModuleState().extensions.push(...extensions);
 }
 
-export function defineProcedures<Context>(procedures: DomainProcedureSources<Context>): void {
-  const state = activeDomainState();
+export function defineProcedures<Context>(procedures: ModuleProcedureSources<Context>): void {
+  const state = activeModuleState();
   for (const [name, procedure] of Object.entries(procedures)) {
-    if (isDomainProcedureRouter(procedure)) {
+    if (isModuleProcedureRouter(procedure)) {
       Object.assign(state.procedures, procedure.procedures);
       continue;
     }
@@ -490,7 +490,7 @@ export function defineSubsystem<
       return subsystem;
     }
 
-    const state = activeDomainState();
+    const state = activeModuleState();
     const registered = state.subsystemsByName[name];
     if (registered !== undefined) {
       subsystem = registered as TSubsystem;
@@ -515,7 +515,7 @@ export function defineResourceSubsystem<TResource extends object, RunOptions, Co
   name: string,
   resolve: {
     fromContext?(context: unknown): TResource | undefined;
-    fromRun?(options: RunOptions, domain: Context): TResource | undefined;
+    fromRun?(options: RunOptions, module: Context): TResource | undefined;
   }
 ): UseSubsystem<ResourceSubsystem<TResource, RunOptions, Context>> {
   let resource: TResource | undefined;
@@ -546,8 +546,8 @@ export function defineResourceSubsystem<TResource extends object, RunOptions, Co
       init(): void {
         configure(undefined);
       },
-      start(options: RunOptions, domain: Context): Promise<void> {
-        configure(resolve.fromRun?.(options, domain));
+      start(options: RunOptions, module: Context): Promise<void> {
+        configure(resolve.fromRun?.(options, module));
         return Promise.resolve();
       }
     };
@@ -577,7 +577,7 @@ export function defineResourceSubsystem<TResource extends object, RunOptions, Co
 export function registerSubsystem<TSubsystem extends Subsystem<unknown, unknown>>(
   subsystem: TSubsystem
 ): TSubsystem {
-  const state = activeDomainState();
+  const state = activeModuleState();
   const name = subsystemNames.get(subsystem);
   if (name === undefined) {
     throw new Error('Subsystem must be created through defineSubsystem before registration');
@@ -600,20 +600,20 @@ export function registerSubsystem<TSubsystem extends Subsystem<unknown, unknown>
 }
 
 export function setRequired(required: boolean): void {
-  activeDomainState().required = required;
+  activeModuleState().required = required;
 }
 
-function activeDomainState(): DomainSetupState {
-  if (currentDomainState === undefined) {
-    throw new Error('Domain composition function called outside defineDomain setup');
+function activeModuleState(): ModuleSetupState {
+  if (currentModuleState === undefined) {
+    throw new Error('Module composition function called outside defineModule setup');
   }
 
-  return currentDomainState;
+  return currentModuleState;
 }
 
-function isDomainProcedureRouter<Context>(
-  procedure: DomainProcedureSource<Context>
-): procedure is DomainProcedureRouter<Context> {
+function isModuleProcedureRouter<Context>(
+  procedure: ModuleProcedureSource<Context>
+): procedure is ModuleProcedureRouter<Context> {
   return 'kind' in procedure && procedure.kind === 'procedureRouter';
 }
 
@@ -629,13 +629,13 @@ function prefixProcedures<Context>(
   );
 }
 
-function createDomainProcedureContext(
+function createModuleProcedureContext(
   slug: string,
-  state: DomainSetupState
+  state: ModuleSetupState
 ): (deps: unknown) => unknown {
   return (deps) => {
     if (!isObjectRecord(deps)) {
-      throw new Error(`Domain ${slug} deps must be an object`);
+      throw new Error(`Module ${slug} deps must be an object`);
     }
 
     const context = { ...deps };
@@ -650,7 +650,7 @@ function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function callInternalRpcDomainProcedure(options: {
+function callInternalRpcModuleProcedure(options: {
   callOptions: InternalRpcCallOptions | undefined;
   client: unknown;
   input: unknown;
@@ -674,7 +674,7 @@ function callInternalRpcDomainProcedure(options: {
 
 function clientTimeoutOptions(
   slug: string,
-  options: InternalRpcDomainClientOptions
+  options: InternalRpcModuleClientOptions
 ): InternalTrpcClientOptions {
   return {
     timeoutMessage: options.timeoutMessage ?? `${titleCaseSlug(slug)} tRPC timed out`,

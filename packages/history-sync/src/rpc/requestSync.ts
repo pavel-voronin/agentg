@@ -1,5 +1,5 @@
 import { createIntegrationEvent } from '@agentg/events/envelope';
-import { mutation } from '@agentg/framework/domain';
+import { mutation } from '@agentg/framework';
 import { z } from 'zod';
 
 import { useEvents } from '../events/subsystem.js';

@@ -1,7 +1,7 @@
 import type { EventBus } from '@agentg/events/bus';
 import type { IntegrationEvent } from '@agentg/events/envelope';
-import { bindSubsystemContext, defineSubsystem } from '@agentg/framework/domain';
-import { currentInternalRpcEventBus } from '@agentg/framework/trpc';
+import { bindSubsystemContext, defineSubsystem } from '@agentg/framework';
+import { currentInternalRpcEventBus } from '@agentg/framework';
 
 import type { HistorySyncServiceOptions } from '../service/runService.js';
 

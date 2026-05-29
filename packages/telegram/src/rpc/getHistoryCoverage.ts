@@ -1,4 +1,4 @@
-import { query } from '@agentg/framework/domain';
+import { query } from '@agentg/framework';
 import { z } from 'zod';
 
 import { useDatabase } from '../database/subsystem.js';

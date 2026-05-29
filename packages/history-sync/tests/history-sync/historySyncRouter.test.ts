@@ -3,7 +3,7 @@ import type { EventBus, EventSubscription } from '@agentg/events/bus';
 import type { IntegrationEvent } from '@agentg/events/envelope';
 import { describe, expect, it } from 'vitest';
 
-import { createHistorySyncRpcRouter } from '../../src/main.js';
+import { createHistorySyncRpcRouter } from '../../src/module.js';
 
 describe('History Sync router', () => {
   it('applies call-scoped event suppression to History Sync domain fact events', async () => {

@@ -1,12 +1,12 @@
-import { defineResourceSubsystem } from '@agentg/framework/domain';
+import { defineResourceSubsystem } from '@agentg/framework';
 
-import type { HistorySyncServiceDomain, HistorySyncServiceOptions } from '../service/runService.js';
+import type { HistorySyncServiceModule, HistorySyncServiceOptions } from '../service/runService.js';
 import type { TelegramReadClient } from '../telegramClient.js';
 
 export const useTelegram = defineResourceSubsystem<
   TelegramReadClient,
   HistorySyncServiceOptions,
-  HistorySyncServiceDomain
+  HistorySyncServiceModule
 >('telegram', {
   fromContext(context) {
     return isTelegramContext(context) ? context.telegram : undefined;

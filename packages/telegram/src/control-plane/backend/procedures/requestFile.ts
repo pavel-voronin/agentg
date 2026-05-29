@@ -1,4 +1,4 @@
-import { mutation } from '@agentg/framework/domain';
+import { mutation } from '@agentg/framework';
 import { z } from 'zod';
 
 import { useFiles } from '../../../files/subsystem.js';

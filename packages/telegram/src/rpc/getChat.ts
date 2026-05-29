@@ -1,4 +1,4 @@
-import { query } from '@agentg/framework/domain';
+import { query } from '@agentg/framework';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 

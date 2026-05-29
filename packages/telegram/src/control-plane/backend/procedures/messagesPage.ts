@@ -1,4 +1,4 @@
-import { mutation } from '@agentg/framework/domain';
+import { mutation } from '@agentg/framework';
 import { z } from 'zod';
 
 import { and, eq, inArray } from 'drizzle-orm';
@@ -26,7 +26,7 @@ import {
 } from '../../../tdlib/wire.js';
 import { toTelegramDate } from '../../../read-model/dates.js';
 import { readMessageSelection, toReadMessages } from '../../../read-model/message.js';
-import { parseLimit } from '@agentg/framework/input';
+import { parseLimit } from '@agentg/framework';
 import {
   nonEmptyStringSchema,
   positiveIntegerSchema,

@@ -1,12 +1,12 @@
-import { defineResourceSubsystem } from '@agentg/framework/domain';
+import { defineResourceSubsystem } from '@agentg/framework';
 
 import type { TelegramDatabase } from './client.js';
-import type { TelegramIngestionDomain, TelegramIngestionOptions } from '../tdlib/ingestion.js';
+import type { TelegramIngestionModule, TelegramIngestionOptions } from '../tdlib/ingestion.js';
 
 export const useDatabase = defineResourceSubsystem<
   TelegramDatabase,
   TelegramIngestionOptions,
-  TelegramIngestionDomain
+  TelegramIngestionModule
 >('database', {
   fromContext(context) {
     return isDatabaseContext(context) ? context.database : undefined;

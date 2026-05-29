@@ -1,12 +1,12 @@
 import type { EventBus } from '@agentg/events/bus';
-import { defineResourceSubsystem } from '@agentg/framework/domain';
+import { defineResourceSubsystem } from '@agentg/framework';
 
-import type { TelegramIngestionDomain, TelegramIngestionOptions } from '../tdlib/ingestion.js';
+import type { TelegramIngestionModule, TelegramIngestionOptions } from '../tdlib/ingestion.js';
 
 export const useEvents = defineResourceSubsystem<
   EventBus,
   TelegramIngestionOptions,
-  TelegramIngestionDomain
+  TelegramIngestionModule
 >('events', {
   fromContext(context) {
     return isEventBusContext(context) ? context.eventBus : undefined;
