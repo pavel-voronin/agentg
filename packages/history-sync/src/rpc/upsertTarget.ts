@@ -1,10 +1,12 @@
 import { createIntegrationEvent } from '@agentg/events/envelope';
-import { mutation, contextForInternalRpcCall } from '@agentg/framework/domain';
+import { mutation } from '@agentg/framework/domain';
 import { z } from 'zod';
 
+import { useDatabase } from '../database/subsystem.js';
+import { useEvents } from '../events/subsystem.js';
 import { historySyncRangeSchema, nonEmptyStringSchema } from '../rangeSchema.js';
+import { useService } from '../service/subsystem.js';
 import { upsertManualHistorySyncTargetFromCommand } from '../targetCommands.js';
-import type { HistorySyncDomainContext } from '../main.js';
 import { historySyncStoredTargetOutputSchema } from './deleteTarget.js';
 import { currentHistorySyncProjectionContext, historySyncTargetToResponse } from '../readModel.js';
 
@@ -40,15 +42,17 @@ export const historySyncTargetMutationOutputSchema = z.object({
 export type HistorySyncUpsertTargetInput = z.infer<typeof historySyncUpsertTargetInputSchema>;
 export type HistorySyncTargetMutationOutput = z.infer<typeof historySyncTargetMutationOutputSchema>;
 
-export const upsertTarget = mutation((options: HistorySyncDomainContext, procedure) =>
+export const upsertTarget = mutation((procedure) =>
   procedure
     .input(historySyncUpsertTargetInputSchema)
     .output(historySyncTargetMutationOutputSchema)
-    .mutation(async ({ ctx, input }) => {
-      const context = contextForInternalRpcCall(options, ctx);
-      const target = await upsertManualHistorySyncTargetFromCommand(context.database, input);
+    .mutation(async ({ input }) => {
+      const database = useDatabase();
+      const events = useEvents();
+      const { requestSync } = useService();
+      const target = await upsertManualHistorySyncTargetFromCommand(database, input);
 
-      context.eventBus.publish(
+      events.publish(
         createIntegrationEvent({
           data: {
             target: historySyncTargetToResponse(target, currentHistorySyncProjectionContext())
@@ -56,7 +60,7 @@ export const upsertTarget = mutation((options: HistorySyncDomainContext, procedu
           type: 'history-sync.target.upserted'
         })
       );
-      context.eventBus.publish(
+      events.publish(
         createIntegrationEvent({
           data: {
             reason: 'target-upserted'
@@ -64,7 +68,7 @@ export const upsertTarget = mutation((options: HistorySyncDomainContext, procedu
           type: 'history-sync.sync.requested'
         })
       );
-      context.requestSync?.('target-upserted');
+      requestSync('target-upserted');
 
       return {
         deleted: false,

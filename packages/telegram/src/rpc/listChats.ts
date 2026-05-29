@@ -41,7 +41,7 @@ type ChatListKind =
       kind: 'folder';
     };
 
-export const listChats = query((_context, procedure) =>
+export const listChats = query((procedure) =>
   procedure
     .input(telegramHistoryListChatsInputSchema)
     .output(z.array(telegramHistoryChatSchema))

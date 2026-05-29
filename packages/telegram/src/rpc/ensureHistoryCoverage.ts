@@ -35,7 +35,7 @@ export type TelegramEnsureHistoryCoverageOutput = z.infer<
   typeof telegramEnsureHistoryCoverageOutputSchema
 >;
 
-export const ensureHistoryCoverage = mutation((_context, procedure) =>
+export const ensureHistoryCoverage = mutation((procedure) =>
   procedure
     .input(telegramEnsureHistoryCoverageInputSchema)
     .output(telegramEnsureHistoryCoverageOutputSchema)

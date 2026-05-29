@@ -19,7 +19,7 @@ export const messageLookupOutputSchema = z.object({
 export type MessageLookupInput = z.infer<typeof messageLookupInputSchema>;
 export type MessageLookupOutput = z.infer<typeof messageLookupOutputSchema>;
 
-export const message = query((_context, procedure) =>
+export const message = query((procedure) =>
   procedure
     .input(messageLookupInputSchema)
     .output(messageLookupOutputSchema)

@@ -42,7 +42,7 @@ export const telegramHistoryFetchPageResultSchema = z.discriminatedUnion('kind',
 export type TelegramHistoryFetchPageRequest = z.infer<typeof telegramHistoryFetchPageInputSchema>;
 export type TelegramHistoryFetchPageResult = z.infer<typeof telegramHistoryFetchPageResultSchema>;
 
-export const fetchPage = mutation((_context, procedure) =>
+export const fetchPage = mutation((procedure) =>
   procedure
     .input(telegramHistoryFetchPageInputSchema)
     .output(telegramHistoryFetchPageResultSchema)

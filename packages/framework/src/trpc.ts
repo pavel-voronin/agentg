@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
 
 import type { EventBus } from '@agentg/events/bus';
@@ -37,6 +38,16 @@ export type InternalTrpcContext = {
 export type InternalTrpcContextOptions = {
   eventBus?: EventBus | undefined;
 };
+
+const internalTrpcContextStorage = new AsyncLocalStorage<InternalTrpcContext>();
+
+export function currentInternalRpcContext(): InternalTrpcContext | undefined {
+  return internalTrpcContextStorage.getStore();
+}
+
+export function currentInternalRpcEventBus(): EventBus | undefined {
+  return currentInternalRpcContext()?.eventBus;
+}
 
 export function createInternalTrpcContext(
   options: CreateHTTPContextOptions,
@@ -117,7 +128,11 @@ export function createInternalTrpcService(targetPrefix: string) {
         nextContext.eventBus = eventBus;
       }
 
-      const result = await next({ ctx: nextContext });
+      const result = await internalTrpcContextStorage.run(nextContext, () =>
+        next({
+          ctx: nextContext
+        })
+      );
 
       if (!result.ok) {
         if (publishLifecycle) {

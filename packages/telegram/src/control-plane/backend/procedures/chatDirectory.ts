@@ -41,7 +41,7 @@ export const chatDirectoryOutputSchema = z.object({
 export type ChatDirectoryInput = z.infer<typeof chatDirectoryInputSchema>;
 export type ChatDirectoryOutput = z.infer<typeof chatDirectoryOutputSchema>;
 
-export const chatDirectory = query((_context, procedure) =>
+export const chatDirectory = query((procedure) =>
   procedure
     .input(chatDirectoryInputSchema)
     .output(chatDirectoryOutputSchema)

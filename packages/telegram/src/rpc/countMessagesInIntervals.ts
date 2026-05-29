@@ -31,7 +31,7 @@ export type TelegramCountMessagesInIntervalsOutput = z.infer<
   typeof telegramCountMessagesInIntervalsOutputSchema
 >;
 
-export const countMessagesInIntervals = query((_context, procedure) =>
+export const countMessagesInIntervals = query((procedure) =>
   procedure
     .input(telegramCountMessagesInIntervalsInputSchema)
     .output(telegramCountMessagesInIntervalsOutputSchema)

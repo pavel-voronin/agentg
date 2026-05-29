@@ -26,7 +26,7 @@ export const fileQueueStatsOutputSchema = z.object({
 
 export type FileQueueStatsOutput = z.infer<typeof fileQueueStatsOutputSchema>;
 
-export const fileQueueStats = query((_context, procedure) =>
+export const fileQueueStats = query((procedure) =>
   procedure
     .input(fileQueueStatsInputSchema)
     .output(fileQueueStatsOutputSchema)

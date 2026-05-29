@@ -30,7 +30,7 @@ export type TelegramListRecentMessagesOutput = z.infer<
   typeof telegramListRecentMessagesOutputSchema
 >;
 
-export const listRecentMessages = query((_context, procedure) =>
+export const listRecentMessages = query((procedure) =>
   procedure
     .input(telegramListRecentMessagesInputSchema)
     .output(telegramListRecentMessagesOutputSchema)

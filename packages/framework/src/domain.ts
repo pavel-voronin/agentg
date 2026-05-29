@@ -217,20 +217,22 @@ type InternalTrpcClientProcedure = {
   ): Promise<unknown>;
 };
 
-export function query<Context, Procedure>(
-  create: (context: Context, procedure: InternalTrpcProcedureBuilder) => Procedure
-): InternalRpcProcedure<Context, Procedure> {
+type ProcedureFactory<Procedure> = (procedure: InternalTrpcProcedureBuilder) => Procedure;
+
+export function query<Procedure>(
+  create: ProcedureFactory<Procedure>
+): InternalRpcProcedure<unknown, Procedure> {
   return {
-    create,
+    create: (_ignored, procedure) => create(procedure),
     kind: 'query'
   };
 }
 
-export function mutation<Context, Procedure>(
-  create: (context: Context, procedure: InternalTrpcProcedureBuilder) => Procedure
-): InternalRpcProcedure<Context, Procedure> {
+export function mutation<Procedure>(
+  create: ProcedureFactory<Procedure>
+): InternalRpcProcedure<unknown, Procedure> {
   return {
-    create,
+    create: (_ignored, procedure) => create(procedure),
     kind: 'mutation'
   };
 }
@@ -646,20 +648,6 @@ function createDomainProcedureContext(
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-export function contextForInternalRpcCall<Context extends { eventBus: EventBus }>(
-  context: Context,
-  ctx: InternalTrpcContext
-): Context {
-  if (ctx.eventBus === undefined || ctx.eventBus === context.eventBus) {
-    return context;
-  }
-
-  return {
-    ...context,
-    eventBus: ctx.eventBus
-  };
 }
 
 function callInternalRpcDomainProcedure(options: {

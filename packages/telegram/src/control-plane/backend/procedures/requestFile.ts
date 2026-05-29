@@ -34,7 +34,7 @@ export const fileRequestOutputSchema = z.object({
 export type FileRequestInput = z.infer<typeof fileRequestInputSchema>;
 export type FileRequestOutput = z.infer<typeof fileRequestOutputSchema>;
 
-export const requestFile = mutation((_context, procedure) =>
+export const requestFile = mutation((procedure) =>
   procedure
     .input(fileRequestInputSchema)
     .output(fileRequestOutputSchema)

@@ -47,7 +47,7 @@ export const messagesPageOutputSchema = z.object({
 export type MessagesPageInput = z.infer<typeof messagesPageInputSchema>;
 export type MessagesPageOutput = z.infer<typeof messagesPageOutputSchema>;
 
-export const messagesPage = mutation((_context, procedure) =>
+export const messagesPage = mutation((procedure) =>
   procedure
     .input(messagesPageInputSchema)
     .output(messagesPageOutputSchema)

@@ -6,10 +6,8 @@ import {
   projectHistorySyncRange,
   type HistorySyncRangeProjectionContext
 } from './ranges.js';
-import type { TelegramReadClient } from './telegramClient.js';
 import { floorToTelegramSecond, normalizeTelegramHistoryInterval } from './time.js';
 import type { HistorySyncInterval, HistorySyncRange, HistorySyncTarget } from './types.js';
-import type { HistorySyncDomainContext } from './main.js';
 
 export type HistorySyncTargetResponse = {
   chatId: string;
@@ -102,14 +100,6 @@ export function clipIntervalsForDisplay<T extends HistorySyncInterval>(
       startAt: interval.startAt < startAt ? startAt : interval.startAt
     }))
     .filter((interval) => interval.startAt < interval.endAt);
-}
-
-export function requireTelegramReadClient(context: HistorySyncDomainContext): TelegramReadClient {
-  if (context.telegram === undefined) {
-    throw new Error('History Sync context requires Telegram read client');
-  }
-
-  return context.telegram;
 }
 
 export function parseOptionalDate(value: string | null): Date | undefined {

@@ -1,7 +1,8 @@
-import { query, contextForInternalRpcCall } from '@agentg/framework/domain';
+import { query } from '@agentg/framework/domain';
 import { asc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 
+import { useDatabase } from '../database/subsystem.js';
 import { subtractIntervals } from '../ranges.js';
 import {
   historySyncRangeSchema,
@@ -10,14 +11,13 @@ import {
 } from '../rangeSchema.js';
 import { projectTargetsForChat } from '../reconciler.js';
 import { historySyncTargets } from '../schema.js';
-import type { HistorySyncDomainContext } from '../main.js';
+import { useTelegram } from '../telegram/subsystem.js';
 import {
   clipIntervalsForDisplay,
   currentHistorySyncProjectionContext,
   intervalToResponse,
   isTelegramHistoryPastCovered,
   parseOptionalDate,
-  requireTelegramReadClient,
   toHistorySyncTarget,
   toTargetResponse
 } from '../readModel.js';
@@ -70,13 +70,13 @@ export type HistorySyncChatHistorySyncStateOutput = z.infer<
 export type HistorySyncIntervalOutput = z.infer<typeof historySyncIntervalOutputSchema>;
 export type HistorySyncTargetOutput = z.infer<typeof historySyncTargetOutputSchema>;
 
-export const getChatHistorySyncState = query((options: HistorySyncDomainContext, procedure) =>
+export const getChatHistorySyncState = query((procedure) =>
   procedure
     .input(historySyncGetChatHistorySyncStateInputSchema)
     .output(historySyncChatHistorySyncStateOutputSchema)
-    .query(async ({ ctx, input }) => {
-      const context = contextForInternalRpcCall(options, ctx);
-      const telegram = requireTelegramReadClient(context);
+    .query(async ({ input }) => {
+      const database = useDatabase();
+      const telegram = useTelegram();
       const chatId = input.chatId;
       const [facts, telegramCoverage] = await Promise.all([
         telegram.getChatHistoryFacts({ chatId }),
@@ -93,7 +93,7 @@ export const getChatHistorySyncState = query((options: HistorySyncDomainContext,
         };
       }
 
-      const targetRows = await context.database
+      const targetRows = await database
         .select()
         .from(historySyncTargets)
         .where(eq(historySyncTargets.telegramChatId, chatId))

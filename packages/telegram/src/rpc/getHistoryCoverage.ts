@@ -18,7 +18,7 @@ export type TelegramGetHistoryCoverageOutput = z.infer<
   typeof telegramGetHistoryCoverageOutputSchema
 >;
 
-export const getHistoryCoverage = query((_context, procedure) =>
+export const getHistoryCoverage = query((procedure) =>
   procedure
     .input(telegramGetHistoryCoverageInputSchema)
     .output(telegramGetHistoryCoverageOutputSchema)

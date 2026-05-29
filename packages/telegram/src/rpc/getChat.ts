@@ -23,7 +23,7 @@ export const telegramGetChatOutputSchema = z.object({
 export type TelegramGetChatInput = z.infer<typeof telegramGetChatInputSchema>;
 export type TelegramGetChatOutput = z.infer<typeof telegramGetChatOutputSchema>;
 
-export const getChat = query((_context, procedure) =>
+export const getChat = query((procedure) =>
   procedure
     .input(telegramGetChatInputSchema)
     .output(telegramGetChatOutputSchema)

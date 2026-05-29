@@ -1,10 +1,12 @@
 import { createIntegrationEvent } from '@agentg/events/envelope';
-import { mutation, contextForInternalRpcCall } from '@agentg/framework/domain';
+import { mutation } from '@agentg/framework/domain';
 import { z } from 'zod';
 
+import { useDatabase } from '../database/subsystem.js';
+import { useEvents } from '../events/subsystem.js';
 import { historySyncRangeSchema, nonEmptyStringSchema } from '../rangeSchema.js';
+import { useService } from '../service/subsystem.js';
 import { deleteManualHistorySyncTargetFromCommand } from '../targetCommands.js';
-import type { HistorySyncDomainContext } from '../main.js';
 
 export const historySyncDeleteTargetInputSchema = z.object({
   targetId: nonEmptyStringSchema
@@ -27,15 +29,17 @@ export type HistorySyncDeleteTargetInput = z.infer<typeof historySyncDeleteTarge
 export type HistorySyncStoredTargetOutput = z.infer<typeof historySyncStoredTargetOutputSchema>;
 export type HistorySyncTargetMutationOutput = z.infer<typeof historySyncTargetMutationOutputSchema>;
 
-export const deleteTarget = mutation((options: HistorySyncDomainContext, procedure) =>
+export const deleteTarget = mutation((procedure) =>
   procedure
     .input(historySyncDeleteTargetInputSchema)
     .output(historySyncTargetMutationOutputSchema)
-    .mutation(async ({ ctx, input }) => {
-      const context = contextForInternalRpcCall(options, ctx);
-      const target = await deleteManualHistorySyncTargetFromCommand(context.database, input);
+    .mutation(async ({ input }) => {
+      const database = useDatabase();
+      const events = useEvents();
+      const { requestSync } = useService();
+      const target = await deleteManualHistorySyncTargetFromCommand(database, input);
 
-      context.eventBus.publish(
+      events.publish(
         createIntegrationEvent({
           data: {
             target
@@ -43,7 +47,7 @@ export const deleteTarget = mutation((options: HistorySyncDomainContext, procedu
           type: 'history-sync.target.deleted'
         })
       );
-      context.eventBus.publish(
+      events.publish(
         createIntegrationEvent({
           data: {
             reason: 'target-deleted'
@@ -51,7 +55,7 @@ export const deleteTarget = mutation((options: HistorySyncDomainContext, procedu
           type: 'history-sync.sync.requested'
         })
       );
-      context.requestSync?.('target-deleted');
+      requestSync('target-deleted');
 
       return {
         deleted: true,

@@ -29,7 +29,7 @@ export const telegramSearchMessagesOutputSchema = z.object({
 export type TelegramSearchMessagesInput = z.infer<typeof telegramSearchMessagesInputSchema>;
 export type TelegramSearchMessagesOutput = z.infer<typeof telegramSearchMessagesOutputSchema>;
 
-export const searchMessages = query((_context, procedure) =>
+export const searchMessages = query((procedure) =>
   procedure
     .input(telegramSearchMessagesInputSchema)
     .output(telegramSearchMessagesOutputSchema)

@@ -17,6 +17,7 @@ auditCrossDomainSchemaImports(tsFiles);
 auditNoPublicProcedureDtoExports(tsFiles);
 auditNoDomainRpcClientFacades(tsFiles);
 auditDomainRpcFolders(tsFiles);
+auditNoContextProcedureApi(tsFiles);
 auditTelegramDomainResources(tsFiles);
 auditTablePrefixes();
 auditGatewayExternalSurface();
@@ -302,6 +303,28 @@ function auditDomainRpcFolders(files) {
   }
 }
 
+function auditNoContextProcedureApi(files) {
+  const forbiddenTokens = [
+    'context' + 'Query',
+    'context' + 'Mutation',
+    'context' + 'ForInternalRpcCall'
+  ];
+
+  for (const file of files) {
+    const rel = toRel(file);
+    if (rel === 'scripts/sourceAudit.mjs') {
+      continue;
+    }
+
+    const source = readFileSync(file, 'utf8');
+    for (const token of forbiddenTokens) {
+      if (source.includes(token)) {
+        failures.push(`domain procedures must use injected resources, not context API: ${rel}`);
+      }
+    }
+  }
+}
+
 function auditTelegramDomainResources(files) {
   if (existsSync(join(root, 'packages/telegram/src/tdlib/update-runtime/context.ts'))) {
     failures.push('TDLib update handlers must not keep a shared context module');
@@ -328,6 +351,15 @@ function auditTelegramDomainResources(files) {
       (source.includes('TelegramUpdateHandlerContext') || /\bcontext\s*[.:]/.test(source))
     ) {
       failures.push(`Telegram update handlers must read resources through use* subsystems: ${rel}`);
+    }
+
+    if (
+      /packages\/telegram\/src\/(?:rpc|control-plane\/backend\/procedures)\//.test(rel) &&
+      /\b(?:query|mutation)\(\(\s*_?context\s*,/.test(source)
+    ) {
+      failures.push(
+        `Telegram procedures without context must use query((procedure) => ...): ${rel}`
+      );
     }
   }
 }

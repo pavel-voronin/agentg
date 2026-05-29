@@ -41,7 +41,7 @@ export type TelegramGetChatHistoryFactsOutput = z.infer<
   typeof telegramGetChatHistoryFactsOutputSchema
 >;
 
-export const getChatHistoryFacts = query((_context, procedure) =>
+export const getChatHistoryFacts = query((procedure) =>
   procedure
     .input(telegramGetChatHistoryFactsInputSchema)
     .output(telegramGetChatHistoryFactsOutputSchema)
