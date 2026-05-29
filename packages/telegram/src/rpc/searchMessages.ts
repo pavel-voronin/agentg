@@ -1,7 +1,7 @@
 import { query } from '@agentg/framework/domain';
 import { z } from 'zod';
 
-import type { TelegramRpcRuntime } from '../main.js';
+import { useDatabase } from '../database/subsystem.js';
 import { and, desc, eq, ilike, sql } from 'drizzle-orm';
 import { telegramMessages } from '../database/schema.js';
 import {
@@ -29,17 +29,17 @@ export const telegramSearchMessagesOutputSchema = z.object({
 export type TelegramSearchMessagesInput = z.infer<typeof telegramSearchMessagesInputSchema>;
 export type TelegramSearchMessagesOutput = z.infer<typeof telegramSearchMessagesOutputSchema>;
 
-export const searchMessages = query((runtime: TelegramRpcRuntime, procedure) =>
+export const searchMessages = query((_context, procedure) =>
   procedure
     .input(telegramSearchMessagesInputSchema)
     .output(telegramSearchMessagesOutputSchema)
-    .query(({ input }) => runSearchMessages(runtime, input))
+    .query(({ input }) => runSearchMessages(input))
 );
 
 async function runSearchMessages(
-  { database }: TelegramRpcRuntime,
   input: TelegramSearchMessagesInput
 ): Promise<TelegramSearchMessagesOutput> {
+  const database = useDatabase();
   const text = input.query.trim();
   const limit = parseLimit(input.limit, 20, 100);
   const textFilter = ilike(sql<string>`coalesce(${messageTextExpression()}, '')`, `%${text}%`);

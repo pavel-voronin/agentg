@@ -1,14 +1,16 @@
 import { telegramGroupCalls } from '../../database/schema.js';
-import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import { telegramWireJsonValue, type TelegramWireUpdateByType } from '../wire.js';
+import { useDatabase } from '../../database/subsystem.js';
+import { useUpdateEvents } from '../../events/updateEvents.js';
 
 type TelegramWireGroupCallUpdate = TelegramWireUpdateByType<'updateGroupCall'>;
 type TelegramWireGroupCall = TelegramWireGroupCallUpdate['group_call'];
 
-export async function handleUpdateGroupCall(
-  { database, events }: TelegramUpdateHandlerContext,
-  { group_call: groupCall }: TelegramWireGroupCallUpdate
-): Promise<void> {
+export async function handleUpdateGroupCall({
+  group_call: groupCall
+}: TelegramWireGroupCallUpdate): Promise<void> {
+  const database = useDatabase();
+  const events = useUpdateEvents();
   const row = telegramGroupCallRow(groupCall);
   await database.insert(telegramGroupCalls).values(row).onConflictDoUpdate({
     set: row,

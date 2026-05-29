@@ -1,8 +1,10 @@
 import { mutation } from '@agentg/framework/domain';
 import { z } from 'zod';
 
-import type { TelegramRpcRuntime } from '../../../main.js';
 import { and, eq, inArray } from 'drizzle-orm';
+import { useDatabase } from '../../../database/subsystem.js';
+import { useEvents } from '../../../events/subsystem.js';
+import { useFiles } from '../../../files/subsystem.js';
 import { createTelegramHistoryCoverageChangedEvent } from '../../../events/contracts.js';
 import { telegramChats, telegramMessages } from '../../../database/schema.js';
 import { storeMessage } from '../../../store/message.js';
@@ -16,6 +18,7 @@ import {
 import { countTelegramMessagesInIntervals } from '../../../history/messageCounts.js';
 import { TELEGRAM_HISTORY_PAST_BOUNDARY } from '../../../history/time.js';
 import { telegramTdlibPriorities } from '../../../tdlib/priority.js';
+import { useTdlib } from '../../../tdlib/subsystem.js';
 import {
   telegramWireDate,
   telegramWireIdNumber,
@@ -44,11 +47,11 @@ export const messagesPageOutputSchema = z.object({
 export type MessagesPageInput = z.infer<typeof messagesPageInputSchema>;
 export type MessagesPageOutput = z.infer<typeof messagesPageOutputSchema>;
 
-export const messagesPage = mutation((runtime: TelegramRpcRuntime, procedure) =>
+export const messagesPage = mutation((_context, procedure) =>
   procedure
     .input(messagesPageInputSchema)
     .output(messagesPageOutputSchema)
-    .mutation(({ input }) => runMessagesPage(runtime, input))
+    .mutation(({ input }) => runMessagesPage(input))
 );
 
 const TELEGRAM_MESSAGE_PAGE_LIMIT = 100;
@@ -59,10 +62,7 @@ type TelegramHistoryCoverageEventInterval = TelegramHistoryCoverageWriteSegment 
   messageCount: number;
 };
 
-async function runMessagesPage(
-  context: TelegramRpcRuntime,
-  input: MessagesPageInput
-): Promise<MessagesPageOutput> {
+async function runMessagesPage(input: MessagesPageInput): Promise<MessagesPageOutput> {
   const limit = parseLimit(
     input.limit,
     TELEGRAM_MESSAGE_PAGE_LIMIT,
@@ -71,14 +71,15 @@ async function runMessagesPage(
   const chatId = parseTelegramChatId(input.chatId);
   const cursorMessageId = parseOptionalMessageId(input.beforeMessageId);
   const initialAnchor =
-    cursorMessageId === undefined ? await readInitialPageAnchor(context, input.chatId) : null;
+    cursorMessageId === undefined ? await readInitialPageAnchor(input.chatId) : null;
   const pageEndAt =
     cursorMessageId === undefined
       ? (initialAnchor?.pageEndAt ?? ceilToTelegramSecond(new Date()))
-      : await readMessagePageEndAt(context, input.chatId, input.beforeMessageId);
+      : await readMessagePageEndAt(input.chatId, input.beforeMessageId);
   const anchorMessageId = cursorMessageId ?? initialAnchor?.messageId ?? 0;
 
-  const history = await context.tdlib.getChatHistory(
+  const tdlib = useTdlib();
+  const history = await tdlib.getChatHistory(
     {
       chatId,
       fromMessageId: anchorMessageId,
@@ -99,7 +100,7 @@ async function runMessagesPage(
   const reachedStart =
     anchorMessageId === 0 ? fetchedMessages.length < limit : nextCursorMessageId === undefined;
   const observedStartAt = observedIntervalStartAt(pageMessages, reachedStart);
-  const persisted = await persistMessagesAndCoverage(context, {
+  const persisted = await persistMessagesAndCoverage({
     coverage:
       pageEndAt === undefined || observedStartAt === undefined
         ? undefined
@@ -114,8 +115,8 @@ async function runMessagesPage(
     cursorMessageId === undefined && initialAnchor?.messageIdText !== undefined
       ? [initialAnchor.messageIdText, ...persisted.messageIds]
       : persisted.messageIds;
-  const messages = await readPersistedMessages(context, input.chatId, messageIds);
-  scheduleOperatorPageFileRecording(context, pageMessages);
+  const messages = await readPersistedMessages(input.chatId, messageIds);
+  scheduleOperatorPageFileRecording(pageMessages);
 
   return {
     messages,
@@ -124,10 +125,10 @@ async function runMessagesPage(
 }
 
 async function readInitialPageAnchor(
-  context: TelegramRpcRuntime,
   chatId: string
 ): Promise<{ messageId: number; messageIdText: string; pageEndAt: Date | undefined } | undefined> {
-  const [chat] = await context.database
+  const database = useDatabase();
+  const [chat] = await database
     .select({
       lastMessageId: telegramChats.lastMessageId
     })
@@ -147,15 +148,15 @@ async function readInitialPageAnchor(
   return {
     messageId,
     messageIdText: chat.lastMessageId,
-    pageEndAt: await readMessagePageEndAt(context, chatId, chat.lastMessageId)
+    pageEndAt: await readMessagePageEndAt(chatId, chat.lastMessageId)
   };
 }
 
 async function readMessagePageEndAt(
-  { database }: TelegramRpcRuntime,
   chatId: string,
   messageId: string | undefined
 ): Promise<Date | undefined> {
+  const database = useDatabase();
   if (messageId === undefined) {
     return undefined;
   }
@@ -175,13 +176,12 @@ async function readMessagePageEndAt(
   return messageDate === null ? undefined : nextTelegramSecond(messageDate);
 }
 
-async function persistMessagesAndCoverage(
-  context: TelegramRpcRuntime,
-  input: {
-    coverage: TelegramHistoryCoverageInterval | undefined;
-    messages: TelegramWireMessage[];
-  }
-): Promise<{ coverageIntervals: TelegramHistoryCoverageEventInterval[]; messageIds: string[] }> {
+async function persistMessagesAndCoverage(input: {
+  coverage: TelegramHistoryCoverageInterval | undefined;
+  messages: TelegramWireMessage[];
+}): Promise<{ coverageIntervals: TelegramHistoryCoverageEventInterval[]; messageIds: string[] }> {
+  const database = useDatabase();
+  const events = useEvents();
   const coverageIntervals =
     input.coverage === undefined ? [] : normalizeCoverageWriteInput([input.coverage], new Date());
   const messageIds: string[] = [];
@@ -189,7 +189,7 @@ async function persistMessagesAndCoverage(
   await withTelegramHistoryCoverageLocks(
     input.coverage === undefined ? [] : [input.coverage.chatId],
     async () =>
-      context.database.transaction(async (transaction) => {
+      database.transaction(async (transaction) => {
         for (const message of input.messages) {
           const stored = await storeMessage(transaction, message);
           if (stored) {
@@ -203,9 +203,9 @@ async function persistMessagesAndCoverage(
       })
   );
 
-  const coverageEventIntervals = await addCoverageMessageCounts(context, coverageIntervals);
+  const coverageEventIntervals = await addCoverageMessageCounts(coverageIntervals);
   if (coverageIntervals.length > 0) {
-    context.eventBus.publish(
+    events.publish(
       createTelegramHistoryCoverageChangedEvent({
         intervals: coverageEventIntervals
       })
@@ -215,16 +215,15 @@ async function persistMessagesAndCoverage(
   return { coverageIntervals: coverageEventIntervals, messageIds };
 }
 
-function scheduleOperatorPageFileRecording(
-  context: TelegramRpcRuntime,
-  messages: TelegramWireMessage[]
-): void {
+function scheduleOperatorPageFileRecording(messages: TelegramWireMessage[]): void {
   if (messages.length === 0) {
     return;
   }
 
+  const files = useFiles();
+  const recordMessageFiles = files.recordMessageFiles.bind(files);
   setImmediate(() => {
-    void recordOperatorPageFiles(context, messages).catch((error: unknown) => {
+    void recordOperatorPageFiles(messages, recordMessageFiles).catch((error: unknown) => {
       console.error(
         JSON.stringify({
           error: error instanceof Error ? error.message : String(error),
@@ -237,18 +236,18 @@ function scheduleOperatorPageFileRecording(
 }
 
 async function recordOperatorPageFiles(
-  context: TelegramRpcRuntime,
-  messages: TelegramWireMessage[]
+  messages: TelegramWireMessage[],
+  recordMessageFiles: ReturnType<typeof useFiles>['recordMessageFiles']
 ): Promise<void> {
   for (const message of messages) {
-    await context.files.recordMessageFiles(message, 'operator_page');
+    await recordMessageFiles(message, 'operator_page');
   }
 }
 
 async function addCoverageMessageCounts(
-  { database }: TelegramRpcRuntime,
   intervals: TelegramHistoryCoverageWriteSegment[]
 ): Promise<TelegramHistoryCoverageEventInterval[]> {
+  const database = useDatabase();
   const counts =
     intervals.length === 0 ? [] : await countTelegramMessagesInIntervals(database, intervals);
   return intervals.map((interval, index) => ({
@@ -257,11 +256,8 @@ async function addCoverageMessageCounts(
   }));
 }
 
-async function readPersistedMessages(
-  { database }: TelegramRpcRuntime,
-  chatId: string,
-  messageIds: string[]
-) {
+async function readPersistedMessages(chatId: string, messageIds: string[]) {
+  const database = useDatabase();
   const orderedMessageIds = [...new Set(messageIds)];
   if (orderedMessageIds.length === 0) {
     return [];

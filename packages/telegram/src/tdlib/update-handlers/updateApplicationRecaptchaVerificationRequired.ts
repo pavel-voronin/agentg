@@ -1,12 +1,12 @@
-import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import type { TelegramWireUpdateByType } from '../wire.js';
+import { useUpdateEvents } from '../../events/updateEvents.js';
 
 type TelegramWireApplicationRecaptchaVerificationRequiredUpdate =
   TelegramWireUpdateByType<'updateApplicationRecaptchaVerificationRequired'>;
 
 export function handleUpdateApplicationRecaptchaVerificationRequired(
-  { events }: TelegramUpdateHandlerContext,
   update: TelegramWireApplicationRecaptchaVerificationRequiredUpdate
 ): void {
+  const events = useUpdateEvents();
   events.publishTelegramApplicationRecaptchaVerificationRequired(update);
 }

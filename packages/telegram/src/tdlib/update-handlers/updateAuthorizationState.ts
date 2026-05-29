@@ -1,10 +1,10 @@
 import { storeAuthorizationState } from '../../store/authorizationState.js';
-import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import type { TelegramWireAuthorizationStateUpdate } from '../wire.js';
+import { useDatabase } from '../../database/subsystem.js';
 
 export async function handleUpdateAuthorizationState(
-  { database }: TelegramUpdateHandlerContext,
   update: TelegramWireAuthorizationStateUpdate
 ): Promise<void> {
+  const database = useDatabase();
   await storeAuthorizationState(database, update);
 }

@@ -17,6 +17,7 @@ auditCrossDomainSchemaImports(tsFiles);
 auditNoPublicProcedureDtoExports(tsFiles);
 auditNoDomainRpcClientFacades(tsFiles);
 auditDomainRpcFolders(tsFiles);
+auditTelegramDomainResources(tsFiles);
 auditTablePrefixes();
 auditGatewayExternalSurface();
 auditServiceDirectorySurface();
@@ -265,6 +266,70 @@ function auditDomainRpcFolders(files) {
   if (!telegramMain.includes('const { procedures } = defineControlPlane')) {
     failures.push('Telegram main must receive Control Plane procedures from defineControlPlane');
   }
+  if (telegramMain.includes('defineRuntime')) {
+    failures.push('Telegram main must receive procedure context from domain subsystems');
+  }
+  if (telegramMain.includes('TELEGRAM_TDLIB_METHODS')) {
+    failures.push('Telegram TDLib operation event catalog must live in TDLib subsystem');
+  }
+  if (telegramMain.includes('defineTelegramTdlibSubsystem')) {
+    failures.push('Telegram TDLib subsystem must be exposed through a useTdlib composable');
+  }
+  if (telegramMain.includes("defineSubsystem('tdlib'")) {
+    failures.push('Telegram main must use useTdlib instead of declaring TDLib inline');
+  }
+  if (!telegramMain.includes('const tdlib = useTdlib();')) {
+    failures.push('Telegram main must use TDLib through useTdlib');
+  }
+  if (!telegramMain.includes('registerSubsystem(tdlib);')) {
+    failures.push('Telegram main must register the used TDLib subsystem intentionally');
+  }
+
+  const telegramTdlibSubsystem = readFileSync(
+    join(root, 'packages/telegram/src/tdlib/subsystem.ts'),
+    'utf8'
+  );
+  if (!telegramTdlibSubsystem.includes('export const useTdlib = defineSubsystem(')) {
+    failures.push('Telegram TDLib subsystem must be exposed as useTdlib defineSubsystem');
+  }
+  if (/export\s+(?:const|function|class|type)\s+(?!useTdlib\b)/.test(telegramTdlibSubsystem)) {
+    failures.push('Telegram TDLib subsystem must export only useTdlib');
+  }
+
+  const historySyncMain = readFileSync(join(root, 'packages/history-sync/src/main.ts'), 'utf8');
+  if (historySyncMain.includes('defineRuntime')) {
+    failures.push('History Sync main must receive procedure context from domain subsystems');
+  }
+}
+
+function auditTelegramDomainResources(files) {
+  if (existsSync(join(root, 'packages/telegram/src/tdlib/update-runtime/context.ts'))) {
+    failures.push('TDLib update handlers must not keep a shared context module');
+  }
+
+  for (const file of files) {
+    const rel = toRel(file);
+    const source = readFileSync(file, 'utf8');
+    if (source.includes('TelegramDomainContext')) {
+      failures.push(
+        `Telegram procedures must use subsystem composables, not domain context: ${rel}`
+      );
+    }
+
+    if (
+      /packages\/telegram\/src\/(?:rpc|history|control-plane\/backend)\//.test(rel) &&
+      /context\.(?:client|database|eventBus|files)\b/.test(source)
+    ) {
+      failures.push(`Telegram procedure resources must be read through use* subsystems: ${rel}`);
+    }
+
+    if (
+      /packages\/telegram\/src\/tdlib\/update-handlers\//.test(rel) &&
+      (source.includes('TelegramUpdateHandlerContext') || /\bcontext\s*[.:]/.test(source))
+    ) {
+      failures.push(`Telegram update handlers must read resources through use* subsystems: ${rel}`);
+    }
+  }
 }
 
 function auditTablePrefixes() {
@@ -345,13 +410,13 @@ function auditGatewayExternalSurface() {
 }
 
 function auditExtensionBoundaries(files) {
-  auditNoDomainEnrichedRuntime(files);
+  auditNoDomainEnrichedRpc(files);
   auditNoDomainExtensionEndpoints(files);
   auditRegistryDoesNotCallRpc(files);
   auditControlPlaneSdkHasNoDomainKnowledge(files);
 }
 
-function auditNoDomainEnrichedRuntime(files) {
+function auditNoDomainEnrichedRpc(files) {
   const auditedPrefixes = [
     'packages/events/src/',
     'packages/framework/src/',
@@ -382,14 +447,12 @@ function auditNoDomainEnrichedRuntime(files) {
 
     const source = readFileSync(file, 'utf8');
     if (/\benriched\b/.test(source)) {
-      failures.push(`domain runtime must not reintroduce enriched RPC behavior: ${rel}`);
+      failures.push(`domain code must not reintroduce enriched RPC behavior: ${rel}`);
     }
 
     for (const token of forbiddenTokens) {
       if (source.includes(token)) {
-        failures.push(
-          `old extension envelope helper is not allowed in runtime: ${rel} -> ${token}`
-        );
+        failures.push(`old extension envelope helper is not allowed: ${rel} -> ${token}`);
       }
     }
   }

@@ -1,6 +1,6 @@
 import { deleteTelegramKv, upsertTelegramKv } from '../../store/kv.js';
-import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import type { TelegramWireUpdateByType } from '../wire.js';
+import { useDatabase } from '../../database/subsystem.js';
 
 type TelegramWireAgeVerificationParametersUpdate =
   TelegramWireUpdateByType<'updateAgeVerificationParameters'>;
@@ -8,9 +8,9 @@ type TelegramWireAgeVerificationParametersUpdate =
 const AGE_VERIFICATION_PARAMETERS_KEY = 'age_verification_parameters';
 
 export async function handleUpdateAgeVerificationParameters(
-  { database }: TelegramUpdateHandlerContext,
   update: TelegramWireAgeVerificationParametersUpdate
 ): Promise<void> {
+  const database = useDatabase();
   const parameters = update.parameters ?? null;
 
   if (parameters === null) {

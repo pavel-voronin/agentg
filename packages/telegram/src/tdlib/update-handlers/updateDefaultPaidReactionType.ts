@@ -1,6 +1,6 @@
-import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import { upsertTelegramKv } from '../../store/kv.js';
 import type { TelegramWireUpdateByType } from '../wire.js';
+import { useDatabase } from '../../database/subsystem.js';
 
 type TelegramWireDefaultPaidReactionTypeUpdate =
   TelegramWireUpdateByType<'updateDefaultPaidReactionType'>;
@@ -8,8 +8,8 @@ type TelegramWireDefaultPaidReactionTypeUpdate =
 const DEFAULT_PAID_REACTION_TYPE_KEY = 'default_paid_reaction_type';
 
 export function handleUpdateDefaultPaidReactionType(
-  { database }: TelegramUpdateHandlerContext,
   update: TelegramWireDefaultPaidReactionTypeUpdate
 ): Promise<void> {
+  const database = useDatabase();
   return upsertTelegramKv(database, DEFAULT_PAID_REACTION_TYPE_KEY, update.type);
 }

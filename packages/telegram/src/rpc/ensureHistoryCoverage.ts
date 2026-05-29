@@ -1,7 +1,6 @@
 import { mutation } from '@agentg/framework/domain';
 import { z } from 'zod';
 
-import type { TelegramRpcRuntime } from '../main.js';
 import { ensureTelegramHistoryCoverage } from '../history/fetch.js';
 import {
   isoDateTimeStringSchema,
@@ -36,16 +35,15 @@ export type TelegramEnsureHistoryCoverageOutput = z.infer<
   typeof telegramEnsureHistoryCoverageOutputSchema
 >;
 
-export const ensureHistoryCoverage = mutation((runtime: TelegramRpcRuntime, procedure) =>
+export const ensureHistoryCoverage = mutation((_context, procedure) =>
   procedure
     .input(telegramEnsureHistoryCoverageInputSchema)
     .output(telegramEnsureHistoryCoverageOutputSchema)
-    .mutation(({ input }) => runEnsureHistoryCoverage(runtime, input))
+    .mutation(({ input }) => runEnsureHistoryCoverage(input))
 );
 
 function runEnsureHistoryCoverage(
-  context: TelegramRpcRuntime,
   input: TelegramEnsureHistoryCoverageInput
 ): Promise<TelegramEnsureHistoryCoverageOutput> {
-  return ensureTelegramHistoryCoverage(context, input);
+  return ensureTelegramHistoryCoverage(input);
 }

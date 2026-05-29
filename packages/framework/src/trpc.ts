@@ -34,13 +34,13 @@ export type InternalTrpcContext = {
   resolveCallOptions?: ((path: string) => InternalRpcCallOptions) | undefined;
 };
 
-export type InternalTrpcContextRuntime = {
+export type InternalTrpcContextOptions = {
   eventBus?: EventBus | undefined;
 };
 
 export function createInternalTrpcContext(
   options: CreateHTTPContextOptions,
-  runtime: InternalTrpcContextRuntime = {}
+  contextOptions: InternalTrpcContextOptions = {}
 ): InternalTrpcContext {
   const correlationId = optionalHeader(options.req.headers[INTERNAL_RPC_CORRELATION_ID_HEADER]);
   const resolveCallOptions = createInternalRpcCallOptionsResolver(
@@ -49,7 +49,7 @@ export function createInternalTrpcContext(
 
   return {
     ...(correlationId === undefined ? {} : { correlationId }),
-    ...(runtime.eventBus === undefined ? {} : { eventBus: runtime.eventBus }),
+    ...(contextOptions.eventBus === undefined ? {} : { eventBus: contextOptions.eventBus }),
     resolveCallOptions
   };
 }

@@ -1,5 +1,7 @@
-import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import { telegramForumTopics } from '../../database/schema.js';
+import { useDatabase } from '../../database/subsystem.js';
+import { useUpdateEvents } from '../../events/updateEvents.js';
+import type { TelegramDatabase } from '../../database/client.js';
 import {
   telegramWireId,
   telegramWireJsonObject,
@@ -9,10 +11,9 @@ import {
 
 type TelegramWireForumTopicUpdate = TelegramWireUpdateByType<'updateForumTopic'>;
 
-export async function handleUpdateForumTopic(
-  { database, events }: TelegramUpdateHandlerContext,
-  update: TelegramWireForumTopicUpdate
-): Promise<void> {
+export async function handleUpdateForumTopic(update: TelegramWireForumTopicUpdate): Promise<void> {
+  const database = useDatabase();
+  const events = useUpdateEvents();
   const chatId = String(update.chat_id);
   await upsertTelegramForumTopicState(database, update);
   events.publishTelegramForumTopicUpdated({
@@ -22,7 +23,7 @@ export async function handleUpdateForumTopic(
 }
 
 async function upsertTelegramForumTopicState(
-  database: TelegramUpdateHandlerContext['database'],
+  database: TelegramDatabase,
   update: TelegramWireForumTopicUpdate
 ): Promise<void> {
   const row: typeof telegramForumTopics.$inferInsert = {

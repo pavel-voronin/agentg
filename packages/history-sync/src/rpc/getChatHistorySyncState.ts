@@ -1,4 +1,4 @@
-import { query, runtimeForInternalRpcCall } from '@agentg/framework/domain';
+import { query, contextForInternalRpcCall } from '@agentg/framework/domain';
 import { asc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 
@@ -10,7 +10,7 @@ import {
 } from '../rangeSchema.js';
 import { projectTargetsForChat } from '../reconciler.js';
 import { historySyncTargets } from '../schema.js';
-import type { HistorySyncRuntime } from '../main.js';
+import type { HistorySyncDomainContext } from '../main.js';
 import {
   clipIntervalsForDisplay,
   currentHistorySyncProjectionContext,
@@ -70,13 +70,13 @@ export type HistorySyncChatHistorySyncStateOutput = z.infer<
 export type HistorySyncIntervalOutput = z.infer<typeof historySyncIntervalOutputSchema>;
 export type HistorySyncTargetOutput = z.infer<typeof historySyncTargetOutputSchema>;
 
-export const getChatHistorySyncState = query((options: HistorySyncRuntime, procedure) =>
+export const getChatHistorySyncState = query((options: HistorySyncDomainContext, procedure) =>
   procedure
     .input(historySyncGetChatHistorySyncStateInputSchema)
     .output(historySyncChatHistorySyncStateOutputSchema)
     .query(async ({ ctx, input }) => {
-      const runtime = runtimeForInternalRpcCall(options, ctx);
-      const telegram = requireTelegramReadClient(runtime);
+      const context = contextForInternalRpcCall(options, ctx);
+      const telegram = requireTelegramReadClient(context);
       const chatId = input.chatId;
       const [facts, telegramCoverage] = await Promise.all([
         telegram.getChatHistoryFacts({ chatId }),
@@ -93,7 +93,7 @@ export const getChatHistorySyncState = query((options: HistorySyncRuntime, proce
         };
       }
 
-      const targetRows = await runtime.database
+      const targetRows = await context.database
         .select()
         .from(historySyncTargets)
         .where(eq(historySyncTargets.telegramChatId, chatId))

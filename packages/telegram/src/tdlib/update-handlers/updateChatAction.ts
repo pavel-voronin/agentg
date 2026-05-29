@@ -1,11 +1,9 @@
-import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import type { TelegramWireUpdateByType } from '../wire.js';
+import { useUpdateEvents } from '../../events/updateEvents.js';
 
 type TelegramWireChatActionUpdate = TelegramWireUpdateByType<'updateChatAction'>;
 
-export function handleUpdateChatAction(
-  { events }: TelegramUpdateHandlerContext,
-  update: TelegramWireChatActionUpdate
-): void {
+export function handleUpdateChatAction(update: TelegramWireChatActionUpdate): void {
+  const events = useUpdateEvents();
   events.publishTelegramChatAction(update);
 }

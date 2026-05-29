@@ -1,15 +1,15 @@
 import { and, eq, sql } from 'drizzle-orm';
 
 import { telegramLanguagePackStrings } from '../../database/schema.js';
-import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import { telegramWireJsonValue, type TelegramWireUpdateByType } from '../wire.js';
+import { useDatabase } from '../../database/subsystem.js';
 
 type TelegramWireLanguagePackStringsUpdate = TelegramWireUpdateByType<'updateLanguagePackStrings'>;
 
 export async function handleUpdateLanguagePackStrings(
-  { database }: TelegramUpdateHandlerContext,
   update: TelegramWireLanguagePackStringsUpdate
 ): Promise<void> {
+  const database = useDatabase();
   if (update.strings.length === 0) {
     await database
       .delete(telegramLanguagePackStrings)

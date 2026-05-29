@@ -1,14 +1,18 @@
-import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import { storeMessage } from '../../store/message.js';
 import { upsertSavedMessagesTopic } from '../../store/savedMessages.js';
 import type { TelegramWireUpdateByType } from '../wire.js';
+import { useDatabase } from '../../database/subsystem.js';
+import { useUpdateEvents } from '../../events/updateEvents.js';
+import { useFiles } from '../../files/subsystem.js';
 
 type TelegramWireSavedMessagesTopicUpdate = TelegramWireUpdateByType<'updateSavedMessagesTopic'>;
 
 export async function handleUpdateSavedMessagesTopic(
-  { database, events, files }: TelegramUpdateHandlerContext,
   update: TelegramWireSavedMessagesTopicUpdate
 ): Promise<void> {
+  const database = useDatabase();
+  const events = useUpdateEvents();
+  const files = useFiles();
   const { topic } = update;
   const lastMessage = topic.last_message ?? null;
 

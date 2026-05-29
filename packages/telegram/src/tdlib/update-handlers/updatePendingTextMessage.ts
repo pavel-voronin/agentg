@@ -1,11 +1,9 @@
-import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import type { TelegramWireUpdateByType } from '../wire.js';
+import { useUpdateEvents } from '../../events/updateEvents.js';
 
 type TelegramWirePendingTextMessageUpdate = TelegramWireUpdateByType<'updatePendingTextMessage'>;
 
-export function handleUpdatePendingTextMessage(
-  { events }: TelegramUpdateHandlerContext,
-  update: TelegramWirePendingTextMessageUpdate
-): void {
+export function handleUpdatePendingTextMessage(update: TelegramWirePendingTextMessageUpdate): void {
+  const events = useUpdateEvents();
   events.publishTelegramPendingTextMessageUpdated(update);
 }

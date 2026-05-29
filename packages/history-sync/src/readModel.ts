@@ -9,7 +9,7 @@ import {
 import type { TelegramReadClient } from './telegramClient.js';
 import { floorToTelegramSecond, normalizeTelegramHistoryInterval } from './time.js';
 import type { HistorySyncInterval, HistorySyncRange, HistorySyncTarget } from './types.js';
-import type { HistorySyncRuntime } from './main.js';
+import type { HistorySyncDomainContext } from './main.js';
 
 export type HistorySyncTargetResponse = {
   chatId: string;
@@ -104,12 +104,12 @@ export function clipIntervalsForDisplay<T extends HistorySyncInterval>(
     .filter((interval) => interval.startAt < interval.endAt);
 }
 
-export function requireTelegramReadClient(runtime: HistorySyncRuntime): TelegramReadClient {
-  if (runtime.telegram === undefined) {
-    throw new Error('History Sync runtime requires Telegram read client');
+export function requireTelegramReadClient(context: HistorySyncDomainContext): TelegramReadClient {
+  if (context.telegram === undefined) {
+    throw new Error('History Sync context requires Telegram read client');
   }
 
-  return runtime.telegram;
+  return context.telegram;
 }
 
 export function parseOptionalDate(value: string | null): Date | undefined {

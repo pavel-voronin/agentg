@@ -10,12 +10,12 @@ import { ceilToTelegramSecond, floorToTelegramSecond } from './time.js';
 import type { TelegramDatabase as AppDatabase } from '../database/client.js';
 
 export type TelegramLiveCoverageObserver = {
-  markConnected(at?: Date): Promise<void>;
-  markDisconnected(): Promise<void>;
-  recordLiveMessage(chatId: string, messageDate: Date, observedUntil?: Date): Promise<void>;
-  syncKnownChats(at?: Date): Promise<void>;
-  tick(at?: Date): Promise<void>;
-  wait(): Promise<void>;
+  markConnected: (at?: Date) => Promise<void>;
+  markDisconnected: () => Promise<void>;
+  recordLiveMessage: (chatId: string, messageDate: Date, observedUntil?: Date) => Promise<void>;
+  syncKnownChats: (at?: Date) => Promise<void>;
+  tick: (at?: Date) => Promise<void>;
+  wait: () => Promise<void>;
 };
 
 export type TelegramLiveCoverageObserverOptions = {

@@ -1,14 +1,16 @@
-import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import { telegramForumTopicInfos } from '../../database/schema.js';
 import { telegramWireJsonObject, type TelegramWireUpdateByType } from '../wire.js';
+import { useDatabase } from '../../database/subsystem.js';
+import { useUpdateEvents } from '../../events/updateEvents.js';
 
 type TelegramWireForumTopicInfoUpdate = TelegramWireUpdateByType<'updateForumTopicInfo'>;
 type TelegramWireForumTopicInfo = TelegramWireForumTopicInfoUpdate['info'];
 
 export async function handleUpdateForumTopicInfo(
-  { database, events }: TelegramUpdateHandlerContext,
   update: TelegramWireForumTopicInfoUpdate
 ): Promise<void> {
+  const database = useDatabase();
+  const events = useUpdateEvents();
   const { info } = update;
   const row = forumTopicInfoRow(info);
 

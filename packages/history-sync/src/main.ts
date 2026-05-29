@@ -9,8 +9,8 @@ import {
   defineDomain,
   defineEvents,
   defineProcedures,
-  defineRuntime,
   defineSubsystem,
+  registerSubsystem,
   setRequired
 } from '@agentg/framework/domain';
 
@@ -40,7 +40,7 @@ export const HISTORY_SYNC_EVENT_TYPES = [
   'history-sync.target.upserted'
 ] as const;
 
-export type HistorySyncRuntime = {
+export type HistorySyncDomainContext = {
   database: HistorySyncDatabase;
   eventBus: EventBus;
   requestSync?: (reason: string, chatId?: string) => void;
@@ -54,19 +54,21 @@ const historySyncProcedures = {
   upsertTarget
 };
 
+const useHistorySyncService = defineSubsystem('service', () => new HistorySyncServiceSubsystem());
+
 const historySync = defineDomain<
-  HistorySyncRuntime,
-  HistorySyncRuntime,
+  HistorySyncDomainContext,
+  HistorySyncDomainContext,
   typeof historySyncProcedures,
   HistorySyncControlPlane,
   HistorySyncServiceOptions
 >('history-sync', () => {
   defineControlPlane(new HistorySyncControlPlaneSubsystem());
-  defineRuntime((runtime: HistorySyncRuntime): HistorySyncRuntime => runtime);
   defineEvents(HISTORY_SYNC_EVENT_TYPES);
   defineProcedures(historySyncProcedures);
   setRequired(true);
-  defineSubsystem('service', new HistorySyncServiceSubsystem());
+  const service = useHistorySyncService();
+  registerSubsystem(service);
 });
 
 export const createHistorySyncRpcClient = historySync.createRpcClient;

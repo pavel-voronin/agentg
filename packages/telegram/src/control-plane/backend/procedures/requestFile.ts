@@ -1,7 +1,7 @@
 import { mutation } from '@agentg/framework/domain';
 import { z } from 'zod';
 
-import type { TelegramRpcRuntime } from '../../../main.js';
+import { useFiles } from '../../../files/subsystem.js';
 import {
   nonEmptyStringSchema,
   telegramFileOwnerModelRefSchema,
@@ -34,16 +34,14 @@ export const fileRequestOutputSchema = z.object({
 export type FileRequestInput = z.infer<typeof fileRequestInputSchema>;
 export type FileRequestOutput = z.infer<typeof fileRequestOutputSchema>;
 
-export const requestFile = mutation((runtime: TelegramRpcRuntime, procedure) =>
+export const requestFile = mutation((_context, procedure) =>
   procedure
     .input(fileRequestInputSchema)
     .output(fileRequestOutputSchema)
-    .mutation(({ input }) => runRequestFile(runtime, input))
+    .mutation(({ input }) => runRequestFile(input))
 );
 
-async function runRequestFile(
-  { files }: TelegramRpcRuntime,
-  input: FileRequestInput
-): Promise<FileRequestOutput> {
+async function runRequestFile(input: FileRequestInput): Promise<FileRequestOutput> {
+  const files = useFiles();
   return files.requestFile(input);
 }

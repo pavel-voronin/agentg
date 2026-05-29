@@ -1,14 +1,16 @@
 import { telegramGroupCallVerificationStates } from '../../database/schema.js';
-import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import { telegramWireJsonValue, type TelegramWireUpdateByType } from '../wire.js';
+import { useDatabase } from '../../database/subsystem.js';
+import { useUpdateEvents } from '../../events/updateEvents.js';
 
 type TelegramWireGroupCallVerificationStateUpdate =
   TelegramWireUpdateByType<'updateGroupCallVerificationState'>;
 
 export async function handleUpdateGroupCallVerificationState(
-  { database, events }: TelegramUpdateHandlerContext,
   update: TelegramWireGroupCallVerificationStateUpdate
 ): Promise<void> {
+  const database = useDatabase();
+  const events = useUpdateEvents();
   const emojis = telegramWireJsonValue(update.emojis) ?? [];
   const row: typeof telegramGroupCallVerificationStates.$inferInsert = {
     emojis,

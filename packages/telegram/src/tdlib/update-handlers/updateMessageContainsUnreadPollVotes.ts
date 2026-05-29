@@ -1,6 +1,7 @@
-import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import { upsertTelegramChatFragment } from '../../store/chat.js';
 import { upsertTelegramMessageFragment } from '../../store/message.js';
+import { useDatabase } from '../../database/subsystem.js';
+import { useUpdateEvents } from '../../events/updateEvents.js';
 
 type TelegramWireMessageContainsUnreadPollVotesUpdate = {
   _: 'updateMessageContainsUnreadPollVotes';
@@ -11,9 +12,10 @@ type TelegramWireMessageContainsUnreadPollVotesUpdate = {
 };
 
 export async function handleUpdateMessageContainsUnreadPollVotes(
-  { database, events }: TelegramUpdateHandlerContext,
   update: TelegramWireMessageContainsUnreadPollVotesUpdate
 ): Promise<void> {
+  const database = useDatabase();
+  const events = useUpdateEvents();
   const chatId = String(update.chat_id);
   const messageId = String(update.message_id);
 

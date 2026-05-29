@@ -1,14 +1,16 @@
-import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import { upsertUserPrivacySettingRules } from '../../store/userPrivacySettingRules.js';
 import type { TelegramWireUpdateByType } from '../wire.js';
+import { useDatabase } from '../../database/subsystem.js';
+import { useUpdateEvents } from '../../events/updateEvents.js';
 
 type TelegramWireUserPrivacySettingRulesUpdate =
   TelegramWireUpdateByType<'updateUserPrivacySettingRules'>;
 
 export async function handleUpdateUserPrivacySettingRules(
-  context: TelegramUpdateHandlerContext,
   update: TelegramWireUserPrivacySettingRulesUpdate
 ): Promise<void> {
-  await upsertUserPrivacySettingRules(context.database, update);
-  context.events.publishTelegramUserPrivacySettingRulesUpdated(update);
+  const database = useDatabase();
+  const events = useUpdateEvents();
+  await upsertUserPrivacySettingRules(database, update);
+  events.publishTelegramUserPrivacySettingRulesUpdated(update);
 }

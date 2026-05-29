@@ -31,13 +31,20 @@ import {
   publishTelegramOperationEvents
 } from './operationEvents.js';
 import { telegramTdlibPriorities } from './priority.js';
-import { createTelegramFileSubsystem, type TelegramFileSubsystem } from '../files/subsystem.js';
+import {
+  createTelegramFileSubsystem,
+  useFiles,
+  type TelegramFileSubsystem
+} from '../files/subsystem.js';
 import { createTelegramTdlibScheduler, type TelegramTdlibScheduler } from './scheduler.js';
 import {
   createTelegramLiveCoverageObserver,
   type TelegramLiveCoverageObserver
 } from '../history/liveCoverage.js';
+import { useLiveCoverage } from '../history/subsystem.js';
 import { createTelegramUpdateEventPublishers } from '../events/updateEventPublishers.js';
+import { useUpdateEvents } from '../events/updateEvents.js';
+import { useTelegramStatus, type TelegramStatusTracker } from '../status/subsystem.js';
 import { handleUpdateAccentColors } from './update-handlers/updateAccentColors.js';
 import { handleUpdateActiveEmojiReactions } from './update-handlers/updateActiveEmojiReactions.js';
 import { handleUpdateActiveGiftAuctions } from './update-handlers/updateActiveGiftAuctions.js';
@@ -257,6 +264,10 @@ export type TelegramIngestionDomain = {
   stopRpcServer(server: Server): Promise<void>;
 };
 
+type TelegramIngestionHooks = {
+  configureOperations(deps: { client: TdlibInvoker; eventBus: EventBus }): void;
+};
+
 type TelegramClient = Awaited<ReturnType<typeof createTelegramClient>>;
 
 type ChatListKind = 'main' | 'archive';
@@ -264,13 +275,6 @@ type ChatListKind = 'main' | 'archive';
 type TdlibStatusState = {
   authenticated: boolean;
   connected: boolean;
-};
-
-type TdlibStatusTracker = {
-  markAuthenticated(authenticated: boolean): void;
-  markConnectionState(connectionState: string): boolean;
-  markDisconnected(): void;
-  publish(): void;
 };
 
 const TDLIB_STATUS_HEARTBEAT_MS = 5000;
@@ -283,7 +287,8 @@ const TELEGRAM_CONTROL_PLANE_ASSETS_ROOT = fileURLToPath(
 
 export async function runTelegramIngestion(
   options: TelegramIngestionOptions,
-  domain: TelegramIngestionDomain
+  domain: TelegramIngestionDomain,
+  hooks: TelegramIngestionHooks
 ): Promise<void> {
   const initialControlPlaneAssets = await readControlPlaneAssetVersions(
     TELEGRAM_CONTROL_PLANE_ASSETS_ROOT
@@ -306,7 +311,7 @@ export async function runTelegramIngestion(
   let liveCoverageTick: ReturnType<typeof setInterval> | undefined;
   let tdlibScheduler: TelegramTdlibScheduler | undefined;
   let client: TelegramClient | undefined;
-  let tdlibStatus: TdlibStatusTracker | undefined;
+  let tdlibStatus: TelegramStatusTracker | undefined;
   let startupComplete = false;
 
   try {
@@ -318,6 +323,10 @@ export async function runTelegramIngestion(
     const activeClient = client;
     tdlibScheduler = createTelegramTdlibScheduler(activeClient);
     const activeTdlibScheduler = tdlibScheduler;
+    hooks.configureOperations({
+      client: activeTdlibScheduler,
+      eventBus
+    });
     fileSubsystem = createTelegramFileSubsystem({
       client: activeTdlibScheduler,
       database: options.database,
@@ -325,26 +334,23 @@ export async function runTelegramIngestion(
       filesDirectory: options.telegram.filesDirectory
     });
     const activeFileSubsystem = fileSubsystem;
+    useFiles().configure(activeFileSubsystem);
     const updateEventPublishers = createTelegramUpdateEventPublishers(eventBus, options.database);
-    tdlibStatus = createTdlibStatusTracker(eventBus);
+    useUpdateEvents().configure(updateEventPublishers);
+    tdlibStatus = createTelegramStatusTracker(eventBus);
     const activeTdlibStatus = tdlibStatus;
+    useTelegramStatus().configure(activeTdlibStatus);
     liveCoverageObserver = createTelegramLiveCoverageObserver({
       database: options.database
     });
     const activeLiveCoverageObserver = liveCoverageObserver;
+    useLiveCoverage().configure(activeLiveCoverageObserver);
 
     activeClient.on('error', (error: unknown) => {
       console.error(JSON.stringify({ event: 'telegram.error', error: String(error) }));
     });
     activeClient.on('update', (update) => {
-      void persistLiveUpdate(
-        options.database,
-        update,
-        updateEventPublishers,
-        activeFileSubsystem,
-        activeLiveCoverageObserver,
-        activeTdlibStatus
-      );
+      void persistLiveUpdate(update);
     });
 
     await publishTelegramOperationEvents(eventBus, 'login', {}, () => activeClient.login());
@@ -481,7 +487,7 @@ async function cleanupTelegramStartupFailure(options: {
   liveCoverageObserver: TelegramLiveCoverageObserver | undefined;
   liveCoverageTick: ReturnType<typeof setInterval> | undefined;
   serviceDirectory: ReturnType<typeof createServiceDirectoryClient> | undefined;
-  tdlibStatus: TdlibStatusTracker | undefined;
+  tdlibStatus: TelegramStatusTracker | undefined;
   tdlibScheduler: TelegramTdlibScheduler | undefined;
   tdlibStatusHeartbeat: ReturnType<typeof setInterval> | undefined;
   domain: TelegramIngestionDomain;
@@ -538,14 +544,14 @@ function requestProcessShutdown(event: string, error: Error): void {
   process.kill(process.pid, 'SIGTERM');
 }
 
-function startTdlibStatusHeartbeat(status: TdlibStatusTracker): ReturnType<typeof setInterval> {
+function startTdlibStatusHeartbeat(status: TelegramStatusTracker): ReturnType<typeof setInterval> {
   status.publish();
   return setInterval(() => {
     status.publish();
   }, TDLIB_STATUS_HEARTBEAT_MS);
 }
 
-function createTdlibStatusTracker(eventBus: EventBus): TdlibStatusTracker {
+function createTelegramStatusTracker(eventBus: EventBus): TelegramStatusTracker {
   const state: TdlibStatusState = {
     authenticated: false,
     connected: false
@@ -615,562 +621,547 @@ async function persistAndLogAuthenticatedClient(
   );
 }
 
-async function persistLiveUpdate(
-  database: AppDatabase,
-  update: TelegramWireUpdate,
-  updateEventPublishers: ReturnType<typeof createTelegramUpdateEventPublishers>,
-  files: TelegramFileSubsystem,
-  liveCoverageObserver: TelegramLiveCoverageObserver,
-  tdlibStatus: TdlibStatusTracker
-): Promise<void> {
-  const context = {
-    database,
-    events: updateEventPublishers,
-    files,
-    liveCoverageObserver,
-    tdlibStatus
-  };
-
+async function persistLiveUpdate(update: TelegramWireUpdate): Promise<void> {
   switch (update._) {
     case 'updateAccentColors':
-      await handleUpdateAccentColors(context, update);
+      await handleUpdateAccentColors(update);
       return;
     case 'updateActiveEmojiReactions':
-      await handleUpdateActiveEmojiReactions(context, update);
+      await handleUpdateActiveEmojiReactions(update);
       return;
     case 'updateActiveGiftAuctions':
-      await handleUpdateActiveGiftAuctions(context, update);
+      await handleUpdateActiveGiftAuctions(update);
       return;
     case 'updateActiveLiveLocationMessages':
-      await handleUpdateActiveLiveLocationMessages(context, update);
+      await handleUpdateActiveLiveLocationMessages(update);
       return;
     case 'updateActiveNotifications':
-      await handleUpdateActiveNotifications(context, update);
+      await handleUpdateActiveNotifications(update);
       return;
     case 'updateAgeVerificationParameters':
-      await handleUpdateAgeVerificationParameters(context, update);
+      await handleUpdateAgeVerificationParameters(update);
       return;
     case 'updateAnimatedEmojiMessageClicked':
-      await handleUpdateAnimatedEmojiMessageClicked(context, update);
+      await handleUpdateAnimatedEmojiMessageClicked(update);
       return;
     case 'updateAnimationSearchParameters':
-      await handleUpdateAnimationSearchParameters(context, update);
+      await handleUpdateAnimationSearchParameters(update);
       return;
     case 'updateApplicationRecaptchaVerificationRequired':
-      handleUpdateApplicationRecaptchaVerificationRequired(context, update);
+      handleUpdateApplicationRecaptchaVerificationRequired(update);
       return;
     case 'updateApplicationVerificationRequired':
-      handleUpdateApplicationVerificationRequired(context, update);
+      handleUpdateApplicationVerificationRequired(update);
       return;
     case 'updateAttachmentMenuBots':
-      await handleUpdateAttachmentMenuBots(context, update);
+      await handleUpdateAttachmentMenuBots(update);
       return;
     case 'updateAuthorizationState':
-      await handleUpdateAuthorizationState(context, update);
+      await handleUpdateAuthorizationState(update);
       return;
     case 'updateAutosaveSettings':
-      await handleUpdateAutosaveSettings(context, update);
+      await handleUpdateAutosaveSettings(update);
       return;
     case 'updateAvailableMessageEffects':
-      await handleUpdateAvailableMessageEffects(context, update);
+      await handleUpdateAvailableMessageEffects(update);
       return;
     case 'updateBasicGroup':
-      await handleUpdateBasicGroup(context, update);
+      await handleUpdateBasicGroup(update);
       return;
     case 'updateBasicGroupFullInfo':
-      await handleUpdateBasicGroupFullInfo(context, update);
+      await handleUpdateBasicGroupFullInfo(update);
       return;
     case 'updateBusinessConnection':
-      await handleUpdateBusinessConnection(context, update);
+      await handleUpdateBusinessConnection(update);
       return;
     case 'updateBusinessMessageEdited':
-      await handleUpdateBusinessMessageEdited(context, update);
+      await handleUpdateBusinessMessageEdited(update);
       return;
     case 'updateBusinessMessagesDeleted':
-      await handleUpdateBusinessMessagesDeleted(context, update);
+      await handleUpdateBusinessMessagesDeleted(update);
       return;
     case 'updateCall':
-      await handleUpdateCall(context, update);
+      await handleUpdateCall(update);
       return;
     case 'updateChatAccentColors':
-      await handleUpdateChatAccentColors(context, update);
+      await handleUpdateChatAccentColors(update);
       return;
     case 'updateChatAction':
-      handleUpdateChatAction(context, update);
+      handleUpdateChatAction(update);
       return;
     case 'updateChatActionBar':
-      await handleUpdateChatActionBar(context, update);
+      await handleUpdateChatActionBar(update);
       return;
     case 'updateChatActiveStories':
-      await handleUpdateChatActiveStories(context, update);
+      await handleUpdateChatActiveStories(update);
       return;
     case 'updateChatAddedToList':
-      await handleUpdateChatAddedToList(context, update);
+      await handleUpdateChatAddedToList(update);
       return;
     case 'updateChatAvailableReactions':
-      await handleUpdateChatAvailableReactions(context, update);
+      await handleUpdateChatAvailableReactions(update);
       return;
     case 'updateChatBackground':
-      await handleUpdateChatBackground(context, update);
+      await handleUpdateChatBackground(update);
       return;
     case 'updateChatBlockList':
-      await handleUpdateChatBlockList(context, update);
+      await handleUpdateChatBlockList(update);
       return;
     case 'updateChatBoost':
-      await handleUpdateChatBoost(context, update);
+      await handleUpdateChatBoost(update);
       return;
     case 'updateChatBusinessBotManageBar':
-      await handleUpdateChatBusinessBotManageBar(context, update);
+      await handleUpdateChatBusinessBotManageBar(update);
       return;
     case 'updateChatDefaultDisableNotification':
-      await handleUpdateChatDefaultDisableNotification(context, update);
+      await handleUpdateChatDefaultDisableNotification(update);
       return;
     case 'updateChatDraftMessage':
-      await handleUpdateChatDraftMessage(context, update);
+      await handleUpdateChatDraftMessage(update);
       return;
     case 'updateChatEmojiStatus':
-      await handleUpdateChatEmojiStatus(context, update);
+      await handleUpdateChatEmojiStatus(update);
       return;
     case 'updateChatFolders':
-      await handleUpdateChatFolders(context, update);
+      await handleUpdateChatFolders(update);
       return;
     case 'updateChatHasProtectedContent':
-      await handleUpdateChatHasProtectedContent(context, update);
+      await handleUpdateChatHasProtectedContent(update);
       return;
     case 'updateChatHasScheduledMessages':
-      await handleUpdateChatHasScheduledMessages(context, update);
+      await handleUpdateChatHasScheduledMessages(update);
       return;
     case 'updateChatIsMarkedAsUnread':
-      await handleUpdateChatIsMarkedAsUnread(context, update);
+      await handleUpdateChatIsMarkedAsUnread(update);
       return;
     case 'updateChatIsTranslatable':
-      await handleUpdateChatIsTranslatable(context, update);
+      await handleUpdateChatIsTranslatable(update);
       return;
     case 'updateChatLastMessage':
-      await handleUpdateChatLastMessage(context, update);
+      await handleUpdateChatLastMessage(update);
       return;
     case 'updateChatMember':
-      await handleUpdateChatMember(context, update);
+      await handleUpdateChatMember(update);
       return;
     case 'updateChatMessageAutoDeleteTime':
-      await handleUpdateChatMessageAutoDeleteTime(context, update);
+      await handleUpdateChatMessageAutoDeleteTime(update);
       return;
     case 'updateChatMessageSender':
-      await handleUpdateChatMessageSender(context, update);
+      await handleUpdateChatMessageSender(update);
       return;
     case 'updateChatNotificationSettings':
-      await handleUpdateChatNotificationSettings(context, update);
+      await handleUpdateChatNotificationSettings(update);
       return;
     case 'updateChatOnlineMemberCount':
-      handleUpdateChatOnlineMemberCount(context, update);
+      handleUpdateChatOnlineMemberCount(update);
       return;
     case 'updateChatPendingJoinRequests':
-      await handleUpdateChatPendingJoinRequests(context, update);
+      await handleUpdateChatPendingJoinRequests(update);
       return;
     case 'updateChatPermissions':
-      await handleUpdateChatPermissions(context, update);
+      await handleUpdateChatPermissions(update);
       return;
     case 'updateChatPhoto':
-      await handleUpdateChatPhoto(context, update);
+      await handleUpdateChatPhoto(update);
       return;
     case 'updateChatPosition':
-      await handleUpdateChatPosition(context, update);
+      await handleUpdateChatPosition(update);
       return;
     case 'updateChatReadInbox':
-      await handleUpdateChatReadInbox(context, update);
+      await handleUpdateChatReadInbox(update);
       return;
     case 'updateChatReadOutbox':
-      await handleUpdateChatReadOutbox(context, update);
+      await handleUpdateChatReadOutbox(update);
       return;
     case 'updateChatRemovedFromList':
-      await handleUpdateChatRemovedFromList(context, update);
+      await handleUpdateChatRemovedFromList(update);
       return;
     case 'updateChatReplyMarkup':
-      await handleUpdateChatReplyMarkup(context, update);
+      await handleUpdateChatReplyMarkup(update);
       return;
     case 'updateChatRevenueAmount':
-      await handleUpdateChatRevenueAmount(context, update);
+      await handleUpdateChatRevenueAmount(update);
       return;
     case 'updateChatTheme':
-      await handleUpdateChatTheme(context, update);
+      await handleUpdateChatTheme(update);
       return;
     case 'updateChatTitle':
-      await handleUpdateChatTitle(context, update);
+      await handleUpdateChatTitle(update);
       return;
     case 'updateChatUnreadMentionCount':
-      await handleUpdateChatUnreadMentionCount(context, update);
+      await handleUpdateChatUnreadMentionCount(update);
       return;
     case 'updateChatUnreadPollVoteCount':
-      await handleUpdateChatUnreadPollVoteCount(context, update);
+      await handleUpdateChatUnreadPollVoteCount(update);
       return;
     case 'updateChatUnreadReactionCount':
-      await handleUpdateChatUnreadReactionCount(context, update);
+      await handleUpdateChatUnreadReactionCount(update);
       return;
     case 'updateChatVideoChat':
-      await handleUpdateChatVideoChat(context, update);
+      await handleUpdateChatVideoChat(update);
       return;
     case 'updateChatViewAsTopics':
-      await handleUpdateChatViewAsTopics(context, update);
+      await handleUpdateChatViewAsTopics(update);
       return;
     case 'updateConnectionState':
-      await handleUpdateConnectionState(context, update);
+      await handleUpdateConnectionState(update);
       return;
     case 'updateContactCloseBirthdays':
-      await handleUpdateContactCloseBirthdays(context, update);
+      await handleUpdateContactCloseBirthdays(update);
       return;
     case 'updateDefaultBackground':
-      await handleUpdateDefaultBackground(context, update);
+      await handleUpdateDefaultBackground(update);
       return;
     case 'updateDefaultPaidReactionType':
-      await handleUpdateDefaultPaidReactionType(context, update);
+      await handleUpdateDefaultPaidReactionType(update);
       return;
     case 'updateDefaultReactionType':
-      await handleUpdateDefaultReactionType(context, update);
+      await handleUpdateDefaultReactionType(update);
       return;
     case 'updateDeleteMessages':
-      await handleUpdateDeleteMessages(context, update);
+      await handleUpdateDeleteMessages(update);
       return;
     case 'updateDiceEmojis':
-      await handleUpdateDiceEmojis(context, update);
+      await handleUpdateDiceEmojis(update);
       return;
     case 'updateDirectMessagesChatTopic':
-      await handleUpdateDirectMessagesChatTopic(context, update);
+      await handleUpdateDirectMessagesChatTopic(update);
       return;
     case 'updateEmojiChatThemes':
-      await handleUpdateEmojiChatThemes(context, update);
+      await handleUpdateEmojiChatThemes(update);
       return;
     case 'updateFavoriteStickers':
-      await handleUpdateFavoriteStickers(context, update);
+      await handleUpdateFavoriteStickers(update);
       return;
     case 'updateFile':
-      await handleUpdateFile(context, update);
+      await handleUpdateFile(update);
       return;
     case 'updateFileAddedToDownloads':
-      await handleUpdateFileAddedToDownloads(context, update);
+      await handleUpdateFileAddedToDownloads(update);
       return;
     case 'updateFileDownload':
-      await handleUpdateFileDownload(context, update);
+      await handleUpdateFileDownload(update);
       return;
     case 'updateFileDownloads':
-      await handleUpdateFileDownloads(context, update);
+      await handleUpdateFileDownloads(update);
       return;
     case 'updateFileGenerationStart':
-      await handleUpdateFileGenerationStart(context, update);
+      await handleUpdateFileGenerationStart(update);
       return;
     case 'updateFileGenerationStop':
-      await handleUpdateFileGenerationStop(context, update);
+      await handleUpdateFileGenerationStop(update);
       return;
     case 'updateFileRemovedFromDownloads':
-      await handleUpdateFileRemovedFromDownloads(context, update);
+      await handleUpdateFileRemovedFromDownloads(update);
       return;
     case 'updateForumTopic':
-      await handleUpdateForumTopic(context, update);
+      await handleUpdateForumTopic(update);
       return;
     case 'updateForumTopicInfo':
-      await handleUpdateForumTopicInfo(context, update);
+      await handleUpdateForumTopicInfo(update);
       return;
     case 'updateFreezeState':
-      await handleUpdateFreezeState(context, update);
+      await handleUpdateFreezeState(update);
       return;
     case 'updateGiftAuctionState':
-      await handleUpdateGiftAuctionState(context, update);
+      await handleUpdateGiftAuctionState(update);
       return;
     case 'updateGroupCall':
-      await handleUpdateGroupCall(context, update);
+      await handleUpdateGroupCall(update);
       return;
     case 'updateGroupCallMessageLevels':
-      await handleUpdateGroupCallMessageLevels(context, update);
+      await handleUpdateGroupCallMessageLevels(update);
       return;
     case 'updateGroupCallMessageSendFailed':
-      await handleUpdateGroupCallMessageSendFailed(context, update);
+      await handleUpdateGroupCallMessageSendFailed(update);
       return;
     case 'updateGroupCallMessagesDeleted':
-      await handleUpdateGroupCallMessagesDeleted(context, update);
+      await handleUpdateGroupCallMessagesDeleted(update);
       return;
     case 'updateGroupCallParticipant':
-      await handleUpdateGroupCallParticipant(context, update);
+      await handleUpdateGroupCallParticipant(update);
       return;
     case 'updateGroupCallParticipants':
-      await handleUpdateGroupCallParticipants(context, update);
+      await handleUpdateGroupCallParticipants(update);
       return;
     case 'updateGroupCallVerificationState':
-      await handleUpdateGroupCallVerificationState(context, update);
+      await handleUpdateGroupCallVerificationState(update);
       return;
     case 'updateHavePendingNotifications':
-      handleUpdateHavePendingNotifications(context, update);
+      handleUpdateHavePendingNotifications(update);
       return;
     case 'updateInstalledStickerSets':
-      await handleUpdateInstalledStickerSets(context, update);
+      await handleUpdateInstalledStickerSets(update);
       return;
     case 'updateLanguagePackStrings':
-      await handleUpdateLanguagePackStrings(context, update);
+      await handleUpdateLanguagePackStrings(update);
       return;
     case 'updateLiveStoryTopDonors':
-      await handleUpdateLiveStoryTopDonors(context, update);
+      await handleUpdateLiveStoryTopDonors(update);
       return;
     case 'updateManagedBot':
-      await handleUpdateManagedBot(context, update);
+      await handleUpdateManagedBot(update);
       return;
     case 'updateMessageContainsUnreadPollVotes':
-      await handleUpdateMessageContainsUnreadPollVotes(context, update);
+      await handleUpdateMessageContainsUnreadPollVotes(update);
       return;
     case 'updateMessageContent':
-      await handleUpdateMessageContent(context, update);
+      await handleUpdateMessageContent(update);
       return;
     case 'updateMessageContentOpened':
-      await handleUpdateMessageContentOpened(context, update);
+      await handleUpdateMessageContentOpened(update);
       return;
     case 'updateMessageEdited':
-      await handleUpdateMessageEdited(context, update);
+      await handleUpdateMessageEdited(update);
       return;
     case 'updateMessageFactCheck':
-      await handleUpdateMessageFactCheck(context, update);
+      await handleUpdateMessageFactCheck(update);
       return;
     case 'updateMessageInteractionInfo':
-      await handleUpdateMessageInteractionInfo(context, update);
+      await handleUpdateMessageInteractionInfo(update);
       return;
     case 'updateMessageIsPinned':
-      await handleUpdateMessageIsPinned(context, update);
+      await handleUpdateMessageIsPinned(update);
       return;
     case 'updateMessageLiveLocationViewed':
-      handleUpdateMessageLiveLocationViewed(context, update);
+      handleUpdateMessageLiveLocationViewed(update);
       return;
     case 'updateMessageMentionRead':
-      await handleUpdateMessageMentionRead(context, update);
+      await handleUpdateMessageMentionRead(update);
       return;
     case 'updateMessageReaction':
-      await handleUpdateMessageReaction(context, update);
+      await handleUpdateMessageReaction(update);
       return;
     case 'updateMessageReactions':
-      await handleUpdateMessageReactions(context, update);
+      await handleUpdateMessageReactions(update);
       return;
     case 'updateMessageSendAcknowledged':
-      await handleUpdateMessageSendAcknowledged(context, update);
+      await handleUpdateMessageSendAcknowledged(update);
       return;
     case 'updateMessageSendFailed':
-      await handleUpdateMessageSendFailed(context, update);
+      await handleUpdateMessageSendFailed(update);
       return;
     case 'updateMessageSendSucceeded':
-      await handleUpdateMessageSendSucceeded(context, update);
+      await handleUpdateMessageSendSucceeded(update);
       return;
     case 'updateMessageSuggestedPostInfo':
-      await handleUpdateMessageSuggestedPostInfo(context, update);
+      await handleUpdateMessageSuggestedPostInfo(update);
       return;
     case 'updateMessageUnreadReactions':
-      await handleUpdateMessageUnreadReactions(context, update);
+      await handleUpdateMessageUnreadReactions(update);
       return;
     case 'updateNewBusinessCallbackQuery':
-      await handleUpdateNewBusinessCallbackQuery(context, update);
+      await handleUpdateNewBusinessCallbackQuery(update);
       return;
     case 'updateNewBusinessMessage':
-      await handleUpdateNewBusinessMessage(context, update);
+      await handleUpdateNewBusinessMessage(update);
       return;
     case 'updateNewCallbackQuery':
-      handleUpdateNewCallbackQuery(context, update);
+      handleUpdateNewCallbackQuery(update);
       return;
     case 'updateNewCallSignalingData':
-      handleUpdateNewCallSignalingData(context, update);
+      handleUpdateNewCallSignalingData(update);
       return;
     case 'updateNewChatJoinRequest':
-      await handleUpdateNewChatJoinRequest(context, update);
+      await handleUpdateNewChatJoinRequest(update);
       return;
     case 'updateNewChat':
-      await handleUpdateNewChat(context, update);
+      await handleUpdateNewChat(update);
       return;
     case 'updateNewChosenInlineResult':
-      handleUpdateNewChosenInlineResult(context, update);
+      handleUpdateNewChosenInlineResult(update);
       return;
     case 'updateNewCustomEvent':
-      handleUpdateNewCustomEvent(context, update);
+      handleUpdateNewCustomEvent(update);
       return;
     case 'updateNewCustomQuery':
-      handleUpdateNewCustomQuery(context, update);
+      handleUpdateNewCustomQuery(update);
       return;
     case 'updateNewGuestQuery':
-      await handleUpdateNewGuestQuery(context, update);
+      await handleUpdateNewGuestQuery(update);
       return;
     case 'updateNewGroupCallMessage':
-      await handleUpdateNewGroupCallMessage(context, update);
+      await handleUpdateNewGroupCallMessage(update);
       return;
     case 'updateNewGroupCallPaidReaction':
-      handleUpdateNewGroupCallPaidReaction(context, update);
+      handleUpdateNewGroupCallPaidReaction(update);
       return;
     case 'updateNewInlineCallbackQuery':
-      handleUpdateNewInlineCallbackQuery(context, update);
+      handleUpdateNewInlineCallbackQuery(update);
       return;
     case 'updateNewInlineQuery':
-      handleUpdateNewInlineQuery(context, update);
+      handleUpdateNewInlineQuery(update);
       return;
     case 'updateNewMessage':
-      await handleUpdateNewMessage(context, update);
+      await handleUpdateNewMessage(update);
       return;
     case 'updateNewOauthRequest':
-      handleUpdateNewOauthRequest(context, update);
+      handleUpdateNewOauthRequest(update);
       return;
     case 'updateNewPreCheckoutQuery':
-      handleUpdateNewPreCheckoutQuery(context, update);
+      handleUpdateNewPreCheckoutQuery(update);
       return;
     case 'updateNewShippingQuery':
-      handleUpdateNewShippingQuery(context, update);
+      handleUpdateNewShippingQuery(update);
       return;
     case 'updateNotification':
-      await handleUpdateNotification(context, update);
+      await handleUpdateNotification(update);
       return;
     case 'updateNotificationGroup':
-      await handleUpdateNotificationGroup(context, update);
+      await handleUpdateNotificationGroup(update);
       return;
     case 'updateOption':
-      await handleUpdateOption(context, update);
+      await handleUpdateOption(update);
       return;
     case 'updateOwnedStarCount':
-      await handleUpdateOwnedStarCount(context, update);
+      await handleUpdateOwnedStarCount(update);
       return;
     case 'updateOwnedTonCount':
-      await handleUpdateOwnedTonCount(context, update);
+      await handleUpdateOwnedTonCount(update);
       return;
     case 'updatePaidMediaPurchased':
-      handleUpdatePaidMediaPurchased(context, update);
+      handleUpdatePaidMediaPurchased(update);
       return;
     case 'updatePendingTextMessage':
-      handleUpdatePendingTextMessage(context, update);
+      handleUpdatePendingTextMessage(update);
       return;
     case 'updatePoll':
-      await handleUpdatePoll(context, update);
+      await handleUpdatePoll(update);
       return;
     case 'updatePollAnswer':
-      await handleUpdatePollAnswer(context, update);
+      await handleUpdatePollAnswer(update);
       return;
     case 'updateProfileAccentColors':
-      await handleUpdateProfileAccentColors(context, update);
+      await handleUpdateProfileAccentColors(update);
       return;
     case 'updateQuickReplyShortcut':
-      await handleUpdateQuickReplyShortcut(context, update);
+      await handleUpdateQuickReplyShortcut(update);
       return;
     case 'updateQuickReplyShortcutDeleted':
-      await handleUpdateQuickReplyShortcutDeleted(context, update);
+      await handleUpdateQuickReplyShortcutDeleted(update);
       return;
     case 'updateQuickReplyShortcutMessages':
-      await handleUpdateQuickReplyShortcutMessages(context, update);
+      await handleUpdateQuickReplyShortcutMessages(update);
       return;
     case 'updateQuickReplyShortcuts':
-      await handleUpdateQuickReplyShortcuts(context, update);
+      await handleUpdateQuickReplyShortcuts(update);
       return;
     case 'updateReactionNotificationSettings':
-      await handleUpdateReactionNotificationSettings(context, update);
+      await handleUpdateReactionNotificationSettings(update);
       return;
     case 'updateRecentStickers':
-      await handleUpdateRecentStickers(context, update);
+      await handleUpdateRecentStickers(update);
       return;
     case 'updateSavedAnimations':
-      await handleUpdateSavedAnimations(context, update);
+      await handleUpdateSavedAnimations(update);
       return;
     case 'updateSavedMessagesTags':
-      await handleUpdateSavedMessagesTags(context, update);
+      await handleUpdateSavedMessagesTags(update);
       return;
     case 'updateSavedMessagesTopic':
-      await handleUpdateSavedMessagesTopic(context, update);
+      await handleUpdateSavedMessagesTopic(update);
       return;
     case 'updateSavedMessagesTopicCount':
-      await handleUpdateSavedMessagesTopicCount(context, update);
+      await handleUpdateSavedMessagesTopicCount(update);
       return;
     case 'updateSavedNotificationSounds':
-      await handleUpdateSavedNotificationSounds(context, update);
+      await handleUpdateSavedNotificationSounds(update);
       return;
     case 'updateScopeNotificationSettings':
-      await handleUpdateScopeNotificationSettings(context, update);
+      await handleUpdateScopeNotificationSettings(update);
       return;
     case 'updateSecretChat':
-      await handleUpdateSecretChat(context, update);
+      await handleUpdateSecretChat(update);
       return;
     case 'updateServiceNotification':
-      await handleUpdateServiceNotification(context, update);
+      await handleUpdateServiceNotification(update);
       return;
     case 'updateSpeechRecognitionTrial':
-      await handleUpdateSpeechRecognitionTrial(context, update);
+      await handleUpdateSpeechRecognitionTrial(update);
       return;
     case 'updateSpeedLimitNotification':
-      await handleUpdateSpeedLimitNotification(context, update);
+      await handleUpdateSpeedLimitNotification(update);
       return;
     case 'updateStakeDiceState':
-      await handleUpdateStakeDiceState(context, update);
+      await handleUpdateStakeDiceState(update);
       return;
     case 'updateStarRevenueStatus':
-      await handleUpdateStarRevenueStatus(context, update);
+      await handleUpdateStarRevenueStatus(update);
       return;
     case 'updateStickerSet':
-      await handleUpdateStickerSet(context, update);
+      await handleUpdateStickerSet(update);
       return;
     case 'updateStory':
-      await handleUpdateStory(context, update);
+      await handleUpdateStory(update);
       return;
     case 'updateStoryDeleted':
-      await handleUpdateStoryDeleted(context, update);
+      await handleUpdateStoryDeleted(update);
       return;
     case 'updateStoryListChatCount':
-      await handleUpdateStoryListChatCount(context, update);
+      await handleUpdateStoryListChatCount(update);
       return;
     case 'updateStoryPostFailed':
-      await handleUpdateStoryPostFailed(context, update);
+      await handleUpdateStoryPostFailed(update);
       return;
     case 'updateStoryPostSucceeded':
-      await handleUpdateStoryPostSucceeded(context, update);
+      await handleUpdateStoryPostSucceeded(update);
       return;
     case 'updateStoryStealthMode':
-      await handleUpdateStoryStealthMode(context, update);
+      await handleUpdateStoryStealthMode(update);
       return;
     case 'updateSuggestedActions':
-      await handleUpdateSuggestedActions(context, update);
+      await handleUpdateSuggestedActions(update);
       return;
     case 'updateSupergroup':
-      await handleUpdateSupergroup(context, update);
+      await handleUpdateSupergroup(update);
       return;
     case 'updateSupergroupFullInfo':
-      await handleUpdateSupergroupFullInfo(context, update);
+      await handleUpdateSupergroupFullInfo(update);
       return;
     case 'updateTermsOfService':
-      await handleUpdateTermsOfService(context, update);
+      await handleUpdateTermsOfService(update);
       return;
     case 'updateTextCompositionStyles':
-      await handleUpdateTextCompositionStyles(context, update);
+      await handleUpdateTextCompositionStyles(update);
       return;
     case 'updateTonRevenueStatus':
-      await handleUpdateTonRevenueStatus(context, update);
+      await handleUpdateTonRevenueStatus(update);
       return;
     case 'updateTopicMessageCount':
-      await handleUpdateTopicMessageCount(context, update);
+      await handleUpdateTopicMessageCount(update);
       return;
     case 'updateTrendingStickerSets':
-      await handleUpdateTrendingStickerSets(context, update);
+      await handleUpdateTrendingStickerSets(update);
       return;
     case 'updateTrustedMiniAppBots':
-      await handleUpdateTrustedMiniAppBots(context, update);
+      await handleUpdateTrustedMiniAppBots(update);
       return;
     case 'updateUnconfirmedSession':
-      await handleUpdateUnconfirmedSession(context, update);
+      await handleUpdateUnconfirmedSession(update);
       return;
     case 'updateUnreadChatCount':
-      await handleUpdateUnreadChatCount(context, update);
+      await handleUpdateUnreadChatCount(update);
       return;
     case 'updateUnreadMessageCount':
-      await handleUpdateUnreadMessageCount(context, update);
+      await handleUpdateUnreadMessageCount(update);
       return;
     case 'updateUser':
-      await handleUpdateUser(context, update);
+      await handleUpdateUser(update);
       return;
     case 'updateUserFullInfo':
-      await handleUpdateUserFullInfo(context, update);
+      await handleUpdateUserFullInfo(update);
       return;
     case 'updateUserPrivacySettingRules':
-      await handleUpdateUserPrivacySettingRules(context, update);
+      await handleUpdateUserPrivacySettingRules(update);
       return;
     case 'updateUserStatus':
-      await handleUpdateUserStatus(context, update);
+      await handleUpdateUserStatus(update);
       return;
     case 'updateVideoPublished':
-      await handleUpdateVideoPublished(context, update);
+      await handleUpdateVideoPublished(update);
       return;
     case 'updateWebAppMessageSent':
-      await handleUpdateWebAppMessageSent(context, update);
+      await handleUpdateWebAppMessageSent(update);
       return;
   }
 

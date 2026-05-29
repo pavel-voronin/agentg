@@ -1,5 +1,7 @@
 import { storeBusinessMessage } from '../../store/businessMessage.js';
-import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
+import { useDatabase } from '../../database/subsystem.js';
+import { useUpdateEvents } from '../../events/updateEvents.js';
+import { useFiles } from '../../files/subsystem.js';
 import type {
   TelegramWireMessage,
   TelegramWireMessageContentUpdate,
@@ -10,9 +12,11 @@ type TelegramWireBusinessMessageEditedUpdate =
   TelegramWireUpdateByType<'updateBusinessMessageEdited'>;
 
 export async function handleUpdateBusinessMessageEdited(
-  { database, events, files }: TelegramUpdateHandlerContext,
   update: TelegramWireBusinessMessageEditedUpdate
 ): Promise<void> {
+  const database = useDatabase();
+  const events = useUpdateEvents();
+  const files = useFiles();
   await storeBusinessMessage(database, {
     businessMessage: update.message,
     connectionId: update.connection_id

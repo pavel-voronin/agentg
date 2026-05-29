@@ -1,14 +1,18 @@
-import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import { upsertTelegramChatFragment } from '../../store/chat.js';
 import { storeMessage } from '../../store/message.js';
 import type { TelegramWireUpdateByType } from '../wire.js';
+import { useDatabase } from '../../database/subsystem.js';
+import { useUpdateEvents } from '../../events/updateEvents.js';
+import { useFiles } from '../../files/subsystem.js';
 
 type TelegramWireChatReplyMarkupUpdate = TelegramWireUpdateByType<'updateChatReplyMarkup'>;
 
 export async function handleUpdateChatReplyMarkup(
-  { database, events, files }: TelegramUpdateHandlerContext,
   update: TelegramWireChatReplyMarkupUpdate
 ): Promise<void> {
+  const database = useDatabase();
+  const events = useUpdateEvents();
+  const files = useFiles();
   const chatId = String(update.chat_id);
   const replyMarkupMessage = update.reply_markup_message ?? null;
 

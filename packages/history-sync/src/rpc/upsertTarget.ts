@@ -1,10 +1,10 @@
 import { createIntegrationEvent } from '@agentg/events/envelope';
-import { mutation, runtimeForInternalRpcCall } from '@agentg/framework/domain';
+import { mutation, contextForInternalRpcCall } from '@agentg/framework/domain';
 import { z } from 'zod';
 
 import { historySyncRangeSchema, nonEmptyStringSchema } from '../rangeSchema.js';
 import { upsertManualHistorySyncTargetFromCommand } from '../targetCommands.js';
-import type { HistorySyncRuntime } from '../main.js';
+import type { HistorySyncDomainContext } from '../main.js';
 import { historySyncStoredTargetOutputSchema } from './deleteTarget.js';
 import { currentHistorySyncProjectionContext, historySyncTargetToResponse } from '../readModel.js';
 
@@ -40,15 +40,15 @@ export const historySyncTargetMutationOutputSchema = z.object({
 export type HistorySyncUpsertTargetInput = z.infer<typeof historySyncUpsertTargetInputSchema>;
 export type HistorySyncTargetMutationOutput = z.infer<typeof historySyncTargetMutationOutputSchema>;
 
-export const upsertTarget = mutation((options: HistorySyncRuntime, procedure) =>
+export const upsertTarget = mutation((options: HistorySyncDomainContext, procedure) =>
   procedure
     .input(historySyncUpsertTargetInputSchema)
     .output(historySyncTargetMutationOutputSchema)
     .mutation(async ({ ctx, input }) => {
-      const runtime = runtimeForInternalRpcCall(options, ctx);
-      const target = await upsertManualHistorySyncTargetFromCommand(runtime.database, input);
+      const context = contextForInternalRpcCall(options, ctx);
+      const target = await upsertManualHistorySyncTargetFromCommand(context.database, input);
 
-      runtime.eventBus.publish(
+      context.eventBus.publish(
         createIntegrationEvent({
           data: {
             target: historySyncTargetToResponse(target, currentHistorySyncProjectionContext())
@@ -56,7 +56,7 @@ export const upsertTarget = mutation((options: HistorySyncRuntime, procedure) =>
           type: 'history-sync.target.upserted'
         })
       );
-      runtime.eventBus.publish(
+      context.eventBus.publish(
         createIntegrationEvent({
           data: {
             reason: 'target-upserted'
@@ -64,7 +64,7 @@ export const upsertTarget = mutation((options: HistorySyncRuntime, procedure) =>
           type: 'history-sync.sync.requested'
         })
       );
-      runtime.requestSync?.('target-upserted');
+      context.requestSync?.('target-upserted');
 
       return {
         deleted: false,

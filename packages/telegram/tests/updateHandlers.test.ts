@@ -1,8 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import '../src/main.js';
 import type { TelegramDatabase } from '../src/database/client.js';
 import { telegramChats, telegramFileSlots, telegramMessages } from '../src/database/schema.js';
-import type { TelegramUpdateHandlerContext } from '../src/tdlib/update-runtime/context.js';
+import { useDatabase } from '../src/database/subsystem.js';
+import { useUpdateEvents } from '../src/events/updateEvents.js';
+import { useFiles } from '../src/files/subsystem.js';
+import { useLiveCoverage } from '../src/history/subsystem.js';
+import { useTelegramStatus } from '../src/status/subsystem.js';
 import { handleUpdateChatLastMessage } from '../src/tdlib/update-handlers/updateChatLastMessage.js';
 import { handleUpdateDeleteMessages } from '../src/tdlib/update-handlers/updateDeleteMessages.js';
 import { handleUpdateNewChat } from '../src/tdlib/update-handlers/updateNewChat.js';
@@ -22,7 +27,6 @@ describe('TDLib update handlers', () => {
 
   it('persists updateNewMessage through message type operations', async () => {
     const {
-      context,
       insert,
       onConflictDoNothing,
       publishTelegramMessageCreated,
@@ -78,7 +82,7 @@ describe('TDLib update handlers', () => {
       _: 'updateNewMessage',
       message
     });
-    await handleUpdateNewMessage(context, update);
+    await handleUpdateNewMessage(update);
 
     expect(insert).toHaveBeenCalledWith(telegramMessages);
     expect(values).toHaveBeenCalledWith(
@@ -120,13 +124,8 @@ describe('TDLib update handlers', () => {
   });
 
   it('does not publish side effects when updateNewMessage already exists', async () => {
-    const {
-      context,
-      insert,
-      publishTelegramMessageCreated,
-      recordLiveMessage,
-      recordMessageFiles
-    } = createHandlerContext({ insertedRows: [] });
+    const { insert, publishTelegramMessageCreated, recordLiveMessage, recordMessageFiles } =
+      createHandlerContext({ insertedRows: [] });
 
     const update = wireUpdateNewMessage({
       _: 'updateNewMessage',
@@ -145,7 +144,7 @@ describe('TDLib update handlers', () => {
         id: 10
       })
     });
-    await handleUpdateNewMessage(context, update);
+    await handleUpdateNewMessage(update);
 
     expect(insert).toHaveBeenCalledWith(telegramMessages);
     expect(recordMessageFiles).not.toHaveBeenCalled();
@@ -155,7 +154,6 @@ describe('TDLib update handlers', () => {
 
   it('persists updateNewChat last_message as a message row and chat last_message_id', async () => {
     const {
-      context,
       insert,
       publishTelegramChatDirectoryUpdated,
       recordChatFiles,
@@ -191,7 +189,7 @@ describe('TDLib update handlers', () => {
       }
     });
 
-    await handleUpdateNewChat(context, update);
+    await handleUpdateNewChat(update);
 
     expect(insert).toHaveBeenCalledWith(telegramChats);
     expect(values).toHaveBeenCalledWith(
@@ -214,7 +212,6 @@ describe('TDLib update handlers', () => {
 
   it('persists updateChatLastMessage message and updates chat last_message_id', async () => {
     const {
-      context,
       insert,
       publishTelegramChatDirectoryUpdated,
       recordLiveMessage,
@@ -241,7 +238,7 @@ describe('TDLib update handlers', () => {
       positions: []
     });
 
-    await handleUpdateChatLastMessage(context, update);
+    await handleUpdateChatLastMessage(update);
 
     expect(insert).toHaveBeenCalledWith(telegramChats);
     expect(values).toHaveBeenCalledWith(
@@ -262,7 +259,7 @@ describe('TDLib update handlers', () => {
   });
 
   it('clears chat last_message_id on null updateChatLastMessage', async () => {
-    const { context, recordMessageFiles, values } = createHandlerContext();
+    const { recordMessageFiles, values } = createHandlerContext();
     const update = wireUpdateChatLastMessage({
       _: 'updateChatLastMessage',
       chat_id: 20,
@@ -270,7 +267,7 @@ describe('TDLib update handlers', () => {
       positions: []
     });
 
-    await handleUpdateChatLastMessage(context, update);
+    await handleUpdateChatLastMessage(update);
 
     expect(values).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -282,14 +279,14 @@ describe('TDLib update handlers', () => {
   });
 
   it('clears chat last_message_id when updateChatLastMessage omits last_message', async () => {
-    const { context, recordMessageFiles, values } = createHandlerContext();
+    const { recordMessageFiles, values } = createHandlerContext();
     const update = wireUpdateChatLastMessage({
       _: 'updateChatLastMessage',
       chat_id: 20,
       positions: []
     });
 
-    await handleUpdateChatLastMessage(context, update);
+    await handleUpdateChatLastMessage(update);
 
     expect(values).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -301,8 +298,7 @@ describe('TDLib update handlers', () => {
   });
 
   it('hard-deletes stored messages for permanent updateDeleteMessages', async () => {
-    const { context, deleteRows, publishTelegramMessageDeleted, transaction } =
-      createHandlerContext();
+    const { deleteRows, publishTelegramMessageDeleted, transaction } = createHandlerContext();
 
     const update = wireUpdateDeleteMessages({
       _: 'updateDeleteMessages',
@@ -311,7 +307,7 @@ describe('TDLib update handlers', () => {
       is_permanent: true,
       message_ids: [10, 11]
     });
-    await handleUpdateDeleteMessages(context, update);
+    await handleUpdateDeleteMessages(update);
 
     expect(transaction).toHaveBeenCalledTimes(1);
     expect(deleteRows).toHaveBeenCalledWith(telegramFileSlots);
@@ -326,7 +322,7 @@ describe('TDLib update handlers', () => {
   });
 
   it('ignores cache-only updateDeleteMessages', async () => {
-    const { context, publishTelegramMessageDeleted, transaction } = createHandlerContext();
+    const { publishTelegramMessageDeleted, transaction } = createHandlerContext();
 
     const update = wireUpdateDeleteMessages({
       _: 'updateDeleteMessages',
@@ -335,14 +331,14 @@ describe('TDLib update handlers', () => {
       is_permanent: false,
       message_ids: [10]
     });
-    await handleUpdateDeleteMessages(context, update);
+    await handleUpdateDeleteMessages(update);
 
     expect(transaction).not.toHaveBeenCalled();
     expect(publishTelegramMessageDeleted).not.toHaveBeenCalled();
   });
 
   it('ignores non-permanent updateDeleteMessages', async () => {
-    const { context, publishTelegramMessageDeleted, transaction } = createHandlerContext();
+    const { publishTelegramMessageDeleted, transaction } = createHandlerContext();
 
     const update = wireUpdateDeleteMessages({
       _: 'updateDeleteMessages',
@@ -351,7 +347,7 @@ describe('TDLib update handlers', () => {
       is_permanent: false,
       message_ids: [10]
     });
-    await handleUpdateDeleteMessages(context, update);
+    await handleUpdateDeleteMessages(update);
 
     expect(transaction).not.toHaveBeenCalled();
     expect(publishTelegramMessageDeleted).not.toHaveBeenCalled();
@@ -359,7 +355,6 @@ describe('TDLib update handlers', () => {
 });
 
 function createHandlerContext(options: { insertedRows?: unknown[] } = {}): {
-  context: TelegramUpdateHandlerContext;
   insert: ReturnType<typeof vi.fn>;
   deleteRows: ReturnType<typeof vi.fn>;
   onConflictDoNothing: ReturnType<typeof vi.fn>;
@@ -587,137 +582,139 @@ function createHandlerContext(options: { insertedRows?: unknown[] } = {}): {
       )
   );
 
+  useDatabase().configure({
+    delete: deleteRows,
+    insert,
+    transaction
+  } as unknown as TelegramDatabase);
+  useUpdateEvents().configure({
+    publishTelegramActiveGiftAuctionsUpdated,
+    publishTelegramActiveNotificationsUpdated,
+    publishTelegramAnimatedEmojiMessageClicked,
+    publishTelegramApplicationRecaptchaVerificationRequired,
+    publishTelegramApplicationVerificationRequired,
+    publishTelegramAttachmentMenuBotsUpdated,
+    publishTelegramAutosaveSettingsUpdated,
+    publishTelegramBusinessConnectionUpdated,
+    publishTelegramBusinessMessagesDeleted,
+    publishTelegramCallUpdated,
+    publishTelegramChatAction,
+    publishTelegramChatDirectoryUpdated,
+    publishTelegramChatFoldersUpdated,
+    publishTelegramChatMemberUpdated,
+    publishTelegramChatOnlineMemberCountUpdated,
+    publishTelegramDefaultBackgroundUpdated,
+    publishTelegramDirectMessagesChatTopicUpdated,
+    publishTelegramEmojiChatThemesUpdated,
+    publishTelegramFileDownloadRemoved,
+    publishTelegramFileDownloadUpdated,
+    publishTelegramFileDownloadsUpdated,
+    publishTelegramForumTopicInfoUpdated,
+    publishTelegramForumTopicUpdated,
+    publishTelegramFreezeStateUpdated,
+    publishTelegramGiftAuctionStateUpdated,
+    publishTelegramGroupCallUpdated,
+    publishTelegramGroupCallEncryptedParticipantUsersUpdated,
+    publishTelegramGroupCallMessageSendFailed,
+    publishTelegramGroupCallParticipantUpdatedOrRemoved,
+    publishTelegramGroupCallMessagesDeleted,
+    publishTelegramGroupCallVerificationStateUpdated,
+    publishTelegramGroupCallMessageCreated,
+    publishTelegramGroupCallPaidReactionReceived,
+    publishTelegramGuestQueryReceived,
+    publishTelegramInlineCallbackQueryReceived,
+    publishTelegramInlineQueryReceived,
+    publishTelegramLiveStoryTopDonorsUpdated,
+    publishTelegramManagedBotUpdated,
+    publishTelegramBusinessCallbackQueryReceived,
+    publishTelegramCallbackQueryReceived,
+    publishTelegramCallSignalingDataReceived,
+    publishTelegramChatJoinRequestCreated,
+    publishTelegramChosenInlineResultReceived,
+    publishTelegramConnectionState,
+    publishTelegramCustomEventReceived,
+    publishTelegramCustomQueryReceived,
+    publishTelegramMessageCreated,
+    publishTelegramMessageDeleted,
+    publishTelegramMessageSendFailed,
+    publishTelegramMessageSendSucceeded,
+    publishTelegramMessageUpdated,
+    publishTelegramOauthRequestReceived,
+    publishTelegramPaidMediaPurchased,
+    publishTelegramPendingNotificationsUpdated,
+    publishTelegramPendingTextMessageUpdated,
+    publishTelegramPollAnswerUpdated,
+    publishTelegramPollUpdated,
+    publishTelegramPreCheckoutQueryReceived,
+    publishTelegramQuickReplyShortcutDeleted,
+    publishTelegramQuickReplyShortcutMessagesUpdated,
+    publishTelegramQuickReplyShortcutUpdated,
+    publishTelegramSavedMessagesTagsUpdated,
+    publishTelegramSavedMessagesTopicUpdated,
+    publishTelegramScopeNotificationSettingsUpdated,
+    publishTelegramServiceNotificationReceived,
+    publishTelegramShippingQueryReceived,
+    publishTelegramSpeedLimitNotificationReceived,
+    publishTelegramStakeDiceStateUpdated,
+    publishTelegramStoryDeleted,
+    publishTelegramStoryPostFailed,
+    publishTelegramStoryPostSucceeded,
+    publishTelegramStoryStealthModeUpdated,
+    publishTelegramStoryUpdated,
+    publishTelegramSuggestedActionsUpdated,
+    publishTelegramTermsOfServiceRequired,
+    publishTelegramTonRevenueStatusUpdated,
+    publishTelegramUnconfirmedSessionUpdated,
+    publishTelegramUnreadChatCountUpdated,
+    publishTelegramUnreadMessageCountUpdated,
+    publishTelegramUserStatusUpdated,
+    publishTelegramUserFullInfoUpdated,
+    publishTelegramUserPrivacySettingRulesUpdated,
+    publishTelegramWebAppCloseRequested,
+    publishTelegramStoredMessageUpdated,
+    publishTelegramSupergroupUpdated,
+    publishTelegramUserUpdated
+  });
+  useFiles().configure({
+    close: vi.fn(),
+    getQueueStats: vi.fn(),
+    handleUpdateFile: vi.fn(),
+    startFileGeneration: vi.fn(),
+    stopFileGeneration: vi.fn(() => Promise.resolve(undefined)),
+    recordChatBackgroundFiles,
+    recordChatFiles,
+    recordChatPhotoFiles,
+    recordChatThemeFiles,
+    recordDefaultBackgroundFiles,
+    recordEmojiChatThemeFiles,
+    recordMessageContentFiles: vi.fn(),
+    recordMessageFiles,
+    recordNotificationFiles,
+    recordNotificationGroupFiles,
+    recordQuickReplyMessageFiles,
+    recordStickerSetFiles,
+    recordStoryFiles,
+    recordTrendingStickerSetFiles,
+    recordUserFullInfoFiles,
+    deleteStoryFileSlots: vi.fn(() => Promise.resolve(undefined)),
+    requestFile: vi.fn()
+  });
+  useLiveCoverage().configure({
+    markConnected: vi.fn(() => Promise.resolve(undefined)),
+    markDisconnected: vi.fn(() => Promise.resolve(undefined)),
+    recordLiveMessage,
+    syncKnownChats: vi.fn(() => Promise.resolve(undefined)),
+    tick: vi.fn(() => Promise.resolve(undefined)),
+    wait: vi.fn(() => Promise.resolve(undefined))
+  });
+  useTelegramStatus().configure({
+    markAuthenticated: vi.fn(),
+    markConnectionState: vi.fn(() => true),
+    markDisconnected: vi.fn(),
+    publish: vi.fn()
+  });
+
   return {
-    context: {
-      database: {
-        delete: deleteRows,
-        insert,
-        transaction
-      } as unknown as TelegramDatabase,
-      events: {
-        publishTelegramActiveGiftAuctionsUpdated,
-        publishTelegramActiveNotificationsUpdated,
-        publishTelegramAnimatedEmojiMessageClicked,
-        publishTelegramApplicationRecaptchaVerificationRequired,
-        publishTelegramApplicationVerificationRequired,
-        publishTelegramAttachmentMenuBotsUpdated,
-        publishTelegramAutosaveSettingsUpdated,
-        publishTelegramBusinessConnectionUpdated,
-        publishTelegramBusinessMessagesDeleted,
-        publishTelegramCallUpdated,
-        publishTelegramChatAction,
-        publishTelegramChatDirectoryUpdated,
-        publishTelegramChatFoldersUpdated,
-        publishTelegramChatMemberUpdated,
-        publishTelegramChatOnlineMemberCountUpdated,
-        publishTelegramDefaultBackgroundUpdated,
-        publishTelegramDirectMessagesChatTopicUpdated,
-        publishTelegramEmojiChatThemesUpdated,
-        publishTelegramFileDownloadRemoved,
-        publishTelegramFileDownloadUpdated,
-        publishTelegramFileDownloadsUpdated,
-        publishTelegramForumTopicInfoUpdated,
-        publishTelegramForumTopicUpdated,
-        publishTelegramFreezeStateUpdated,
-        publishTelegramGiftAuctionStateUpdated,
-        publishTelegramGroupCallUpdated,
-        publishTelegramGroupCallEncryptedParticipantUsersUpdated,
-        publishTelegramGroupCallMessageSendFailed,
-        publishTelegramGroupCallParticipantUpdatedOrRemoved,
-        publishTelegramGroupCallMessagesDeleted,
-        publishTelegramGroupCallVerificationStateUpdated,
-        publishTelegramGroupCallMessageCreated,
-        publishTelegramGroupCallPaidReactionReceived,
-        publishTelegramGuestQueryReceived,
-        publishTelegramInlineCallbackQueryReceived,
-        publishTelegramInlineQueryReceived,
-        publishTelegramLiveStoryTopDonorsUpdated,
-        publishTelegramManagedBotUpdated,
-        publishTelegramBusinessCallbackQueryReceived,
-        publishTelegramCallbackQueryReceived,
-        publishTelegramCallSignalingDataReceived,
-        publishTelegramChatJoinRequestCreated,
-        publishTelegramChosenInlineResultReceived,
-        publishTelegramConnectionState,
-        publishTelegramCustomEventReceived,
-        publishTelegramCustomQueryReceived,
-        publishTelegramMessageCreated,
-        publishTelegramMessageDeleted,
-        publishTelegramMessageSendFailed,
-        publishTelegramMessageSendSucceeded,
-        publishTelegramMessageUpdated,
-        publishTelegramOauthRequestReceived,
-        publishTelegramPaidMediaPurchased,
-        publishTelegramPendingNotificationsUpdated,
-        publishTelegramPendingTextMessageUpdated,
-        publishTelegramPollAnswerUpdated,
-        publishTelegramPollUpdated,
-        publishTelegramPreCheckoutQueryReceived,
-        publishTelegramQuickReplyShortcutDeleted,
-        publishTelegramQuickReplyShortcutMessagesUpdated,
-        publishTelegramQuickReplyShortcutUpdated,
-        publishTelegramSavedMessagesTagsUpdated,
-        publishTelegramSavedMessagesTopicUpdated,
-        publishTelegramScopeNotificationSettingsUpdated,
-        publishTelegramServiceNotificationReceived,
-        publishTelegramShippingQueryReceived,
-        publishTelegramSpeedLimitNotificationReceived,
-        publishTelegramStakeDiceStateUpdated,
-        publishTelegramStoryDeleted,
-        publishTelegramStoryPostFailed,
-        publishTelegramStoryPostSucceeded,
-        publishTelegramStoryStealthModeUpdated,
-        publishTelegramStoryUpdated,
-        publishTelegramSuggestedActionsUpdated,
-        publishTelegramTermsOfServiceRequired,
-        publishTelegramTonRevenueStatusUpdated,
-        publishTelegramUnconfirmedSessionUpdated,
-        publishTelegramUnreadChatCountUpdated,
-        publishTelegramUnreadMessageCountUpdated,
-        publishTelegramUserStatusUpdated,
-        publishTelegramUserFullInfoUpdated,
-        publishTelegramUserPrivacySettingRulesUpdated,
-        publishTelegramWebAppCloseRequested,
-        publishTelegramStoredMessageUpdated,
-        publishTelegramSupergroupUpdated,
-        publishTelegramUserUpdated
-      },
-      files: {
-        close: vi.fn(),
-        getQueueStats: vi.fn(),
-        handleUpdateFile: vi.fn(),
-        startFileGeneration: vi.fn(),
-        stopFileGeneration: vi.fn(() => Promise.resolve(undefined)),
-        recordChatBackgroundFiles,
-        recordChatFiles,
-        recordChatPhotoFiles,
-        recordChatThemeFiles,
-        recordDefaultBackgroundFiles,
-        recordEmojiChatThemeFiles,
-        recordMessageContentFiles: vi.fn(),
-        recordMessageFiles,
-        recordNotificationFiles,
-        recordNotificationGroupFiles,
-        recordQuickReplyMessageFiles,
-        recordStickerSetFiles,
-        recordStoryFiles,
-        recordTrendingStickerSetFiles,
-        recordUserFullInfoFiles,
-        deleteStoryFileSlots: vi.fn(() => Promise.resolve(undefined)),
-        requestFile: vi.fn()
-      },
-      liveCoverageObserver: {
-        markConnected: vi.fn(() => Promise.resolve(undefined)),
-        markDisconnected: vi.fn(() => Promise.resolve(undefined)),
-        recordLiveMessage,
-        syncKnownChats: vi.fn(() => Promise.resolve(undefined)),
-        tick: vi.fn(() => Promise.resolve(undefined)),
-        wait: vi.fn(() => Promise.resolve(undefined))
-      },
-      tdlibStatus: {
-        markConnectionState: vi.fn(() => true)
-      }
-    },
     deleteRows,
     insert,
     onConflictDoNothing,

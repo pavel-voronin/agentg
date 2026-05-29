@@ -1,7 +1,7 @@
 import { query } from '@agentg/framework/domain';
 import { z } from 'zod';
 
-import type { TelegramRpcRuntime } from '../main.js';
+import { useDatabase } from '../database/subsystem.js';
 import { listTelegramHistoryCoverage } from '../history/coverage.js';
 import { nonEmptyStringSchema, telegramHistoryCoverageSegmentSchema } from '../read-model/api.js';
 
@@ -18,17 +18,17 @@ export type TelegramGetHistoryCoverageOutput = z.infer<
   typeof telegramGetHistoryCoverageOutputSchema
 >;
 
-export const getHistoryCoverage = query((runtime: TelegramRpcRuntime, procedure) =>
+export const getHistoryCoverage = query((_context, procedure) =>
   procedure
     .input(telegramGetHistoryCoverageInputSchema)
     .output(telegramGetHistoryCoverageOutputSchema)
-    .query(({ input }) => runGetHistoryCoverage(runtime, input))
+    .query(({ input }) => runGetHistoryCoverage(input))
 );
 
 async function runGetHistoryCoverage(
-  { database }: TelegramRpcRuntime,
   input: TelegramGetHistoryCoverageInput
 ): Promise<TelegramGetHistoryCoverageOutput> {
+  const database = useDatabase();
   const coverage = await listTelegramHistoryCoverage(database, input.chatId);
 
   return {

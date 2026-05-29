@@ -2,7 +2,7 @@ import { query } from '@agentg/framework/domain';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
-import type { TelegramRpcRuntime } from '../main.js';
+import { useDatabase } from '../database/subsystem.js';
 import { telegramChats } from '../database/schema.js';
 import { readTelegramFileRefsForOwners } from '../files/read.js';
 import { readChatSelection, toTelegramChatStorageRow } from '../read-model/chat.js';
@@ -23,17 +23,15 @@ export const telegramGetChatOutputSchema = z.object({
 export type TelegramGetChatInput = z.infer<typeof telegramGetChatInputSchema>;
 export type TelegramGetChatOutput = z.infer<typeof telegramGetChatOutputSchema>;
 
-export const getChat = query((runtime: TelegramRpcRuntime, procedure) =>
+export const getChat = query((_context, procedure) =>
   procedure
     .input(telegramGetChatInputSchema)
     .output(telegramGetChatOutputSchema)
-    .query(({ input }) => runGetChat(runtime, input))
+    .query(({ input }) => runGetChat(input))
 );
 
-async function runGetChat(
-  { database }: TelegramRpcRuntime,
-  input: TelegramGetChatInput
-): Promise<TelegramGetChatOutput> {
+async function runGetChat(input: TelegramGetChatInput): Promise<TelegramGetChatOutput> {
+  const database = useDatabase();
   const [chat] = await database
     .select(readChatSelection())
     .from(telegramChats)

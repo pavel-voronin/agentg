@@ -1,15 +1,19 @@
-import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import { storeDirectMessagesChatTopic } from '../../store/directMessagesChatTopic.js';
 import { recordMessageFiles, storeMessage } from '../../store/message.js';
 import type { TelegramWireUpdateByType } from '../wire.js';
+import { useDatabase } from '../../database/subsystem.js';
+import { useUpdateEvents } from '../../events/updateEvents.js';
+import { useFiles } from '../../files/subsystem.js';
 
 type TelegramWireDirectMessagesChatTopicUpdate =
   TelegramWireUpdateByType<'updateDirectMessagesChatTopic'>;
 
 export async function handleUpdateDirectMessagesChatTopic(
-  { database, events, files }: TelegramUpdateHandlerContext,
   update: TelegramWireDirectMessagesChatTopicUpdate
 ): Promise<void> {
+  const database = useDatabase();
+  const events = useUpdateEvents();
+  const files = useFiles();
   const { topic } = update;
   const lastMessage = topic.last_message ?? null;
 

@@ -1,12 +1,12 @@
-import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import type { TelegramWireUpdateByType } from '../wire.js';
+import { useUpdateEvents } from '../../events/updateEvents.js';
 
 type TelegramWireServiceNotificationUpdate = TelegramWireUpdateByType<'updateServiceNotification'>;
 
 export function handleUpdateServiceNotification(
-  context: TelegramUpdateHandlerContext,
   update: TelegramWireServiceNotificationUpdate
 ): Promise<void> {
-  context.events.publishTelegramServiceNotificationReceived(update);
+  const events = useUpdateEvents();
+  events.publishTelegramServiceNotificationReceived(update);
   return Promise.resolve();
 }

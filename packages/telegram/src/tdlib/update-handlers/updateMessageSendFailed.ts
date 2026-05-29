@@ -7,15 +7,19 @@ import {
   telegramMessages
 } from '../../database/schema.js';
 import { recordMessageFiles, storeMessage } from '../../store/message.js';
-import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import { telegramWireJsonObject, type TelegramWireUpdateByType } from '../wire.js';
+import { useDatabase } from '../../database/subsystem.js';
+import { useUpdateEvents } from '../../events/updateEvents.js';
+import { useFiles } from '../../files/subsystem.js';
 
 type TelegramWireMessageSendFailedUpdate = TelegramWireUpdateByType<'updateMessageSendFailed'>;
 
 export async function handleUpdateMessageSendFailed(
-  { database, events, files }: TelegramUpdateHandlerContext,
   update: TelegramWireMessageSendFailedUpdate
 ): Promise<void> {
+  const database = useDatabase();
+  const events = useUpdateEvents();
+  const files = useFiles();
   const chatId = String(update.message.chat_id);
   const messageId = String(update.message.id);
   const oldMessageId = String(update.old_message_id);

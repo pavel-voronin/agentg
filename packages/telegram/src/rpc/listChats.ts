@@ -1,18 +1,19 @@
 import { query } from '@agentg/framework/domain';
 import { z } from 'zod';
 import type { ChatList$Input } from 'tdlib-types';
-import type { TelegramRpcRuntime } from '../main.js';
 import { asc } from 'drizzle-orm';
 import {
   telegramChatFolderInfos,
   telegramChatPositions,
   telegramChats
 } from '../database/schema.js';
+import { useDatabase } from '../database/subsystem.js';
 import { storeChat, telegramChatType } from '../store/chat.js';
 import { storeMessage } from '../store/message.js';
 import { readChatSelection, toTelegramChatStorageRow } from '../read-model/chat.js';
 import { isListableTelegramChat } from '../read-model/chatPlacements.js';
 import { telegramTdlibPriorities } from '../tdlib/priority.js';
+import { useTdlib } from '../tdlib/subsystem.js';
 import { telegramWireJsonObject } from '../tdlib/wire.js';
 import { parseLimit } from '@agentg/framework/input';
 
@@ -40,39 +41,34 @@ type ChatListKind =
       kind: 'folder';
     };
 
-export const listChats = query((runtime: TelegramRpcRuntime, procedure) =>
+export const listChats = query((_context, procedure) =>
   procedure
     .input(telegramHistoryListChatsInputSchema)
     .output(z.array(telegramHistoryChatSchema))
-    .query(({ input }) => runListChats(runtime, input))
+    .query(({ input }) => runListChats(input))
 );
 
 async function runListChats(
-  context: TelegramRpcRuntime,
   input: TelegramHistoryListChatsRequest
 ): Promise<TelegramHistoryChat[]> {
   const { discover } = input;
   const loadBatchSize = parseLimit(input.loadBatchSize, 100, 1000);
-  return discover === true
-    ? discoverHistoryChats(context, loadBatchSize)
-    : listKnownHistoryChats(context);
+  return discover === true ? discoverHistoryChats(loadBatchSize) : listKnownHistoryChats();
 }
 
-async function discoverHistoryChats(
-  context: TelegramRpcRuntime,
-  loadBatchSize: number
-): Promise<TelegramHistoryChat[]> {
-  const folderIds = await listKnownFolderIds(context);
-  await loadAllChatsFromKnownLists(context, loadBatchSize, folderIds);
+async function discoverHistoryChats(loadBatchSize: number): Promise<TelegramHistoryChat[]> {
+  const database = useDatabase();
+  const folderIds = await listKnownFolderIds();
+  await loadAllChatsFromKnownLists(loadBatchSize, folderIds);
   const chatIds = dedupeTelegramIds([
-    ...(await getChatIdsFromList(context, { kind: 'main' }, 100000)),
-    ...(await getChatIdsFromList(context, { kind: 'archive' }, 100000)),
-    ...(await getFolderChatIds(context, folderIds, 100000))
+    ...(await getChatIdsFromList({ kind: 'main' }, 100000)),
+    ...(await getChatIdsFromList({ kind: 'archive' }, 100000)),
+    ...(await getFolderChatIds(folderIds, 100000))
   ]);
   const chats: TelegramHistoryChat[] = [];
 
   for (const chatId of chatIds) {
-    const chat = await getChatOrUndefined(context, chatId);
+    const chat = await getChatOrUndefined(chatId);
     if (chat === undefined) {
       continue;
     }
@@ -81,7 +77,7 @@ async function discoverHistoryChats(
     }
     const lastMessage = chat.last_message ?? null;
 
-    await context.database.transaction(async (transaction) => {
+    await database.transaction(async (transaction) => {
       if (lastMessage !== null) {
         await storeMessage(transaction, lastMessage);
       }
@@ -102,9 +98,8 @@ async function discoverHistoryChats(
   return chats;
 }
 
-async function listKnownHistoryChats({
-  database
-}: TelegramRpcRuntime): Promise<TelegramHistoryChat[]> {
+async function listKnownHistoryChats(): Promise<TelegramHistoryChat[]> {
+  const database = useDatabase();
   const rows = await database
     .select(readChatSelection())
     .from(telegramChats)
@@ -128,19 +123,16 @@ async function listKnownHistoryChats({
     }));
 }
 
-async function getFolderChatIds(
-  context: TelegramRpcRuntime,
-  folderIds: number[],
-  limit: number
-): Promise<number[]> {
+async function getFolderChatIds(folderIds: number[], limit: number): Promise<number[]> {
   const chatIds: number[] = [];
   for (const folderId of folderIds) {
-    chatIds.push(...(await getChatIdsFromList(context, { folderId, kind: 'folder' }, limit)));
+    chatIds.push(...(await getChatIdsFromList({ folderId, kind: 'folder' }, limit)));
   }
   return chatIds;
 }
 
-async function listKnownFolderIds({ database }: TelegramRpcRuntime): Promise<number[]> {
+async function listKnownFolderIds(): Promise<number[]> {
+  const database = useDatabase();
   const rows = await database
     .select({
       folderId: telegramChatFolderInfos.id
@@ -163,26 +155,19 @@ function dedupeTelegramIds(ids: number[]): number[] {
   return [...new Set(ids)];
 }
 
-async function loadAllChatsFromKnownLists(
-  context: TelegramRpcRuntime,
-  batchSize: number,
-  folderIds: number[]
-): Promise<void> {
-  await loadChatsFromList(context, { kind: 'main' }, batchSize);
-  await loadChatsFromList(context, { kind: 'archive' }, batchSize);
+async function loadAllChatsFromKnownLists(batchSize: number, folderIds: number[]): Promise<void> {
+  await loadChatsFromList({ kind: 'main' }, batchSize);
+  await loadChatsFromList({ kind: 'archive' }, batchSize);
   for (const folderId of folderIds) {
-    await loadChatsFromList(context, { folderId, kind: 'folder' }, batchSize);
+    await loadChatsFromList({ folderId, kind: 'folder' }, batchSize);
   }
 }
 
-async function loadChatsFromList(
-  context: TelegramRpcRuntime,
-  chatList: ChatListKind,
-  batchSize: number
-): Promise<void> {
+async function loadChatsFromList(chatList: ChatListKind, batchSize: number): Promise<void> {
+  const tdlib = useTdlib();
   for (;;) {
     try {
-      await context.tdlib.loadChats(
+      await tdlib.loadChats(
         {
           chatList: toTdChatList(chatList),
           limit: batchSize
@@ -199,13 +184,10 @@ async function loadChatsFromList(
   }
 }
 
-async function getChatIdsFromList(
-  context: TelegramRpcRuntime,
-  chatList: ChatListKind,
-  limit: number
-): Promise<number[]> {
+async function getChatIdsFromList(chatList: ChatListKind, limit: number): Promise<number[]> {
   try {
-    const chats = await context.tdlib.getChats(
+    const tdlib = useTdlib();
+    const chats = await tdlib.getChats(
       {
         chatList: toTdChatList(chatList),
         limit
@@ -223,11 +205,11 @@ async function getChatIdsFromList(
 }
 
 async function getChatOrUndefined(
-  context: TelegramRpcRuntime,
   chatId: number
-): Promise<Awaited<ReturnType<TelegramRpcRuntime['tdlib']['getChat']>> | undefined> {
+): Promise<Awaited<ReturnType<ReturnType<typeof useTdlib>['getChat']>> | undefined> {
   try {
-    return await context.tdlib.getChat(
+    const tdlib = useTdlib();
+    return await tdlib.getChat(
       { chatId },
       {
         priority: telegramTdlibPriorities.maximum

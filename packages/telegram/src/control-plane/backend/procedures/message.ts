@@ -1,7 +1,7 @@
 import { query } from '@agentg/framework/domain';
 import { z } from 'zod';
 
-import type { TelegramRpcRuntime } from '../../../main.js';
+import { useDatabase } from '../../../database/subsystem.js';
 import { and, eq } from 'drizzle-orm';
 import { telegramMessages } from '../../../database/schema.js';
 import { readMessageSelection, toReadMessages } from '../../../read-model/message.js';
@@ -19,17 +19,15 @@ export const messageLookupOutputSchema = z.object({
 export type MessageLookupInput = z.infer<typeof messageLookupInputSchema>;
 export type MessageLookupOutput = z.infer<typeof messageLookupOutputSchema>;
 
-export const message = query((runtime: TelegramRpcRuntime, procedure) =>
+export const message = query((_context, procedure) =>
   procedure
     .input(messageLookupInputSchema)
     .output(messageLookupOutputSchema)
-    .query(({ input }) => runMessage(runtime, input))
+    .query(({ input }) => runMessage(input))
 );
 
-async function runMessage(
-  { database }: TelegramRpcRuntime,
-  input: MessageLookupInput
-): Promise<MessageLookupOutput> {
+async function runMessage(input: MessageLookupInput): Promise<MessageLookupOutput> {
+  const database = useDatabase();
   const [message] = await database
     .select(readMessageSelection())
     .from(telegramMessages)

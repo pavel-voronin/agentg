@@ -1,5 +1,6 @@
-import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import { telegramWireJsonValue, type TelegramWireUpdateByType } from '../wire.js';
+import { useDatabase } from '../../database/subsystem.js';
+import { useUpdateEvents } from '../../events/updateEvents.js';
 import {
   replaceMessageReactionSummaries,
   upsertTelegramMessageFragment
@@ -9,9 +10,10 @@ type TelegramWireMessageInteractionInfoUpdate =
   TelegramWireUpdateByType<'updateMessageInteractionInfo'>;
 
 export async function handleUpdateMessageInteractionInfo(
-  { database, events }: TelegramUpdateHandlerContext,
   update: TelegramWireMessageInteractionInfoUpdate
 ): Promise<void> {
+  const database = useDatabase();
+  const events = useUpdateEvents();
   const chatId = String(update.chat_id);
   const messageId = String(update.message_id);
 

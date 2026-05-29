@@ -1,11 +1,9 @@
-import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import type { TelegramWireUpdateByType } from '../wire.js';
+import { useUpdateEvents } from '../../events/updateEvents.js';
 
 type TelegramWireNewShippingQueryUpdate = TelegramWireUpdateByType<'updateNewShippingQuery'>;
 
-export function handleUpdateNewShippingQuery(
-  { events }: TelegramUpdateHandlerContext,
-  update: TelegramWireNewShippingQueryUpdate
-): void {
+export function handleUpdateNewShippingQuery(update: TelegramWireNewShippingQueryUpdate): void {
+  const events = useUpdateEvents();
   events.publishTelegramShippingQueryReceived(update);
 }

@@ -1,12 +1,12 @@
-import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import type { TelegramWireUpdateByType } from '../wire.js';
+import { useUpdateEvents } from '../../events/updateEvents.js';
 
 type TelegramWireNewCallSignalingDataUpdate =
   TelegramWireUpdateByType<'updateNewCallSignalingData'>;
 
 export function handleUpdateNewCallSignalingData(
-  { events }: TelegramUpdateHandlerContext,
   update: TelegramWireNewCallSignalingDataUpdate
 ): void {
+  const events = useUpdateEvents();
   events.publishTelegramCallSignalingDataReceived(update);
 }

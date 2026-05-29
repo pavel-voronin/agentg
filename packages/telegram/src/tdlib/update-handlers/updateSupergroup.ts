@@ -1,10 +1,10 @@
 import { storeSupergroup } from '../../store/supergroup.js';
-import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import type { TelegramWireSupergroupUpdate } from '../wire.js';
+import { useDatabase } from '../../database/subsystem.js';
 
-export async function handleUpdateSupergroup(
-  { database }: TelegramUpdateHandlerContext,
-  { supergroup }: TelegramWireSupergroupUpdate
-): Promise<void> {
+export async function handleUpdateSupergroup({
+  supergroup
+}: TelegramWireSupergroupUpdate): Promise<void> {
+  const database = useDatabase();
   await storeSupergroup(database, supergroup);
 }

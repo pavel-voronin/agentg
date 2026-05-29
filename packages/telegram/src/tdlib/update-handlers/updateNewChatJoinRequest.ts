@@ -1,14 +1,16 @@
 import { telegramChatJoinRequests } from '../../database/schema.js';
 import { upsertChatInviteLink } from '../../store/chatMember.js';
-import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import { telegramWireDate, type TelegramWireUpdateByType } from '../wire.js';
+import { useDatabase } from '../../database/subsystem.js';
+import { useUpdateEvents } from '../../events/updateEvents.js';
 
 type TelegramWireNewChatJoinRequestUpdate = TelegramWireUpdateByType<'updateNewChatJoinRequest'>;
 
 export async function handleUpdateNewChatJoinRequest(
-  { database, events }: TelegramUpdateHandlerContext,
   update: TelegramWireNewChatJoinRequestUpdate
 ): Promise<void> {
+  const database = useDatabase();
+  const events = useUpdateEvents();
   const chatId = String(update.chat_id);
   const inviteLink = update.invite_link ?? null;
   const row = {

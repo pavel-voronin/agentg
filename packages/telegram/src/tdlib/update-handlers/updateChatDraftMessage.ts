@@ -1,13 +1,15 @@
-import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import { replaceTelegramChatPositions, upsertTelegramChatFragment } from '../../store/chat.js';
 import { telegramWireJsonValue, type TelegramWireUpdateByType } from '../wire.js';
+import { useDatabase } from '../../database/subsystem.js';
+import { useUpdateEvents } from '../../events/updateEvents.js';
 
 type TelegramWireChatDraftMessageUpdate = TelegramWireUpdateByType<'updateChatDraftMessage'>;
 
 export async function handleUpdateChatDraftMessage(
-  { database, events }: TelegramUpdateHandlerContext,
   update: TelegramWireChatDraftMessageUpdate
 ): Promise<void> {
+  const database = useDatabase();
+  const events = useUpdateEvents();
   const chatId = String(update.chat_id);
   await database.transaction(async (transaction) => {
     await upsertTelegramChatFragment(transaction, {

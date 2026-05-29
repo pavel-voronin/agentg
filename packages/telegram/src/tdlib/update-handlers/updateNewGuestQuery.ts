@@ -1,11 +1,15 @@
 import { recordMessageFiles, storeMessage } from '../../store/message.js';
-import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import type { TelegramWireNewGuestQueryUpdate } from '../wire.js';
+import { useDatabase } from '../../database/subsystem.js';
+import { useUpdateEvents } from '../../events/updateEvents.js';
+import { useFiles } from '../../files/subsystem.js';
 
 export async function handleUpdateNewGuestQuery(
-  { database, events, files }: TelegramUpdateHandlerContext,
   update: TelegramWireNewGuestQueryUpdate
 ): Promise<void> {
+  const database = useDatabase();
+  const events = useUpdateEvents();
+  const files = useFiles();
   await database.transaction(async (transaction) => {
     await storeMessage(transaction, update.message);
 

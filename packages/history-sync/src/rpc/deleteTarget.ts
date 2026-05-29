@@ -1,10 +1,10 @@
 import { createIntegrationEvent } from '@agentg/events/envelope';
-import { mutation, runtimeForInternalRpcCall } from '@agentg/framework/domain';
+import { mutation, contextForInternalRpcCall } from '@agentg/framework/domain';
 import { z } from 'zod';
 
 import { historySyncRangeSchema, nonEmptyStringSchema } from '../rangeSchema.js';
 import { deleteManualHistorySyncTargetFromCommand } from '../targetCommands.js';
-import type { HistorySyncRuntime } from '../main.js';
+import type { HistorySyncDomainContext } from '../main.js';
 
 export const historySyncDeleteTargetInputSchema = z.object({
   targetId: nonEmptyStringSchema
@@ -27,15 +27,15 @@ export type HistorySyncDeleteTargetInput = z.infer<typeof historySyncDeleteTarge
 export type HistorySyncStoredTargetOutput = z.infer<typeof historySyncStoredTargetOutputSchema>;
 export type HistorySyncTargetMutationOutput = z.infer<typeof historySyncTargetMutationOutputSchema>;
 
-export const deleteTarget = mutation((options: HistorySyncRuntime, procedure) =>
+export const deleteTarget = mutation((options: HistorySyncDomainContext, procedure) =>
   procedure
     .input(historySyncDeleteTargetInputSchema)
     .output(historySyncTargetMutationOutputSchema)
     .mutation(async ({ ctx, input }) => {
-      const runtime = runtimeForInternalRpcCall(options, ctx);
-      const target = await deleteManualHistorySyncTargetFromCommand(runtime.database, input);
+      const context = contextForInternalRpcCall(options, ctx);
+      const target = await deleteManualHistorySyncTargetFromCommand(context.database, input);
 
-      runtime.eventBus.publish(
+      context.eventBus.publish(
         createIntegrationEvent({
           data: {
             target
@@ -43,7 +43,7 @@ export const deleteTarget = mutation((options: HistorySyncRuntime, procedure) =>
           type: 'history-sync.target.deleted'
         })
       );
-      runtime.eventBus.publish(
+      context.eventBus.publish(
         createIntegrationEvent({
           data: {
             reason: 'target-deleted'
@@ -51,7 +51,7 @@ export const deleteTarget = mutation((options: HistorySyncRuntime, procedure) =>
           type: 'history-sync.sync.requested'
         })
       );
-      runtime.requestSync?.('target-deleted');
+      context.requestSync?.('target-deleted');
 
       return {
         deleted: true,

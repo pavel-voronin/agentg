@@ -1,7 +1,7 @@
 import { query } from '@agentg/framework/domain';
 import { z } from 'zod';
 
-import type { TelegramRpcRuntime } from '../main.js';
+import { useDatabase } from '../database/subsystem.js';
 import { desc, eq, sql } from 'drizzle-orm';
 import { telegramMessages } from '../database/schema.js';
 import { andSql } from '../read-model/sql.js';
@@ -30,17 +30,17 @@ export type TelegramListRecentMessagesOutput = z.infer<
   typeof telegramListRecentMessagesOutputSchema
 >;
 
-export const listRecentMessages = query((runtime: TelegramRpcRuntime, procedure) =>
+export const listRecentMessages = query((_context, procedure) =>
   procedure
     .input(telegramListRecentMessagesInputSchema)
     .output(telegramListRecentMessagesOutputSchema)
-    .query(({ input }) => runListRecentMessages(runtime, input))
+    .query(({ input }) => runListRecentMessages(input))
 );
 
 async function runListRecentMessages(
-  { database }: TelegramRpcRuntime,
   input: TelegramListRecentMessagesInput
 ): Promise<TelegramListRecentMessagesOutput> {
+  const database = useDatabase();
   const limit = parseLimit(input.limit, 50, 200);
   const where = andSql(
     input.chatId === undefined ? undefined : eq(telegramMessages.chatId, input.chatId),

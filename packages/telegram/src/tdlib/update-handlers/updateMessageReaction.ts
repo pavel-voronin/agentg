@@ -3,8 +3,9 @@ import { and, eq } from 'drizzle-orm';
 import type { JsonObject, JsonValue } from '@agentg/events/json';
 
 import { telegramMessageReactions } from '../../database/schema.js';
-import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import { telegramWireJsonValue, type TelegramWireUpdateByType } from '../wire.js';
+import { useDatabase } from '../../database/subsystem.js';
+import { useUpdateEvents } from '../../events/updateEvents.js';
 
 type TelegramWireMessageReactionUpdate = TelegramWireUpdateByType<'updateMessageReaction'>;
 type TelegramWireReactionType = TelegramWireMessageReactionUpdate['old_reaction_types'][number];
@@ -20,9 +21,10 @@ type StoredReactionRow = {
 const RECENT_SENDER_IDS_CAP = 3;
 
 export async function handleUpdateMessageReaction(
-  { database, events }: TelegramUpdateHandlerContext,
   update: TelegramWireMessageReactionUpdate
 ): Promise<void> {
+  const database = useDatabase();
+  const events = useUpdateEvents();
   const oldReactions = uniqueReactionTypes(update.old_reaction_types);
   const newReactions = uniqueReactionTypes(update.new_reaction_types);
   const removed = [...oldReactions.keys()].filter((key) => !newReactions.has(key));

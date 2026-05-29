@@ -1,14 +1,16 @@
 import { telegramGroupCallMessages } from '../../database/schema.js';
-import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import { telegramWireJsonObject, type TelegramWireUpdateByType } from '../wire.js';
+import { useDatabase } from '../../database/subsystem.js';
+import { useUpdateEvents } from '../../events/updateEvents.js';
 
 type TelegramWireGroupCallMessageSendFailedUpdate =
   TelegramWireUpdateByType<'updateGroupCallMessageSendFailed'>;
 
 export async function handleUpdateGroupCallMessageSendFailed(
-  { database, events }: TelegramUpdateHandlerContext,
   update: TelegramWireGroupCallMessageSendFailedUpdate
 ): Promise<void> {
+  const database = useDatabase();
+  const events = useUpdateEvents();
   const error = telegramWireJsonObject(update.error);
   const row: typeof telegramGroupCallMessages.$inferInsert = {
     error,

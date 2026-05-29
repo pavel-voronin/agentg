@@ -1,8 +1,9 @@
 import { and, eq } from 'drizzle-orm';
 
 import { telegramGroupCallParticipants } from '../../database/schema.js';
-import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import { telegramWireJsonValue, type TelegramWireUpdateByType } from '../wire.js';
+import { useDatabase } from '../../database/subsystem.js';
+import { useUpdateEvents } from '../../events/updateEvents.js';
 
 type TelegramWireGroupCallParticipantUpdate =
   TelegramWireUpdateByType<'updateGroupCallParticipant'>;
@@ -10,9 +11,10 @@ type TelegramWireGroupCallParticipant = TelegramWireGroupCallParticipantUpdate['
 type TelegramWireGroupCallParticipantId = TelegramWireGroupCallParticipant['participant_id'];
 
 export async function handleUpdateGroupCallParticipant(
-  { database, events }: TelegramUpdateHandlerContext,
   update: TelegramWireGroupCallParticipantUpdate
 ): Promise<void> {
+  const database = useDatabase();
+  const events = useUpdateEvents();
   const groupCallId = update.group_call_id;
   const participantId = messageSenderKey(update.participant.participant_id);
   const removed = update.participant.order === '';

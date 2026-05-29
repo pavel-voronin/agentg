@@ -1,12 +1,12 @@
-import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import { upsertStarRevenueStatus } from '../../store/starRevenue.js';
 import type { TelegramWireUpdateByType } from '../wire.js';
+import { useDatabase } from '../../database/subsystem.js';
 
 type TelegramWireStarRevenueStatusUpdate = TelegramWireUpdateByType<'updateStarRevenueStatus'>;
 
 export function handleUpdateStarRevenueStatus(
-  { database }: TelegramUpdateHandlerContext,
   update: TelegramWireStarRevenueStatusUpdate
 ): Promise<void> {
+  const database = useDatabase();
   return upsertStarRevenueStatus(database, update);
 }

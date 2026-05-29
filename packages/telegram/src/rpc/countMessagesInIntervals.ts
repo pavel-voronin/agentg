@@ -1,7 +1,7 @@
 import { query } from '@agentg/framework/domain';
 import { z } from 'zod';
 
-import type { TelegramRpcRuntime } from '../main.js';
+import { useDatabase } from '../database/subsystem.js';
 import { countTelegramMessagesInIntervals } from '../history/messageCounts.js';
 import { requireDate } from '../history/time.js';
 import {
@@ -31,17 +31,17 @@ export type TelegramCountMessagesInIntervalsOutput = z.infer<
   typeof telegramCountMessagesInIntervalsOutputSchema
 >;
 
-export const countMessagesInIntervals = query((runtime: TelegramRpcRuntime, procedure) =>
+export const countMessagesInIntervals = query((_context, procedure) =>
   procedure
     .input(telegramCountMessagesInIntervalsInputSchema)
     .output(telegramCountMessagesInIntervalsOutputSchema)
-    .query(({ input }) => runCountMessagesInIntervals(runtime, input))
+    .query(({ input }) => runCountMessagesInIntervals(input))
 );
 
 async function runCountMessagesInIntervals(
-  { database }: TelegramRpcRuntime,
   input: TelegramCountMessagesInIntervalsInput
 ): Promise<{ counts: number[] }> {
+  const database = useDatabase();
   const intervals = input.intervals.map((interval) => ({
     endAt: requireDate(interval.endAt, 'telegram.countMessagesInIntervals requires endAt'),
     startAt: requireDate(interval.startAt, 'telegram.countMessagesInIntervals requires startAt')

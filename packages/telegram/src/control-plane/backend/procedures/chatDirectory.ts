@@ -1,7 +1,7 @@
 import { query } from '@agentg/framework/domain';
 import { z } from 'zod';
 
-import type { TelegramRpcRuntime } from '../../../main.js';
+import { useDatabase } from '../../../database/subsystem.js';
 import { asc, sql } from 'drizzle-orm';
 import { telegramChatFolderInfos, telegramChats } from '../../../database/schema.js';
 import {
@@ -41,17 +41,15 @@ export const chatDirectoryOutputSchema = z.object({
 export type ChatDirectoryInput = z.infer<typeof chatDirectoryInputSchema>;
 export type ChatDirectoryOutput = z.infer<typeof chatDirectoryOutputSchema>;
 
-export const chatDirectory = query((runtime: TelegramRpcRuntime, procedure) =>
+export const chatDirectory = query((_context, procedure) =>
   procedure
     .input(chatDirectoryInputSchema)
     .output(chatDirectoryOutputSchema)
-    .query(({ input }) => runChatDirectory(runtime, input))
+    .query(({ input }) => runChatDirectory(input))
 );
 
-async function runChatDirectory(
-  { database }: TelegramRpcRuntime,
-  input: ChatDirectoryInput
-): Promise<ChatDirectoryOutput> {
+async function runChatDirectory(input: ChatDirectoryInput): Promise<ChatDirectoryOutput> {
+  const database = useDatabase();
   const searchQuery = input.query?.trim();
   const type = input.type?.trim();
   const queryWhere =

@@ -2,11 +2,7 @@ import { createIntegrationEvent } from '@agentg/events/envelope';
 import { createValidatedEventBus } from '@agentg/events/validated-bus';
 import { describe, expect, it } from 'vitest';
 
-import {
-  createTelegramServiceManifest,
-  TELEGRAM_EVENT_TYPES,
-  TELEGRAM_TDLIB_EVENT_TYPES
-} from '../src/main.js';
+import { createTelegramServiceManifest, TELEGRAM_EVENT_TYPES } from '../src/main.js';
 
 describe('Telegram service manifest', () => {
   it('lists exact Telegram events without wildcard types', () => {
@@ -178,7 +174,7 @@ describe('Telegram service manifest', () => {
   });
 
   it('lists every lifecycle for every TDLib operation used by Telegram code', () => {
-    expect(TELEGRAM_TDLIB_EVENT_TYPES).toEqual([
+    expect(TELEGRAM_EVENT_TYPES.filter((event) => event.startsWith('telegram.tdlib.'))).toEqual([
       'telegram.tdlib.addFileToDownloads.completed',
       'telegram.tdlib.addFileToDownloads.failed',
       'telegram.tdlib.addFileToDownloads.started',

@@ -1,5 +1,6 @@
 import { telegramGroupCallMessages } from '../../database/schema.js';
-import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
+import { useDatabase } from '../../database/subsystem.js';
+import { useUpdateEvents } from '../../events/updateEvents.js';
 import {
   telegramWireDate,
   telegramWireId,
@@ -10,9 +11,10 @@ import {
 type TelegramWireNewGroupCallMessageUpdate = TelegramWireUpdateByType<'updateNewGroupCallMessage'>;
 
 export async function handleUpdateNewGroupCallMessage(
-  { database, events }: TelegramUpdateHandlerContext,
   update: TelegramWireNewGroupCallMessageUpdate
 ): Promise<void> {
+  const database = useDatabase();
+  const events = useUpdateEvents();
   const row: typeof telegramGroupCallMessages.$inferInsert = {
     canBeDeleted: update.message.can_be_deleted,
     date: requiredTelegramWireDate(update.message.date),

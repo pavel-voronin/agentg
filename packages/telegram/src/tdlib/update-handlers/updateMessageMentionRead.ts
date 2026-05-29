@@ -1,14 +1,16 @@
-import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import { upsertTelegramChatFragment } from '../../store/chat.js';
 import { upsertTelegramMessageFragment } from '../../store/message.js';
 import type { TelegramWireUpdateByType } from '../wire.js';
+import { useDatabase } from '../../database/subsystem.js';
+import { useUpdateEvents } from '../../events/updateEvents.js';
 
 type TelegramWireMessageMentionReadUpdate = TelegramWireUpdateByType<'updateMessageMentionRead'>;
 
 export async function handleUpdateMessageMentionRead(
-  { database, events }: TelegramUpdateHandlerContext,
   update: TelegramWireMessageMentionReadUpdate
 ): Promise<void> {
+  const database = useDatabase();
+  const events = useUpdateEvents();
   const chatId = String(update.chat_id);
   const messageId = String(update.message_id);
 

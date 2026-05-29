@@ -1,7 +1,7 @@
 import { query } from '@agentg/framework/domain';
 import { z } from 'zod';
 
-import type { TelegramRpcRuntime } from '../../../main.js';
+import { useFiles } from '../../../files/subsystem.js';
 import { nonNegativeIntegerSchema } from '../../../read-model/api.js';
 
 export const fileQueueStatsSchema = z.object({
@@ -26,14 +26,15 @@ export const fileQueueStatsOutputSchema = z.object({
 
 export type FileQueueStatsOutput = z.infer<typeof fileQueueStatsOutputSchema>;
 
-export const fileQueueStats = query((runtime: TelegramRpcRuntime, procedure) =>
+export const fileQueueStats = query((_context, procedure) =>
   procedure
     .input(fileQueueStatsInputSchema)
     .output(fileQueueStatsOutputSchema)
-    .query(() => runFileQueueStats(runtime))
+    .query(() => runFileQueueStats())
 );
 
-async function runFileQueueStats({ files }: TelegramRpcRuntime): Promise<FileQueueStatsOutput> {
+async function runFileQueueStats(): Promise<FileQueueStatsOutput> {
+  const files = useFiles();
   return {
     stats: await files.getQueueStats()
   };

@@ -9,18 +9,19 @@ import {
   defineDomain,
   defineEvent,
   defineProcedures,
-  defineRuntime,
-  defineSubsystem,
+  registerSubsystem,
   setRequired
 } from '@agentg/framework/domain';
 
 import type { TelegramDatabase } from './database/client.js';
+import { useDatabase } from './database/subsystem.js';
 import {
   type TelegramControlPlaneProcedures,
   TelegramControlPlaneSubsystem,
   type TelegramControlPlane
 } from './control-plane/subsystem.js';
 import type { TelegramFileSubsystem } from './files/subsystem.js';
+import { useFiles } from './files/subsystem.js';
 import { countMessagesInIntervals } from './rpc/countMessagesInIntervals.js';
 import { ensureHistoryCoverage } from './rpc/ensureHistoryCoverage.js';
 import { fetchPage } from './rpc/fetchPage.js';
@@ -32,11 +33,14 @@ import { listRecentMessages } from './rpc/listRecentMessages.js';
 import { searchMessages } from './rpc/searchMessages.js';
 import { loadTelegramIngestionConfig } from './config.js';
 import { createTelegramDatabase } from './database/client.js';
+import { useEvents } from './events/subsystem.js';
+import { useUpdateEvents } from './events/updateEvents.js';
 import { configureTdlib } from './tdlib/client.js';
-import { createTelegramTdlibOperations, type TelegramTdlibOperations } from './tdlib/operations.js';
 import type { TdlibInvoker } from './tdlib/operationEvents.js';
 import type { TelegramIngestionOptions } from './tdlib/ingestion.js';
-import { TelegramTdlibSubsystem } from './tdlib/subsystem.js';
+import { useTdlib } from './tdlib/subsystem.js';
+import { useLiveCoverage } from './history/subsystem.js';
+import { useTelegramStatus } from './status/subsystem.js';
 
 const TELEGRAM_OPERATION_EVENT_TYPES = [
   'telegram.login.completed',
@@ -154,42 +158,11 @@ const TELEGRAM_DOMAIN_EVENT_TYPES = [
   'telegram.web_app.close_requested'
 ] as const;
 
-const TELEGRAM_TDLIB_METHODS = [
-  'addFileToDownloads',
-  'close',
-  'deleteFile',
-  'downloadFile',
-  'getChat',
-  'getChatHistory',
-  'getChatMessageByDate',
-  'getChats',
-  'getFile',
-  'getMe',
-  'loadChats',
-  'removeFileFromDownloads'
-] as const;
-
-const TELEGRAM_OPERATION_LIFECYCLES = ['completed', 'failed', 'started'] as const;
-
-export const TELEGRAM_TDLIB_EVENT_TYPES = TELEGRAM_TDLIB_METHODS.flatMap((method) =>
-  TELEGRAM_OPERATION_LIFECYCLES.map((lifecycle) => `telegram.tdlib.${method}.${lifecycle}`)
-);
-
-export const TELEGRAM_EVENT_TYPES = [
-  ...TELEGRAM_DOMAIN_EVENT_TYPES,
-  ...TELEGRAM_OPERATION_EVENT_TYPES,
-  ...TELEGRAM_TDLIB_EVENT_TYPES
-].sort();
-
-export type TelegramRpcRuntimeDeps = {
+type TelegramProcedureResources = {
   client: TdlibInvoker;
   database: TelegramDatabase;
   eventBus: EventBus;
   files: TelegramFileSubsystem;
-};
-
-export type TelegramRpcRuntime = TelegramRpcRuntimeDeps & {
-  tdlib: TelegramTdlibOperations;
 };
 
 type TelegramProcedures = TelegramControlPlaneProcedures & {
@@ -205,16 +178,27 @@ type TelegramProcedures = TelegramControlPlaneProcedures & {
 };
 
 const telegram = defineDomain<
-  TelegramRpcRuntimeDeps,
-  TelegramRpcRuntime,
+  TelegramProcedureResources,
+  object,
   TelegramProcedures,
   TelegramControlPlane,
   TelegramIngestionOptions
 >('telegram', () => {
+  registerSubsystem(useDatabase());
+  registerSubsystem(useEvents());
+  registerSubsystem(useFiles());
+  registerSubsystem(useUpdateEvents());
+  registerSubsystem(useLiveCoverage());
+  registerSubsystem(useTelegramStatus());
+  const tdlib = useTdlib();
+  registerSubsystem(tdlib);
   const { procedures } = defineControlPlane(new TelegramControlPlaneSubsystem());
-  
-  defineRuntime(createTelegramRpcRuntime);
-  for (const event of TELEGRAM_EVENT_TYPES) {
+
+  for (const event of [
+    ...TELEGRAM_DOMAIN_EVENT_TYPES,
+    ...TELEGRAM_OPERATION_EVENT_TYPES,
+    ...tdlib.eventTypes
+  ].sort()) {
     defineEvent(event);
   }
 
@@ -231,9 +215,9 @@ const telegram = defineDomain<
     searchMessages
   });
   setRequired(true);
-  defineSubsystem('tdlib', new TelegramTdlibSubsystem());
 });
 
+export const TELEGRAM_EVENT_TYPES = telegram.events;
 export const createTelegramRpcClient = telegram.createRpcClient;
 export const createTelegramRpcRouter = telegram.createRpcRouter;
 export type TelegramRpcClient = ReturnType<typeof createTelegramRpcClient>;
@@ -241,16 +225,6 @@ export const createTelegramServiceManifest = (
   config: Parameters<typeof telegram.createServiceManifest>[0]
 ) => telegram.createServiceManifest(config);
 export type TelegramRouter = ReturnType<typeof createTelegramRpcRouter>;
-
-function createTelegramRpcRuntime(deps: TelegramRpcRuntimeDeps): TelegramRpcRuntime {
-  return {
-    ...deps,
-    tdlib: createTelegramTdlibOperations({
-      client: deps.client,
-      eventBus: deps.eventBus
-    })
-  };
-}
 
 if (isMainModule()) {
   await runTelegramMain();

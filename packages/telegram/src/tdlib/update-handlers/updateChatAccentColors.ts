@@ -1,13 +1,15 @@
-import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import { telegramWireId, telegramWireJsonValue, type TelegramWireUpdateByType } from '../wire.js';
 import { upsertTelegramChatFragment, type TelegramChatFragment } from '../../store/chat.js';
+import { useDatabase } from '../../database/subsystem.js';
+import { useUpdateEvents } from '../../events/updateEvents.js';
 
 type TelegramWireChatAccentColorsUpdate = TelegramWireUpdateByType<'updateChatAccentColors'>;
 
 export async function handleUpdateChatAccentColors(
-  { database, events }: TelegramUpdateHandlerContext,
   update: TelegramWireChatAccentColorsUpdate
 ): Promise<void> {
+  const database = useDatabase();
+  const events = useUpdateEvents();
   const row: TelegramChatFragment = {
     accentColorId: update.accent_color_id,
     backgroundCustomEmojiId: telegramWireId(update.background_custom_emoji_id),

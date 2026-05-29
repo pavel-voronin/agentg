@@ -1,13 +1,13 @@
-import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import { upsertTelegramKv } from '../../store/kv.js';
 import type { TelegramWireUpdateByType } from '../wire.js';
+import { useDatabase } from '../../database/subsystem.js';
 
 type TelegramWireTopicMessageCountUpdate = TelegramWireUpdateByType<'updateTopicMessageCount'>;
 
 export function handleUpdateTopicMessageCount(
-  { database }: TelegramUpdateHandlerContext,
   update: TelegramWireTopicMessageCountUpdate
 ): Promise<void> {
+  const database = useDatabase();
   return upsertTelegramKv(database, topicMessageCountKey(update), update.message_count);
 }
 

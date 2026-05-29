@@ -1,13 +1,13 @@
-import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import { upsertStickerSet } from '../../store/stickerSet.js';
 import type { TelegramWireUpdateByType } from '../wire.js';
+import { useDatabase } from '../../database/subsystem.js';
+import { useFiles } from '../../files/subsystem.js';
 
 type TelegramWireStickerSetUpdate = TelegramWireUpdateByType<'updateStickerSet'>;
 
-export async function handleUpdateStickerSet(
-  context: TelegramUpdateHandlerContext,
-  update: TelegramWireStickerSetUpdate
-): Promise<void> {
-  await upsertStickerSet(context.database, update.sticker_set);
-  await context.files.recordStickerSetFiles(update.sticker_set, 'live_update');
+export async function handleUpdateStickerSet(update: TelegramWireStickerSetUpdate): Promise<void> {
+  const database = useDatabase();
+  const files = useFiles();
+  await upsertStickerSet(database, update.sticker_set);
+  await files.recordStickerSetFiles(update.sticker_set, 'live_update');
 }

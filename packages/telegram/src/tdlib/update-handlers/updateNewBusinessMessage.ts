@@ -1,8 +1,11 @@
 import { telegramBusinessMessages } from '../../database/schema.js';
 import type { TelegramDatabase } from '../../database/client.js';
 import { recordMessageFiles, storeMessage } from '../../store/message.js';
-import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import type { TelegramWireUpdateByType } from '../wire.js';
+import { useDatabase } from '../../database/subsystem.js';
+import { useUpdateEvents } from '../../events/updateEvents.js';
+import { useFiles } from '../../files/subsystem.js';
+import { useLiveCoverage } from '../../history/subsystem.js';
 
 type TelegramWireNewBusinessMessageUpdate = TelegramWireUpdateByType<'updateNewBusinessMessage'>;
 type TelegramWireBusinessMessage = TelegramWireNewBusinessMessageUpdate['message'];
@@ -13,9 +16,12 @@ type StoreNewBusinessMessageResult = {
 };
 
 export async function handleUpdateNewBusinessMessage(
-  { database, events, files, liveCoverageObserver }: TelegramUpdateHandlerContext,
   update: TelegramWireNewBusinessMessageUpdate
 ): Promise<void> {
+  const database = useDatabase();
+  const events = useUpdateEvents();
+  const files = useFiles();
+  const { recordLiveMessage } = useLiveCoverage();
   const { businessMessageInserted, messageInserted } = await storeNewBusinessMessage(database, {
     businessMessage: update.message,
     connectionId: update.connection_id
@@ -30,10 +36,7 @@ export async function handleUpdateNewBusinessMessage(
   }
 
   if (message.date > 0) {
-    void liveCoverageObserver.recordLiveMessage(
-      String(message.chat_id),
-      new Date(message.date * 1000)
-    );
+    void recordLiveMessage(String(message.chat_id), new Date(message.date * 1000));
   }
 
   if (messageInserted || businessMessageInserted) {

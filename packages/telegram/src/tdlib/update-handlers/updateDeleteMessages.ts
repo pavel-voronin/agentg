@@ -1,11 +1,13 @@
 import { deleteMessages } from '../../store/message.js';
 import type { TelegramWireDeleteMessagesUpdate } from '../wire.js';
-import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
+import { useDatabase } from '../../database/subsystem.js';
+import { useUpdateEvents } from '../../events/updateEvents.js';
 
 export async function handleUpdateDeleteMessages(
-  { database, events }: TelegramUpdateHandlerContext,
   update: TelegramWireDeleteMessagesUpdate
 ): Promise<void> {
+  const database = useDatabase();
+  const events = useUpdateEvents();
   if (update.from_cache || !update.is_permanent) {
     return;
   }

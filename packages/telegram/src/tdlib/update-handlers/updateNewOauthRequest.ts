@@ -1,11 +1,9 @@
-import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import type { TelegramWireUpdateByType } from '../wire.js';
+import { useUpdateEvents } from '../../events/updateEvents.js';
 
 type TelegramWireNewOauthRequestUpdate = TelegramWireUpdateByType<'updateNewOauthRequest'>;
 
-export function handleUpdateNewOauthRequest(
-  { events }: TelegramUpdateHandlerContext,
-  update: TelegramWireNewOauthRequestUpdate
-): void {
+export function handleUpdateNewOauthRequest(update: TelegramWireNewOauthRequestUpdate): void {
+  const events = useUpdateEvents();
   events.publishTelegramOauthRequestReceived(update);
 }

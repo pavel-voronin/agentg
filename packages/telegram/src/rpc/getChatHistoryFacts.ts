@@ -1,9 +1,9 @@
 import { query } from '@agentg/framework/domain';
 import { z } from 'zod';
 
-import type { TelegramRpcRuntime } from '../main.js';
 import { and, asc, eq, isNotNull, sql } from 'drizzle-orm';
 import type { TelegramDatabase } from '../database/client.js';
+import { useDatabase } from '../database/subsystem.js';
 import { telegramChatPositions, telegramChats, telegramMessages } from '../database/schema.js';
 import { readChatSelection, toTelegramChatStorageRow } from '../read-model/chat.js';
 import { readTelegramChatUsersByChat, telegramChatUserId } from '../read-model/chatUser.js';
@@ -41,17 +41,17 @@ export type TelegramGetChatHistoryFactsOutput = z.infer<
   typeof telegramGetChatHistoryFactsOutputSchema
 >;
 
-export const getChatHistoryFacts = query((runtime: TelegramRpcRuntime, procedure) =>
+export const getChatHistoryFacts = query((_context, procedure) =>
   procedure
     .input(telegramGetChatHistoryFactsInputSchema)
     .output(telegramGetChatHistoryFactsOutputSchema)
-    .query(({ input }) => runGetChatHistoryFacts(runtime, input))
+    .query(({ input }) => runGetChatHistoryFacts(input))
 );
 
 async function runGetChatHistoryFacts(
-  { database }: TelegramRpcRuntime,
   input: TelegramGetChatHistoryFactsInput
 ): Promise<TelegramGetChatHistoryFactsOutput> {
+  const database = useDatabase();
   const [chat] = await database
     .select(readChatSelection())
     .from(telegramChats)

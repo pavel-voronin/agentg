@@ -1,16 +1,18 @@
 import { and, eq, inArray } from 'drizzle-orm';
 
 import { telegramBusinessMessages } from '../../database/schema.js';
-import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import type { TelegramWireUpdateByType } from '../wire.js';
+import { useDatabase } from '../../database/subsystem.js';
+import { useUpdateEvents } from '../../events/updateEvents.js';
 
 type TelegramWireBusinessMessagesDeletedUpdate =
   TelegramWireUpdateByType<'updateBusinessMessagesDeleted'>;
 
 export async function handleUpdateBusinessMessagesDeleted(
-  { database, events }: TelegramUpdateHandlerContext,
   update: TelegramWireBusinessMessagesDeletedUpdate
 ): Promise<void> {
+  const database = useDatabase();
+  const events = useUpdateEvents();
   const connectionId = update.connection_id;
   const chatId = String(update.chat_id);
   const messageIds = update.message_ids.map(String);

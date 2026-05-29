@@ -1,12 +1,12 @@
-import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import type { TelegramWireUpdateByType } from '../wire.js';
+import { useUpdateEvents } from '../../events/updateEvents.js';
 
 type TelegramWireHavePendingNotificationsUpdate =
   TelegramWireUpdateByType<'updateHavePendingNotifications'>;
 
 export function handleUpdateHavePendingNotifications(
-  { events }: TelegramUpdateHandlerContext,
   update: TelegramWireHavePendingNotificationsUpdate
 ): void {
+  const events = useUpdateEvents();
   events.publishTelegramPendingNotificationsUpdated(update);
 }

@@ -1,17 +1,19 @@
 import { eq } from 'drizzle-orm';
 
 import { telegramFileDownloads } from '../../database/schema.js';
-import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import { upsertTelegramKv } from '../../store/kv.js';
 import type { TelegramWireUpdateByType } from '../wire.js';
+import { useDatabase } from '../../database/subsystem.js';
+import { useUpdateEvents } from '../../events/updateEvents.js';
 
 type TelegramWireFileRemovedFromDownloadsUpdate =
   TelegramWireUpdateByType<'updateFileRemovedFromDownloads'>;
 
 export async function handleUpdateFileRemovedFromDownloads(
-  { database, events }: TelegramUpdateHandlerContext,
   update: TelegramWireFileRemovedFromDownloadsUpdate
 ): Promise<void> {
+  const database = useDatabase();
+  const events = useUpdateEvents();
   await database
     .delete(telegramFileDownloads)
     .where(eq(telegramFileDownloads.fileId, update.file_id));

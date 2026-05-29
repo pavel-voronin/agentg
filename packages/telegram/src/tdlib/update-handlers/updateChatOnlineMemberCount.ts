@@ -1,12 +1,12 @@
-import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import type { TelegramWireUpdateByType } from '../wire.js';
+import { useUpdateEvents } from '../../events/updateEvents.js';
 
 type TelegramWireChatOnlineMemberCountUpdate =
   TelegramWireUpdateByType<'updateChatOnlineMemberCount'>;
 
 export function handleUpdateChatOnlineMemberCount(
-  { events }: TelegramUpdateHandlerContext,
   update: TelegramWireChatOnlineMemberCountUpdate
 ): void {
+  const events = useUpdateEvents();
   events.publishTelegramChatOnlineMemberCountUpdated(update);
 }

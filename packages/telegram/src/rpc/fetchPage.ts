@@ -1,7 +1,6 @@
 import { mutation } from '@agentg/framework/domain';
 import { z } from 'zod';
 
-import type { TelegramRpcRuntime } from '../main.js';
 import { fetchTelegramHistoryPage } from '../history/fetch.js';
 import { telegramTdlibPriorities } from '../tdlib/priority.js';
 import { isoDateTimeStringSchema, telegramHistoryIntervalSchema } from '../read-model/api.js';
@@ -43,16 +42,15 @@ export const telegramHistoryFetchPageResultSchema = z.discriminatedUnion('kind',
 export type TelegramHistoryFetchPageRequest = z.infer<typeof telegramHistoryFetchPageInputSchema>;
 export type TelegramHistoryFetchPageResult = z.infer<typeof telegramHistoryFetchPageResultSchema>;
 
-export const fetchPage = mutation((runtime: TelegramRpcRuntime, procedure) =>
+export const fetchPage = mutation((_context, procedure) =>
   procedure
     .input(telegramHistoryFetchPageInputSchema)
     .output(telegramHistoryFetchPageResultSchema)
-    .mutation(({ input }) => runFetchPage(runtime, input))
+    .mutation(({ input }) => runFetchPage(input))
 );
 
 function runFetchPage(
-  context: TelegramRpcRuntime,
   input: TelegramHistoryFetchPageRequest
 ): Promise<TelegramHistoryFetchPageResult> {
-  return fetchTelegramHistoryPage(context, input, { priority: telegramTdlibPriorities.low });
+  return fetchTelegramHistoryPage(input, { priority: telegramTdlibPriorities.low });
 }

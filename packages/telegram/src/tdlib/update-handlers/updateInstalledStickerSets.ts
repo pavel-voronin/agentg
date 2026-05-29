@@ -1,14 +1,14 @@
-import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import { upsertTelegramKv } from '../../store/kv.js';
 import type { TelegramWireUpdateByType } from '../wire.js';
+import { useDatabase } from '../../database/subsystem.js';
 
 type TelegramWireInstalledStickerSetsUpdate =
   TelegramWireUpdateByType<'updateInstalledStickerSets'>;
 
 export function handleUpdateInstalledStickerSets(
-  { database }: TelegramUpdateHandlerContext,
   update: TelegramWireInstalledStickerSetsUpdate
 ): Promise<void> {
+  const database = useDatabase();
   return upsertTelegramKv(
     database,
     `installed_sticker_sets_by_type:${update.sticker_type._}`,

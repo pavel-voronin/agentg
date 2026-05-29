@@ -6,6 +6,7 @@ import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 
 import type { EventBus } from '@agentg/events/bus';
+import { defineResourceSubsystem } from '@agentg/framework/domain';
 import { createIntegrationEvent } from '@agentg/events/envelope';
 import { and, eq, notInArray, sql } from 'drizzle-orm';
 
@@ -76,6 +77,17 @@ import { isTelegramTdlibUnderNavigationPressure } from '../tdlib/scheduler.js';
 import { chatDirectoryEntryByChatId } from '../control-plane/backend/chatDirectory.js';
 import { readMessageSelection, toReadMessages } from '../read-model/message.js';
 import { readDefaultBackgroundSelection } from '../store/defaultBackground.js';
+import type { TelegramIngestionDomain, TelegramIngestionOptions } from '../tdlib/ingestion.js';
+
+export const useFiles = defineResourceSubsystem<
+  TelegramFileSubsystem,
+  TelegramIngestionOptions,
+  TelegramIngestionDomain
+>('files', {
+  fromContext(context) {
+    return isFilesContext(context) ? context.files : undefined;
+  }
+});
 
 export type TelegramFileSubsystem = {
   close(): void;
@@ -152,6 +164,10 @@ export type TelegramFileSubsystem = {
     slotKey: string;
   }): Promise<TelegramFileRequestResult>;
 };
+
+function isFilesContext(context: unknown): context is { files: TelegramFileSubsystem } {
+  return typeof context === 'object' && context !== null && 'files' in context;
+}
 
 export type TelegramFileSubsystemOptions = {
   client: TdlibInvoker;

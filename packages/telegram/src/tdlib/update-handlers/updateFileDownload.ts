@@ -1,14 +1,16 @@
-import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import { patchTelegramFileDownload } from '../../store/fileDownload.js';
 import { upsertTelegramKv } from '../../store/kv.js';
 import type { TelegramWireUpdateByType } from '../wire.js';
+import { useDatabase } from '../../database/subsystem.js';
+import { useUpdateEvents } from '../../events/updateEvents.js';
 
 type TelegramWireFileDownloadUpdate = TelegramWireUpdateByType<'updateFileDownload'>;
 
 export async function handleUpdateFileDownload(
-  { database, events }: TelegramUpdateHandlerContext,
   update: TelegramWireFileDownloadUpdate
 ): Promise<void> {
+  const database = useDatabase();
+  const events = useUpdateEvents();
   const downloadRowPatched = await patchTelegramFileDownload(database, {
     completeDate: update.complete_date,
     fileId: update.file_id,

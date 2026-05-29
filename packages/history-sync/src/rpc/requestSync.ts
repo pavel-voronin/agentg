@@ -1,9 +1,9 @@
 import { createIntegrationEvent } from '@agentg/events/envelope';
-import { mutation, runtimeForInternalRpcCall } from '@agentg/framework/domain';
+import { mutation, contextForInternalRpcCall } from '@agentg/framework/domain';
 import { z } from 'zod';
 
 import { nonEmptyStringSchema } from '../rangeSchema.js';
-import type { HistorySyncRuntime } from '../main.js';
+import type { HistorySyncDomainContext } from '../main.js';
 
 export const historySyncRequestSyncInputSchema = z
   .object({
@@ -18,13 +18,13 @@ export const historySyncRequestSyncOutputSchema = z.object({
 export type HistorySyncRequestSyncInput = z.infer<typeof historySyncRequestSyncInputSchema>;
 export type HistorySyncRequestSyncOutput = z.infer<typeof historySyncRequestSyncOutputSchema>;
 
-export const requestSync = mutation((options: HistorySyncRuntime, procedure) =>
+export const requestSync = mutation((options: HistorySyncDomainContext, procedure) =>
   procedure
     .input(historySyncRequestSyncInputSchema)
     .output(historySyncRequestSyncOutputSchema)
     .mutation(({ ctx, input }) => {
-      const runtime = runtimeForInternalRpcCall(options, ctx);
-      runtime.eventBus.publish(
+      const context = contextForInternalRpcCall(options, ctx);
+      context.eventBus.publish(
         createIntegrationEvent({
           data: {
             ...(input.chatId === undefined ? {} : { chatId: input.chatId }),
@@ -33,7 +33,7 @@ export const requestSync = mutation((options: HistorySyncRuntime, procedure) =>
           type: 'history-sync.sync.requested'
         })
       );
-      runtime.requestSync?.('manual', input.chatId);
+      context.requestSync?.('manual', input.chatId);
 
       return {
         requested: true

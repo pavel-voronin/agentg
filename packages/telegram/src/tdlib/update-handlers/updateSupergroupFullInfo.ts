@@ -1,11 +1,13 @@
 import { storeSupergroupFullInfo } from '../../store/supergroupFullInfo.js';
-import type { TelegramUpdateHandlerContext } from '../update-runtime/context.js';
 import type { TelegramWireSupergroupFullInfoUpdate } from '../wire.js';
+import { useDatabase } from '../../database/subsystem.js';
+import { useUpdateEvents } from '../../events/updateEvents.js';
 
 export async function handleUpdateSupergroupFullInfo(
-  { database, events }: TelegramUpdateHandlerContext,
   update: TelegramWireSupergroupFullInfoUpdate
 ): Promise<void> {
+  const database = useDatabase();
+  const events = useUpdateEvents();
   const supergroupId = String(update.supergroup_id);
 
   await database.transaction(async (transaction) => {
