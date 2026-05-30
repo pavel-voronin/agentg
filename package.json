@@ -55,6 +55,9 @@
     "tdlib:docs:generate": "node scripts/tdlibExplorerSchemaGenerate.mjs",
     "tdlib:docs:build": "npm run tdlib:docs:generate && npm --workspace @agentg/tdlib-docs run build",
     "source:audit": "node scripts/sourceAudit.mjs",
+    "check:module-framework": "npm --workspace @agentg/module-framework run typecheck && npm --workspace @agentg/module-framework run test && eslint packages/module-framework && prettier --check packages/module-framework",
+    "check:telegram-next": "npm --workspace @agentg/telegram-next run typecheck && npm --workspace @agentg/telegram-next --if-present run test && eslint packages/telegram-next && prettier --check packages/telegram-next",
+    "check:new": "npm run check:module-framework && npm run check:telegram-next",
     "check": "npm run typecheck && npm run lint && npm run source:audit && npm run format:check && npm run test"
   },
   "devDependencies": {
