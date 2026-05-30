@@ -4,21 +4,24 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./cp": "./src/cp/index.ts"
   },
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {
-    "@agentg/events": "file:../events",
-    "@trpc/client": "^11.17.0",
-    "@trpc/server": "^11.17.0",
-    "zod": "^4.4.1"
+    "drizzle-orm": "^0.45.2",
+    "nats": "^2.29.3",
+    "pg": "8.20.0",
+    "vue": "^3.5.33"
   },
   "devDependencies": {
     "@types/node": "24.10.0",
+    "@types/pg": "8.15.6",
     "typescript": "6.0.3",
+    "vue-tsc": "^3.2.7",
     "vitest": "4.1.5"
   }
 }
