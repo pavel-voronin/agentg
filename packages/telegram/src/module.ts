@@ -7,6 +7,7 @@ import {
   registerSubsystem,
   setRequired
 } from '@agentg/framework';
+import type { Module } from '@agentg/framework';
 
 import type { TelegramDatabase } from './database/client.js';
 import { useDatabase } from './database/subsystem.js';
@@ -169,13 +170,15 @@ type Procedures = TelegramControlPlaneProcedures & {
   searchMessages: typeof searchMessages;
 };
 
-const module = defineModule<
+type TelegramModule = Module<
   ProcedureResources,
   object,
   Procedures,
   TelegramControlPlane,
   TelegramIngestionOptions
->('telegram', () => {
+>;
+
+export const telegramModule: TelegramModule = defineModule('telegram', () => {
   registerSubsystem(useDatabase());
   registerSubsystem(useEvents());
   registerSubsystem(useFiles());
@@ -205,15 +208,8 @@ const module = defineModule<
   setRequired(true);
 });
 
-export const TELEGRAM_EVENT_TYPES = module.events;
-export const createTelegramRpcClient = module.createRpcClient;
-export const createTelegramRpcRouter = module.createRpcRouter;
-export type TelegramRpcClient = ReturnType<typeof createTelegramRpcClient>;
-export const createTelegramServiceManifest = (
-  config: Parameters<typeof module.createServiceManifest>[0]
-) => module.createServiceManifest(config);
-export type TelegramRouter = ReturnType<typeof createTelegramRpcRouter>;
+export const TELEGRAM_EVENT_TYPES = telegramModule.events;
 
 export function runTelegramModule(options: TelegramIngestionOptions): Promise<void> {
-  return module.run(options);
+  return telegramModule.run(options);
 }

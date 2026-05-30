@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
+import { createModuleRpcRouter } from '@agentg/framework';
 
 import type { TelegramDatabase } from '../src/database/client.js';
-import { createTelegramRpcRouter } from '../src/module.js';
+import { telegramModule } from '../src/module.js';
 import { toTelegramChatStorageRow } from '../src/read-model/chat.js';
 import { toChatDirectoryEntries } from '../src/control-plane/backend/chatDirectory.js';
 import type { TelegramFileSubsystem } from '../src/files/subsystem.js';
@@ -292,7 +293,7 @@ function createCaller(
     ...options.files
   };
 
-  return createTelegramRpcRouter({
+  return createModuleRpcRouter(telegramModule, {
     client: options.client ?? { invoke: vi.fn() },
     database: database as unknown as TelegramDatabase,
     eventBus: { publish: vi.fn() } as never,

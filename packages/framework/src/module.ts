@@ -150,11 +150,6 @@ export type Subsystem<RunOptions, Context> = {
 
 export type UseSubsystem<TSubsystem extends Subsystem<unknown, unknown>> = () => TSubsystem;
 
-export type ResourceSubsystem<TResource extends object, RunOptions, Context> = TResource &
-  Subsystem<RunOptions, Context> & {
-    configure(resource: TResource): void;
-  };
-
 export type ControlPlaneSubsystem<ControlPlane, Context = unknown> = {
   createControlPlane(config: ModuleControlPlaneConfig): ControlPlane;
   createProcedureRouter?(): ModuleProcedureRouter<Context>;
@@ -403,6 +398,46 @@ export function defineModule<
   return module;
 }
 
+export function createModuleRpcClient<
+  Deps,
+  Context,
+  const Procedures extends InternalRpcProcedureMap<Context>,
+  ControlPlane,
+  RunOptions
+>(
+  module: Module<Deps, Context, Procedures, ControlPlane, RunOptions>,
+  config: InternalTrpcClientConfig,
+  options?: InternalRpcModuleClientOptions
+): InternalRpcModuleClient<Context, Procedures> {
+  return module.createRpcClient(config, options);
+}
+
+export function createModuleRpcRouter<
+  Deps,
+  Context,
+  const Procedures extends InternalRpcProcedureMap<Context>,
+  ControlPlane,
+  RunOptions
+>(
+  module: Module<Deps, Context, Procedures, ControlPlane, RunOptions>,
+  deps: Deps
+): ReturnType<Module<Deps, Context, Procedures, ControlPlane, RunOptions>['createRpcRouter']> {
+  return module.createRpcRouter(deps);
+}
+
+export function createModuleServiceManifest<
+  Deps,
+  Context,
+  const Procedures extends InternalRpcProcedureMap<Context>,
+  ControlPlane,
+  RunOptions
+>(
+  module: Module<Deps, Context, Procedures, ControlPlane, RunOptions>,
+  config: ModuleServiceManifestConfig
+): ModuleServiceManifest<ControlPlane> {
+  return module.createServiceManifest(config);
+}
+
 let currentModuleState: ModuleSetupState | undefined;
 const subsystemNames = new WeakMap<Subsystem<unknown, unknown>, string>();
 
@@ -509,69 +544,6 @@ export function defineSubsystem<
     state.createdSubsystemsByName[name] = subsystem;
     return subsystem;
   };
-}
-
-export function defineResourceSubsystem<TResource extends object, RunOptions, Context>(
-  name: string,
-  resolve: {
-    fromContext?(context: unknown): TResource | undefined;
-    fromRun?(options: RunOptions, module: Context): TResource | undefined;
-  }
-): UseSubsystem<ResourceSubsystem<TResource, RunOptions, Context>> {
-  let resource: TResource | undefined;
-
-  function configure(nextResource: TResource | undefined): void {
-    if (nextResource !== undefined) {
-      resource = nextResource;
-    }
-  }
-
-  function readyResource(): TResource {
-    if (resource === undefined) {
-      throw new Error(`Subsystem ${name} resource is not ready`);
-    }
-    return resource;
-  }
-
-  return defineSubsystem(name, () => {
-    const lifecycle: Subsystem<RunOptions, Context> & {
-      configure(resource: TResource): void;
-    } = {
-      [bindSubsystemContext](context: unknown): void {
-        configure(resolve.fromContext?.(context));
-      },
-      configure(resource: TResource): void {
-        configure(resource);
-      },
-      init(): void {
-        configure(undefined);
-      },
-      start(options: RunOptions, module: Context): Promise<void> {
-        configure(resolve.fromRun?.(options, module));
-        return Promise.resolve();
-      }
-    };
-
-    return new Proxy(lifecycle, {
-      get(target, property) {
-        if (property in target) {
-          return (target as Record<PropertyKey, unknown>)[property];
-        }
-
-        const resource = readyResource();
-        const value = (resource as Record<PropertyKey, unknown>)[property];
-        if (typeof value !== 'function') {
-          return value;
-        }
-
-        return value.bind(resource) as (...args: unknown[]) => unknown;
-      },
-      set(_target, property, value) {
-        (readyResource() as Record<PropertyKey, unknown>)[property] = value;
-        return true;
-      }
-    }) as ResourceSubsystem<TResource, RunOptions, Context>;
-  });
 }
 
 export function registerSubsystem<TSubsystem extends Subsystem<unknown, unknown>>(

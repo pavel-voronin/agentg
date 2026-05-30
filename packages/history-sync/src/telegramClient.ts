@@ -1,7 +1,9 @@
-import { createTelegramRpcClient, type TelegramRpcClient } from '@agentg/telegram';
-import type { InternalRpcCallOptions } from '@agentg/framework';
+import { createModuleRpcClient, type InternalRpcCallOptions } from '@agentg/framework';
+import { telegramModule } from '@agentg/telegram';
 
 import type { InternalTrpcClientConfig } from '@agentg/framework';
+
+type TelegramRpcClient = ReturnType<typeof telegramModule.createRpcClient>;
 
 type TelegramRpcProcedureName = Exclude<keyof TelegramRpcClient, 'close'>;
 
@@ -88,7 +90,7 @@ const TELEGRAM_HISTORY_SYNC_REQUEST_TIMEOUT_MS = 30000;
 export function createTrpcTelegramHistoryClient(
   config: InternalTrpcClientConfig
 ): TelegramHistoryClient {
-  const telegram = createTelegramRpcClient(config, {
+  const telegram = createModuleRpcClient(telegramModule, config, {
     timeoutMs: TELEGRAM_HISTORY_SYNC_REQUEST_TIMEOUT_MS
   });
 
@@ -180,7 +182,8 @@ export function createServiceDirectoryTelegramHistoryClient(
       return existing;
     }
 
-    const client = createTelegramRpcClient(
+    const client = createModuleRpcClient(
+      telegramModule,
       { url },
       {
         timeoutMs: TELEGRAM_HISTORY_SYNC_REQUEST_TIMEOUT_MS

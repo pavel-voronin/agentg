@@ -1,4 +1,5 @@
-import { createTelegramRpcClient } from '@agentg/telegram';
+import { createModuleRpcClient } from '@agentg/framework';
+import { telegramModule } from '@agentg/telegram';
 
 export type GatewayTelegramClient = {
   call(method: string, params: unknown): Promise<unknown>;
@@ -9,7 +10,7 @@ type TelegramServiceConfig = {
   url: string;
 };
 
-type TelegramRpcClient = ReturnType<typeof createTelegramRpcClient>;
+type TelegramRpcClient = ReturnType<typeof telegramModule.createRpcClient>;
 type ServiceDirectoryProcedureResolver = {
   resolveProcedure(procedure: string): { rpcUrl: string };
 };
@@ -19,7 +20,7 @@ const DEFAULT_TELEGRAM_REQUEST_TIMEOUT_MS = 15000;
 export function createTrpcGatewayTelegramClient(
   config: TelegramServiceConfig
 ): GatewayTelegramClient {
-  const telegram = createTelegramRpcClient(config, {
+  const telegram = createModuleRpcClient(telegramModule, config, {
     timeoutMs: DEFAULT_TELEGRAM_REQUEST_TIMEOUT_MS
   });
 
@@ -57,7 +58,8 @@ export function createServiceDirectoryGatewayTelegramClient(
       return existing;
     }
 
-    const client = createTelegramRpcClient(
+    const client = createModuleRpcClient(
+      telegramModule,
       { url },
       {
         timeoutMs: DEFAULT_TELEGRAM_REQUEST_TIMEOUT_MS

@@ -7,6 +7,7 @@ import {
   registerSubsystem,
   setRequired
 } from '@agentg/framework';
+import type { Module } from '@agentg/framework';
 
 import {
   HistorySyncControlPlaneSubsystem,
@@ -35,13 +36,6 @@ const EVENT_TYPES = [
   'history-sync.target.upserted'
 ] as const;
 
-type ProcedureResources = {
-  database: HistorySyncDatabase;
-  eventBus: EventBus;
-  requestSync?: (reason: string, chatId?: string) => void;
-  telegram?: TelegramReadClient;
-};
-
 const procedures = {
   deleteTarget,
   getChatHistorySyncState,
@@ -49,13 +43,22 @@ const procedures = {
   upsertTarget
 };
 
-const module = defineModule<
+type ProcedureResources = {
+  database: HistorySyncDatabase;
+  eventBus: EventBus;
+  requestSync?: (reason: string, chatId?: string) => void;
+  telegram?: TelegramReadClient;
+};
+
+type HistorySyncModule = Module<
   ProcedureResources,
   ProcedureResources,
   typeof procedures,
   HistorySyncControlPlane,
   HistorySyncServiceOptions
->('history-sync', () => {
+>;
+
+export const historySyncModule: HistorySyncModule = defineModule('history-sync', () => {
   defineControlPlane(new HistorySyncControlPlaneSubsystem());
   defineEvents(EVENT_TYPES);
   defineProcedures(procedures);
@@ -66,14 +69,6 @@ const module = defineModule<
   registerSubsystem(useService());
 });
 
-export const createHistorySyncRpcClient = module.createRpcClient;
-export const createHistorySyncRpcRouter = module.createRpcRouter;
-export const createHistorySyncServiceManifest = (
-  config: Parameters<typeof module.createServiceManifest>[0]
-) => module.createServiceManifest(config);
-export type HistorySyncRouter = ReturnType<typeof createHistorySyncRpcRouter>;
-export type HistorySyncRpcClient = ReturnType<typeof createHistorySyncRpcClient>;
-
 export function runHistorySyncModule(options: HistorySyncServiceOptions): Promise<void> {
-  return module.run(options);
+  return historySyncModule.run(options);
 }

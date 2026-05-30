@@ -1,12 +1,13 @@
 import { createIntegrationEvent } from '@agentg/events/envelope';
 import { createValidatedEventBus } from '@agentg/events/validated-bus';
+import { createModuleServiceManifest } from '@agentg/framework';
 import { describe, expect, it } from 'vitest';
 
-import { createTelegramServiceManifest, TELEGRAM_EVENT_TYPES } from '../src/module.js';
+import { telegramModule, TELEGRAM_EVENT_TYPES } from '../src/module.js';
 
 describe('Telegram service manifest', () => {
   it('lists exact Telegram events without wildcard types', () => {
-    const manifest = createTelegramServiceManifest({
+    const manifest = createModuleServiceManifest(telegramModule, {
       controlPlaneAssetVersion: 'asset-v1',
       controlPlaneAssetVersions: {
         'workspace.js': 'workspace-v1'

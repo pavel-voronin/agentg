@@ -18,6 +18,7 @@ auditNoPublicProcedureDtoExports(tsFiles);
 auditNoModuleRpcClientFacades(tsFiles);
 auditModuleRpcFolders(tsFiles);
 auditNoFrameworkDomainApi(tsFiles);
+auditNoFrameworkResourceSubsystemApi(tsFiles);
 auditFrameworkSingleEntrypoint(sourceFiles);
 auditNoContextProcedureApi(tsFiles);
 auditTelegramDomainResources(tsFiles);
@@ -268,6 +269,27 @@ function auditModuleRpcFolders(files) {
     }
   }
 
+  for (const file of files) {
+    const rel = toRel(file);
+    if (rel === 'packages/framework/src/module.ts') {
+      continue;
+    }
+    if (!rel.startsWith('packages/') || !file.endsWith('.ts')) {
+      continue;
+    }
+    const source = readFileSync(file, 'utf8');
+    if (/defineModule\s*</.test(source)) {
+      failures.push(`module definitions must not pass explicit defineModule generics: ${rel}`);
+    }
+
+    if (
+      /packages\/[^/]+\/src\/module\.ts$/.test(rel) &&
+      /export\s+(?:const|function)\s+create[A-Z]\w*Rpc(?:Client|Router)\b/.test(source)
+    ) {
+      failures.push(`module RPC client/router factories must live in framework helpers: ${rel}`);
+    }
+  }
+
   const telegramModule = readFileSync(join(root, 'packages/telegram/src/module.ts'), 'utf8');
   if (!telegramModule.includes('const { procedures } = defineControlPlane')) {
     failures.push('Telegram module must receive Control Plane procedures from defineControlPlane');
@@ -347,6 +369,24 @@ function auditNoFrameworkDomainApi(files) {
     for (const token of forbiddenTokens) {
       if (source.includes(token)) {
         failures.push(`framework module API must not use old domain naming: ${rel}`);
+      }
+    }
+  }
+}
+
+function auditNoFrameworkResourceSubsystemApi(files) {
+  const forbiddenTokens = ['define' + 'ResourceSubsystem', 'Resource' + 'Subsystem'];
+
+  for (const file of files) {
+    const rel = toRel(file);
+    if (rel === 'scripts/sourceAudit.mjs') {
+      continue;
+    }
+
+    const source = readFileSync(file, 'utf8');
+    for (const token of forbiddenTokens) {
+      if (source.includes(token)) {
+        failures.push(`framework must expose only defineSubsystem for subsystems: ${rel}`);
       }
     }
   }

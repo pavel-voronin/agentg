@@ -71,6 +71,9 @@ export type { ModelMarker, ModelRef } from './modelRefs.js';
 
 export {
   bindSubsystemContext,
+  createModuleRpcClient,
+  createModuleRpcRouter,
+  createModuleServiceManifest,
   createProcedureRouter,
   createRouter,
   defineControlPlane,
@@ -80,7 +83,6 @@ export {
   defineInternalRpcModule,
   defineModule,
   defineProcedures,
-  defineResourceSubsystem,
   defineSubsystem,
   mutation,
   query,
@@ -104,7 +106,6 @@ export type {
   ModuleServiceManifest,
   ModuleServiceManifestConfig,
   PrefixedProcedureMap,
-  ResourceSubsystem,
   Subsystem,
   UseSubsystem
 } from './module.js';

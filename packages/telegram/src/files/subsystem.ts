@@ -6,7 +6,7 @@ import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 
 import type { EventBus } from '@agentg/events/bus';
-import { defineResourceSubsystem } from '@agentg/framework';
+import { bindSubsystemContext, defineSubsystem } from '@agentg/framework';
 import { createIntegrationEvent } from '@agentg/events/envelope';
 import { and, eq, notInArray, sql } from 'drizzle-orm';
 
@@ -77,16 +77,61 @@ import { isTelegramTdlibUnderNavigationPressure } from '../tdlib/scheduler.js';
 import { chatDirectoryEntryByChatId } from '../control-plane/backend/chatDirectory.js';
 import { readMessageSelection, toReadMessages } from '../read-model/message.js';
 import { readDefaultBackgroundSelection } from '../store/defaultBackground.js';
-import type { TelegramIngestionModule, TelegramIngestionOptions } from '../tdlib/ingestion.js';
 
-export const useFiles = defineResourceSubsystem<
-  TelegramFileSubsystem,
-  TelegramIngestionOptions,
-  TelegramIngestionModule
->('files', {
-  fromContext(context) {
-    return isFilesContext(context) ? context.files : undefined;
+type TelegramFilesSubsystem = TelegramFileSubsystem & {
+  [bindSubsystemContext](context: unknown): void;
+  configure(files: TelegramFileSubsystem): void;
+  start(): Promise<void>;
+};
+
+export const useFiles = defineSubsystem('files', (): TelegramFilesSubsystem => {
+  let files: TelegramFileSubsystem | undefined;
+
+  function configure(nextFiles: TelegramFileSubsystem | undefined): void {
+    if (nextFiles !== undefined) {
+      files = nextFiles;
+    }
   }
+
+  function readyFiles(): TelegramFileSubsystem {
+    if (files === undefined) {
+      throw new Error('Subsystem files resource is not ready');
+    }
+    return files;
+  }
+
+  const lifecycle = {
+    [bindSubsystemContext](context: unknown): void {
+      configure(isFilesContext(context) ? context.files : undefined);
+    },
+    configure(files: TelegramFileSubsystem): void {
+      configure(files);
+    },
+    init(): void {
+      return;
+    },
+    start(): Promise<void> {
+      return Promise.resolve();
+    }
+  };
+
+  return new Proxy(lifecycle, {
+    get(target, property) {
+      if (property in target) {
+        return (target as Record<PropertyKey, unknown>)[property];
+      }
+      if (typeof property === 'symbol') {
+        return undefined;
+      }
+
+      const value = (readyFiles() as Record<PropertyKey, unknown>)[property];
+      if (typeof value !== 'function') {
+        return value;
+      }
+
+      return value.bind(readyFiles()) as (...args: unknown[]) => unknown;
+    }
+  }) as unknown as TelegramFilesSubsystem;
 });
 
 export type TelegramFileSubsystem = {
