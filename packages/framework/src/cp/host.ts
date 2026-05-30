@@ -8,9 +8,16 @@ export type ControlPlaneHostEvent = {
   type?: string;
 };
 
+export type ModelRefSelection = {
+  id: string;
+  model: string;
+};
+
 export type ControlPlaneHost = {
   rpc<T = unknown>(method: string, params?: unknown): Promise<T>;
+  selectModelRef(selection: ModelRefSelection): void;
   subscribeEvents(listener: (event: ControlPlaneHostEvent) => void): () => void;
+  subscribeModelRefs(listener: (selection: ModelRefSelection) => void): () => void;
 };
 
 const controlPlaneHostKey = Symbol.for(

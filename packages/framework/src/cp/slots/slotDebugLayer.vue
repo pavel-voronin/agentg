@@ -11,6 +11,7 @@ import type {
   SlotResolution
 } from './types.js';
 
+// TODO(file-size): Split geometry tracking, icon layout, popover content, and DOM observers.
 type SlotDebugRect = {
   height: number;
   left: number;
