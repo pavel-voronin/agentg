@@ -1,5 +1,9 @@
 # Project Rules
 
+- Do not hide material facts from the user. Explicitly disclose API changes,
+  signature changes, compatibility paths, fallback behavior, architectural
+  violations, failed checks, risky assumptions, and any workaround before or
+  when presenting the change.
 - Use conventional commits.
 - Use only these commit scopes: `project`, `infra`, `telegram`, `history-sync`,
   `gateway`, `control-plane`, `extensions`, `storage`, `rpc`, and
@@ -12,6 +16,8 @@
   `docker-compose.yml`, `vite.config.ts`, `drizzle.config.ts`, dotfiles, and
   generated Drizzle migration/meta files. Do not add new exceptions or
   differently-cased names; rename the file or directory instead.
+- `index.ts`, `procedures.ts`, and `oneFunction.ts` are camelCase stems.
+  `Index.ts`, `OneFunction.ts`, and `one-function.ts` are not camelCase stems.
 - Do not leak a package or domain name into variable, constant, function, or
   local type names inside that same package or domain. Use local role names
   such as `database`, `events`, or `useDatabase` instead of package-prefixed
@@ -32,6 +38,17 @@
   the change instead of implementing it.
 - Ordinary procedures must return fresh direct results only. They must not wrap
   results in compatibility envelopes or preserve old response shapes.
+- For current module work, use `npm run check:modules` as the scoped
+  verification command. Use `npm run check:framework`,
+  `npm run check:registry`, `npm run check:control-plane`, or
+  `npm run check:telegram` when only one of those packages changed. Keep
+  `npm run check` as the full repository gate before final integration.
+- Current module packages must not import, depend on, wrap, call, or adapt
+  deleted old-contour packages such as `@agentg/events`,
+  `@agentg/service-directory`, `@agentg/database`, or another removed package.
+  If any removed package appears necessary, or if a search shows it
+  participating in the current contour, stop immediately and report the
+  boundary violation before editing code.
 - Vue component styling must be scoped to the component. Every Vue component
   style block must use `<style scoped>`, and component templates may assign only
   one semantic CSS class per element. Tailwind utilities belong inside the
@@ -77,6 +94,11 @@
   intentional public surface and already have a real external consumer.
   Speculative exports for future convenience, "just in case" access, or
   broad type surface coverage are a hard architecture error.
+- Package root exports must stay minimal. Add a root export only when there is
+  a real current consumer outside the package that must import through the
+  package public entrypoint. Framework-internal tests should import internal
+  files by relative path instead of widening the package surface. Run `npx knip`
+  before adding or keeping public exports.
 - A domain must not export procedure-specific `Input`/`Output` DTO types for
   other domains. Cross-domain procedure access must go through a typed client or
   a local domain port; procedure schemas and DTO names stay inside the owning
