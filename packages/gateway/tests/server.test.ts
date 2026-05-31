@@ -1,37 +1,25 @@
-import type { Server } from 'node:http';
 import { randomUUID } from 'node:crypto';
 
-import type { EventBus, EventSubscription } from '@agentg/events/bus';
-import type { IntegrationEvent } from '@agentg/events/envelope';
-import { createHTTPServer } from '@trpc/server/adapters/standalone';
+import type { EventBus, EventEnvelope, EventSubscription } from '@agentg/framework';
 import { WebSocket, type RawData } from 'ws';
-import { z } from 'zod';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { startAgentGatewayServer, type AgentGatewayServerHandle } from '../src/agentGateway.js';
-import { createTrpcGatewayTelegramClient } from '../src/telegramReads.js';
-import { testRpc, testRpcRouter } from './trpcTest.js';
+import { startGatewayServer, type GatewayServerHandle } from '../src/server.js';
 
-const gatewayHandles: AgentGatewayServerHandle[] = [];
-const httpServers: Server[] = [];
-const telegramGetChatInputSchema = z.object({
-  chatId: z.string().trim().min(1)
-});
+const gatewayHandles: GatewayServerHandle[] = [];
 
-describe('Agent Gateway external surface', () => {
+describe('gateway server', () => {
   afterEach(async () => {
-    await Promise.all(gatewayHandles.splice(0).map((handle) => handle.close()));
-    await Promise.all(httpServers.splice(0).map(close));
+    await Promise.all(gatewayHandles.splice(0).map((handle) => handle.stop()));
   });
 
   it('exposes only telegram.getChat through WebSocket RPC', async () => {
     const calls: unknown[] = [];
-    const telegramServer = createHTTPServer({
-      allowMethodOverride: true,
-      router: testRpcRouter({
-        getChat: testRpc.input(telegramGetChatInputSchema).query(({ input }) => {
+    const gateway = await startGateway({
+      chatLookup: {
+        getChat(input) {
           calls.push(input);
-          return {
+          return Promise.resolve({
             chat: {
               _model: 'telegram.chat',
               avatar: {
@@ -43,23 +31,14 @@ describe('Agent Gateway external surface', () => {
               type: 'private',
               updatedAt: '2026-05-02T00:00:00.000Z'
             }
-          };
-        })
-      })
-    });
-    httpServers.push(telegramServer);
-    const telegramPort = await listen(telegramServer);
-    const gateway = await startGateway({
-      telegramUrl: `http://127.0.0.1:${String(telegramPort)}`
+          });
+        }
+      }
     });
     const client = await connectGateway(gateway);
 
     try {
-      await expect(
-        request(client, 'telegram.getChat', {
-          chatId: 'chat-a'
-        })
-      ).resolves.toEqual({
+      await expect(request(client, 'telegram.getChat', { chatId: 'chat-a' })).resolves.toEqual({
         chat: {
           _model: 'telegram.chat',
           avatar: {
@@ -81,9 +60,6 @@ describe('Agent Gateway external surface', () => {
       await expect(request(client, 'capabilities.list', {})).rejects.toThrow(
         'Unknown method: capabilities.list'
       );
-      await expect(request(client, 'extensions.compose', {})).rejects.toThrow(
-        'Unknown method: extensions.compose'
-      );
       expect(calls).toEqual([{ chatId: 'chat-a' }]);
     } finally {
       client.close();
@@ -91,54 +67,39 @@ describe('Agent Gateway external surface', () => {
   });
 
   it('forwards only telegram.login.completed as an external event', async () => {
-    const eventBus = createFakeEventBus();
-    const gateway = await startGateway({
-      eventBus,
-      telegramUrl: 'http://127.0.0.1:1'
-    });
+    const events = createFakeEventBus();
+    const gateway = await startGateway({ events });
     const client = await connectGateway(gateway);
 
     try {
-      expect(eventBus.subjects()).toEqual(['telegram.login.completed']);
+      expect(events.subjects()).toEqual(['telegram.login.completed']);
+
+      const ignored = createEvent('telegram.status');
+      await events.emit('telegram.status', ignored);
 
       const event = createEvent('telegram.login.completed');
       const responsePromise = nextPayload(client);
-      await eventBus.emit('telegram.login.completed', event);
-      await expect(responsePromise).resolves.toEqual({
-        event
-      });
+      await events.emit('telegram.login.completed', event);
+
+      await expect(responsePromise).resolves.toEqual({ event });
     } finally {
       client.close();
     }
   });
 
-  it('returns dependency_unavailable for an allowed method when its service is absent', async () => {
-    const gateway = await startAgentGatewayServer({
-      config: {
-        host: '127.0.0.1',
-        port: 0,
-        serviceUrl: 'http://127.0.0.1:0'
-      },
-      eventBus: createFakeEventBus(),
-      telegramClient: {
-        call() {
-          const error = new Error('Dependency is unavailable: telegram.getChat') as Error & {
-            code: string;
-          };
-          error.code = 'dependency_unavailable';
-          throw error;
-        },
-        close() {
-          return;
+  it('returns dependency_unavailable for an allowed method when Telegram is absent', async () => {
+    const gateway = await startGateway({
+      chatLookup: {
+        getChat() {
+          return Promise.reject(new Error('Module is not registered: telegram'));
         }
       }
     });
-    gatewayHandles.push(gateway);
     const client = await connectGateway(gateway);
-    const id = `req_${randomUUID()}`;
-    const responsePromise = nextResponse(client);
 
     try {
+      const id = `req_${randomUUID()}`;
+      const responsePromise = nextResponse(client);
       client.send(
         JSON.stringify({
           id,
@@ -152,7 +113,7 @@ describe('Agent Gateway external surface', () => {
       await expect(responsePromise).resolves.toEqual({
         error: {
           code: 'dependency_unavailable',
-          message: 'Dependency is unavailable: telegram.getChat'
+          message: 'Module is not registered: telegram'
         },
         id
       });
@@ -160,35 +121,92 @@ describe('Agent Gateway external surface', () => {
       client.close();
     }
   });
+
+  it('requires bearer authorization when a gateway token is configured', async () => {
+    const gateway = await startGateway({
+      token: 'secret'
+    });
+
+    await expect(connectGateway(gateway)).rejects.toThrow('Unexpected server response: 401');
+    await expect(connectGateway(gateway, { queryToken: 'secret' })).rejects.toThrow(
+      'Unexpected server response: 401'
+    );
+
+    const client = await connectGateway(gateway, { token: 'secret' });
+    client.close();
+  });
+
+  it('closes connections that send oversized payloads', async () => {
+    const gateway = await startGateway();
+    const client = await connectGateway(gateway);
+
+    try {
+      const close = nextClose(client);
+      client.send('x'.repeat(1_000_001));
+
+      await expect(close).resolves.toBe(1009);
+    } finally {
+      client.close();
+    }
+  });
 });
 
-async function startGateway(options: {
-  eventBus?: TestEventBus | undefined;
-  telegramUrl: string;
-}): Promise<AgentGatewayServerHandle> {
-  const handle = await startAgentGatewayServer({
+async function startGateway(
+  options: {
+    chatLookup?: { getChat(input: { chatId: string }): Promise<unknown> } | undefined;
+    events?: TestEventBus | undefined;
+    token?: string | undefined;
+  } = {}
+): Promise<GatewayServerHandle> {
+  const handle = await startGatewayServer({
+    chatLookup: options.chatLookup ?? {
+      getChat() {
+        return Promise.reject(new Error('Module is not registered: telegram'));
+      }
+    },
     config: {
       host: '127.0.0.1',
       port: 0,
-      serviceUrl: 'http://127.0.0.1:0'
+      ...(options.token === undefined ? {} : { token: options.token })
     },
-    eventBus: options.eventBus ?? createFakeEventBus(),
-    telegramClient: createTrpcGatewayTelegramClient({
-      url: options.telegramUrl
-    })
+    events: options.events ?? createFakeEventBus()
   });
   gatewayHandles.push(handle);
   return handle;
 }
 
-async function connectGateway(handle: AgentGatewayServerHandle): Promise<WebSocket> {
-  const client = new WebSocket(`ws://${handle.host}:${String(handle.port)}`);
+async function connectGateway(
+  handle: GatewayServerHandle,
+  options: { queryToken?: string | undefined; token?: string | undefined } = {}
+): Promise<WebSocket> {
+  const url = new URL(`ws://${handle.host}:${String(handle.port)}`);
+  if (options.queryToken !== undefined) {
+    url.searchParams.set('token', options.queryToken);
+  }
+  const client = new WebSocket(
+    url,
+    options.token === undefined
+      ? undefined
+      : {
+          headers: {
+            authorization: `Bearer ${options.token}`
+          }
+        }
+  );
   await new Promise<void>((resolve, reject) => {
     client.once('open', resolve);
     client.once('error', reject);
   });
 
   return client;
+}
+
+async function nextClose(client: WebSocket): Promise<number> {
+  return new Promise((resolve) => {
+    client.once('close', (code) => {
+      resolve(code);
+    });
+  });
 }
 
 async function request(client: WebSocket, method: string, params: unknown): Promise<unknown> {
@@ -259,22 +277,25 @@ type GatewayResponse = {
 };
 
 type TestEventBus = EventBus & {
-  emit(subject: string, event: IntegrationEvent): Promise<void>;
+  emit(subject: string, event: EventEnvelope): Promise<void>;
   subjects(): string[];
 };
 
 function createFakeEventBus(): TestEventBus {
-  const handlers = new Map<string, (event: IntegrationEvent) => void | Promise<void>>();
+  const handlers = new Map<string, (event: EventEnvelope) => void | Promise<void>>();
 
   return {
-    close(): Promise<void> {
-      return Promise.resolve();
-    },
     async emit(subject, event): Promise<void> {
       await handlers.get(subject)?.(event);
     },
     publish(): void {
       return;
+    },
+    start(): Promise<void> {
+      return Promise.resolve();
+    },
+    stop(): Promise<void> {
+      return Promise.resolve();
     },
     subscribe(subject, handler): EventSubscription {
       handlers.set(subject, handler);
@@ -290,59 +311,25 @@ function createFakeEventBus(): TestEventBus {
   };
 }
 
-function createEvent(type: string): IntegrationEvent {
+function createEvent(type: string): EventEnvelope {
   return {
+    at: '2026-05-05T00:00:00.000Z',
     data: {},
     id: `evt_${randomUUID()}`,
-    occurredAt: '2026-05-05T00:00:00.000Z',
     type
   };
-}
-
-function listen(server: Server): Promise<number> {
-  return new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', () => {
-      const address = server.address();
-      if (typeof address === 'object' && address !== null) {
-        resolve(address.port);
-        return;
-      }
-
-      throw new Error('Expected TCP server address');
-    });
-  });
-}
-
-function close(server: Server): Promise<void> {
-  if (!server.listening) {
-    return Promise.resolve();
-  }
-
-  return new Promise((resolve, reject) => {
-    server.close((error) => {
-      if (error !== undefined) {
-        reject(error);
-        return;
-      }
-
-      resolve();
-    });
-  });
 }
 
 function rawDataToString(payload: RawData): string {
   if (typeof payload === 'string') {
     return payload;
   }
-
   if (Buffer.isBuffer(payload)) {
     return payload.toString('utf8');
   }
-
   if (Array.isArray(payload)) {
     return Buffer.concat(payload).toString('utf8');
   }
-
   return Buffer.from(payload).toString('utf8');
 }
 

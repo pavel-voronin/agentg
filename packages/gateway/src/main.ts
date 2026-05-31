@@ -1,22 +1,30 @@
-import { createNatsEventBus } from '@agentg/events/bus';
+import { httpRpc, nats, registry } from '@agentg/framework';
 
-import { runAgentGateway } from './agentGateway.js';
-import { loadGatewayConfig } from './config.js';
+import { readConfig } from './config.js';
+import { gatewayModule } from './module.js';
 
-const config = loadGatewayConfig();
+const config = readConfig(process.env);
+const app = gatewayModule({
+  config,
+  connect: {
+    events: nats(config.natsUrl),
+    rpc: httpRpc(
+      config.rpcHost === undefined
+        ? { port: config.rpcPort }
+        : { host: config.rpcHost, port: config.rpcPort }
+    ),
+    registry: registry(config.registryUrl)
+  }
+});
 
 try {
-  const eventBus = await createNatsEventBus(config.nats);
-  await runAgentGateway({
-    config: config.gateway,
-    eventBus,
-    services: config.services
-  });
+  await app.start();
+  console.log('gateway started');
 } catch (error) {
   console.error(
     JSON.stringify({
-      event: 'agent_gateway.failed',
-      error: error instanceof Error ? error.message : String(error)
+      error: error instanceof Error ? error.message : String(error),
+      event: 'gateway.failed'
     })
   );
   process.exitCode = 1;
