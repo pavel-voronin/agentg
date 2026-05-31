@@ -9,7 +9,7 @@ import { format, resolveConfig } from 'prettier';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const reviewPath = resolve(repoRoot, 'packages/tdlib-docs/src/data/tdlibStorageReview.json');
-const schemaPath = resolve(repoRoot, 'packages/telegram/src/tdlib/databaseSchema.ts');
+const schemaPath = resolve(repoRoot, 'packages/telegram/src/database/storageSchema.ts');
 const drizzleDir = resolve(repoRoot, 'packages/telegram/drizzle');
 const drizzleMetaDir = resolve(drizzleDir, 'meta');
 const migrationTag = '0000_telegram_tdlib_schema';
@@ -37,6 +37,7 @@ const reviewState = JSON.parse(await readFile(reviewPath, 'utf8'));
 const tables = sortTablesByDependencies(parseReviewTables(reviewState));
 
 await mkdir(drizzleMetaDir, { recursive: true });
+await mkdir(dirname(schemaPath), { recursive: true });
 await writeFile(
   schemaPath,
   await format(renderDrizzleSchema(tables), { ...prettierOptions, parser: 'typescript' })
@@ -48,7 +49,7 @@ console.log(
     event: 'telegram.db_schema.generated',
     foreignKeys: tables.reduce((total, table) => total + table.foreignKeys.length, 0),
     migration: `packages/telegram/drizzle/${migrationTag}.sql`,
-    schema: 'packages/telegram/src/tdlib/databaseSchema.ts',
+    schema: 'packages/telegram/src/database/storageSchema.ts',
     source: 'packages/tdlib-docs/src/data/tdlibStorageReview.json',
     tables: tables.length
   })
@@ -243,7 +244,7 @@ function renderDrizzleSchema(inputTables) {
   const chunks = [
     `import { boolean, customType, doublePrecision, foreignKey, integer, jsonb, pgTable, primaryKey, text, timestamp } from 'drizzle-orm/pg-core';`,
     '',
-    `import type { JsonValue } from '@agentg/events/json';`,
+    `type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };`,
     '',
     `const bigintText = customType<{ data: string; driverData: string }>({`,
     `  dataType() {`,

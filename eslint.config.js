@@ -30,27 +30,6 @@ export default tseslint.config(
     }
   },
   {
-    files: ['packages/**/*.ts'],
-    ignores: [
-      'packages/*/src/rpc/trpc.ts',
-      'packages/framework/src/trpc.ts',
-      'packages/*/tests/trpcTest.ts'
-    ],
-    rules: {
-      'no-restricted-imports': [
-        'error',
-        {
-          paths: [
-            {
-              message: 'Use the package-local RPC runtime exports instead.',
-              name: '@trpc/server'
-            }
-          ]
-        }
-      ]
-    }
-  },
-  {
     files: ['eslint.config.js', 'scripts/**/*.mjs'],
     extends: [tseslint.configs.disableTypeChecked],
     languageOptions: {

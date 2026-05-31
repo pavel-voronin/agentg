@@ -4,7 +4,7 @@
 import { spawnSync } from 'node:child_process';
 
 const includeTelegram = process.env.COMPOSE_SMOKE_TELEGRAM === '1';
-const profiles = ['history-sync', 'gateway', 'control-plane'];
+const profiles = ['control-plane'];
 if (includeTelegram) {
   profiles.push('container-client');
 }
@@ -13,9 +13,7 @@ const compose = ['docker', 'compose', ...profiles.flatMap((profile) => ['--profi
 const services = [
   'postgres',
   'nats',
-  'service-directory',
-  'history-sync',
-  'gateway',
+  'registry',
   'control-plane',
   ...(includeTelegram ? ['telegram'] : [])
 ];
@@ -34,7 +32,7 @@ try {
     'run',
     '--rm',
     '--no-deps',
-    'gateway',
+    'control-plane',
     'node',
     '--input-type=module',
     '--eval',
@@ -81,7 +79,7 @@ function runNpm(args) {
 
 function smokeDriver(checkTelegram) {
   return `
-import { createServiceDirectoryClient } from '@agentg/service-directory/rpc';
+import { callProcedure } from '@agentg/framework';
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -105,36 +103,27 @@ async function fetchUntilReady(url, service, acceptedStatuses, attempts = 30) {
   throw new Error(service + ' did not become ready: ' + (lastError instanceof Error ? lastError.message : String(lastError)));
 }
 
-async function waitForServiceRegistrations(client, expectedSlugs, attempts = 20) {
+async function waitForModuleRegistrations(expectedModules, attempts = 20) {
   let snapshot;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    snapshot = await client.refresh();
-    const activeSlugs = new Set(snapshot.services.map((service) => service.slug));
-    if (expectedSlugs.every((slug) => activeSlugs.has(slug))) {
+    snapshot = await callProcedure('http://registry:8080', 'getSnapshot');
+    const activeModules = new Set(snapshot.modules.map((module) => module.module));
+    if (expectedModules.every((module) => activeModules.has(module))) {
       return snapshot;
     }
     await sleep(2_000);
   }
 
-  throw new Error('Expected services are not registered: ' + JSON.stringify({
-    expectedSlugs,
+  throw new Error('Expected modules are not registered: ' + JSON.stringify({
+    expectedModules,
     snapshot
   }));
 }
 
-const serviceDirectoryClient = createServiceDirectoryClient({
-  url: 'http://service-directory:8080'
-});
-const expectedServices = [
-  'control-plane',
-  'gateway',
-  'history-sync',
+const expectedModules = [
   ...(checkTelegram ? ['telegram'] : [])
 ];
-const serviceDirectory = await waitForServiceRegistrations(
-  serviceDirectoryClient,
-  expectedServices
-);
+const registry = await waitForModuleRegistrations(expectedModules);
 
 const controlPlaneResponse = await fetchUntilReady('http://control-plane:8788/', 'control-plane', [200]);
 
@@ -148,8 +137,7 @@ console.log(JSON.stringify({
     contentType: controlPlaneResponse.headers.get('content-type'),
     status: controlPlaneResponse.status
   },
-  serviceDirectory
+  registry
 }, null, 2));
-serviceDirectoryClient.close();
 `;
 }

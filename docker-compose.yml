@@ -3,7 +3,7 @@ x-agentg-module-environment: &agentg-module-environment
   MODULE_RPC_HOST: 0.0.0.0
   MODULE_RPC_PORT: 8080
   NATS_URL: nats://nats:4222
-  SERVICE_DIRECTORY_RPC_URL: http://service-directory:8080
+  REGISTRY_URL: http://registry:8080
 
 x-agentg-module-service: &agentg-module-service
   build:
@@ -24,7 +24,7 @@ services:
       context: .
       target: runtime
     depends_on:
-      service-directory:
+      registry:
         condition: service_started
       nats:
         condition: service_started
@@ -33,10 +33,9 @@ services:
     environment:
       DATABASE_URL: postgres://agentg:agentg@postgres:5432/agentg
       NATS_URL: nats://nats:4222
-      SERVICE_DIRECTORY_RPC_URL: http://service-directory:8080
-      TELEGRAM_RPC_HOST: 0.0.0.0
-      TELEGRAM_RPC_PORT: 8080
-      TELEGRAM_RPC_URL: http://telegram:8080
+      REGISTRY_URL: http://registry:8080
+      HOST: 0.0.0.0
+      PORT: 8080
       TELEGRAM_API_ID: ${TELEGRAM_API_ID:-}
       TELEGRAM_API_HASH: ${TELEGRAM_API_HASH:-}
       TDLIB_DATABASE_DIR: /app/td-data/database
@@ -44,7 +43,7 @@ services:
     volumes:
       - ./td-data:/app/td-data
     restart: 'no'
-    command: ['npm', '--workspace', '@agentg/telegram', 'run', 'start']
+    command: ['npm', 'run', 'dev:telegram']
 
   modulesmoke:
     profiles:
@@ -63,47 +62,22 @@ services:
       MODULE_SLUG: modulesmoke
       MODULE_TABLE_PREFIX: modulesmoke_
 
-  service-directory:
+  registry:
     profiles:
-      - service-directory
+      - registry
       - container-client
-      - history-sync
-      - gateway
       - control-plane
     build:
       context: .
       target: runtime
-    command: ['npm', '--workspace', '@agentg/service-directory', 'run', 'start']
+    command: ['npm', '--workspace', '@agentg/registry', 'run', 'dev']
     depends_on:
       nats:
         condition: service_started
     environment:
       NATS_URL: nats://nats:4222
-      SERVICE_DIRECTORY_RPC_HOST: 0.0.0.0
-      SERVICE_DIRECTORY_RPC_PORT: 8080
-    restart: 'no'
-
-  gateway:
-    profiles:
-      - gateway
-    build:
-      context: .
-      target: runtime
-    command: ['npm', '--workspace', '@agentg/gateway', 'run', 'start']
-    depends_on:
-      service-directory:
-        condition: service_started
-      nats:
-        condition: service_started
-    environment:
-      AGENT_GATEWAY_HOST: 0.0.0.0
-      AGENT_GATEWAY_PORT: ${AGENT_GATEWAY_PORT:-8787}
-      AGENT_GATEWAY_TOKEN: ${AGENT_GATEWAY_TOKEN:-}
-      AGENT_GATEWAY_URL: http://gateway:${AGENT_GATEWAY_PORT:-8787}
-      NATS_URL: nats://nats:4222
-      SERVICE_DIRECTORY_RPC_URL: http://service-directory:8080
-    ports:
-      - '${AGENT_GATEWAY_PORT:-8787}:${AGENT_GATEWAY_PORT:-8787}'
+      HOST: 0.0.0.0
+      PORT: 8080
     restart: 'no'
 
   control-plane:
@@ -114,31 +88,32 @@ services:
       target: runtime
     command: ['npm', '--workspace', '@agentg/control-plane', 'run', 'start']
     depends_on:
-      service-directory:
-        condition: service_started
-      history-sync:
+      registry:
         condition: service_started
       nats:
         condition: service_started
     environment:
+      DATABASE_URL: postgres://agentg:agentg@postgres:5432/agentg
       CONTROL_PLANE_HOST: 0.0.0.0
       CONTROL_PLANE_PORT: ${CONTROL_PLANE_PORT:-8788}
       CONTROL_PLANE_URL: http://control-plane:${CONTROL_PLANE_PORT:-8788}
       NATS_URL: nats://nats:4222
-      SERVICE_DIRECTORY_RPC_URL: http://service-directory:8080
+      REGISTRY_URL: http://registry:8080
+      TDLIB_FILES_DIR: /app/td-data/files
     ports:
       - '${CONTROL_PLANE_PORT:-8788}:${CONTROL_PLANE_PORT:-8788}'
     restart: 'no'
 
   history-sync:
     profiles:
-      - history-sync
+      - container-client
+      - control-plane
     build:
       context: .
       target: runtime
-    command: ['npm', '--workspace', '@agentg/history-sync', 'run', 'start']
+    command: ['npm', '--workspace', '@agentg/history-sync', 'run', 'dev']
     depends_on:
-      service-directory:
+      registry:
         condition: service_started
       nats:
         condition: service_started
@@ -146,15 +121,34 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgres://agentg:agentg@postgres:5432/agentg
-      HISTORY_SYNC_CHAT_LOAD_BATCH_SIZE: ${HISTORY_SYNC_CHAT_LOAD_BATCH_SIZE:-100}
-      HISTORY_SYNC_MESSAGE_LIMIT: ${HISTORY_SYNC_MESSAGE_LIMIT:-100}
-      HISTORY_SYNC_REQUEST_DELAY_MS: ${HISTORY_SYNC_REQUEST_DELAY_MS:-1000}
-      HISTORY_SYNC_WINDOW_DAYS: ${HISTORY_SYNC_WINDOW_DAYS:-31}
-      HISTORY_SYNC_RPC_HOST: 0.0.0.0
-      HISTORY_SYNC_RPC_PORT: 8080
-      HISTORY_SYNC_RPC_URL: http://history-sync:8080
       NATS_URL: nats://nats:4222
-      SERVICE_DIRECTORY_RPC_URL: http://service-directory:8080
+      REGISTRY_URL: http://registry:8080
+      HOST: 0.0.0.0
+      PORT: 8080
+    restart: 'no'
+
+  gateway:
+    profiles:
+      - container-client
+      - control-plane
+    build:
+      context: .
+      target: runtime
+    command: ['npm', '--workspace', '@agentg/gateway', 'run', 'dev']
+    depends_on:
+      registry:
+        condition: service_started
+      nats:
+        condition: service_started
+    environment:
+      NATS_URL: nats://nats:4222
+      REGISTRY_URL: http://registry:8080
+      HOST: 0.0.0.0
+      PORT: 8080
+      GATEWAY_HOST: 0.0.0.0
+      GATEWAY_PORT: ${GATEWAY_PORT:-8787}
+    ports:
+      - '${GATEWAY_PORT:-8787}:${GATEWAY_PORT:-8787}'
     restart: 'no'
 
   nats:

@@ -3,17 +3,23 @@ import { createInterface } from 'node:readline/promises';
 
 import type { LoginDetails } from 'tdl';
 
-import { loadTelegramIngestionConfig } from '../packages/telegram/src/config.js';
+import { readAuthConfig } from '../packages/telegram/src/config.js';
 import {
   configureTdlib,
-  createTelegramClient,
-  hasTelegramCredentials
+  createClient,
+  hasCredentials
 } from '../packages/telegram/src/tdlib/client.js';
 
-const config = loadTelegramIngestionConfig();
+const config = readAuthConfig(process.env);
+const clientConfig = {
+  ...(config.apiHash === undefined ? {} : { apiHash: config.apiHash }),
+  ...(config.apiId === undefined ? {} : { apiId: config.apiId }),
+  databaseDirectory: config.tdlibDatabaseDirectory,
+  filesDirectory: config.tdlibFilesDirectory
+};
 
 try {
-  if (!hasTelegramCredentials(config.telegram)) {
+  if (!hasCredentials(clientConfig)) {
     throw new Error('TELEGRAM_API_ID and TELEGRAM_API_HASH are required for TDLib authorization');
   }
 
@@ -27,7 +33,7 @@ try {
     })
   );
 
-  const client = await createTelegramClient(config.telegram);
+  const client = await createClient(clientConfig);
   client.on('update', (update: unknown) => {
     if (!isAuthorizationUpdate(update)) {
       return;

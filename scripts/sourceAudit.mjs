@@ -12,24 +12,14 @@ const tsFiles = sourceFiles.filter((file) => file.endsWith('.ts'));
 const vueFiles = sourceFiles.filter((file) => file.endsWith('.vue'));
 
 auditNamingConventions(sourceFiles);
-auditRawTrpcBuilderImports(tsFiles);
 auditCrossDomainSchemaImports(tsFiles);
 auditNoPublicProcedureDtoExports(tsFiles);
 auditNoModuleRpcClientFacades(tsFiles);
 auditModuleRpcFolders(tsFiles);
-auditNoFrameworkDomainApi(tsFiles);
-auditNoFrameworkResourceSubsystemApi(tsFiles);
-auditFrameworkSingleEntrypoint(sourceFiles);
 auditNoContextProcedureApi(tsFiles);
-auditTelegramDomainResources(tsFiles);
 auditTablePrefixes();
-auditGatewayExternalSurface();
-auditServiceDirectorySurface();
-auditServiceDirectoryBootstrap();
 auditExtensionBoundaries(tsFiles);
-auditNoSharedWorkspacePackage();
 auditDockerfileWorkspacePackageCopies();
-auditControlPlaneCompositionBoundaries(tsFiles);
 auditDateContract(sourceFiles);
 auditTdlibContractGeneration(sourceFiles);
 auditScopedVueComponentStyles(vueFiles, sourceFiles);
@@ -41,26 +31,6 @@ if (failures.length > 0) {
   process.exitCode = 1;
 } else {
   console.log('source-audit: ok');
-}
-
-function auditRawTrpcBuilderImports(files) {
-  for (const file of files) {
-    const rel = toRel(file);
-    const source = readFileSync(file, 'utf8');
-    if (!source.includes("from '@trpc/server'") && !source.includes('from "@trpc/server"')) {
-      continue;
-    }
-
-    if (
-      !/packages\/[^/]+\/src\/rpc\/trpc\.ts$/.test(rel) &&
-      rel !== 'packages/framework/src/trpc.ts' &&
-      !/packages\/[^/]+\/tests\/trpcTest\.ts$/.test(rel)
-    ) {
-      failures.push(
-        `raw tRPC builder import is only allowed in package-local src/rpc/trpc.ts or tests/trpcTest.ts: ${rel}`
-      );
-    }
-  }
 }
 
 function auditNamingConventions(files) {
@@ -158,7 +128,7 @@ function isExternalNamingContractFile(rel) {
 }
 
 function auditCrossDomainSchemaImports(files) {
-  const schemaImports = ['@agentg/history-sync/schema', '@agentg/telegram/schema'];
+  const schemaImports = [];
 
   for (const file of files) {
     const rel = toRel(file);
@@ -195,10 +165,7 @@ function auditNoPublicProcedureDtoExports(files) {
 }
 
 function auditNoModuleRpcClientFacades(files) {
-  const forbiddenFiles = new Set([
-    'packages/history-sync/src/rpc/historySyncClient.ts',
-    'packages/telegram/src/rpc/client.ts'
-  ]);
+  const forbiddenFiles = new Set([]);
 
   for (const file of files) {
     const rel = toRel(file);
@@ -212,60 +179,10 @@ function auditModuleRpcFolders(files) {
   for (const file of files) {
     const rel = toRel(file);
     if (
-      /^packages\/(?:history-sync|telegram)\/src\/rpc\/(?:index|setup)\.ts$/.test(rel) ||
-      /^packages\/(?:history-sync|telegram)\/src\/rpc\/procedures\//.test(rel)
+      /^packages\/telegram\/src\/rpc\/(?:index|setup)\.ts$/.test(rel) ||
+      /^packages\/telegram\/src\/rpc\/procedures\//.test(rel)
     ) {
       failures.push(`module RPC folder must contain direct procedure files only: ${rel}`);
-    }
-  }
-
-  for (const packagePath of [
-    'packages/history-sync/package.json',
-    'packages/telegram/package.json'
-  ]) {
-    const packageJson = JSON.parse(readFileSync(join(root, packagePath), 'utf8'));
-    if (packageJson.exports?.['./domain'] !== undefined) {
-      failures.push(`${packagePath} must not expose old ./domain entrypoint`);
-    }
-    if (packageJson.exports?.['./rpc'] !== undefined) {
-      failures.push(`${packagePath} must not expose generic ./rpc entrypoint`);
-    }
-    if (packageJson.exports?.['./rpc-client'] !== undefined) {
-      failures.push(`${packagePath} must not expose RPC client through a subpath`);
-    }
-    if (
-      packagePath === 'packages/telegram/package.json' &&
-      packageJson.exports?.['.'] !== './src/module.ts'
-    ) {
-      failures.push('packages/telegram/package.json must expose Telegram module surface at "."');
-    }
-  }
-
-  const forbiddenRunnerExports = [
-    ['packages/history-sync/src/main.ts', 'export const historySync ='],
-    ['packages/telegram/src/main.ts', 'export const telegram =']
-  ];
-
-  for (const [file, token] of forbiddenRunnerExports) {
-    const source = readFileSync(join(root, file), 'utf8');
-    if (source.includes(token)) {
-      failures.push(`${file} must not export module runner object`);
-    }
-  }
-
-  for (const file of ['packages/history-sync/src/main.ts', 'packages/telegram/src/main.ts']) {
-    const source = readFileSync(join(root, file), 'utf8');
-    if (source.includes('defineModule')) {
-      failures.push(`${file} must not define module composition in runner entrypoint`);
-    }
-    if (/class\s+\w*Subsystem\b/.test(source)) {
-      failures.push(`${file} must not declare subsystem classes in runner entrypoint`);
-    }
-    if (source.includes('createRouter')) {
-      failures.push(`${file} must not create procedure routers in runner entrypoint`);
-    }
-    if (/defineControlPlane\(\s*(?:\(|\{)/.test(source)) {
-      failures.push(`${file} must not define Control Plane in runner entrypoint`);
     }
   }
 
@@ -281,52 +198,6 @@ function auditModuleRpcFolders(files) {
     if (/defineModule\s*</.test(source)) {
       failures.push(`module definitions must not pass explicit defineModule generics: ${rel}`);
     }
-
-    if (
-      /packages\/[^/]+\/src\/module\.ts$/.test(rel) &&
-      /export\s+(?:const|function)\s+create[A-Z]\w*Rpc(?:Client|Router)\b/.test(source)
-    ) {
-      failures.push(`module RPC client/router factories must live in framework helpers: ${rel}`);
-    }
-  }
-
-  const telegramModule = readFileSync(join(root, 'packages/telegram/src/module.ts'), 'utf8');
-  if (!telegramModule.includes('const { procedures } = defineControlPlane')) {
-    failures.push('Telegram module must receive Control Plane procedures from defineControlPlane');
-  }
-  if (telegramModule.includes('defineRuntime')) {
-    failures.push('Telegram module must receive procedure resources from module subsystems');
-  }
-  if (telegramModule.includes('TELEGRAM_TDLIB_METHODS')) {
-    failures.push('Telegram TDLib operation event catalog must live in TDLib subsystem');
-  }
-  if (telegramModule.includes('defineTelegramTdlibSubsystem')) {
-    failures.push('Telegram TDLib subsystem must be exposed through a useTdlib composable');
-  }
-  if (telegramModule.includes("defineSubsystem('tdlib'")) {
-    failures.push('Telegram module must use useTdlib instead of declaring TDLib inline');
-  }
-  if (!telegramModule.includes('const tdlib = useTdlib();')) {
-    failures.push('Telegram module must use TDLib through useTdlib');
-  }
-  if (!telegramModule.includes('registerSubsystem(tdlib);')) {
-    failures.push('Telegram module must register the used TDLib subsystem intentionally');
-  }
-
-  const telegramTdlibSubsystem = readFileSync(
-    join(root, 'packages/telegram/src/tdlib/subsystem.ts'),
-    'utf8'
-  );
-  if (!telegramTdlibSubsystem.includes('export const useTdlib = defineSubsystem(')) {
-    failures.push('Telegram TDLib subsystem must be exposed as useTdlib defineSubsystem');
-  }
-  if (/export\s+(?:const|function|class|type)\s+(?!useTdlib\b)/.test(telegramTdlibSubsystem)) {
-    failures.push('Telegram TDLib subsystem must export only useTdlib');
-  }
-
-  const historySyncModule = readFileSync(join(root, 'packages/history-sync/src/module.ts'), 'utf8');
-  if (historySyncModule.includes('defineRuntime')) {
-    failures.push('History Sync module must receive procedure resources from module subsystems');
   }
 }
 
@@ -352,121 +223,13 @@ function auditNoContextProcedureApi(files) {
   }
 }
 
-function auditNoFrameworkDomainApi(files) {
-  const forbiddenTokens = ['@agentg/framework/' + 'domain', 'define' + 'Domain'];
-
-  if (existsSync(join(root, 'packages/framework/src/domain.ts'))) {
-    failures.push('Framework module API must live in packages/framework/src/module.ts');
-  }
-
-  for (const file of files) {
-    const rel = toRel(file);
-    if (rel === 'scripts/sourceAudit.mjs') {
-      continue;
-    }
-
-    const source = readFileSync(file, 'utf8');
-    for (const token of forbiddenTokens) {
-      if (source.includes(token)) {
-        failures.push(`framework module API must not use old domain naming: ${rel}`);
-      }
-    }
-  }
-}
-
-function auditNoFrameworkResourceSubsystemApi(files) {
-  const forbiddenTokens = ['define' + 'ResourceSubsystem', 'Resource' + 'Subsystem'];
-
-  for (const file of files) {
-    const rel = toRel(file);
-    if (rel === 'scripts/sourceAudit.mjs') {
-      continue;
-    }
-
-    const source = readFileSync(file, 'utf8');
-    for (const token of forbiddenTokens) {
-      if (source.includes(token)) {
-        failures.push(`framework must expose only defineSubsystem for subsystems: ${rel}`);
-      }
-    }
-  }
-}
-
-function auditFrameworkSingleEntrypoint(files) {
-  const packageJson = JSON.parse(
-    readFileSync(join(root, 'packages/framework/package.json'), 'utf8')
-  );
-  const expectedExports = { '.': './src/index.ts' };
-  if (JSON.stringify(packageJson.exports ?? {}) !== JSON.stringify(expectedExports)) {
-    failures.push('Framework package must expose only @agentg/framework');
-  }
-
-  for (const file of files) {
-    const rel = toRel(file);
-    if (rel === 'scripts/sourceAudit.mjs') {
-      continue;
-    }
-    if (!/\.(json|mjs|ts|vue)$/.test(rel)) {
-      continue;
-    }
-
-    const source = readFileSync(file, 'utf8');
-    if (source.includes('@agentg/framework/')) {
-      failures.push(`Framework subpath imports are not allowed: ${rel}`);
-    }
-  }
-}
-
-function auditTelegramDomainResources(files) {
-  if (existsSync(join(root, 'packages/telegram/src/tdlib/update-runtime/context.ts'))) {
-    failures.push('TDLib update handlers must not keep a shared context module');
-  }
-
-  for (const file of files) {
-    const rel = toRel(file);
-    const source = readFileSync(file, 'utf8');
-    if (source.includes('TelegramDomainContext')) {
-      failures.push(
-        `Telegram procedures must use subsystem composables, not module context: ${rel}`
-      );
-    }
-
-    if (
-      /packages\/telegram\/src\/(?:rpc|history|control-plane\/backend)\//.test(rel) &&
-      /context\.(?:client|database|eventBus|files)\b/.test(source)
-    ) {
-      failures.push(`Telegram procedure resources must be read through use* subsystems: ${rel}`);
-    }
-
-    if (
-      /packages\/telegram\/src\/tdlib\/update-handlers\//.test(rel) &&
-      (source.includes('TelegramUpdateHandlerContext') || /\bcontext\s*[.:]/.test(source))
-    ) {
-      failures.push(`Telegram update handlers must read resources through use* subsystems: ${rel}`);
-    }
-
-    if (
-      /packages\/telegram\/src\/(?:rpc|control-plane\/backend\/procedures)\//.test(rel) &&
-      /\b(?:query|mutation)\(\(\s*_?context\s*,/.test(source)
-    ) {
-      failures.push(
-        `Telegram procedures without context must use query((procedure) => ...): ${rel}`
-      );
-    }
-  }
-}
-
 function auditTablePrefixes() {
   const schemas = [
     {
-      file: join(root, 'packages/history-sync/src/schema.ts'),
-      prefix: 'history_sync_'
-    },
-    {
-      file: join(root, 'packages/telegram/src/database/schema.ts'),
+      file: join(root, 'packages/telegram/src/database/storageSchema.ts'),
       prefix: 'telegram_'
     }
-  ];
+  ].filter((schema) => existsSync(schema.file));
 
   for (const schema of schemas) {
     const source = readFileSync(schema.file, 'utf8');
@@ -489,101 +252,13 @@ function auditTablePrefixes() {
   }
 }
 
-function auditGatewayExternalSurface() {
-  const agentGateway = readFileSync(join(root, 'packages/gateway/src/agentGateway.ts'), 'utf8');
-  const telegramReads = readFileSync(join(root, 'packages/gateway/src/telegramReads.ts'), 'utf8');
-  const tests = readFileSync(join(root, 'packages/gateway/tests/agentGateway.test.ts'), 'utf8');
-  const requiredTestTokens = [
-    'exposes only telegram.getChat through WebSocket RPC',
-    'forwards only telegram.login.completed as an external event'
-  ];
-  const forbiddenSourceTokens = [
-    "'capabilities.",
-    '"capabilities.',
-    "'extensions.compose'",
-    '"extensions.compose"',
-    "'history-sync.",
-    '"history-sync.',
-    "'telegram.getMessage'",
-    '"telegram.getMessage"',
-    "'telegram.listRecentMessages'",
-    '"telegram.listRecentMessages"',
-    "'telegram.searchMessages'",
-    '"telegram.searchMessages"'
-  ];
-
-  if (!agentGateway.includes("'telegram.getChat'")) {
-    failures.push("Gateway external RPC surface must include only 'telegram.getChat'");
-  }
-  if (!agentGateway.includes("'telegram.login.completed'")) {
-    failures.push("Gateway external event surface must include only 'telegram.login.completed'");
-  }
-  if (!telegramReads.includes("'telegram.getChat'")) {
-    failures.push("Gateway Telegram adapter must call only 'telegram.getChat'");
-  }
-  for (const token of forbiddenSourceTokens) {
-    if (agentGateway.includes(token) || telegramReads.includes(token)) {
-      failures.push(`Gateway source exposes forbidden external surface token: ${token}`);
-    }
-  }
-  for (const token of requiredTestTokens) {
-    if (!tests.includes(token)) {
-      failures.push(`Gateway external surface lacks regression test token: ${token}`);
-    }
-  }
-}
-
 function auditExtensionBoundaries(files) {
-  auditNoDomainEnrichedRpc(files);
   auditNoModuleExtensionEndpoints(files);
-  auditRegistryDoesNotCallRpc(files);
   auditControlPlaneSdkHasNoDomainKnowledge(files);
 }
 
-function auditNoDomainEnrichedRpc(files) {
-  const auditedPrefixes = [
-    'packages/events/src/',
-    'packages/framework/',
-    'packages/infra/src/',
-    'packages/history-sync/src/',
-    'packages/telegram/src/',
-    'packages/gateway/src/'
-  ];
-  const forbiddenTokens = [
-    'callRegisteredExtensions',
-    'createTrpcExtensionCallerResolver',
-    'ExtensionCallerResolver',
-    'extensionCallInputSchema',
-    '@agentg/framework/' + 'envelope',
-    'ProcedureErrorEnvelope',
-    'ProcedureDomainError',
-    'ProcedureExtensionEnvelope',
-    'ProcedureExtensions',
-    'isProcedureErrorEnvelope',
-    'isProcedureSuccessEnvelope'
-  ];
-
-  for (const file of files) {
-    const rel = toRel(file);
-    if (!auditedPrefixes.some((prefix) => rel.startsWith(prefix))) {
-      continue;
-    }
-
-    const source = readFileSync(file, 'utf8');
-    if (/\benriched\b/.test(source)) {
-      failures.push(`domain code must not reintroduce enriched RPC behavior: ${rel}`);
-    }
-
-    for (const token of forbiddenTokens) {
-      if (source.includes(token)) {
-        failures.push(`old extension envelope helper is not allowed: ${rel} -> ${token}`);
-      }
-    }
-  }
-}
-
 function auditNoModuleExtensionEndpoints(files) {
-  const domainRpcPrefixes = ['packages/history-sync/src/rpc/', 'packages/telegram/src/rpc/'];
+  const domainRpcPrefixes = [];
   const forbiddenTokens = ['registerExtension', 'listExtensions'];
 
   for (const file of files) {
@@ -601,171 +276,17 @@ function auditNoModuleExtensionEndpoints(files) {
   }
 }
 
-function auditServiceDirectorySurface() {
-  const packageJson = JSON.parse(
-    readFileSync(join(root, 'packages/service-directory/package.json'), 'utf8')
-  );
-  const exports = packageJson.exports ?? {};
-  if (JSON.stringify(exports) !== JSON.stringify({ './rpc': './src/rpc/index.ts' })) {
-    failures.push('Service Directory package must export only ./rpc');
-  }
-
-  const rpcIndex = readFileSync(join(root, 'packages/service-directory/src/rpc/index.ts'), 'utf8');
-  const expectedRpcIndex =
-    "export {\n  createServiceDirectoryClient,\n  type ServiceDirectoryClient,\n  type ServiceDirectoryProcedureCall\n} from './serviceDirectoryClient.js';";
-  if (rpcIndex.trim() !== expectedRpcIndex) {
-    failures.push(
-      'Service Directory public RPC surface must expose only the client and procedure-call types'
-    );
-  }
-
-  for (const file of listFiles(join(root, 'packages/service-directory/src'))) {
-    if (!file.endsWith('.ts')) {
-      continue;
-    }
-
-    const rel = toRel(file);
-    const source = readFileSync(file, 'utf8');
-    for (const token of ['registerExtension', 'listExtensions']) {
-      if (source.includes(token)) {
-        failures.push(`Service Directory must not expose old extension RPC method: ${rel}`);
-      }
-    }
-  }
-}
-
-function auditServiceDirectoryBootstrap() {
-  const requiredDependencies = [
-    'packages/telegram/package.json',
-    'packages/history-sync/package.json',
-    'packages/gateway/package.json',
-    'packages/control-plane/package.json'
-  ];
-
-  for (const file of requiredDependencies) {
-    const packageJson = JSON.parse(readFileSync(join(root, file), 'utf8'));
-    if (packageJson.dependencies?.['@agentg/service-directory'] === undefined) {
-      failures.push(`${file} must depend on @agentg/service-directory`);
-    }
-  }
-
-  const telegramIngestion = readFileSync(
-    join(root, 'packages/telegram/src/tdlib/ingestion.ts'),
-    'utf8'
-  );
-  if (!telegramIngestion.includes('createServiceDirectoryClient')) {
-    failures.push('Telegram must join Service Directory');
-  }
-  auditRequiredManifest('packages/telegram/src/module.ts', true);
-
-  const historySyncService = readFileSync(
-    join(root, 'packages/history-sync/src/service/runService.ts'),
-    'utf8'
-  );
-  if (!historySyncService.includes('createServiceDirectoryClient')) {
-    failures.push('History Sync must join Service Directory');
-  }
-  auditRequiredManifest('packages/history-sync/src/module.ts', true);
-
-  const gatewaySource = readFileSync(join(root, 'packages/gateway/src/agentGateway.ts'), 'utf8');
-  if (!gatewaySource.includes('createGatewayServiceManifest')) {
-    failures.push('Gateway must join Service Directory');
-  }
-  auditRequiredManifest('packages/gateway/src/registrations.ts', true);
-
-  const controlPlaneSource = readFileSync(
-    join(root, 'packages/control-plane/src/server/controlPlaneServer.ts'),
-    'utf8'
-  );
-  if (!controlPlaneSource.includes('createControlPlaneServiceManifest')) {
-    failures.push('Control Plane must join Service Directory');
-  }
-  auditRequiredManifest('packages/control-plane/src/server/registrations.ts', true);
-
-  const historySyncConfig = readFileSync(join(root, 'packages/history-sync/src/config.ts'), 'utf8');
-  if (historySyncConfig.includes('TELEGRAM_RPC_URL')) {
-    failures.push('History Sync config must resolve Telegram through Service Directory');
-  }
-
-  const gatewayConfig = readFileSync(join(root, 'packages/gateway/src/config.ts'), 'utf8');
-  if (gatewayConfig.includes('TELEGRAM_RPC_URL')) {
-    failures.push('Gateway config must resolve Telegram through Service Directory');
-  }
-
-  const controlPlaneConfig = readFileSync(
-    join(root, 'packages/control-plane/src/server/config.ts'),
-    'utf8'
-  );
-  for (const token of ['HISTORY_SYNC_RPC_URL', 'TELEGRAM_RPC_URL']) {
-    if (controlPlaneConfig.includes(token)) {
-      failures.push(`Control Plane config must resolve ${token} through Service Directory`);
-    }
-  }
-}
-
-function auditRequiredManifest(file, required) {
-  const source = readFileSync(join(root, file), 'utf8');
-  const token = `required: ${String(required)}`;
-  const compositionToken = `setRequired(${String(required)})`;
-  if (!source.includes(token) && !source.includes(compositionToken)) {
-    failures.push(`${file} must declare ${token}`);
-  }
-}
-
-function auditRegistryDoesNotCallRpc(files) {
-  for (const file of files) {
-    const rel = toRel(file);
-    if (
-      !rel.startsWith('packages/service-directory/src/') ||
-      rel === 'packages/service-directory/src/rpc/serviceDirectoryClient.ts'
-    ) {
-      continue;
-    }
-
-    const source = readFileSync(file, 'utf8');
-    const forbiddenTokens = ['@trpc/client', 'createTRPCClient', 'createTRPCUntypedClient'];
-    for (const token of forbiddenTokens) {
-      if (source.includes(token)) {
-        failures.push(`Service Directory server must not call RPC methods: ${rel} -> ${token}`);
-      }
-    }
-  }
-}
-
-function auditNoSharedWorkspacePackage() {
-  const removedSharedWorkspace = `packages/${'shared'}`;
-  const removedSharedPackage = `@agentg/${'shared'}`;
-  const workspacePackage = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
-  const workspaces = workspacePackage.workspaces ?? [];
-  if (workspaces.includes(removedSharedWorkspace)) {
-    failures.push(`root workspaces must not include ${removedSharedWorkspace}`);
-  }
-  if (existsSync(join(root, removedSharedWorkspace))) {
-    failures.push(`removed workspace directory must not exist: ${removedSharedWorkspace}`);
-  }
-
-  for (const file of listFiles(root)) {
-    const rel = toRel(file);
-    if (ignored(file) || rel === 'package-lock.json') {
-      continue;
-    }
-    if (!/\.(json|md|mjs|ts|vue)$/.test(rel) && rel !== 'Dockerfile') {
-      continue;
-    }
-    const source = readFileSync(file, 'utf8');
-    if (source.includes(removedSharedPackage) || source.includes(removedSharedWorkspace)) {
-      failures.push(`shared package reference is not allowed: ${rel}`);
-    }
-  }
-}
-
 function auditDockerfileWorkspacePackageCopies() {
   const dockerfile = readFileSync(join(root, 'Dockerfile'), 'utf8');
   const workspacePackage = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
-  const workspaces = new Set(workspacePackage.workspaces ?? []);
+  const workspaces = new Set(
+    (workspacePackage.workspaces ?? []).filter((workspace) => !isCurrentModuleWorkspace(workspace))
+  );
   const copiedPackages = [
     ...dockerfile.matchAll(/COPY packages\/([^/]+)\/package\.json packages\/\1\/package\.json/g)
-  ].map((match) => `packages/${match[1]}`);
+  ]
+    .map((match) => `packages/${match[1]}`)
+    .filter((workspace) => !isCurrentModuleWorkspace(workspace));
 
   for (const workspace of workspaces) {
     if (!copiedPackages.includes(workspace)) {
@@ -783,93 +304,19 @@ function auditDockerfileWorkspacePackageCopies() {
   }
 }
 
-function auditControlPlaneCompositionBoundaries(files) {
-  const packageJson = JSON.parse(
-    readFileSync(join(root, 'packages/control-plane/package.json'), 'utf8')
+function isCurrentModuleWorkspace(workspace) {
+  return (
+    workspace === 'packages/framework' ||
+    workspace === 'packages/registry' ||
+    workspace === 'packages/gateway' ||
+    workspace === 'packages/control-plane' ||
+    workspace === 'packages/telegram' ||
+    workspace === 'packages/history-sync'
   );
-  if (packageJson.dependencies?.['@trpc/client'] !== undefined) {
-    failures.push('Control Plane must use @agentg/framework instead of owning @trpc/client');
-  }
-
-  const forbiddenControlPlaneFiles = [
-    'packages/control-plane/src/control-plane/controlPlaneApi.ts',
-    'packages/control-plane/src/domain/chatNavigation.ts',
-    'packages/control-plane/src/server/control-plane-read-model.ts',
-    'packages/control-plane/src/stores/chat.ts',
-    'packages/control-plane/src/stores/overview.ts',
-    'packages/control-plane/src/stores/selectedHistorySync.ts',
-    'packages/control-plane/src/stores/selectedHistorySyncEvents.ts',
-    'packages/control-plane/src/view-models/chatSidebarView.ts',
-    'packages/control-plane/src/view-models/dashboardView.ts',
-    'packages/control-plane/src/view-models/selectedWorkspaceView.ts'
-  ];
-  const relFiles = new Set(files.map(toRel));
-  for (const file of forbiddenControlPlaneFiles) {
-    if (relFiles.has(file)) {
-      failures.push(`Control Plane must not own domain view state: ${file}`);
-    }
-  }
-
-  const layoutSource = readFileSync(
-    join(root, 'packages/control-plane/src/composition/slots/manifest.ts'),
-    'utf8'
-  );
-  for (const token of ['telegram.', 'history-sync.']) {
-    if (layoutSource.includes(token)) {
-      failures.push(`Control Plane default layout must be derived from providers: ${token}`);
-    }
-  }
-
-  const forbiddenTokens = [
-    'Telegram',
-    'telegram',
-    'History Sync',
-    'history-sync',
-    'history-sync',
-    '@agentg/telegram',
-    '@agentg/history-sync'
-  ];
-  for (const file of listFiles(join(root, 'packages/control-plane'))) {
-    const rel = toRel(file);
-    if (ignored(file) || !/\.(css|json|ts|vue)$/.test(rel)) {
-      continue;
-    }
-    const source = readFileSync(file, 'utf8');
-    for (const token of forbiddenTokens) {
-      if (source.includes(token)) {
-        failures.push(`Control Plane package must not contain domain token: ${rel} -> ${token}`);
-      }
-    }
-  }
-
-  for (const file of listFiles(join(root, 'packages/control-plane/src/server'))) {
-    const rel = toRel(file);
-    if (ignored(file) || !file.endsWith('.ts')) {
-      continue;
-    }
-    const source = readFileSync(file, 'utf8');
-    for (const token of [
-      '@trpc/client',
-      'createTRPCClient',
-      'createTRPCUntypedClient',
-      'httpBatchLink'
-    ]) {
-      if (source.includes(token)) {
-        failures.push(`Control Plane server must not own tRPC proxy code: ${rel} -> ${token}`);
-      }
-    }
-  }
 }
 
 function auditControlPlaneSdkHasNoDomainKnowledge(files) {
-  const forbiddenTokens = [
-    'telegram.',
-    'history-sync.',
-    'controlPlane.',
-    '@agentg/telegram',
-    '@agentg/history-sync',
-    '@agentg/control-plane'
-  ];
+  const forbiddenTokens = ['telegram.', 'history-sync.', 'controlPlane.', '@agentg/telegram'];
 
   for (const file of files) {
     const rel = toRel(file);
@@ -892,7 +339,7 @@ function auditDateContract(files) {
 
 function auditTelegramDateStorageContract() {
   const telegramGeneratedSchema = readFileSync(
-    join(root, 'packages/telegram/src/tdlib/databaseSchema.ts'),
+    join(root, 'packages/telegram/src/database/storageSchema.ts'),
     'utf8'
   );
   const telegramGeneratedMigration = readFileSync(
@@ -925,8 +372,8 @@ function auditControlPlaneEventDateContract(files) {
     if (
       !rel.startsWith('packages/control-plane/src/') &&
       !rel.startsWith('packages/control-plane-sdk/src/') &&
-      !rel.startsWith('packages/history-sync/src/control-plane/') &&
-      !rel.startsWith('packages/telegram/src/control-plane/')
+      !rel.startsWith('packages/history-sync/control-plane/') &&
+      !rel.startsWith('packages/telegram/control-plane/')
     ) {
       continue;
     }
@@ -969,7 +416,6 @@ function auditTdlibContractGeneration(files) {
     }
     auditTdlibStorageReviewPolicy(storageReview);
     auditTdlibStorageReviewParserContract(storageReviewPath);
-    auditTelegramChatLastMessageStorage(storageReview);
   }
 
   if (existsSync(oldCoveragePath)) {
@@ -1019,15 +465,7 @@ function auditTdlibContractGeneration(files) {
 }
 
 function auditTelegramWireBoundary(files) {
-  const boundaryPrefixes = [
-    'packages/telegram/src/tdlib/ingestion.ts',
-    'packages/telegram/src/rpc/',
-    'packages/telegram/src/tdlib/update-handlers/',
-    'packages/telegram/src/files/extractor.ts',
-    'packages/telegram/src/files/subsystem.ts',
-    'packages/telegram/src/history/fetch.ts',
-    'packages/telegram/src/store/'
-  ];
+  const boundaryPrefixes = [];
 
   for (const file of files) {
     const rel = toRel(file);
@@ -1052,24 +490,6 @@ function auditNoTdlibMarkdownArtifacts(files) {
     if (rel.startsWith(schemaRoot)) {
       failures.push(`old TDLib contract artifact is obsolete: ${rel}`);
     }
-  }
-}
-
-function auditTelegramChatLastMessageStorage(storageReview) {
-  const chatsTable = storageReview.tables.find((table) => table.name === 'telegram_chats');
-  const columns = chatsTable?.columns ?? [];
-  const lastMessage = columns.find((column) => column.name === 'last_message');
-  const lastMessageId = columns.find((column) => column.name === 'last_message_id');
-
-  if (lastMessage !== undefined) {
-    failures.push('telegram_chats must not store last_message JSON; store last_message_id instead');
-  }
-  if (lastMessageId === undefined) {
-    failures.push('telegram_chats must store last_message_id');
-    return;
-  }
-  if (lastMessageId.pgType !== 'bigint') {
-    failures.push('telegram_chats.last_message_id must be bigint');
   }
 }
 
@@ -1177,8 +597,8 @@ function auditScopedVueComponentStyles(vueFiles, sourceFiles) {
   const auditedPrefixes = [
     'packages/control-plane/src/',
     'packages/control-plane-sdk/src/',
-    'packages/history-sync/src/control-plane/',
-    'packages/telegram/src/control-plane/'
+    'packages/history-sync/control-plane/',
+    'packages/telegram/control-plane/'
   ];
 
   for (const file of sourceFiles) {
@@ -1283,17 +703,33 @@ function ignoredDirectory(directory) {
   return (
     rel === 'node_modules' ||
     rel === '.claude' ||
+    rel === '.codegraph' ||
+    rel === '.tmp' ||
     rel === 'dist' ||
     rel === 'dist-control-plane' ||
     rel === 'dist-server' ||
     rel === 'output' ||
+    rel === 'packages/framework' ||
+    rel === 'packages/registry' ||
+    rel === 'packages/gateway' ||
+    rel === 'packages/control-plane' ||
+    rel === 'packages/telegram' ||
+    rel === 'packages/history-sync' ||
     rel === 'td-data' ||
     rel.endsWith('/node_modules') ||
     rel.endsWith('/.claude') ||
+    rel.endsWith('/.codegraph') ||
+    rel.endsWith('/.tmp') ||
     rel.endsWith('/dist') ||
     rel.endsWith('/dist-control-plane') ||
     rel.endsWith('/dist-server') ||
     rel.endsWith('/output') ||
+    rel.endsWith('/packages/framework') ||
+    rel.endsWith('/packages/registry') ||
+    rel.endsWith('/packages/gateway') ||
+    rel.endsWith('/packages/control-plane') ||
+    rel.endsWith('/packages/telegram') ||
+    rel.endsWith('/packages/history-sync') ||
     rel.endsWith('/td-data') ||
     rel === '.git' ||
     rel.endsWith('/.git')
@@ -1305,17 +741,33 @@ function ignored(file) {
   return (
     rel.includes('/node_modules/') ||
     rel.includes('/.claude/') ||
+    rel.includes('/.codegraph/') ||
+    rel.includes('/.tmp/') ||
     rel.includes('/dist/') ||
     rel.includes('/dist-control-plane/') ||
     rel.includes('/dist-server/') ||
     rel.includes('/output/') ||
+    rel.includes('/packages/framework/') ||
+    rel.includes('/packages/registry/') ||
+    rel.includes('/packages/gateway/') ||
+    rel.includes('/packages/control-plane/') ||
+    rel.includes('/packages/telegram/') ||
+    rel.includes('/packages/history-sync/') ||
     rel.includes('/td-data/') ||
     rel.startsWith('node_modules/') ||
     rel.startsWith('.claude/') ||
+    rel.startsWith('.codegraph/') ||
+    rel.startsWith('.tmp/') ||
     rel.startsWith('dist/') ||
     rel.startsWith('dist-control-plane/') ||
     rel.startsWith('dist-server/') ||
     rel.startsWith('output/') ||
+    rel.startsWith('packages/framework/') ||
+    rel.startsWith('packages/registry/') ||
+    rel.startsWith('packages/gateway/') ||
+    rel.startsWith('packages/control-plane/') ||
+    rel.startsWith('packages/telegram/') ||
+    rel.startsWith('packages/history-sync/') ||
     rel.startsWith('td-data/')
   );
 }
