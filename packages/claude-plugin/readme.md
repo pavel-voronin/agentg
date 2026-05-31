@@ -5,13 +5,14 @@ Claude Code channel server for AgentG Gateway.
 The plugin is intentionally thin:
 
 - connects to AgentG Gateway over WebSocket
-- forwards `telegram.message.created` as Claude channel notifications
-- exposes one minimal read-only MCP tool, `list_recent_messages`
+- forwards selected gateway events as Claude channel notifications
+- exposes one minimal read-only MCP tool, `get_chat`
 
 Gateway defaults:
 
-- `AGENTG_GATEWAY_WS_URL=ws://127.0.0.1:8787/`
-- optional `AGENTG_GATEWAY_TOKEN`, sent as `?token=...`
+- `GATEWAY_WS_URL=ws://127.0.0.1:8787/`
+- optional `GATEWAY_TOKEN`, sent as a WebSocket `Authorization: Bearer ...`
+  header
 
 ## Gateway auth
 
@@ -22,14 +23,14 @@ To enable token auth, set the same token on both sides:
 
 ```sh
 # AgentG Gateway
-AGENT_GATEWAY_TOKEN=...
+GATEWAY_TOKEN=...
 
 # Claude plugin
-AGENTG_GATEWAY_TOKEN=...
+GATEWAY_TOKEN=...
 ```
 
-The plugin sends `AGENTG_GATEWAY_TOKEN` to the gateway as the WebSocket query
-parameter `?token=...`.
+The plugin sends `GATEWAY_TOKEN` to the gateway as a WebSocket
+`Authorization: Bearer ...` header.
 
 ## Claude MCP config
 

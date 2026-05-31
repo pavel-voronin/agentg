@@ -3,7 +3,7 @@
 ## Purpose
 
 Agent Gateway is the external WebSocket API boundary for agent-side clients.
-Gateway keeps NATS and internal tRPC services private. It exposes only the
+Gateway keeps NATS and internal module RPC services private. It exposes only the
 Gateway RPC methods explicitly owned by this document and only the live events
 explicitly allowed here.
 
@@ -16,20 +16,20 @@ extension composition, raw NATS subjects, database rows, or raw TDLib payloads.
 Telegram ingestion
   -> Postgres
   -> NATS Core subjects
-  <- internal tRPC
+  <- internal module RPC
 
 Agent Gateway
   <- NATS Core subject telegram.login.completed
   -> WebSocket clients
-  <-> Service Directory for Telegram ingestion discovery
-  <-> internal tRPC to Telegram ingestion for telegram.getChat
+  <-> Registry for Telegram ingestion discovery
+  <-> internal module RPC to Telegram ingestion for telegram.getChat
 ```
 
 Start locally:
 
 ```sh
 docker compose up -d postgres nats
-npm run dev:service-directory
+npm run dev:registry
 npm run dev:telegram
 npm run dev:gateway
 ```
@@ -37,15 +37,16 @@ npm run dev:gateway
 Configuration:
 
 - `NATS_URL`, default `nats://localhost:4222`
-- `AGENT_GATEWAY_HOST`, default `127.0.0.1`
-- `AGENT_GATEWAY_PORT`, default `8787`
-- `AGENT_GATEWAY_TOKEN`, optional query-string token
-- `SERVICE_DIRECTORY_RPC_URL`, default `http://127.0.0.1:18084`
+- `GATEWAY_HOST`, default `127.0.0.1`
+- `GATEWAY_PORT`, default `8787`
+- `GATEWAY_TOKEN`, optional bearer token
+- `REGISTRY_URL`, default `http://127.0.0.1:8701`
 
-When `AGENT_GATEWAY_TOKEN` is set, connect with:
+When `GATEWAY_TOKEN` is set, connect with the WebSocket
+`Authorization` header:
 
 ```text
-ws://127.0.0.1:8787/?token=...
+Authorization: Bearer ...
 ```
 
 ## External Events
@@ -109,7 +110,7 @@ Gateway error codes:
 
 - `unknown_method`: the external method is not part of Gateway's public API.
 - `dependency_unavailable`: the method is allowed, but its downstream service is
-  absent from the current Service Directory snapshot.
+  absent from the current Registry snapshot.
 - `method_failed`: the downstream call failed after routing.
 
 ## Methods
@@ -124,8 +125,8 @@ Gateway exposes exactly one external WebSocket RPC method.
 }
 ```
 
-`telegram.getChat` resolves the owning service through Service Directory, calls
-Telegram ingestion through its internal tRPC client, and returns Telegram's chat
+`telegram.getChat` resolves the owning service through Registry, calls
+Telegram ingestion through its internal module RPC client, and returns Telegram's chat
 read model. Gateway does not read Telegram storage directly, does not call TDLib
 directly, and does not enrich the result.
 

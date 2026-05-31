@@ -23,16 +23,15 @@ type GatewayResponse = {
   };
 };
 
-type IntegrationEvent = {
+type GatewayEvent = {
   id: string;
   type: string;
-  occurredAt: string;
-  data: Record<string, unknown>;
-  meta?: Record<string, unknown>;
+  at: string;
+  data?: unknown;
 };
 
 type GatewayEventPayload = {
-  event?: IntegrationEvent;
+  event?: GatewayEvent;
 };
 
 type Config = {
@@ -41,17 +40,17 @@ type Config = {
 };
 
 function readConfig(): Config {
-  const token = optionalString(process.env.AGENTG_GATEWAY_TOKEN);
+  const token = optionalString(process.env.GATEWAY_TOKEN);
 
   return {
-    wsUrl: new URL(process.env.AGENTG_GATEWAY_WS_URL ?? 'ws://127.0.0.1:8787/').toString(),
+    wsUrl: new URL(process.env.GATEWAY_WS_URL ?? 'ws://127.0.0.1:8787/').toString(),
     ...(token === undefined ? {} : { token })
   };
 }
 
 class AgentGBridge {
   private ws: WebSocket | null = null;
-  private nextRpcId = 1;
+  private nextRequestId = 1;
   private reconnectTimer: NodeJS.Timeout | null = null;
   private stopped = false;
   private readonly pending = new Map<
@@ -82,7 +81,7 @@ class AgentGBridge {
       throw new Error('AgentG gateway websocket is not connected');
     }
 
-    const id = this.nextRpcId++;
+    const id = this.nextRequestId++;
     const request: GatewayRequest = { id, method, params };
 
     return new Promise((resolve, reject) => {
@@ -98,9 +97,16 @@ class AgentGBridge {
 
   private connect(): void {
     const url = new URL(this.config.wsUrl);
-    if (this.config.token) url.searchParams.set('token', this.config.token);
-
-    const ws = new WebSocket(url);
+    const ws = new WebSocket(
+      url,
+      this.config.token === undefined
+        ? undefined
+        : {
+            headers: {
+              authorization: `Bearer ${this.config.token}`
+            }
+          }
+    );
     this.ws = ws;
 
     ws.on('open', () => {
@@ -162,10 +168,9 @@ class AgentGBridge {
         content: JSON.stringify(
           {
             event: event.type,
+            at: event.at,
             id: event.id,
-            occurredAt: event.occurredAt,
-            data: event.data,
-            meta: event.meta ?? {}
+            data: event.data
           },
           null,
           2
@@ -186,7 +191,7 @@ const server = new Server(
     },
     instructions: [
       'This plugin bridges AgentG Telegram client gateway into Claude Code.',
-      'Incoming Telegram message events arrive as Claude channel notifications with event=telegram.message.created.',
+      'Incoming Telegram gateway events arrive as Claude channel notifications.',
       'The plugin is intentionally thin; event selection and available gateway behavior are owned by AgentG Gateway.'
     ].join('\n')
   }
@@ -202,8 +207,12 @@ function optionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
-function optionalLimit(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : undefined;
+function requiredString(value: unknown, name: string): string {
+  if (typeof value === 'string' && value.trim() !== '') {
+    return value;
+  }
+
+  throw new Error(`${name} is required`);
 }
 
 function rawDataToString(payload: RawData): string {
@@ -223,14 +232,14 @@ const bridge = new AgentGBridge(readConfig(), server);
 server.setRequestHandler(ListToolsRequestSchema, () => ({
   tools: [
     {
-      name: 'list_recent_messages',
-      description: 'List recent Telegram messages from AgentG Gateway.',
+      name: 'get_chat',
+      description: 'Read one Telegram chat from AgentG Gateway.',
       inputSchema: {
         type: 'object',
         properties: {
-          chatId: { type: 'string' },
-          limit: { type: 'number' }
-        }
+          chatId: { type: 'string' }
+        },
+        required: ['chatId']
       }
     }
   ]
@@ -240,11 +249,10 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
   const args = req.params.arguments ?? {};
 
   switch (req.params.name) {
-    case 'list_recent_messages':
+    case 'get_chat':
       return toolResult(
-        await bridge.call('telegram.listRecentMessages', {
-          chatId: optionalString(args.chatId),
-          limit: optionalLimit(args.limit)
+        await bridge.call('telegram.getChat', {
+          chatId: requiredString(args.chatId, 'chatId')
         })
       );
     default:
