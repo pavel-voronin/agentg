@@ -1,33 +1,103 @@
-import { createServer, type Server } from 'node:http';
-
-import type { EventBus, EventSubscription } from '@agentg/events/bus';
-import { createIntegrationEvent, type IntegrationEvent } from '@agentg/events/envelope';
-import type { ServiceDirectoryClient } from '@agentg/service-directory/rpc';
+import {
+  httpRpc,
+  type EventBus,
+  type EventEnvelope,
+  type EventSubscription,
+  type RegistryClient,
+  type Snapshot
+} from '@agentg/framework';
 import { WebSocket, type RawData } from 'ws';
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-  startControlPlaneServer,
-  type ControlPlaneServerConfig
-} from '../src/server/controlPlaneServer.js';
+import { startServer, type ServerConfig } from '../src/server/server.js';
 
 describe('Control Plane server boundary', () => {
-  it('routes browser RPC through the procedure proxy and forwards events', async () => {
-    const eventBus = createFakeEventBus();
-    const procedureProxy = {
-      call: vi.fn(() =>
-        Promise.resolve({
+  it('routes browser RPC through local procedures and forwards events', async () => {
+    const events = createFakeEventBus();
+    const registry = createFakeRegistry({
+      modules: [],
+      version: 0
+    });
+    const localProcedure = vi.fn(() =>
+      Promise.resolve({
+        items: 3,
+        records: 5
+      })
+    );
+
+    const server = await startServer({
+      config: testServerConfig(),
+      events,
+      procedures: {
+        'cp.getStatus': localProcedure
+      },
+      registry
+    });
+    const socket = await openWebSocket(`ws://127.0.0.1:${String(server.port)}/ws`);
+
+    try {
+      socket.send(JSON.stringify({ id: 1, method: 'cp.getStatus', params: { limit: 10 } }));
+
+      await expect(nextJsonMessage(socket)).resolves.toEqual({
+        id: 1,
+        result: {
           items: 3,
           records: 5
-        })
-      ),
-      close: vi.fn()
-    };
+        }
+      });
+      expect(localProcedure).toHaveBeenCalledWith({ limit: 10 });
 
-    const server = await startControlPlaneServer({
-      config: testControlPlaneServerConfig(),
-      eventBus,
-      procedureProxy
+      const event = eventEnvelope('beta.coverage.changed', {
+        recordId: 'record-a'
+      });
+      await events.emit(event);
+
+      await expect(nextJsonMessage(socket)).resolves.toEqual({
+        event: {
+          data: {
+            recordId: 'record-a'
+          },
+          id: event.id,
+          occurredAt: event.at,
+          type: 'beta.coverage.changed'
+        }
+      });
+    } finally {
+      socket.close();
+      await server.close();
+      registry.close();
+    }
+  });
+
+  it('routes browser RPC through registry module procedures', async () => {
+    const events = createFakeEventBus();
+    const moduleServer = await httpRpc({ port: 0 }).start({
+      getStatus: (...args: never[]) =>
+        Promise.resolve({
+          input: args[0],
+          ok: true
+        })
+    });
+    const registry = createFakeRegistry({
+      modules: [
+        {
+          expiresAt: '2026-05-04T00:01:00.000Z',
+          extensions: [],
+          module: 'beta',
+          procedures: ['getStatus'],
+          registeredAt: '2026-05-04T00:00:00.000Z',
+          required: false,
+          rpcUrl: moduleServer.url
+        }
+      ],
+      version: 1
+    });
+    const refresh = vi.spyOn(registry, 'refresh');
+
+    const server = await startServer({
+      config: testServerConfig(),
+      events,
+      registry
     });
     const socket = await openWebSocket(`ws://127.0.0.1:${String(server.port)}/ws`);
 
@@ -37,71 +107,40 @@ describe('Control Plane server boundary', () => {
       await expect(nextJsonMessage(socket)).resolves.toEqual({
         id: 1,
         result: {
-          items: 3,
-          records: 5
+          input: {
+            limit: 10
+          },
+          ok: true
         }
       });
-      expect(procedureProxy.call).toHaveBeenCalledWith('beta.getStatus', { limit: 10 });
-
-      const event = createIntegrationEvent({
-        data: {
-          recordId: 'record-a'
-        },
-        type: 'beta.coverage.changed'
-      });
-      await eventBus.emit(event);
-
-      await expect(nextJsonMessage(socket)).resolves.toEqual({
-        event
-      });
-
-      const rpcEvent = createIntegrationEvent({
-        data: {
-          callId: 'call-a',
-          target: 'beta.getStatus'
-        },
-        type: 'beta.rpc.getStatus.started'
-      });
-      await eventBus.emit(rpcEvent);
-
-      await expect(nextJsonMessage(socket)).resolves.toEqual({
-        event: rpcEvent
-      });
-
-      const analysisEvent = createIntegrationEvent({
-        data: {
-          recordId: 'record-a',
-          runId: 'run-a'
-        },
-        type: 'beta.analysis.requested'
-      });
-      await eventBus.emit(analysisEvent);
-
-      await expect(nextJsonMessage(socket)).resolves.toEqual({
-        event: analysisEvent
-      });
+      expect(refresh).not.toHaveBeenCalled();
     } finally {
       socket.close();
       await server.close();
+      registry.close();
+      await moduleServer.stop();
     }
   });
 
-  it('returns proxy failures as RPC errors', async () => {
-    const eventBus = createFakeEventBus();
-    const procedureProxy = {
-      call: vi.fn(() => Promise.reject(new Error('Procedure failed'))),
-      close: vi.fn()
-    };
+  it('returns procedure failures as RPC errors', async () => {
+    const events = createFakeEventBus();
+    const registry = createFakeRegistry({
+      modules: [],
+      version: 0
+    });
 
-    const server = await startControlPlaneServer({
-      config: testControlPlaneServerConfig(),
-      eventBus,
-      procedureProxy
+    const server = await startServer({
+      config: testServerConfig(),
+      events,
+      procedures: {
+        'cp.fail': () => Promise.reject(new Error('Procedure failed'))
+      },
+      registry
     });
     const socket = await openWebSocket(`ws://127.0.0.1:${String(server.port)}/ws`);
 
     try {
-      socket.send(JSON.stringify({ id: 2, method: 'alpha.fail', params: {} }));
+      socket.send(JSON.stringify({ id: 2, method: 'cp.fail', params: {} }));
 
       await expect(nextJsonMessage(socket)).resolves.toEqual({
         id: 2,
@@ -113,39 +152,54 @@ describe('Control Plane server boundary', () => {
     } finally {
       socket.close();
       await server.close();
+      registry.close();
     }
   });
 
-  it('serves browser runtime metadata endpoints without a service directory client', async () => {
-    const eventBus = createFakeEventBus();
-    const procedureProxy = {
-      call: vi.fn(() => Promise.resolve(null)),
-      close: vi.fn()
-    };
+  it('serves runtime endpoints from registry snapshot metadata', async () => {
+    const events = createFakeEventBus();
+    const registry = createFakeRegistry({
+      modules: [
+        {
+          expiresAt: '2026-05-04T00:01:00.000Z',
+          extensions: [],
+          module: 'alpha',
+          procedures: ['listItems'],
+          registeredAt: '2026-05-04T00:00:00.000Z',
+          required: false,
+          rpcUrl: 'http://127.0.0.1:1'
+        }
+      ],
+      version: 1
+    });
 
-    const server = await startControlPlaneServer({
-      config: testControlPlaneServerConfig(),
-      eventBus,
-      procedureProxy
+    const server = await startServer({
+      config: testServerConfig(),
+      events,
+      registry
     });
 
     try {
-      await expect(
-        fetch(`http://127.0.0.1:${String(server.port)}/control-plane/content-catalog`).then(
-          (response) => response.json()
-        )
-      ).resolves.toEqual({
-        providers: [],
-        version: 0
-      });
       await expect(
         fetch(`http://127.0.0.1:${String(server.port)}/control-plane/event-catalog`).then(
           (response) => response.json()
         )
       ).resolves.toEqual({
-        services: [],
-        version: 0
+        services: [
+          {
+            events: [],
+            procedures: [
+              {
+                kind: 'procedure',
+                name: 'alpha.listItems'
+              }
+            ],
+            slug: 'alpha'
+          }
+        ],
+        version: 1
       });
+
       const runtimeResponse = await fetch(
         `http://127.0.0.1:${String(server.port)}/control-plane/runtime/vue.js`
       );
@@ -153,136 +207,99 @@ describe('Control Plane server boundary', () => {
       await expect(runtimeResponse.text()).resolves.toContain('__VUE_HMR_RUNTIME__');
     } finally {
       await server.close();
+      registry.close();
     }
   });
 
-  it('publishes versioned provider asset URLs and proxies only the active version', async () => {
-    const eventBus = createFakeEventBus();
-    const providerServer = await startProviderAssetServer({
-      '/control-plane-assets/assets/style.css': '.alpha { color: red; }',
-      '/control-plane-assets/chunks/shared.js': 'export const shared = true',
-      '/control-plane-assets/tile.js': 'export default {}'
+  it('proxies module file URLs through the module file procedure', async () => {
+    const events = createFakeEventBus();
+    const moduleServer = await httpRpc({ port: 0 }).start({
+      'cp.file': (...args: never[]) => {
+        const input = args[0] as unknown;
+        if (isFileRequest(input) && input.path === '/assets/icon.svg') {
+          return Promise.resolve({
+            bodyBase64: Buffer.from('<svg />').toString('base64'),
+            contentType: 'image/svg+xml'
+          });
+        }
+        throw new Error('File not found');
+      }
     });
-    const serviceDirectory = createFakeServiceDirectory({
-      extensions: [],
-      services: [
+    const registry = createFakeRegistry({
+      modules: [
         {
-          controlPlane: {
-            assetVersion: 'asset-v1',
-            assetVersions: {
-              'assets/style.css': 'style-v1',
-              'chunks/shared.js': 'chunk-v1',
-              'tile.js': 'tile-v1'
-            },
-            contents: [
-              {
-                contentId: 'alpha.tile',
-                metadata: {
-                  tab: {
-                    label: 'Alpha',
-                    order: 10
-                  }
-                },
-                module: {
-                  assetPath: 'tile.js'
-                },
-                styleAssetPaths: ['assets/style.css'],
-                tags: ['dashboard.tile']
-              }
-            ]
-          },
-          events: [],
           expiresAt: '2026-05-04T00:01:00.000Z',
           extensions: [],
-          procedures: [],
+          module: 'alpha',
+          procedures: ['cp.file'],
           registeredAt: '2026-05-04T00:00:00.000Z',
           required: false,
-          rpcUrl: serverUrl(providerServer),
-          slug: 'alpha'
+          rpcUrl: moduleServer.url
         }
       ],
       version: 1
     });
 
+    const server = await startServer({
+      config: testServerConfig(),
+      events,
+      registry
+    });
+
     try {
-      const controlPlane = await startControlPlaneServer({
-        config: testControlPlaneServerConfig(),
-        eventBus,
-        procedureProxy: {
-          call: vi.fn(() => Promise.resolve(null)),
-          close: vi.fn()
-        },
-        serviceDirectory
-      });
+      const response = await fetch(
+        `http://127.0.0.1:${String(server.port)}/control-plane/module-files/alpha/assets/icon.svg`
+      );
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toBe('image/svg+xml');
+      await expect(response.text()).resolves.toBe('<svg />');
 
-      try {
-        const catalog = (await fetch(
-          `http://127.0.0.1:${String(controlPlane.port)}/control-plane/content-catalog`
-        ).then((response) => response.json())) as unknown;
-
-        expect(catalog).toMatchObject({
-          providers: [
-            {
-              assetVersion: 'asset-v1',
-              contents: [
-                {
-                  contentId: 'alpha.tile',
-                  metadata: {
-                    tab: {
-                      label: 'Alpha',
-                      order: 10
-                    }
-                  },
-                  module: {
-                    url: '/control-plane/provider-assets/alpha/tile-v1/tile.js'
-                  },
-                  styleUrls: ['/control-plane/provider-assets/alpha/style-v1/assets/style.css'],
-                  tags: ['dashboard.tile']
-                }
-              ],
-              domainId: 'alpha'
-            }
-          ]
-        });
-
-        await expect(
-          fetch(
-            `http://127.0.0.1:${String(controlPlane.port)}/control-plane/provider-assets/alpha/tile-v1/tile.js`
-          ).then((response) => response.text())
-        ).resolves.toBe('export default {}');
-        await expect(
-          fetch(
-            `http://127.0.0.1:${String(controlPlane.port)}/control-plane/provider-assets/alpha/tile-v1/chunks/shared.js`
-          ).then((response) => response.text())
-        ).resolves.toBe('export const shared = true');
-        await expect(
-          fetch(
-            `http://127.0.0.1:${String(controlPlane.port)}/control-plane/provider-assets/alpha/old/tile.js`
-          ).then((response) => response.status)
-        ).resolves.toBe(404);
-      } finally {
-        await controlPlane.close();
-      }
+      await expect(
+        fetch(
+          `http://127.0.0.1:${String(server.port)}/control-plane/module-files/alpha/assets/missing.svg`
+        ).then((missing) => missing.status)
+      ).resolves.toBe(404);
     } finally {
-      serviceDirectory.close();
-      await closeServer(providerServer);
+      await server.close();
+      registry.close();
+      await moduleServer.stop();
+    }
+  });
+
+  it('closes browser WebSocket connections that send oversized payloads', async () => {
+    const events = createFakeEventBus();
+    const registry = createFakeRegistry({
+      modules: [],
+      version: 0
+    });
+    const server = await startServer({
+      config: testServerConfig(),
+      events,
+      registry
+    });
+    const socket = await openWebSocket(`ws://127.0.0.1:${String(server.port)}/ws`);
+
+    try {
+      const close = nextClose(socket);
+      socket.send('x'.repeat(1_000_001));
+
+      await expect(close).resolves.toBe(1009);
+    } finally {
+      socket.close();
+      await server.close();
+      registry.close();
     }
   });
 });
 
 type FakeEventBus = EventBus & {
-  emit(event: IntegrationEvent): Promise<void>;
+  emit(event: EventEnvelope): Promise<void>;
 };
-type ServiceDirectorySnapshot = ReturnType<ServiceDirectoryClient['getSnapshot']>;
 
-function testControlPlaneServerConfig(
-  overrides: Partial<ControlPlaneServerConfig> = {}
-): ControlPlaneServerConfig {
+function testServerConfig(overrides: Partial<ServerConfig> = {}): ServerConfig {
   return {
     host: '127.0.0.1',
     port: 0,
-    runtimeVueBuild: 'development',
-    serviceUrl: 'http://127.0.0.1:0',
     staticDir: '/tmp/agentg-control-plane-test-missing',
     ...overrides
   };
@@ -292,16 +309,13 @@ function createFakeEventBus(): FakeEventBus {
   const subscriptions = new Map<
     number,
     {
-      handler: (event: IntegrationEvent) => void | Promise<void>;
+      handler: (event: EventEnvelope) => void | Promise<void>;
       subject: string;
     }
   >();
   let nextId = 1;
 
   return {
-    close(): Promise<void> {
-      return Promise.resolve();
-    },
     async emit(event): Promise<void> {
       for (const subscription of subscriptions.values()) {
         if (matchesSubject(subscription.subject, event.type)) {
@@ -311,6 +325,12 @@ function createFakeEventBus(): FakeEventBus {
     },
     publish(): void {
       return;
+    },
+    start(): Promise<void> {
+      return Promise.resolve();
+    },
+    stop(): Promise<void> {
+      return Promise.resolve();
     },
     subscribe(subject, handler): EventSubscription {
       const id = nextId;
@@ -328,12 +348,45 @@ function createFakeEventBus(): FakeEventBus {
   };
 }
 
+function eventEnvelope(type: string, data: unknown): EventEnvelope {
+  return {
+    at: '2026-05-05T00:00:00.000Z',
+    data,
+    id: `event:${type}`,
+    type
+  };
+}
+
 function matchesSubject(subject: string, type: string): boolean {
+  if (subject === '>') {
+    return true;
+  }
   if (subject.endsWith('>')) {
     return type.startsWith(subject.slice(0, -1));
   }
 
   return subject === type;
+}
+
+function createFakeRegistry(initialSnapshot: Snapshot): RegistryClient {
+  const snapshot = initialSnapshot;
+  return {
+    close(): void {
+      return;
+    },
+    getSnapshot(): Snapshot {
+      return snapshot;
+    },
+    join(): Promise<Snapshot> {
+      return Promise.resolve(snapshot);
+    },
+    refresh(): Promise<Snapshot> {
+      return Promise.resolve(snapshot);
+    },
+    renew(): Promise<Snapshot> {
+      return Promise.resolve(snapshot);
+    }
+  };
 }
 
 function openWebSocket(url: string): Promise<WebSocket> {
@@ -363,6 +416,14 @@ function nextJsonMessage(socket: WebSocket): Promise<unknown> {
   });
 }
 
+function nextClose(socket: WebSocket): Promise<number> {
+  return new Promise((resolve) => {
+    socket.once('close', (code) => {
+      resolve(code);
+    });
+  });
+}
+
 function rawDataToString(data: RawData): string {
   if (typeof data === 'string') {
     return data;
@@ -379,74 +440,8 @@ function rawDataToString(data: RawData): string {
   return Buffer.from(data).toString('utf8');
 }
 
-function createFakeServiceDirectory(snapshot: ServiceDirectorySnapshot): ServiceDirectoryClient {
-  return {
-    close(): void {
-      return;
-    },
-    extensionsForTarget(target): ServiceDirectorySnapshot['extensions'] {
-      return snapshot.extensions.filter((extension) => extension.target === target);
-    },
-    getSnapshot(): ServiceDirectorySnapshot {
-      return snapshot;
-    },
-    join(): Promise<ServiceDirectorySnapshot> {
-      return Promise.resolve(snapshot);
-    },
-    refresh(): Promise<ServiceDirectorySnapshot> {
-      return Promise.resolve(snapshot);
-    },
-    renew(): Promise<ServiceDirectorySnapshot> {
-      return Promise.resolve(snapshot);
-    },
-    resolveProcedure(procedure) {
-      throw new Error(`Procedure is not registered in fake Service Directory: ${procedure}`);
-    }
-  };
-}
-
-function startProviderAssetServer(assets: Record<string, string>): Promise<Server> {
-  const server = createServer((request, response) => {
-    const path = new URL(request.url ?? '/', 'http://localhost').pathname;
-    const body = assets[path];
-    if (body === undefined) {
-      response.writeHead(404, {
-        'content-type': 'text/plain; charset=utf-8'
-      });
-      response.end('Not Found');
-      return;
-    }
-    response.writeHead(200, {
-      'content-type': path.endsWith('.css')
-        ? 'text/css; charset=utf-8'
-        : 'text/javascript; charset=utf-8'
-    });
-    response.end(body);
-  });
-
-  return new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', () => {
-      resolve(server);
-    });
-  });
-}
-
-function closeServer(server: Server): Promise<void> {
-  return new Promise((resolve, reject) => {
-    server.close((error) => {
-      if (error !== undefined) {
-        reject(error);
-        return;
-      }
-      resolve();
-    });
-  });
-}
-
-function serverUrl(server: Server): string {
-  const address = server.address();
-  if (typeof address !== 'object' || address === null) {
-    throw new Error('Server is not listening on a TCP port');
-  }
-  return `http://127.0.0.1:${String(address.port)}`;
+function isFileRequest(value: unknown): value is { path: string } {
+  return (
+    typeof value === 'object' && value !== null && 'path' in value && typeof value.path === 'string'
+  );
 }

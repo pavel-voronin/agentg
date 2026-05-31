@@ -1,4 +1,8 @@
-import type { ControlPlaneHost, ControlPlaneHostEvent } from '@agentg/control-plane-sdk/host';
+import type {
+  ControlPlaneHost,
+  ControlPlaneHostEvent,
+  ModelRefSelection
+} from '@agentg/framework/cp';
 import { onBeforeUnmount, onMounted } from 'vue';
 
 import { createControlPlaneClient } from '../control-plane/controlPlaneClient.js';
@@ -12,6 +16,7 @@ export function useControlPlaneRuntime(): ControlPlaneHost {
   const appShellStore = useAppShellStore();
   const eventsStore = useEventsStore();
   const eventListeners = new Set<(event: ControlPlaneHostEvent) => void>();
+  const modelRefListeners = new Set<(selection: ModelRefSelection) => void>();
   let runtimeStarted = false;
 
   const controlPlane = createControlPlaneClient({
@@ -37,10 +42,21 @@ export function useControlPlaneRuntime(): ControlPlaneHost {
     rpc(method, params) {
       return controlPlane.rpc(method, params);
     },
+    selectModelRef(selection) {
+      for (const listener of modelRefListeners) {
+        listener(selection);
+      }
+    },
     subscribeEvents(listener) {
       eventListeners.add(listener);
       return () => {
         eventListeners.delete(listener);
+      };
+    },
+    subscribeModelRefs(listener) {
+      modelRefListeners.add(listener);
+      return () => {
+        modelRefListeners.delete(listener);
       };
     }
   };
@@ -90,6 +106,7 @@ export function useControlPlaneRuntime(): ControlPlaneHost {
     }
     runtimeStarted = false;
     eventListeners.clear();
+    modelRefListeners.clear();
     controlPlane.disconnect();
   }
 
