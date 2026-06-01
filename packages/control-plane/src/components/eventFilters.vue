@@ -7,7 +7,7 @@ import type {
   EventFilterLifecycleColumnView,
   EventFiltersPanelView
 } from '../stores/controlPlaneTypes.js';
-import UiButton from '@agentg/control-plane-sdk/ui';
+import { UiButton } from '@agentg/framework/cp';
 
 const props = defineProps<{
   view: EventFiltersPanelView;

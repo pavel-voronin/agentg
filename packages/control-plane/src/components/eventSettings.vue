@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 
-import UiButton from '@agentg/control-plane-sdk/ui';
+import { UiButton } from '@agentg/framework/cp';
 
 const props = defineProps<{
   eventLimit: number;

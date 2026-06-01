@@ -145,8 +145,15 @@ function eventDomainFromType(type: string): string {
 function eventCatalogTypesInState(state: EventFilterSource): string[] {
   return state.eventCatalog.services.flatMap((service) => [
     ...service.events,
-    ...service.procedures.flatMap((procedure) => rpcCallEventTypesForProcedure(procedure.name))
+    ...service.procedures.flatMap((procedure) =>
+      rpcCallEventTypesForProcedure(eventCatalogProcedureTarget(service.slug, procedure.name))
+    )
   ]);
+}
+
+function eventCatalogProcedureTarget(serviceSlug: string, procedureName: string): string {
+  const name = procedureName.trim();
+  return name.startsWith(`${serviceSlug}.`) ? name : `${serviceSlug}.${name}`;
 }
 
 function labelForEventDomain(domain: string): string {

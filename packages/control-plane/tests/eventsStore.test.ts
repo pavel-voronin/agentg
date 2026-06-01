@@ -184,14 +184,14 @@ describe('events store', () => {
     expect(store.events.map((item) => item.yamlListItemLimit)).toEqual([2, 5]);
   });
 
-  it('stores the Service Directory event catalog used by filter view models', () => {
+  it('stores the Registry event catalog used by filter view models', () => {
     const store = useEventsStore();
 
     store.setEventCatalog({
       services: [
         {
           events: ['alpha.message.created'],
-          procedures: [{ kind: 'query', name: 'alpha.listItems' }],
+          procedures: [{ kind: 'procedure', name: 'alpha.listItems' }],
           slug: 'alpha'
         }
       ],
@@ -202,7 +202,7 @@ describe('events store', () => {
       services: [
         {
           events: ['alpha.message.created'],
-          procedures: [{ kind: 'query', name: 'alpha.listItems' }],
+          procedures: [{ kind: 'procedure', name: 'alpha.listItems' }],
           slug: 'alpha'
         }
       ],

@@ -6,11 +6,10 @@ import type {
 
 export const CONTROL_PLANE_EVENT_CATALOG_PATH = '/control-plane/event-catalog';
 
-type ServiceDirectorySnapshotLike = {
-  services: {
-    events: string[];
-    procedures: EventCatalogProcedure[];
-    slug: string;
+type RegistrySnapshotLike = {
+  modules: readonly {
+    module: string;
+    procedures: readonly string[];
   }[];
   version: number;
 };
@@ -26,20 +25,26 @@ export async function loadControlPlaneEventCatalog(): Promise<EventCatalogState>
   return parseEventCatalogState(await response.json());
 }
 
-export function eventCatalogFromServiceDirectorySnapshot(
-  snapshot: ServiceDirectorySnapshotLike
+export function eventCatalogFromRegistrySnapshot(
+  snapshot: RegistrySnapshotLike
 ): EventCatalogState {
   return {
-    services: snapshot.services.map((service) => ({
-      events: [...service.events].sort(),
-      procedures: service.procedures.map((procedure) => ({
-        kind: procedure.kind,
-        name: procedure.name
+    services: snapshot.modules.map((moduleRecord) => ({
+      events: [],
+      procedures: moduleRecord.procedures.map((procedure) => ({
+        kind: 'procedure',
+        name: eventCatalogProcedureName(moduleRecord.module, procedure)
       })),
-      slug: service.slug
+      slug: moduleRecord.module
     })),
     version: snapshot.version
   };
+}
+
+function eventCatalogProcedureName(moduleName: string, procedureName: string): string {
+  return procedureName.startsWith(`${moduleName}.`)
+    ? procedureName
+    : `${moduleName}.${procedureName}`;
 }
 
 function parseEventCatalogState(value: unknown): EventCatalogState {
@@ -79,11 +84,7 @@ function parseEventCatalogService(value: unknown): EventCatalogService {
 }
 
 function parseEventCatalogProcedure(value: unknown): EventCatalogProcedure {
-  if (
-    !isRecord(value) ||
-    typeof value.name !== 'string' ||
-    (value.kind !== 'mutation' && value.kind !== 'query')
-  ) {
+  if (!isRecord(value) || typeof value.name !== 'string' || value.kind !== 'procedure') {
     throw new Error('Control Plane event catalog procedure must include name and kind');
   }
 

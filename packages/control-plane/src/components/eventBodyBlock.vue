@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { dispatchModelRefSelected } from '@agentg/control-plane-sdk/model-ref-events';
+import { useControlPlaneHost } from '@agentg/framework/cp';
 import { computed, shallowRef } from 'vue';
 
 import type {
@@ -17,6 +17,7 @@ const props = defineProps<{
 }>();
 
 const expandedRevealIds = shallowRef<ReadonlySet<string>>(new Set());
+const host = useControlPlaneHost();
 const renderedYamlLines = computed(() =>
   visibleYamlLines(props.body.yamlLines, expandedRevealIds.value)
 );
@@ -35,7 +36,7 @@ function revealYamlLine(line: AppEventYamlRevealLine): void {
 }
 
 function selectModelRef(model: string, id: string): void {
-  dispatchModelRefSelected({ id, model });
+  host.selectModelRef({ id, model });
 }
 
 function visibleYamlLines(

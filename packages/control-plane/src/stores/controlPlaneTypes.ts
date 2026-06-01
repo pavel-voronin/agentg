@@ -1,10 +1,11 @@
-import {
-  RPC_CALL_EVENT_LIFECYCLES,
-  rpcCallEventTarget,
-  rpcCallEventTypesForProcedure,
-  rpcCallEventType
-} from '@agentg/framework';
-import type { RpcCallEventSuffix } from '@agentg/framework';
+const RPC_CALL_EVENT_LIFECYCLES = [
+  { label: 'S', suffix: 'started', title: 'Started' },
+  { label: 'C', suffix: 'completed', title: 'Completed' },
+  { label: 'F', suffix: 'failed', title: 'Failed' },
+  { label: 'P', suffix: 'progress', title: 'Progress' }
+] as const;
+
+type RpcCallEventSuffix = (typeof RPC_CALL_EVENT_LIFECYCLES)[number]['suffix'];
 
 export const DEFAULT_EVENT_LIMIT = 200;
 export const DEFAULT_EVENT_YAML_LIST_LIMIT = 12;
@@ -125,7 +126,7 @@ export type EventFiltersState = {
 };
 
 export type EventCatalogProcedure = {
-  kind: 'mutation' | 'query';
+  kind: 'procedure';
   name: string;
 };
 
@@ -139,6 +140,37 @@ export type EventCatalogState = {
   services: EventCatalogService[];
   version: number;
 };
+
+export function rpcCallEventType(target: string, suffix: RpcCallEventSuffix): string {
+  const [domain, ...procedureSegments] = target.split('.');
+  const procedure = procedureSegments.join('.');
+  if (domain === undefined || domain.length === 0 || procedure.length === 0) {
+    throw new Error(`Invalid RPC call target: ${target}`);
+  }
+  return `${domain}.rpc.${procedure}.${suffix}`;
+}
+
+export function rpcCallEventTypesForProcedure(target: string): string[] {
+  return RPC_CALL_EVENT_LIFECYCLES.map((lifecycle) => rpcCallEventType(target, lifecycle.suffix));
+}
+
+export function rpcCallEventTarget(type: string): string | null {
+  const suffix = RPC_CALL_EVENT_LIFECYCLES.find((lifecycle) =>
+    type.endsWith(`.${lifecycle.suffix}`)
+  )?.suffix;
+  if (suffix === undefined) {
+    return null;
+  }
+
+  const eventName = type.slice(0, -(suffix.length + 1));
+  const [domain, category, ...procedureSegments] = eventName.split('.');
+  const procedure = procedureSegments.join('.');
+  if (domain === undefined || domain.length === 0 || category !== 'rpc' || procedure.length === 0) {
+    return null;
+  }
+
+  return `${domain}.${procedure}`;
+}
 
 export type EventFilterTypeView = {
   enabled: boolean;
@@ -202,7 +234,7 @@ export type EventFiltersPanelView = {
 
 export type EventsPanelMode = 'events' | 'filters' | 'settings';
 
-export { RPC_CALL_EVENT_LIFECYCLES, rpcCallEventTarget, rpcCallEventTypesForProcedure };
+export { RPC_CALL_EVENT_LIFECYCLES };
 
 export function rpcCallLifecycleEventType(target: string, suffix: RpcCallEventSuffix): string {
   return rpcCallEventType(target, suffix);

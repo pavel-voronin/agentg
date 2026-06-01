@@ -13,7 +13,7 @@ describe('event filters view', () => {
         services: [
           {
             events: ['alpha.message.created'],
-            procedures: [{ kind: 'query', name: 'alpha.listItems' }],
+            procedures: [{ kind: 'procedure', name: 'alpha.listItems' }],
             slug: 'alpha'
           }
         ],
@@ -47,7 +47,7 @@ describe('event filters view', () => {
         services: [
           {
             events: [],
-            procedures: [{ kind: 'query', name: 'alpha.listItems' }],
+            procedures: [{ kind: 'procedure', name: 'alpha.listItems' }],
             slug: 'alpha'
           }
         ],

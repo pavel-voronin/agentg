@@ -2,11 +2,13 @@ import { renderToString } from '@vue/server-renderer';
 import { createSSRApp, h } from 'vue';
 import { describe, expect, it } from 'vitest';
 
+import { provideControlPlaneHost, type ControlPlaneHost } from '@agentg/framework/cp';
 import EventsList from '../src/components/eventsList.vue';
 import type {
   AppEventYamlLine,
   AppEventYamlRevealLine,
   AppEventYamlToken,
+  AppEventItem,
   AppRpcEventItem,
   AppStandardEventItem,
   ControlPlaneEvent
@@ -84,13 +86,7 @@ describe('event list view', () => {
       () => false
     );
 
-    const html = await renderToString(
-      createSSRApp({
-        render() {
-          return h(EventsList, { events: items, hasEvents: true });
-        }
-      })
-    );
+    const html = await renderEventsList(items);
 
     expect(html).toContain('RPC call');
     expect(html).toContain('alpha.listItems');
@@ -141,13 +137,7 @@ describe('event list view', () => {
     });
     expect(modelRefToken?.kind === 'modelRef' ? modelRefToken.color : '').toMatch(/^#/);
 
-    const html = await renderToString(
-      createSSRApp({
-        render() {
-          return h(EventsList, { events: items, hasEvents: true });
-        }
-      })
-    );
+    const html = await renderEventsList(items);
 
     expect(html).toContain('alpha.record');
     expect(html).toContain('title="alpha.record chat-a"');
@@ -176,23 +166,14 @@ describe('event list view', () => {
     expect(linesText(body.yamlLines)).toContain('3 more');
     expect(linesText(body.yamlLines)).not.toContain('item-13');
 
-    const html = await renderToString(
-      createSSRApp({
-        render() {
-          return h(EventsList, {
-            events: [
-              eventListItem({
-                data: { items },
-                id: 'long-list',
-                occurredAt: '2026-05-05T00:00:01.000Z',
-                type: 'alpha.longList'
-              })
-            ],
-            hasEvents: true
-          });
-        }
+    const html = await renderEventsList([
+      eventListItem({
+        data: { items },
+        id: 'long-list',
+        occurredAt: '2026-05-05T00:00:01.000Z',
+        type: 'alpha.longList'
       })
-    );
+    ]);
 
     expect(html).toContain('3 more');
     expect(html).toContain('item-12');
@@ -332,6 +313,34 @@ function event(type: string, occurredAt: string, data: unknown): ControlPlaneEve
 
 function eventListItem(event: ControlPlaneEvent): AppStandardEventItem {
   return eventListItems([event], () => false)[0] as AppStandardEventItem;
+}
+
+function renderEventsList(events: AppEventItem[]) {
+  return renderToString(
+    createSSRApp({
+      setup() {
+        provideControlPlaneHost(testHost());
+        return () => h(EventsList, { events, hasEvents: true });
+      }
+    })
+  );
+}
+
+function testHost(): ControlPlaneHost {
+  return {
+    rpc() {
+      throw new Error('Unexpected Control Plane RPC call');
+    },
+    selectModelRef() {
+      return undefined;
+    },
+    subscribeEvents() {
+      return () => undefined;
+    },
+    subscribeModelRefs() {
+      return () => undefined;
+    }
+  };
 }
 
 function linesText(lines: AppEventYamlLine[]): string {
