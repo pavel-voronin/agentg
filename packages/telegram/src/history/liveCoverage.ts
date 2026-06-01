@@ -1,15 +1,15 @@
 import {
-  listTelegramHistoryChatIds,
-  closeTelegramHistoryLiveWindow,
-  extendTelegramHistoryLiveWindow,
-  openTelegramHistoryLiveWindow,
-  recoverTelegramHistoryLiveWindows,
-  registerTelegramHistoryLiveChats
+  listHistoryChatIds,
+  closeHistoryLiveWindow,
+  extendHistoryLiveWindow,
+  openHistoryLiveWindow,
+  recoverHistoryLiveWindows,
+  registerHistoryLiveChats
 } from './coverage.js';
-import { ceilToTelegramSecond, floorToTelegramSecond } from './time.js';
-import type { TelegramDatabase as AppDatabase } from '../database/client.js';
+import { ceilToHistorySecond, floorToHistorySecond } from './time.js';
+import type { Database } from '../database/client.js';
 
-export type TelegramLiveCoverageObserver = {
+export type LiveCoverageObserver = {
   markConnected: (at?: Date) => Promise<void>;
   markDisconnected: () => Promise<void>;
   recordLiveMessage: (chatId: string, messageDate: Date, observedUntil?: Date) => Promise<void>;
@@ -18,16 +18,16 @@ export type TelegramLiveCoverageObserver = {
   wait: () => Promise<void>;
 };
 
-export type TelegramLiveCoverageObserverOptions = {
-  database: AppDatabase;
+export type LiveCoverageObserverOptions = {
+  database: Database;
   now?: () => Date;
 };
 
-const TELEGRAM_LIVE_COVERAGE_CHAT_REFRESH_MS = 60_000;
+const LIVE_COVERAGE_CHAT_REFRESH_MS = 60_000;
 
-export function createTelegramLiveCoverageObserver(
-  options: TelegramLiveCoverageObserverOptions
-): TelegramLiveCoverageObserver {
+export function createLiveCoverageObserver(
+  options: LiveCoverageObserverOptions
+): LiveCoverageObserver {
   const now = options.now ?? (() => new Date());
   let connected = false;
   let connectedSince: Date | undefined;
@@ -54,8 +54,8 @@ export function createTelegramLiveCoverageObserver(
       return;
     }
 
-    const chatIds = await listTelegramHistoryChatIds(options.database);
-    await registerTelegramHistoryLiveChats(options.database, chatIds, eligibleFrom);
+    const chatIds = await listHistoryChatIds(options.database);
+    await registerHistoryLiveChats(options.database, chatIds, eligibleFrom);
     for (const chatId of chatIds) {
       knownLiveChatIds.add(chatId);
     }
@@ -65,7 +65,7 @@ export function createTelegramLiveCoverageObserver(
   const refreshKnownChatsIfDue = async (at: Date): Promise<void> => {
     if (
       knownChatsSyncedAt !== undefined &&
-      at.getTime() - knownChatsSyncedAt.getTime() < TELEGRAM_LIVE_COVERAGE_CHAT_REFRESH_MS
+      at.getTime() - knownChatsSyncedAt.getTime() < LIVE_COVERAGE_CHAT_REFRESH_MS
     ) {
       return;
     }
@@ -80,9 +80,9 @@ export function createTelegramLiveCoverageObserver(
           return;
         }
 
-        const connectedAt = ceilToTelegramSecond(at);
-        await recoverTelegramHistoryLiveWindows(options.database);
-        activeWindowId = await openTelegramHistoryLiveWindow(options.database, connectedAt);
+        const connectedAt = ceilToHistorySecond(at);
+        await recoverHistoryLiveWindows(options.database);
+        activeWindowId = await openHistoryLiveWindow(options.database, connectedAt);
         connected = true;
         connectedSince = connectedAt;
         knownChatsSyncedAt = undefined;
@@ -92,10 +92,10 @@ export function createTelegramLiveCoverageObserver(
     markDisconnected(): Promise<void> {
       return enqueue(async () => {
         if (activeWindowId !== undefined) {
-          await closeTelegramHistoryLiveWindow(
+          await closeHistoryLiveWindow(
             options.database,
             activeWindowId,
-            ceilToTelegramSecond(now()),
+            ceilToHistorySecond(now()),
             'disconnected'
           );
         }
@@ -113,16 +113,16 @@ export function createTelegramLiveCoverageObserver(
           return;
         }
 
-        const normalizedMessageStart = maxDate(floorToTelegramSecond(messageDate), connectedSince);
+        const normalizedMessageStart = maxDate(floorToHistorySecond(messageDate), connectedSince);
         if (knownLiveChatIds.has(chatId)) {
           return;
         }
-        await registerTelegramHistoryLiveChats(options.database, [chatId], normalizedMessageStart);
+        await registerHistoryLiveChats(options.database, [chatId], normalizedMessageStart);
         knownLiveChatIds.add(chatId);
       });
     },
     syncKnownChats(at = now()): Promise<void> {
-      return enqueue(() => syncKnownChatsAt(ceilToTelegramSecond(at)));
+      return enqueue(() => syncKnownChatsAt(ceilToHistorySecond(at)));
     },
     tick(at = now()): Promise<void> {
       return enqueue(async () => {
@@ -130,8 +130,8 @@ export function createTelegramLiveCoverageObserver(
           return;
         }
 
-        const endAt = ceilToTelegramSecond(at);
-        await extendTelegramHistoryLiveWindow(options.database, activeWindowId, endAt);
+        const endAt = ceilToHistorySecond(at);
+        await extendHistoryLiveWindow(options.database, activeWindowId, endAt);
         await refreshKnownChatsIfDue(endAt);
       });
     },

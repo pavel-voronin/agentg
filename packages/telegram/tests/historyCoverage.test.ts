@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   normalizeCoverageSegments,
-  planTelegramHistoryCoverageMerge,
-  subtractTelegramHistoryIntervals
+  planHistoryCoverageMerge,
+  subtractHistoryIntervals
 } from '../src/history/coverage.js';
 
 describe('Telegram history coverage', () => {
@@ -20,7 +20,7 @@ describe('Telegram history coverage', () => {
 
   it('computes missing intervals from Telegram-owned coverage', () => {
     expect(
-      subtractTelegramHistoryIntervals(
+      subtractHistoryIntervals(
         [interval('2026-05-01T00:00:00.000Z', '2026-05-01T04:00:00.000Z')],
         [
           interval('2026-05-01T00:00:00.000Z', '2026-05-01T01:00:00.000Z'),
@@ -39,7 +39,7 @@ describe('Telegram history coverage', () => {
     );
 
     expect(
-      planTelegramHistoryCoverageMerge(
+      planHistoryCoverageMerge(
         [
           coverageRow(10, 'chat-a', '2026-05-01T00:00:00.000Z', '2026-05-01T01:00:00.000Z', '10:00')
         ],
@@ -66,7 +66,7 @@ describe('Telegram history coverage', () => {
     );
 
     expect(
-      planTelegramHistoryCoverageMerge(
+      planHistoryCoverageMerge(
         [
           coverageRow(
             10,
@@ -100,7 +100,7 @@ describe('Telegram history coverage', () => {
     );
 
     expect(
-      planTelegramHistoryCoverageMerge(
+      planHistoryCoverageMerge(
         [
           coverageRow(10, 'chat-a', '2026-05-01T00:00:00.000Z', '2026-05-01T02:00:00.000Z', '10:05')
         ],
@@ -122,7 +122,7 @@ describe('Telegram history coverage', () => {
     );
 
     expect(
-      planTelegramHistoryCoverageMerge(
+      planHistoryCoverageMerge(
         [
           coverageRow(10, 'chat-a', '2026-05-01T00:00:00.000Z', '2026-05-01T02:00:00.000Z', '10:05')
         ],

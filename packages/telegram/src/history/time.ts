@@ -1,26 +1,24 @@
-export type TelegramHistoryInterval = {
+export type HistoryInterval = {
   endAt: Date;
   startAt: Date;
 };
 
-export const TELEGRAM_HISTORY_TICK_MS = 1000;
-export const TELEGRAM_HISTORY_PAST_BOUNDARY = new Date('2013-08-14T00:00:00.000Z');
+export const HISTORY_TICK_MS = 1000;
+export const HISTORY_PAST_BOUNDARY = new Date('2013-08-14T00:00:00.000Z');
 
-export function floorToTelegramSecond(date: Date): Date {
-  return new Date(Math.floor(date.getTime() / TELEGRAM_HISTORY_TICK_MS) * TELEGRAM_HISTORY_TICK_MS);
+export function floorToHistorySecond(date: Date): Date {
+  return new Date(Math.floor(date.getTime() / HISTORY_TICK_MS) * HISTORY_TICK_MS);
 }
 
-export function ceilToTelegramSecond(date: Date): Date {
-  return new Date(Math.ceil(date.getTime() / TELEGRAM_HISTORY_TICK_MS) * TELEGRAM_HISTORY_TICK_MS);
+export function ceilToHistorySecond(date: Date): Date {
+  return new Date(Math.ceil(date.getTime() / HISTORY_TICK_MS) * HISTORY_TICK_MS);
 }
 
-export function normalizeTelegramHistoryInterval<T extends TelegramHistoryInterval>(
-  interval: T
-): T {
+export function normalizeHistoryInterval<T extends HistoryInterval>(interval: T): T {
   return {
     ...interval,
-    endAt: ceilToTelegramSecond(interval.endAt),
-    startAt: floorToTelegramSecond(interval.startAt)
+    endAt: ceilToHistorySecond(interval.endAt),
+    startAt: floorToHistorySecond(interval.startAt)
   };
 }
 

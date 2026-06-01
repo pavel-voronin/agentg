@@ -1,17 +1,17 @@
 import { and, eq, gte, isNotNull, lt, sql } from 'drizzle-orm';
 
-import type { TelegramDatabase as AppDatabase } from '../database/client.js';
+import type { Database } from '../database/client.js';
 import { telegramMessages } from '../database/schema.js';
 
-export type TelegramMessageCountInterval = {
+export type MessageCountInterval = {
   chatId: string;
   endAt: Date;
   startAt: Date;
 };
 
-export async function countTelegramMessagesInIntervals(
-  database: AppDatabase,
-  intervals: TelegramMessageCountInterval[]
+export async function countMessagesInIntervals(
+  database: Database,
+  intervals: MessageCountInterval[]
 ): Promise<number[]> {
   return Promise.all(
     intervals.map(async (interval) => {

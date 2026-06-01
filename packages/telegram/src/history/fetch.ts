@@ -1,54 +1,107 @@
-import { createTelegramHistoryCoverageChangedEvent } from '../events/contracts.js';
+import { parseLimit, type EventBus } from '@agentg/framework';
+import type { message as Message } from 'tdlib-types';
 
+import type { Database } from '../database/client.js';
+import type { FileSubsystem } from '../files/index.js';
+import { chatRef } from '../model/refs.js';
 import { recordMessageFiles, storeMessage } from '../store/message.js';
+import type { Operations } from '../tdlib/operations.js';
 import {
-  addTelegramHistoryCoverageBatch,
-  listTelegramHistoryCoverage,
+  addHistoryCoverageBatch,
+  listHistoryCoverage,
   normalizeCoverageWriteInput,
-  orderTelegramHistoryIntervalsClosestToPresent,
-  subtractTelegramHistoryIntervals,
-  withTelegramHistoryCoverageLocks,
-  writeTelegramHistoryCoverageInTransaction,
-  type TelegramHistoryCoverageInterval
+  orderHistoryIntervalsClosestToPresent,
+  subtractHistoryIntervals,
+  withHistoryCoverageLocks,
+  writeHistoryCoverageInTransaction,
+  type HistoryCoverageInterval
 } from './coverage.js';
-import { countTelegramMessagesInIntervals } from './messageCounts.js';
+import { countMessagesInIntervals } from './messageCounts.js';
 import {
-  floorToTelegramSecond,
-  normalizeTelegramHistoryInterval,
+  floorToHistorySecond,
+  normalizeHistoryInterval,
   requireDate,
-  TELEGRAM_HISTORY_PAST_BOUNDARY,
-  TELEGRAM_HISTORY_TICK_MS,
-  type TelegramHistoryInterval
+  HISTORY_PAST_BOUNDARY,
+  HISTORY_TICK_MS,
+  type HistoryInterval
 } from './time.js';
-import type { TelegramEnsureHistoryCoverageOutput } from '../rpc/ensureHistoryCoverage.js';
-import type {
-  TelegramHistoryFetchPageRequest,
-  TelegramHistoryFetchPageResult
-} from '../rpc/fetchPage.js';
-import { useDatabase } from '../database/subsystem.js';
-import { useEvents } from '../events/subsystem.js';
-import { useFiles } from '../files/subsystem.js';
-import { parseLimit } from '@agentg/framework';
-import { telegramTdlibPriorities, type TelegramTdlibPriority } from '../tdlib/priority.js';
-import { useTdlib } from '../tdlib/subsystem.js';
-import { telegramWireDate, telegramWireIdNumber, type TelegramWireMessage } from '../tdlib/wire.js';
+import { priorities, type Priority } from '../tdlib/priority.js';
+import { tdDate, tdIdNumber } from '../tdlib/value.js';
 
-export type TelegramHistoryPageCheckpointInput = {
+// TODO(file-size): Split page fetch, ensure coverage orchestration, and persistence helpers.
+export type FetchPageInput = {
+  chatId: string;
+  cursorMessageId?: number | undefined;
+  endAt: string;
+  limit: number;
+  startAt: string;
+};
+
+export type FetchPageResult =
+  | {
+      coveredInterval?: { endAt: string; startAt: string } | undefined;
+      fetchedMessages: 0;
+      kind: 'no_messages_before_end';
+      storedMessages: 0;
+    }
+  | {
+      anchorMessageDate: string;
+      coveredInterval?: { endAt: string; startAt: string } | undefined;
+      fetchedMessages: 0;
+      kind: 'anchor_before_start';
+      storedMessages: 0;
+    }
+  | {
+      coveredInterval?: { endAt: string; startAt: string } | undefined;
+      crossedStart: boolean;
+      fetchedMessages: number;
+      kind: 'page';
+      nextCursorMessageId?: number | undefined;
+      oldestFetchedMessageDate?: string | undefined;
+      reachedBeginning: boolean;
+      storedMessages: number;
+    };
+
+export type EnsureCoverageInput = {
+  chatId: string;
+  endAt: string;
+  limit?: number | undefined;
+  maxPages?: number | undefined;
+  requestDelayMs?: number | undefined;
+  startAt: string;
+};
+
+export type EnsureCoverageOutput = {
+  alreadyCovered: boolean;
+  coveredIntervals: { endAt: string; startAt: string }[];
+  fetchedMessages: number;
+  pages: number;
+  remainingIntervals: { endAt: string; startAt: string }[];
+  reachedBeginning: boolean;
+  storedMessages: number;
+};
+
+export type HistoryResources = {
+  database: Database;
+  events: EventBus;
+  files: FileSubsystem;
+  tdlib: Operations;
+};
+
+export type HistoryPageCheckpointInput = {
   crossedStart: boolean;
   oldestFetchedMessageDate?: Date;
   reachedBeginning: boolean;
   remainingEndAt: Date;
 };
 
-export type TelegramHistoryPageCheckpoint = {
+export type HistoryPageCheckpoint = {
   complete: boolean;
-  coveredInterval?: TelegramHistoryCoverageInterval;
+  coveredInterval?: HistoryCoverageInterval;
   remainingEndAt: Date;
 };
 
-type TelegramHistoryCoverageEventInterval = ReturnType<
-  typeof normalizeCoverageWriteInput
->[number] & {
+type HistoryCoverageEventInterval = ReturnType<typeof normalizeCoverageWriteInput>[number] & {
   messageCount: number;
 };
 
@@ -57,30 +110,34 @@ const TELEGRAM_ENSURE_HISTORY_MAX_PAGES = 100;
 const TELEGRAM_ENSURE_HISTORY_DEFAULT_LIMIT = 100;
 const TELEGRAM_ENSURE_HISTORY_MAX_LIMIT = 100;
 
-export async function fetchTelegramHistoryPage(
-  request: TelegramHistoryFetchPageRequest,
-  options: { priority: TelegramTdlibPriority } = { priority: telegramTdlibPriorities.low }
-): Promise<TelegramHistoryFetchPageResult> {
-  const chatId = parseTelegramChatId(request.chatId);
+export async function fetchHistoryPage(
+  request: FetchPageInput,
+  resources: HistoryResources,
+  options: { priority: Priority } = { priority: priorities.low }
+): Promise<FetchPageResult> {
+  const chatId = parseChatId(request.chatId);
   const startAt = requireDate(request.startAt, 'telegram.history.fetch_page requires startAt');
   const endAt = requireDate(request.endAt, 'telegram.history.fetch_page requires endAt');
   const limit = parseLimit(request.limit, TELEGRAM_ENSURE_HISTORY_DEFAULT_LIMIT, 100);
-  let cursorMessageId = optionalTelegramMessageId(request.cursorMessageId);
+  let cursorMessageId = optionalMessageId(request.cursorMessageId);
   let remainingEndAt = endAt;
 
   if (cursorMessageId === undefined) {
-    const anchor = await getLastMessageNoLaterThan(chatId, endAt, {
+    const anchor = await getLastMessageNoLaterThan(chatId, endAt, resources, {
       priority: options.priority
     });
     const anchorDate = tdMessageDate(anchor);
     const anchorMessageId = tdMessageId(anchor);
 
     if (anchor === undefined || anchorMessageId === undefined) {
-      const coveredInterval = await addAndPublishCoverage({
-        chatId: request.chatId,
-        endAt,
-        startAt: TELEGRAM_HISTORY_PAST_BOUNDARY
-      });
+      const coveredInterval = await addAndPublishCoverage(
+        {
+          chatId: request.chatId,
+          endAt,
+          startAt: HISTORY_PAST_BOUNDARY
+        },
+        resources
+      );
       return {
         ...(coveredInterval === undefined ? {} : { coveredInterval }),
         fetchedMessages: 0,
@@ -90,11 +147,14 @@ export async function fetchTelegramHistoryPage(
     }
 
     if (anchorDate !== undefined && anchorDate < startAt) {
-      const coveredInterval = await addAndPublishCoverage({
-        chatId: request.chatId,
-        endAt,
-        startAt
-      });
+      const coveredInterval = await addAndPublishCoverage(
+        {
+          chatId: request.chatId,
+          endAt,
+          startAt
+        },
+        resources
+      );
       return {
         anchorMessageDate: anchorDate.toISOString(),
         ...(coveredInterval === undefined ? {} : { coveredInterval }),
@@ -105,14 +165,13 @@ export async function fetchTelegramHistoryPage(
     }
 
     if (anchorDate !== undefined && anchorDate < remainingEndAt) {
-      remainingEndAt = nextTelegramSecond(anchorDate);
+      remainingEndAt = nextTdlibSecond(anchorDate);
     }
 
     cursorMessageId = anchorMessageId;
   }
 
-  const tdlib = useTdlib();
-  const history = await tdlib.getChatHistory(
+  const history = await resources.tdlib.getChatHistory(
     {
       chatId,
       fromMessageId: cursorMessageId,
@@ -127,11 +186,14 @@ export async function fetchTelegramHistoryPage(
   const concreteMessages = history.messages.filter(isFetchedMessage);
 
   if (concreteMessages.length === 0) {
-    const coveredInterval = await addAndPublishCoverage({
-      chatId: request.chatId,
-      endAt,
-      startAt: TELEGRAM_HISTORY_PAST_BOUNDARY
-    });
+    const coveredInterval = await addAndPublishCoverage(
+      {
+        chatId: request.chatId,
+        endAt,
+        startAt: HISTORY_PAST_BOUNDARY
+      },
+      resources
+    );
     return {
       ...(coveredInterval === undefined ? {} : { coveredInterval }),
       fetchedMessages: 0,
@@ -143,7 +205,7 @@ export async function fetchTelegramHistoryPage(
   const nextCursorMessageId = oldestMessageIdOlderThan(concreteMessages, cursorMessageId);
   const oldestFetchedMessageDate = oldestMessageDate(concreteMessages);
   const crossedStart = concreteMessages.some((message) => isBeforeInterval(message, startAt));
-  const checkpoint = checkpointTelegramHistoryPage(
+  const checkpoint = checkpointHistoryPage(
     {
       chatId: request.chatId,
       endAt,
@@ -157,26 +219,25 @@ export async function fetchTelegramHistoryPage(
       remainingEndAt
     }
   );
-  const persisted = await persistPageAndCoverage({
-    coveredInterval: checkpoint.coveredInterval,
-    messages: concreteMessages,
-    request: {
-      chatId: request.chatId,
-      endAt: remainingEndAt,
-      startAt
-    }
-  });
+  const persisted = await persistPageAndCoverage(
+    {
+      coveredInterval: checkpoint.coveredInterval,
+      messages: concreteMessages,
+      request: {
+        chatId: request.chatId,
+        endAt: remainingEndAt,
+        startAt
+      }
+    },
+    resources
+  );
   const coveredInterval =
     checkpoint.coveredInterval === undefined
       ? undefined
       : intervalToResponse(checkpoint.coveredInterval);
 
   if (persisted.coverageIntervals.length > 0) {
-    useEvents().publish(
-      createTelegramHistoryCoverageChangedEvent({
-        intervals: persisted.coverageIntervals
-      })
-    );
+    publishCoverageChanged(resources.events, persisted.coverageIntervals);
   }
 
   return {
@@ -193,16 +254,12 @@ export async function fetchTelegramHistoryPage(
   };
 }
 
-export async function ensureTelegramHistoryCoverage(request: {
-  chatId: string;
-  endAt: string;
-  limit?: number | undefined;
-  maxPages?: number | undefined;
-  requestDelayMs?: number | undefined;
-  startAt: string;
-}): Promise<TelegramEnsureHistoryCoverageOutput> {
+export async function ensureHistoryCoverage(
+  request: EnsureCoverageInput,
+  resources: HistoryResources
+): Promise<EnsureCoverageOutput> {
   const chatId = request.chatId;
-  const requestedInterval = normalizeTelegramHistoryInterval({
+  const requestedInterval = normalizeHistoryInterval({
     endAt: requireDate(request.endAt, 'telegram.history.ensure_coverage requires endAt'),
     startAt: requireDate(request.startAt, 'telegram.history.ensure_coverage requires startAt')
   });
@@ -229,7 +286,7 @@ export async function ensureTelegramHistoryCoverage(request: {
     TELEGRAM_ENSURE_HISTORY_MAX_PAGES
   );
   const requestDelayMs = Math.max(0, request.requestDelayMs ?? 0);
-  const initialMissing = await missingCoverageIntervals(chatId, [requestedInterval]);
+  const initialMissing = await missingCoverageIntervals(chatId, [requestedInterval], resources);
   if (initialMissing.length === 0) {
     return {
       alreadyCovered: true,
@@ -246,9 +303,9 @@ export async function ensureTelegramHistoryCoverage(request: {
   let pages = 0;
   let reachedBeginning = false;
   let storedMessages = 0;
-  const coveredIntervals: TelegramHistoryInterval[] = [];
+  const coveredIntervals: HistoryInterval[] = [];
 
-  for (const interval of orderTelegramHistoryIntervalsClosestToPresent(initialMissing)) {
+  for (const interval of orderHistoryIntervalsClosestToPresent(initialMissing)) {
     let remainingEndAt = interval.endAt;
     let cursorMessageId: number | undefined;
 
@@ -259,16 +316,16 @@ export async function ensureTelegramHistoryCoverage(request: {
           coveredIntervals: coveredIntervals.map(intervalToResponse),
           fetchedMessages,
           pages,
-          remainingIntervals: (await missingCoverageIntervals(chatId, [requestedInterval])).map(
-            intervalToResponse
-          ),
+          remainingIntervals: (
+            await missingCoverageIntervals(chatId, [requestedInterval], resources)
+          ).map(intervalToResponse),
           reachedBeginning,
           storedMessages
         };
       }
 
       await delay(requestDelayMs);
-      const page = await fetchTelegramHistoryPage(
+      const page = await fetchHistoryPage(
         {
           chatId,
           ...(cursorMessageId === undefined ? {} : { cursorMessageId }),
@@ -276,7 +333,8 @@ export async function ensureTelegramHistoryCoverage(request: {
           limit,
           startAt: interval.startAt.toISOString()
         },
-        { priority: telegramTdlibPriorities.low }
+        resources,
+        { priority: priorities.low }
       );
       pages += 1;
 
@@ -308,7 +366,7 @@ export async function ensureTelegramHistoryCoverage(request: {
     }
   }
 
-  const remainingIntervals = await missingCoverageIntervals(chatId, [requestedInterval]);
+  const remainingIntervals = await missingCoverageIntervals(chatId, [requestedInterval], resources);
 
   return {
     alreadyCovered: false,
@@ -321,16 +379,16 @@ export async function ensureTelegramHistoryCoverage(request: {
   };
 }
 
-export function checkpointTelegramHistoryPage(
+export function checkpointHistoryPage(
   job: {
     chatId: string;
     endAt: Date;
     startAt: Date;
     status: 'running';
   },
-  checkpoint: TelegramHistoryPageCheckpointInput
-): TelegramHistoryPageCheckpoint {
-  const remainingEndAt = normalizeTelegramHistoryInterval({
+  checkpoint: HistoryPageCheckpointInput
+): HistoryPageCheckpoint {
+  const remainingEndAt = normalizeHistoryInterval({
     endAt: checkpoint.remainingEndAt,
     startAt: job.startAt
   }).endAt;
@@ -354,20 +412,23 @@ export function checkpointTelegramHistoryPage(
   };
 }
 
-async function persistPageAndCoverage(input: {
-  coveredInterval: TelegramHistoryCoverageInterval | undefined;
-  messages: TelegramWireMessage[];
-  request: {
-    chatId: string;
-    endAt: Date;
-    startAt: Date;
-  };
-}): Promise<{
-  coverageIntervals: TelegramHistoryCoverageEventInterval[];
+async function persistPageAndCoverage(
+  input: {
+    coveredInterval: HistoryCoverageInterval | undefined;
+    messages: Message[];
+    request: {
+      chatId: string;
+      endAt: Date;
+      startAt: Date;
+    };
+  },
+  resources: HistoryResources
+): Promise<{
+  coverageIntervals: HistoryCoverageEventInterval[];
   storedMessages: number;
 }> {
-  const database = useDatabase();
-  const files = useFiles();
+  const { database } = resources;
+  const { files } = resources;
   const provedAt = new Date();
   const coverageIntervals =
     input.coveredInterval === undefined
@@ -383,7 +444,7 @@ async function persistPageAndCoverage(input: {
   });
 
   let storedMessages = 0;
-  await withTelegramHistoryCoverageLocks([input.request.chatId], async () =>
+  await withHistoryCoverageLocks([input.request.chatId], async () =>
     database.transaction(async (transaction) => {
       for (const message of messages) {
         const stored = await storeMessage(transaction, message);
@@ -393,7 +454,7 @@ async function persistPageAndCoverage(input: {
       }
 
       if (coverageIntervals.length > 0) {
-        await writeTelegramHistoryCoverageInTransaction(transaction, coverageIntervals);
+        await writeHistoryCoverageInTransaction(transaction, coverageIntervals);
       }
     })
   );
@@ -403,38 +464,34 @@ async function persistPageAndCoverage(input: {
   }
 
   return {
-    coverageIntervals: await addCoverageMessageCounts(coverageIntervals),
+    coverageIntervals: await addCoverageMessageCounts(coverageIntervals, resources),
     storedMessages
   };
 }
 
 async function addAndPublishCoverage(
-  interval: TelegramHistoryCoverageInterval
+  interval: HistoryCoverageInterval,
+  resources: HistoryResources
 ): Promise<{ endAt: string; startAt: string } | undefined> {
-  const database = useDatabase();
-  const events = useEvents();
-  const result = await addTelegramHistoryCoverageBatch(database, [interval]);
+  const { database } = resources;
+  const result = await addHistoryCoverageBatch(database, [interval]);
   if (result.intervals.length === 0) {
     return undefined;
   }
 
-  const intervals = await addCoverageMessageCounts(result.intervals);
-  events.publish(
-    createTelegramHistoryCoverageChangedEvent({
-      intervals
-    })
-  );
+  const intervals = await addCoverageMessageCounts(result.intervals, resources);
+  publishCoverageChanged(resources.events, intervals);
 
   const writtenInterval = result.intervals[0];
   return writtenInterval === undefined ? undefined : intervalToResponse(writtenInterval);
 }
 
 async function addCoverageMessageCounts(
-  intervals: ReturnType<typeof normalizeCoverageWriteInput>
-): Promise<TelegramHistoryCoverageEventInterval[]> {
-  const database = useDatabase();
-  const counts =
-    intervals.length === 0 ? [] : await countTelegramMessagesInIntervals(database, intervals);
+  intervals: ReturnType<typeof normalizeCoverageWriteInput>,
+  resources: HistoryResources
+): Promise<HistoryCoverageEventInterval[]> {
+  const { database } = resources;
+  const counts = intervals.length === 0 ? [] : await countMessagesInIntervals(database, intervals);
   return intervals.map((interval, index) => ({
     ...interval,
     messageCount: counts[index] ?? 0
@@ -443,20 +500,20 @@ async function addCoverageMessageCounts(
 
 async function missingCoverageIntervals(
   chatId: string,
-  requestedIntervals: TelegramHistoryInterval[]
-): Promise<TelegramHistoryInterval[]> {
-  const database = useDatabase();
-  const coverage = await listTelegramHistoryCoverage(database, chatId);
-  return subtractTelegramHistoryIntervals(requestedIntervals, coverage);
+  requestedIntervals: HistoryInterval[],
+  resources: HistoryResources
+): Promise<HistoryInterval[]> {
+  const coverage = await listHistoryCoverage(resources.database, chatId);
+  return subtractHistoryIntervals(requestedIntervals, coverage);
 }
 
 function checkpointCoveredStartAt(
   job: { startAt: Date },
-  checkpoint: TelegramHistoryPageCheckpointInput,
+  checkpoint: HistoryPageCheckpointInput,
   remainingEndAt: Date
 ): Date | undefined {
   if (checkpoint.reachedBeginning) {
-    return TELEGRAM_HISTORY_PAST_BOUNDARY;
+    return HISTORY_PAST_BOUNDARY;
   }
 
   if (checkpoint.crossedStart) {
@@ -467,36 +524,71 @@ function checkpointCoveredStartAt(
     return undefined;
   }
 
-  const oldestFetchedSecond = floorToTelegramSecond(checkpoint.oldestFetchedMessageDate);
-  const nextUnprovenEndAt = new Date(oldestFetchedSecond.getTime() + TELEGRAM_HISTORY_TICK_MS);
+  const oldestFetchedSecond = floorToHistorySecond(checkpoint.oldestFetchedMessageDate);
+  const nextUnprovenEndAt = new Date(oldestFetchedSecond.getTime() + HISTORY_TICK_MS);
   return nextUnprovenEndAt < remainingEndAt ? nextUnprovenEndAt : undefined;
 }
 
-function nextTelegramSecond(date: Date): Date {
-  const second = floorToTelegramSecond(date);
-  return new Date(second.getTime() + TELEGRAM_HISTORY_TICK_MS);
+function nextTdlibSecond(date: Date): Date {
+  const second = floorToHistorySecond(date);
+  return new Date(second.getTime() + HISTORY_TICK_MS);
 }
 
-function intervalToResponse(interval: TelegramHistoryInterval): { endAt: string; startAt: string } {
-  const normalized = normalizeTelegramHistoryInterval(interval);
+function intervalToResponse(interval: HistoryInterval): { endAt: string; startAt: string } {
+  const normalized = normalizeHistoryInterval(interval);
   return {
     endAt: normalized.endAt.toISOString(),
     startAt: normalized.startAt.toISOString()
   };
 }
 
-function isFetchedMessage(value: TelegramWireMessage | null): value is TelegramWireMessage {
+function publishCoverageChanged(events: EventBus, intervals: HistoryCoverageEventInterval[]): void {
+  if (intervals.length === 0) {
+    return;
+  }
+  const serializedIntervals = intervals.map((interval) => ({
+    chat: chatRef(interval.chatId),
+    endAt: interval.endAt.toISOString(),
+    messageCount: interval.messageCount,
+    provedAt: interval.provedAt.toISOString(),
+    startAt: interval.startAt.toISOString()
+  }));
+  events.publish('telegram.history.coverage.changed', {
+    chatCount: new Set(serializedIntervals.map((interval) => interval.chat.id)).size,
+    endAt: maxIso(serializedIntervals.map((interval) => interval.endAt)),
+    intervals: serializedIntervals,
+    startAt: minIso(serializedIntervals.map((interval) => interval.startAt))
+  });
+}
+
+function minIso(values: string[]): string {
+  const first = values[0];
+  if (first === undefined) {
+    throw new Error('history coverage event requires at least one interval');
+  }
+  return values.slice(1).reduce((minimum, value) => (value < minimum ? value : minimum), first);
+}
+
+function maxIso(values: string[]): string {
+  const first = values[0];
+  if (first === undefined) {
+    throw new Error('history coverage event requires at least one interval');
+  }
+  return values.slice(1).reduce((maximum, value) => (value > maximum ? value : maximum), first);
+}
+
+function isFetchedMessage(value: Message | null): value is Message {
   return value !== null;
 }
 
 async function getLastMessageNoLaterThan(
   chatId: number,
   end: Date,
-  options: { priority: TelegramTdlibPriority }
-): Promise<TelegramWireMessage | undefined> {
+  resources: HistoryResources,
+  options: { priority: Priority }
+): Promise<Message | undefined> {
   try {
-    const tdlib = useTdlib();
-    return await tdlib.getChatMessageByDate(
+    return await resources.tdlib.getChatMessageByDate(
       {
         chatId,
         date: Math.floor((end.getTime() - 1) / 1000)
@@ -512,7 +604,7 @@ async function getLastMessageNoLaterThan(
   }
 }
 
-function parseTelegramChatId(value: string): number {
+function parseChatId(value: string): number {
   const text = value.trim();
   const parsed = Number(text);
   if (text.length === 0 || !Number.isSafeInteger(parsed)) {
@@ -521,7 +613,7 @@ function parseTelegramChatId(value: string): number {
   return parsed;
 }
 
-function optionalTelegramMessageId(value: number | undefined): number | undefined {
+function optionalMessageId(value: number | undefined): number | undefined {
   if (value === undefined) {
     return undefined;
   }
@@ -532,20 +624,20 @@ function optionalTelegramMessageId(value: number | undefined): number | undefine
   return value;
 }
 
-function tdMessageId(message: TelegramWireMessage | undefined): number | undefined {
-  return telegramWireIdNumber(message?.id);
+function tdMessageId(message: Message | undefined): number | undefined {
+  return tdIdNumber(message?.id);
 }
 
-function tdMessageDate(message: TelegramWireMessage | undefined): Date | undefined {
-  return telegramWireDate(message?.date);
+function tdMessageDate(message: Message | undefined): Date | undefined {
+  return tdDate(message?.date);
 }
 
-function isBeforeInterval(message: TelegramWireMessage, startAt: Date): boolean {
+function isBeforeInterval(message: Message, startAt: Date): boolean {
   const messageDate = tdMessageDate(message);
   return messageDate !== undefined && messageDate < startAt;
 }
 
-function oldestMessageDate(messages: TelegramWireMessage[]): Date | undefined {
+function oldestMessageDate(messages: Message[]): Date | undefined {
   const dates = messages.map(tdMessageDate).filter((date): date is Date => date !== undefined);
   const [first, ...rest] = dates;
   return first === undefined
@@ -554,7 +646,7 @@ function oldestMessageDate(messages: TelegramWireMessage[]): Date | undefined {
 }
 
 function oldestMessageIdOlderThan(
-  messages: TelegramWireMessage[],
+  messages: Message[],
   cursorMessageId: number
 ): number | undefined {
   const ids = messages
