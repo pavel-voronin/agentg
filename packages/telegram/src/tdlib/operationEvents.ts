@@ -1,30 +1,29 @@
 import { randomUUID } from 'node:crypto';
 
-import type { EventBus } from '@agentg/events/bus';
-import { createIntegrationEvent } from '@agentg/events/envelope';
-import { toJsonValue } from '@agentg/events/json';
+import type { EventBus } from '@agentg/framework';
+import { toJsonValue } from '@agentg/framework';
 
-import type { TelegramTdlibPriority } from './priority.js';
-import type { TelegramTdlibQueueStats } from './scheduler.js';
+import type { Priority } from './priority.js';
+import type { QueueStats } from './scheduler.js';
 
-export type TdlibInvokeOptions = {
-  priority?: TelegramTdlibPriority;
+export type InvokeOptions = {
+  priority?: Priority;
 };
 
-export type TdlibInvoker = {
-  getQueueStats?(): TelegramTdlibQueueStats;
-  invoke(request: Record<string, unknown>, options?: TdlibInvokeOptions): Promise<unknown>;
+export type Invoker = {
+  getQueueStats?(): QueueStats;
+  invoke(request: Record<string, unknown>, options?: InvokeOptions): Promise<unknown>;
 };
 
-export async function invokeTdlibWithEvents(
-  eventBus: EventBus,
-  client: TdlibInvoker,
+export async function invokeWithEvents(
+  events: EventBus,
+  client: Invoker,
   request: Record<string, unknown>,
-  options: TdlibInvokeOptions = {}
+  options: InvokeOptions = {}
 ): Promise<unknown> {
-  const method = tdlibMethodName(request._);
+  const method = methodName(request._);
   return publishOperationEvents(
-    eventBus,
+    events,
     `telegram.tdlib.${sanitizeEventSegment(method)}`,
     method,
     {
@@ -35,14 +34,14 @@ export async function invokeTdlibWithEvents(
   );
 }
 
-export async function publishTelegramOperationEvents<T>(
-  eventBus: EventBus,
+export async function publishOperation<T>(
+  events: EventBus,
   operationName: string,
   input: unknown,
   operation: () => Promise<T>
 ): Promise<T> {
   return publishOperationEvents(
-    eventBus,
+    events,
     `telegram.${sanitizeEventSegment(operationName)}`,
     operationName,
     input,
@@ -50,23 +49,8 @@ export async function publishTelegramOperationEvents<T>(
   );
 }
 
-export async function publishTdlibOperationEvents<T>(
-  eventBus: EventBus,
-  method: string,
-  input: unknown,
-  operation: () => Promise<T>
-): Promise<T> {
-  return publishOperationEvents(
-    eventBus,
-    `telegram.tdlib.${sanitizeEventSegment(method)}`,
-    method,
-    input,
-    operation
-  );
-}
-
 async function publishOperationEvents<T>(
-  eventBus: EventBus,
+  events: EventBus,
   target: string,
   method: string,
   input: unknown,
@@ -75,56 +59,41 @@ async function publishOperationEvents<T>(
   const callId = `telegram_${randomUUID()}`;
   const startedAt = new Date();
 
-  eventBus.publish(
-    createIntegrationEvent({
-      data: {
-        callId,
-        input: toJsonValue(input),
-        method,
-        startedAt: startedAt.toISOString()
-      },
-      type: `${target}.started`
-    })
-  );
+  events.publish(`${target}.started`, {
+    callId,
+    input: toJsonValue(input),
+    method,
+    startedAt: startedAt.toISOString()
+  });
 
   try {
     const result = await operation();
     const completedAt = new Date();
-    eventBus.publish(
-      createIntegrationEvent({
-        data: {
-          callId,
-          completedAt: completedAt.toISOString(),
-          durationMs: completedAt.getTime() - startedAt.getTime(),
-          method,
-          startedAt: startedAt.toISOString()
-        },
-        type: `${target}.completed`
-      })
-    );
+    events.publish(`${target}.completed`, {
+      callId,
+      completedAt: completedAt.toISOString(),
+      durationMs: completedAt.getTime() - startedAt.getTime(),
+      method,
+      startedAt: startedAt.toISOString()
+    });
     return result;
   } catch (error) {
     const failedAt = new Date();
-    eventBus.publish(
-      createIntegrationEvent({
-        data: {
-          callId,
-          durationMs: failedAt.getTime() - startedAt.getTime(),
-          error: {
-            message: error instanceof Error ? error.message : String(error)
-          },
-          failedAt: failedAt.toISOString(),
-          method,
-          startedAt: startedAt.toISOString()
-        },
-        type: `${target}.failed`
-      })
-    );
+    events.publish(`${target}.failed`, {
+      callId,
+      durationMs: failedAt.getTime() - startedAt.getTime(),
+      error: {
+        message: error instanceof Error ? error.message : String(error)
+      },
+      failedAt: failedAt.toISOString(),
+      method,
+      startedAt: startedAt.toISOString()
+    });
     throw error;
   }
 }
 
-function tdlibMethodName(value: unknown): string {
+function methodName(value: unknown): string {
   return typeof value === 'string' && value.length > 0 ? value : 'unknown';
 }
 

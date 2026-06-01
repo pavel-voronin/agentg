@@ -1,23 +1,20 @@
-export const telegramTdlibPriorities = {
+export const priorities = {
   high: 24,
   low: 8,
   maximum: 32,
   normal: 16
 } as const;
 
-export type TelegramTdlibPriority = number;
+export type Priority = number;
 
-export function resolveTelegramTdlibPriority(
-  priority: TelegramTdlibPriority | undefined,
-  fallback: TelegramTdlibPriority
-): number {
+export function resolvePriority(priority: Priority | undefined, fallback: Priority): number {
   if (priority === undefined) {
     return fallback;
   }
-  return assertTelegramTdlibPriority(priority);
+  return assertPriority(priority);
 }
 
-export function assertTelegramTdlibPriority(priority: number): number {
+export function assertPriority(priority: number): number {
   if (Number.isSafeInteger(priority) && priority >= 1 && priority <= 32) {
     return priority;
   }

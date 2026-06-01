@@ -1,34 +1,98 @@
-import type { EventBus } from '@agentg/events/bus';
+import type { EventBus } from '@agentg/framework';
 import type {
-  $Function as TdlibFunction,
+  $Function,
   Chat,
   ChatList$Input,
   Chats,
+  File,
+  User,
   Message,
   Messages,
-  Ok
+  Ok,
+  error$Input
 } from 'tdlib-types';
 
-import {
-  invokeTdlibWithEvents,
-  type TdlibInvokeOptions,
-  type TdlibInvoker
-} from './operationEvents.js';
+import { invokeWithEvents, type InvokeOptions, type Invoker } from './operationEvents.js';
 
-type TelegramTdlibOperationDeps = {
-  client: TdlibInvoker;
-  eventBus: EventBus;
+type OperationDeps = {
+  client: Invoker;
+  events: EventBus;
 };
 
-export function createTelegramTdlibOperations(deps: TelegramTdlibOperationDeps) {
+export function createOperations(deps: OperationDeps) {
   return {
-    getChat(
+    addFileToDownloads(
       input: {
         chatId: number;
+        fileId: number;
+        messageId: number;
+        priority: number;
       },
-      options?: TdlibInvokeOptions
-    ): Promise<Chat> {
-      return invokeTdlib(deps, { _: 'getChat', chat_id: input.chatId }, options) as Promise<Chat>;
+      options?: InvokeOptions
+    ): Promise<File> {
+      return invoke(
+        deps,
+        {
+          _: 'addFileToDownloads',
+          chat_id: input.chatId,
+          file_id: input.fileId,
+          message_id: input.messageId,
+          priority: input.priority
+        },
+        options
+      ) as Promise<File>;
+    },
+    deleteFile(input: { fileId: number }, options?: InvokeOptions): Promise<Ok> {
+      return invoke(deps, { _: 'deleteFile', file_id: input.fileId }, options) as Promise<Ok>;
+    },
+    downloadFile(
+      input: {
+        fileId: number;
+        limit: number;
+        offset: number;
+        priority: number;
+        synchronous: boolean;
+      },
+      options?: InvokeOptions
+    ): Promise<File> {
+      return invoke(
+        deps,
+        {
+          _: 'downloadFile',
+          file_id: input.fileId,
+          limit: input.limit,
+          offset: input.offset,
+          priority: input.priority,
+          synchronous: input.synchronous
+        },
+        options
+      ) as Promise<File>;
+    },
+    finishFileGeneration(
+      input: {
+        error: error$Input | null;
+        generationId: number | string;
+      },
+      options?: InvokeOptions
+    ): Promise<Ok> {
+      return invoke(
+        deps,
+        {
+          _: 'finishFileGeneration',
+          ...(input.error === null ? {} : { error: input.error }),
+          generation_id: input.generationId
+        },
+        options
+      ) as Promise<Ok>;
+    },
+    getChat(input: { chatId: number }, options?: InvokeOptions): Promise<Chat> {
+      return invoke(deps, { _: 'getChat', chat_id: input.chatId }, options) as Promise<Chat>;
+    },
+    getFile(input: { fileId: number }, options?: InvokeOptions): Promise<File> {
+      return invoke(deps, { _: 'getFile', file_id: input.fileId }, options) as Promise<File>;
+    },
+    getMe(options?: InvokeOptions): Promise<User> {
+      return invoke(deps, { _: 'getMe' }, options) as Promise<User>;
     },
     getChatHistory(
       input: {
@@ -38,9 +102,9 @@ export function createTelegramTdlibOperations(deps: TelegramTdlibOperationDeps) 
         offset: number;
         onlyLocal: boolean;
       },
-      options?: TdlibInvokeOptions
+      options?: InvokeOptions
     ): Promise<Messages> {
-      return invokeTdlib(
+      return invoke(
         deps,
         {
           _: 'getChatHistory',
@@ -58,9 +122,9 @@ export function createTelegramTdlibOperations(deps: TelegramTdlibOperationDeps) 
         chatId: number;
         date: number;
       },
-      options?: TdlibInvokeOptions
+      options?: InvokeOptions
     ): Promise<Message> {
-      return invokeTdlib(
+      return invoke(
         deps,
         {
           _: 'getChatMessageByDate',
@@ -75,9 +139,9 @@ export function createTelegramTdlibOperations(deps: TelegramTdlibOperationDeps) 
         chatList: ChatList$Input;
         limit: number;
       },
-      options?: TdlibInvokeOptions
+      options?: InvokeOptions
     ): Promise<Chats> {
-      return invokeTdlib(
+      return invoke(
         deps,
         { _: 'getChats', chat_list: input.chatList, limit: input.limit },
         options
@@ -88,25 +152,61 @@ export function createTelegramTdlibOperations(deps: TelegramTdlibOperationDeps) 
         chatList: ChatList$Input;
         limit: number;
       },
-      options?: TdlibInvokeOptions
+      options?: InvokeOptions
     ): Promise<Ok> {
-      return invokeTdlib(
+      return invoke(
         deps,
         { _: 'loadChats', chat_list: input.chatList, limit: input.limit },
+        options
+      ) as Promise<Ok>;
+    },
+    removeFileFromDownloads(
+      input: {
+        deleteFromCache: boolean;
+        fileId: number;
+      },
+      options?: InvokeOptions
+    ): Promise<Ok> {
+      return invoke(
+        deps,
+        {
+          _: 'removeFileFromDownloads',
+          delete_from_cache: input.deleteFromCache,
+          file_id: input.fileId
+        },
+        options
+      ) as Promise<Ok>;
+    },
+    setFileGenerationProgress(
+      input: {
+        expectedSize: number;
+        generationId: number | string;
+        localPrefixSize: number;
+      },
+      options?: InvokeOptions
+    ): Promise<Ok> {
+      return invoke(
+        deps,
+        {
+          _: 'setFileGenerationProgress',
+          expected_size: input.expectedSize,
+          generation_id: input.generationId,
+          local_prefix_size: input.localPrefixSize
+        },
         options
       ) as Promise<Ok>;
     }
   };
 }
 
-async function invokeTdlib(
-  deps: TelegramTdlibOperationDeps,
-  request: TdlibFunction,
-  options: TdlibInvokeOptions = {}
+async function invoke(
+  deps: OperationDeps,
+  request: $Function,
+  options: InvokeOptions = {}
 ): Promise<unknown> {
   for (;;) {
     try {
-      return await invokeTdlibWithEvents(deps.eventBus, deps.client, request, {
+      return await invokeWithEvents(deps.events, deps.client, request, {
         ...options
       });
     } catch (error) {
@@ -143,4 +243,4 @@ async function delay(milliseconds: number): Promise<void> {
   });
 }
 
-export type TelegramTdlibOperations = ReturnType<typeof createTelegramTdlibOperations>;
+export type Operations = ReturnType<typeof createOperations>;

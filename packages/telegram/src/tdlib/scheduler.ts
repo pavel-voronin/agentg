@@ -1,23 +1,23 @@
-import type { TdlibInvoker, TdlibInvokeOptions } from './operationEvents.js';
-import { resolveTelegramTdlibPriority, telegramTdlibPriorities } from './priority.js';
+import type { Invoker, InvokeOptions } from './operationEvents.js';
+import { priorities, resolvePriority } from './priority.js';
 
-export type TelegramTdlibScheduler = TdlibInvoker & {
+export type Scheduler = Invoker & {
   close(): void;
-  getQueueStats(): TelegramTdlibQueueStats;
+  getQueueStats(): QueueStats;
 };
 
-export type TelegramTdlibQueueStats = {
+export type QueueStats = {
   highestPendingPriority: number | null;
   pendingCount: number;
   runningCount: number;
 };
 
-export type TelegramTdlibSchedulerOptions = {
+export type SchedulerOptions = {
   maxConcurrent?: number;
 };
 
-type QueuedTdlibOperation = {
-  options: TdlibInvokeOptions;
+type QueuedOperation = {
+  options: InvokeOptions;
   priority: number;
   reject(error: unknown): void;
   request: Record<string, unknown>;
@@ -25,20 +25,14 @@ type QueuedTdlibOperation = {
   sequence: number;
 };
 
-const DEFAULT_MAX_CONCURRENT_TDLIB_OPERATIONS = 4;
+const DEFAULT_MAX_CONCURRENT_OPERATIONS = 4;
 
-export function createTelegramTdlibScheduler(
-  client: TdlibInvoker,
-  options: TelegramTdlibSchedulerOptions = {}
-): TelegramTdlibScheduler {
-  const maxConcurrent = positiveInteger(
-    options.maxConcurrent,
-    DEFAULT_MAX_CONCURRENT_TDLIB_OPERATIONS
-  );
+export function createScheduler(client: Invoker, options: SchedulerOptions = {}): Scheduler {
+  const maxConcurrent = positiveInteger(options.maxConcurrent, DEFAULT_MAX_CONCURRENT_OPERATIONS);
   let closed = false;
   let runningCount = 0;
   let sequence = 0;
-  const queue: QueuedTdlibOperation[] = [];
+  const queue: QueuedOperation[] = [];
 
   const drain = (): void => {
     if (closed) {
@@ -73,10 +67,10 @@ export function createTelegramTdlibScheduler(
       closed = true;
       const pending = queue.splice(0);
       for (const operation of pending) {
-        operation.reject(new Error('Telegram TDLib scheduler is closed'));
+        operation.reject(new Error('TDLib scheduler is closed'));
       }
     },
-    getQueueStats(): TelegramTdlibQueueStats {
+    getQueueStats(): QueueStats {
       return {
         highestPendingPriority:
           queue.length === 0 ? null : Math.max(...queue.map((operation) => operation.priority)),
@@ -84,15 +78,15 @@ export function createTelegramTdlibScheduler(
         runningCount
       };
     },
-    invoke(request: Record<string, unknown>, options: TdlibInvokeOptions = {}): Promise<unknown> {
+    invoke(request: Record<string, unknown>, options: InvokeOptions = {}): Promise<unknown> {
       if (closed) {
-        return Promise.reject(new Error('Telegram TDLib scheduler is closed'));
+        return Promise.reject(new Error('TDLib scheduler is closed'));
       }
 
       return new Promise((resolve, reject) => {
         queue.push({
           options,
-          priority: resolveTelegramTdlibPriority(options.priority, telegramTdlibPriorities.low),
+          priority: resolvePriority(options.priority, priorities.low),
           reject,
           request,
           resolve,
@@ -106,16 +100,16 @@ export function createTelegramTdlibScheduler(
   };
 }
 
-export function isTelegramTdlibUnderNavigationPressure(client: TdlibInvoker): boolean {
+export function isUnderNavigationPressure(client: Invoker): boolean {
   const stats = client.getQueueStats?.();
   return (
     stats !== undefined &&
-    (stats.runningCount >= DEFAULT_MAX_CONCURRENT_TDLIB_OPERATIONS ||
-      (stats.highestPendingPriority ?? 0) >= telegramTdlibPriorities.maximum)
+    (stats.runningCount >= DEFAULT_MAX_CONCURRENT_OPERATIONS ||
+      (stats.highestPendingPriority ?? 0) >= priorities.maximum)
   );
 }
 
-function compareQueuedOperations(left: QueuedTdlibOperation, right: QueuedTdlibOperation): number {
+function compareQueuedOperations(left: QueuedOperation, right: QueuedOperation): number {
   return right.priority - left.priority || left.sequence - right.sequence;
 }
 
