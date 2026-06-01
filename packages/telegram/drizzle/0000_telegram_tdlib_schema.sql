@@ -140,6 +140,7 @@ CREATE TABLE "telegram_messages" (
   "is_pinned" boolean,
   "media_album_id" bigint,
   "paid_message_star_count" bigint,
+  "reactions" jsonb,
   "reply_markup" jsonb,
   "reply_to" jsonb,
   "restriction_info" jsonb,
@@ -640,19 +641,6 @@ CREATE TABLE "telegram_managed_bots" (
   "bot_user_id" bigint NOT NULL,
   "creator_user_id" bigint NOT NULL,
   CONSTRAINT "telegram_managed_bots_pk" PRIMARY KEY ("bot_user_id")
-);
-
---> statement-breakpoint
-
-CREATE TABLE "telegram_message_reactions" (
-  "chat_id" bigint NOT NULL,
-  "is_chosen" boolean NOT NULL,
-  "message_id" bigint NOT NULL,
-  "reaction_type" text NOT NULL,
-  "recent_sender_ids" jsonb NOT NULL,
-  "total_count" integer NOT NULL,
-  "used_sender_id" jsonb,
-  CONSTRAINT "telegram_message_reactions_pk" PRIMARY KEY ("chat_id", "message_id", "reaction_type")
 );
 
 --> statement-breakpoint

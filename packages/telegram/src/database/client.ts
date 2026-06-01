@@ -1,10 +1,22 @@
-import { createAppDatabase, type AppDatabase } from '@agentg/database/client';
-import type { Pool } from 'pg';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { postgres, type PostgresResource } from '@agentg/framework';
 
 import * as schema from './schema.js';
 
-export type TelegramDatabase = AppDatabase<typeof schema>;
+export type DatabaseResource = PostgresResource<typeof schema>;
+export type Database = DatabaseResource['db'];
 
-export function createTelegramDatabase(pool: Pool): TelegramDatabase {
-  return createAppDatabase(pool, schema);
+const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+
+export function createDatabase(url: string): DatabaseResource {
+  return postgres({
+    migrations: {
+      folder: resolve(packageRoot, 'drizzle'),
+      table: '__drizzle_migrations_telegram'
+    },
+    schema,
+    url
+  });
 }
