@@ -1,8 +1,8 @@
+import { toJsonValue, type JsonObject } from '@agentg/framework';
 import { describe, expect, it } from 'vitest';
 
-import { extractTelegramFileSlots, type TelegramFileSlotUpdate } from '../src/files/extractor.js';
-import { decideTelegramFilePolicy } from '../src/files/policy.js';
-import { telegramWireJsonObject } from '../src/tdlib/wire.js';
+import { extractFileSlots, type FileSlotUpdate } from '../src/files/extractor.js';
+import { decideFilePolicy } from '../src/files/policy.js';
 
 describe('Telegram file extraction', () => {
   it('extracts chat avatar slots from chat photos', () => {
@@ -21,7 +21,7 @@ describe('Telegram file extraction', () => {
       }
     });
 
-    expect(extractTelegramFileSlots(update)).toMatchObject([
+    expect(extractFileSlots(update)).toMatchObject([
       {
         mediaKind: 'avatar',
         owner: { _model: 'telegram.chat', id: '42' },
@@ -107,14 +107,12 @@ describe('Telegram file extraction', () => {
       })
     );
 
-    expect(extractTelegramFileSlots(photoUpdate).map((slot) => slot.slotKey)).toEqual([
-      'content.photo.0'
-    ]);
-    expect(extractTelegramFileSlots(videoUpdate).map((slot) => slot.slotKey)).toEqual([
+    expect(extractFileSlots(photoUpdate).map((slot) => slot.slotKey)).toEqual(['content.photo.0']);
+    expect(extractFileSlots(videoUpdate).map((slot) => slot.slotKey)).toEqual([
       'content.video.file',
       'content.video.thumbnail'
     ]);
-    expect(extractTelegramFileSlots(documentUpdate)).toMatchObject([
+    expect(extractFileSlots(documentUpdate)).toMatchObject([
       {
         fileName: 'archive.zip',
         mediaKind: 'document',
@@ -122,7 +120,7 @@ describe('Telegram file extraction', () => {
         slotKey: 'content.document.file'
       }
     ]);
-    expect(extractTelegramFileSlots(voiceUpdate)).toMatchObject([
+    expect(extractFileSlots(voiceUpdate)).toMatchObject([
       {
         durationSeconds: 17,
         mediaKind: 'voice',
@@ -136,7 +134,7 @@ describe('Telegram file extraction', () => {
 
 describe('Telegram file policy', () => {
   it('queues small automatic photos and videos', () => {
-    const photo = extractTelegramFileSlots(
+    const photo = extractFileSlots(
       messageSlotUpdate(
         message({
           content: {
@@ -150,7 +148,7 @@ describe('Telegram file policy', () => {
         })
       )
     )[0];
-    const video = extractTelegramFileSlots(
+    const video = extractFileSlots(
       messageSlotUpdate(
         message({
           content: {
@@ -171,7 +169,7 @@ describe('Telegram file policy', () => {
       throw new Error('expected photo and video slots');
     }
     expect(
-      decideTelegramFilePolicy({
+      decideFilePolicy({
         cause: 'live_update',
         current: null,
         slot: photo,
@@ -179,7 +177,7 @@ describe('Telegram file policy', () => {
       }).action
     ).toBe('enqueue');
     expect(
-      decideTelegramFilePolicy({
+      decideFilePolicy({
         cause: 'live_update',
         current: null,
         slot: video,
@@ -188,8 +186,8 @@ describe('Telegram file policy', () => {
     ).toBe('enqueue');
   });
 
-  it('queues voice messages for Control Plane pages and explicit requests', () => {
-    const [voice] = extractTelegramFileSlots(
+  it('queues voice messages for rendered pages and explicit requests', () => {
+    const [voice] = extractFileSlots(
       messageSlotUpdate(
         message({
           content: {
@@ -211,7 +209,7 @@ describe('Telegram file policy', () => {
       throw new Error('expected voice slot');
     }
     expect(
-      decideTelegramFilePolicy({
+      decideFilePolicy({
         cause: 'operator_page',
         current: null,
         slot: voice,
@@ -219,7 +217,7 @@ describe('Telegram file policy', () => {
       }).action
     ).toBe('enqueue');
     expect(
-      decideTelegramFilePolicy({
+      decideFilePolicy({
         cause: 'explicit_request',
         current: null,
         slot: voice,
@@ -229,7 +227,7 @@ describe('Telegram file policy', () => {
   });
 
   it('keeps large photos known until an allowed explicit request', () => {
-    const [photo] = extractTelegramFileSlots(
+    const [photo] = extractFileSlots(
       messageSlotUpdate(
         message({
           content: {
@@ -256,7 +254,7 @@ describe('Telegram file policy', () => {
       throw new Error('expected photo slot');
     }
     expect(
-      decideTelegramFilePolicy({
+      decideFilePolicy({
         cause: 'live_update',
         current: null,
         slot: photo,
@@ -264,7 +262,7 @@ describe('Telegram file policy', () => {
       }).action
     ).toBe('record');
     expect(
-      decideTelegramFilePolicy({
+      decideFilePolicy({
         cause: 'explicit_request',
         current: null,
         slot: photo,
@@ -274,7 +272,7 @@ describe('Telegram file policy', () => {
   });
 
   it('treats zero TDLib sizes as unknown for automatic policies', () => {
-    const [photo] = extractTelegramFileSlots(
+    const [photo] = extractFileSlots(
       messageSlotUpdate(
         message({
           content: {
@@ -303,7 +301,7 @@ describe('Telegram file policy', () => {
 
     expect(photo.byteSize).toBeNull();
     expect(
-      decideTelegramFilePolicy({
+      decideFilePolicy({
         cause: 'live_update',
         current: null,
         slot: photo,
@@ -313,7 +311,7 @@ describe('Telegram file policy', () => {
   });
 
   it('keeps history media indexed without automatic downloads', () => {
-    const [photo] = extractTelegramFileSlots(
+    const [photo] = extractFileSlots(
       messageSlotUpdate(
         message({
           content: {
@@ -341,7 +339,7 @@ describe('Telegram file policy', () => {
     }
 
     expect(
-      decideTelegramFilePolicy({
+      decideFilePolicy({
         cause: 'history_fetch',
         current: null,
         slot: photo,
@@ -351,7 +349,7 @@ describe('Telegram file policy', () => {
   });
 
   it('keeps failed files idle until an explicit retry request', () => {
-    const [photo] = extractTelegramFileSlots(
+    const [photo] = extractFileSlots(
       messageSlotUpdate(
         message({
           content: {
@@ -379,7 +377,7 @@ describe('Telegram file policy', () => {
     }
 
     expect(
-      decideTelegramFilePolicy({
+      decideFilePolicy({
         cause: 'live_update',
         current: {
           sourceFingerprint: 'photo-asset',
@@ -390,7 +388,7 @@ describe('Telegram file policy', () => {
       }).action
     ).toBe('record');
     expect(
-      decideTelegramFilePolicy({
+      decideFilePolicy({
         cause: 'explicit_request',
         current: {
           sourceFingerprint: 'photo-asset',
@@ -403,7 +401,7 @@ describe('Telegram file policy', () => {
   });
 });
 
-function chatSlotUpdate(input: unknown): TelegramFileSlotUpdate {
+function chatSlotUpdate(input: unknown): FileSlotUpdate {
   const update = input as {
     chat: {
       id: number;
@@ -411,13 +409,13 @@ function chatSlotUpdate(input: unknown): TelegramFileSlotUpdate {
   };
   return {
     chat: {
-      chat: telegramWireJsonObject(update.chat),
+      chat: jsonObject(update.chat),
       id: String(update.chat.id)
     }
   };
 }
 
-function messageSlotUpdate(input: unknown): TelegramFileSlotUpdate {
+function messageSlotUpdate(input: unknown): FileSlotUpdate {
   const update = input as {
     chat_id: number;
     content: unknown;
@@ -426,7 +424,7 @@ function messageSlotUpdate(input: unknown): TelegramFileSlotUpdate {
   return {
     message: {
       chatId: String(update.chat_id),
-      content: telegramWireJsonObject(update.content),
+      content: jsonObject(update.content),
       messageId: String(update.id)
     }
   };
@@ -476,4 +474,12 @@ function tdFile(id: number, size: number) {
     },
     size
   };
+}
+
+function jsonObject(value: unknown): JsonObject {
+  const json = toJsonValue(value);
+  if (typeof json !== 'object' || json === null || Array.isArray(json)) {
+    throw new Error('expected JSON object');
+  }
+  return json;
 }

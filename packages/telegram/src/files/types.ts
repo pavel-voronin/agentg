@@ -1,18 +1,18 @@
 import type {
-  TelegramActiveNotificationModelRef,
-  TelegramChatModelRef,
-  TelegramDefaultBackgroundModelRef,
-  TelegramEmojiChatThemesModelRef,
-  TelegramMessageModelRef,
-  TelegramQuickReplyMessageModelRef,
-  TelegramStickerSetModelRef,
-  TelegramStoryModelRef,
-  TelegramUserModelRef
+  ActiveNotificationModelRef,
+  ChatModelRef,
+  DefaultBackgroundModelRef,
+  EmojiChatThemesModelRef,
+  MessageModelRef,
+  QuickReplyMessageModelRef,
+  StickerSetModelRef,
+  StoryModelRef,
+  UserModelRef
 } from '../model/refs.js';
-import type { TelegramWireFile } from '../tdlib/wire.js';
+import type { file } from 'tdlib-types';
 
-export const telegramFileStatuses = ['known', 'queued', 'downloading', 'ready', 'failed'] as const;
-export const telegramFileMediaKinds = [
+export const fileStatuses = ['known', 'queued', 'downloading', 'ready', 'failed'] as const;
+export const fileMediaKinds = [
   'avatar',
   'document',
   'photo',
@@ -20,43 +20,43 @@ export const telegramFileMediaKinds = [
   'video',
   'voice'
 ] as const;
-export const telegramFileRenderKinds = ['audio', 'download', 'image', 'video'] as const;
+export const fileRenderKinds = ['audio', 'download', 'image', 'video'] as const;
 
-export type TelegramFileStatus = (typeof telegramFileStatuses)[number];
-export type TelegramFileMediaKind = (typeof telegramFileMediaKinds)[number];
-export type TelegramFileRenderKind = (typeof telegramFileRenderKinds)[number];
-export type TelegramFileOwner =
-  | TelegramActiveNotificationModelRef
-  | TelegramChatModelRef
-  | TelegramDefaultBackgroundModelRef
-  | TelegramEmojiChatThemesModelRef
-  | TelegramMessageModelRef
-  | TelegramQuickReplyMessageModelRef
-  | TelegramStickerSetModelRef
-  | TelegramStoryModelRef
-  | TelegramUserModelRef;
-export type TelegramFileOwnerModel = TelegramFileOwner['_model'];
-export type TelegramFileOwnerKey = {
+export type FileStatus = (typeof fileStatuses)[number];
+export type FileMediaKind = (typeof fileMediaKinds)[number];
+export type FileRenderKind = (typeof fileRenderKinds)[number];
+export type FileOwner =
+  | ActiveNotificationModelRef
+  | ChatModelRef
+  | DefaultBackgroundModelRef
+  | EmojiChatThemesModelRef
+  | MessageModelRef
+  | QuickReplyMessageModelRef
+  | StickerSetModelRef
+  | StoryModelRef
+  | UserModelRef;
+export type FileOwnerModel = FileOwner['_model'];
+export type FileOwnerKey = {
   ownerId: string;
-  ownerModel: TelegramFileOwnerModel;
+  ownerModel: FileOwnerModel;
 };
 
-export type ExtractedTelegramFileSlot = {
+export type ExtractedFileSlot = {
   byteSize: number | null;
   durationSeconds: number | null;
-  file: TelegramWireFile;
+  file: file;
   fileName: string | null;
   height: number | null;
-  mediaKind: TelegramFileMediaKind;
+  mediaKind: FileMediaKind;
   mimeType: string | null;
-  owner: TelegramFileOwner;
-  renderKind: TelegramFileRenderKind;
+  owner: FileOwner;
+  renderKind: FileRenderKind;
   slotKey: string;
   tdlibFileId: number;
   width: number | null;
 };
 
-export type TelegramFileRef = {
+export type FileRef = {
   _model: 'telegram.file';
   byteSize: number | null;
   canRequest: boolean;
@@ -66,19 +66,19 @@ export type TelegramFileRef = {
   fileName: string | null;
   height: number | null;
   id: string;
-  mediaKind: TelegramFileMediaKind;
+  mediaKind: FileMediaKind;
   mimeType: string | null;
-  owner: TelegramFileOwner;
-  renderKind: TelegramFileRenderKind;
+  owner: FileOwner;
+  renderKind: FileRenderKind;
   slotKey: string;
-  status: TelegramFileStatus;
+  status: FileStatus;
   updatedAt: string;
   url: string | null;
   width: number | null;
 };
 
-export function telegramFileRefId(input: {
-  ownerModel: TelegramFileOwnerModel;
+export function fileRefId(input: {
+  ownerModel: FileOwnerModel;
   ownerId: string;
   slotKey: string;
 }): string {

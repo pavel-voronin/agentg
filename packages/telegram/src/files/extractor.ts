@@ -1,25 +1,23 @@
-import type { JsonObject } from '@agentg/events/json';
+import type { JsonObject } from '@agentg/framework';
+
+import type { file } from 'tdlib-types';
 
 import {
-  telegramActiveNotificationRef,
-  telegramChatRef,
-  telegramDefaultBackgroundRef,
-  telegramEmojiChatThemesRef,
-  telegramMessageRef,
-  telegramQuickReplyMessageRef,
-  telegramStickerSetRef,
-  telegramStoryRef,
-  telegramUserRef
+  activeNotificationRef,
+  chatRef,
+  defaultBackgroundRef,
+  emojiChatThemesRef,
+  messageRef,
+  quickReplyMessageRef,
+  stickerSetRef,
+  storyRef,
+  userRef
 } from '../model/refs.js';
-import { telegramWireFileOrUndefined, type TelegramWireFile } from '../tdlib/wire.js';
-import type {
-  ExtractedTelegramFileSlot,
-  TelegramFileOwner,
-  TelegramFileMediaKind,
-  TelegramFileRenderKind
-} from './types.js';
+import { tdFileOrUndefined } from '../tdlib/value.js';
+import type { ExtractedFileSlot, FileMediaKind, FileOwner, FileRenderKind } from './types.js';
 
-export type TelegramFileSlotUpdate = {
+// TODO(file-size): Split by extracted owner/content kind; this file is above the target size.
+export type FileSlotUpdate = {
   chat?: {
     chat: JsonObject;
     id: string;
@@ -80,17 +78,15 @@ export type TelegramFileSlotUpdate = {
 
 type TdFileFacts = {
   byteSize: number | null;
-  file: TelegramWireFile;
+  file: file;
   tdlibFileId: number;
 };
 
 type ContentFileOwner = {
-  owner: TelegramFileOwner;
+  owner: FileOwner;
 };
 
-export function extractTelegramFileSlots(
-  update: TelegramFileSlotUpdate
-): ExtractedTelegramFileSlot[] {
+export function extractFileSlots(update: FileSlotUpdate): ExtractedFileSlot[] {
   return [
     ...(update.chat === undefined ? [] : extractChatFileSlots(update.chat.id, update.chat.chat)),
     ...(update.chatPhoto === undefined
@@ -118,7 +114,7 @@ export function extractTelegramFileSlots(
       ? []
       : extractMessageFileSlots(
           {
-            owner: telegramMessageRef({
+            owner: messageRef({
               chatId: update.message.chatId,
               messageId: update.message.messageId
             })
@@ -129,7 +125,7 @@ export function extractTelegramFileSlots(
       ? []
       : extractMessageFileSlots(
           {
-            owner: telegramMessageRef({
+            owner: messageRef({
               chatId: update.contentUpdate.chatId,
               messageId: update.contentUpdate.messageId
             })
@@ -143,7 +139,7 @@ export function extractTelegramFileSlots(
       ? []
       : extractMessageFileSlots(
           {
-            owner: telegramQuickReplyMessageRef(update.quickReplyMessage.messageId)
+            owner: quickReplyMessageRef(update.quickReplyMessage.messageId)
           },
           asPlainRecord(update.quickReplyMessage.content)
         )),
@@ -160,7 +156,7 @@ export function extractTelegramFileSlots(
       ? []
       : extractNestedFileSlots(
           {
-            owner: telegramUserRef(update.userFullInfo.userId)
+            owner: userRef(update.userFullInfo.userId)
           },
           update.userFullInfo.info,
           'full_info'
@@ -168,7 +164,7 @@ export function extractTelegramFileSlots(
   ];
 }
 
-function extractChatFileSlots(chatId: string, chat: JsonObject): ExtractedTelegramFileSlot[] {
+function extractChatFileSlots(chatId: string, chat: JsonObject): ExtractedFileSlot[] {
   const photo = asPlainRecord(chat.photo);
   return [
     chatAvatarSlot(chatId, 'avatar.small', photo?.small),
@@ -180,7 +176,7 @@ function chatAvatarSlot(
   chatId: string,
   slotKey: string,
   value: unknown
-): ExtractedTelegramFileSlot | undefined {
+): ExtractedFileSlot | undefined {
   const file = tdFileFacts(value);
   if (file === null) {
     return undefined;
@@ -189,16 +185,13 @@ function chatAvatarSlot(
     facts: file,
     mediaKind: 'avatar',
     mimeType: 'image/jpeg',
-    owner: telegramChatRef(chatId),
+    owner: chatRef(chatId),
     renderKind: 'image',
     slotKey
   });
 }
 
-function extractChatPhotoFileSlots(
-  chatId: string,
-  photo: JsonObject | null
-): ExtractedTelegramFileSlot[] {
+function extractChatPhotoFileSlots(chatId: string, photo: JsonObject | null): ExtractedFileSlot[] {
   if (photo === null) {
     return [];
   }
@@ -212,10 +205,10 @@ function extractChatPhotoFileSlots(
 function extractChatBackgroundFileSlots(
   chatId: string,
   chatBackground: JsonObject
-): ExtractedTelegramFileSlot[] {
+): ExtractedFileSlot[] {
   const background = asPlainRecord(chatBackground.background);
   const owner: ContentFileOwner = {
-    owner: telegramChatRef(chatId)
+    owner: chatRef(chatId)
   };
 
   return extractBackgroundFileSlots(owner, background, 'background');
@@ -224,25 +217,25 @@ function extractChatBackgroundFileSlots(
 function extractDefaultBackgroundFileSlots(
   key: string,
   background: JsonObject | null
-): ExtractedTelegramFileSlot[] {
+): ExtractedFileSlot[] {
   if (background === null) {
     return [];
   }
 
   return extractBackgroundFileSlots(
     {
-      owner: telegramDefaultBackgroundRef(key)
+      owner: defaultBackgroundRef(key)
     },
     background,
     'background'
   );
 }
 
-function extractEmojiChatThemeFileSlots(themes: JsonObject[]): ExtractedTelegramFileSlot[] {
+function extractEmojiChatThemeFileSlots(themes: JsonObject[]): ExtractedFileSlot[] {
   const owner: ContentFileOwner = {
-    owner: telegramEmojiChatThemesRef()
+    owner: emojiChatThemesRef()
   };
-  const slots: ExtractedTelegramFileSlot[] = [];
+  const slots: ExtractedFileSlot[] = [];
 
   for (const theme of themes) {
     const name = safeString(theme.name);
@@ -269,16 +262,13 @@ function extractEmojiChatThemeFileSlots(themes: JsonObject[]): ExtractedTelegram
   return slots;
 }
 
-function extractChatThemeFileSlots(
-  chatId: string,
-  theme: JsonObject | null
-): ExtractedTelegramFileSlot[] {
+function extractChatThemeFileSlots(chatId: string, theme: JsonObject | null): ExtractedFileSlot[] {
   if (theme?._ !== 'chatThemeGift') {
     return [];
   }
 
   const owner: ContentFileOwner = {
-    owner: telegramChatRef(chatId)
+    owner: chatRef(chatId)
   };
   const giftTheme = asPlainRecord(theme.gift_theme);
   const gift = asPlainRecord(giftTheme?.gift);
@@ -307,9 +297,9 @@ function extractBackgroundFileSlots(
   owner: ContentFileOwner,
   background: Record<string, unknown> | undefined,
   slotKeyPrefix: string
-): ExtractedTelegramFileSlot[] {
+): ExtractedFileSlot[] {
   const document = asPlainRecord(background?.document);
-  const slots: ExtractedTelegramFileSlot[] = [];
+  const slots: ExtractedFileSlot[] = [];
   const documentFacts = tdFileFacts(document?.document);
 
   if (documentFacts !== null) {
@@ -341,7 +331,7 @@ function extractBackgroundFileSlots(
 function extractMessageFileSlots(
   owner: ContentFileOwner,
   content: Record<string, unknown> | undefined
-): ExtractedTelegramFileSlot[] {
+): ExtractedFileSlot[] {
   switch (content?._) {
     case 'messageAudio':
       return extractMessageAudioSlots(owner, content);
@@ -367,7 +357,7 @@ function extractMessageFileSlots(
 function extractMessagePhotoSlots(
   owner: ContentFileOwner,
   content: Record<string, unknown>
-): ExtractedTelegramFileSlot[] {
+): ExtractedFileSlot[] {
   const photo = asPlainRecord(content.photo);
   const size = chooseLargestPhotoSize(asRecordArray(photo?.sizes));
   const facts = tdFileFacts(size?.photo);
@@ -392,9 +382,9 @@ function extractMessageVideoSlots(
   owner: ContentFileOwner,
   content: Record<string, unknown>,
   field: 'animation' | 'video'
-): ExtractedTelegramFileSlot[] {
+): ExtractedFileSlot[] {
   const video = asPlainRecord(content[field]);
-  const slots: ExtractedTelegramFileSlot[] = [];
+  const slots: ExtractedFileSlot[] = [];
   const facts = tdFileFacts(video?.[field]);
   if (facts !== null) {
     slots.push(
@@ -422,9 +412,9 @@ function extractMessageVideoSlots(
 function extractMessageVideoNoteSlots(
   owner: ContentFileOwner,
   content: Record<string, unknown>
-): ExtractedTelegramFileSlot[] {
+): ExtractedFileSlot[] {
   const videoNote = asPlainRecord(content.video_note);
-  const slots: ExtractedTelegramFileSlot[] = [];
+  const slots: ExtractedFileSlot[] = [];
   const facts = tdFileFacts(videoNote?.video);
   if (facts !== null) {
     slots.push(
@@ -451,9 +441,9 @@ function extractMessageVideoNoteSlots(
 function extractMessageDocumentSlots(
   owner: ContentFileOwner,
   content: Record<string, unknown>
-): ExtractedTelegramFileSlot[] {
+): ExtractedFileSlot[] {
   const document = asPlainRecord(content.document);
-  const slots: ExtractedTelegramFileSlot[] = [];
+  const slots: ExtractedFileSlot[] = [];
   const facts = tdFileFacts(document?.document);
   if (facts !== null) {
     slots.push(
@@ -478,7 +468,7 @@ function extractMessageDocumentSlots(
 function extractMessageVoiceNoteSlots(
   owner: ContentFileOwner,
   content: Record<string, unknown>
-): ExtractedTelegramFileSlot[] {
+): ExtractedFileSlot[] {
   const voiceNote = asPlainRecord(content.voice_note);
   const facts = tdFileFacts(voiceNote?.voice);
   if (facts === null) {
@@ -500,9 +490,9 @@ function extractMessageVoiceNoteSlots(
 function extractMessageAudioSlots(
   owner: ContentFileOwner,
   content: Record<string, unknown>
-): ExtractedTelegramFileSlot[] {
+): ExtractedFileSlot[] {
   const audio = asPlainRecord(content.audio);
-  const slots: ExtractedTelegramFileSlot[] = [];
+  const slots: ExtractedFileSlot[] = [];
   const facts = tdFileFacts(audio?.audio);
   if (facts !== null) {
     slots.push(
@@ -528,7 +518,7 @@ function extractMessageAudioSlots(
 function extractMessageStickerSlots(
   owner: ContentFileOwner,
   content: Record<string, unknown>
-): ExtractedTelegramFileSlot[] {
+): ExtractedFileSlot[] {
   const sticker = asPlainRecord(content.sticker);
   return extractStickerFileSlots(owner, sticker, 'content.sticker');
 }
@@ -537,8 +527,8 @@ function extractStickerFileSlots(
   owner: ContentFileOwner,
   sticker: Record<string, unknown> | undefined,
   slotKeyPrefix: string
-): ExtractedTelegramFileSlot[] {
-  const slots: ExtractedTelegramFileSlot[] = [];
+): ExtractedFileSlot[] {
+  const slots: ExtractedFileSlot[] = [];
   const facts = tdFileFacts(sticker?.sticker);
   const renderKind = stickerRenderKind(sticker);
   if (facts !== null) {
@@ -565,11 +555,11 @@ function extractStickerFileSlots(
 function extractStickerSetFileSlots(
   stickerSetId: string,
   stickerSet: JsonObject
-): ExtractedTelegramFileSlot[] {
+): ExtractedFileSlot[] {
   const owner: ContentFileOwner = {
-    owner: telegramStickerSetRef(stickerSetId)
+    owner: stickerSetRef(stickerSetId)
   };
-  const slots: ExtractedTelegramFileSlot[] = [];
+  const slots: ExtractedFileSlot[] = [];
   const thumbnail = thumbnailSlot(owner, stickerSet.thumbnail, 'thumbnail');
 
   if (thumbnail !== undefined) {
@@ -583,8 +573,8 @@ function extractStickerSetFileSlots(
   return slots;
 }
 
-function extractStickerSetInfoFileSlots(stickerSets: JsonObject[]): ExtractedTelegramFileSlot[] {
-  const slots: ExtractedTelegramFileSlot[] = [];
+function extractStickerSetInfoFileSlots(stickerSets: JsonObject[]): ExtractedFileSlot[] {
+  const slots: ExtractedFileSlot[] = [];
 
   for (const stickerSet of stickerSets) {
     const stickerSetId = safeString(stickerSet.id);
@@ -592,7 +582,7 @@ function extractStickerSetInfoFileSlots(stickerSets: JsonObject[]): ExtractedTel
       continue;
     }
     const owner: ContentFileOwner = {
-      owner: telegramStickerSetRef(stickerSetId)
+      owner: stickerSetRef(stickerSetId)
     };
     const thumbnail = thumbnailSlot(owner, stickerSet.thumbnail, 'trending.thumbnail');
     if (thumbnail !== undefined) {
@@ -611,9 +601,9 @@ function extractStoryFileSlots(
   posterChatId: string,
   storyId: number,
   story: JsonObject
-): ExtractedTelegramFileSlot[] {
+): ExtractedFileSlot[] {
   const owner: ContentFileOwner = {
-    owner: telegramStoryRef({ posterChatId, storyId })
+    owner: storyRef({ posterChatId, storyId })
   };
   const content = asPlainRecord(story.content);
 
@@ -637,7 +627,7 @@ function extractStoryFileSlots(
 function extractStoryPhotoSlots(
   owner: ContentFileOwner,
   content: Record<string, unknown>
-): ExtractedTelegramFileSlot[] {
+): ExtractedFileSlot[] {
   const photo = asPlainRecord(content.photo);
   const size = chooseLargestPhotoSize(asRecordArray(photo?.sizes));
   const facts = tdFileFacts(size?.photo);
@@ -662,8 +652,8 @@ function extractStoryVideoSlots(
   owner: ContentFileOwner,
   video: Record<string, unknown> | undefined,
   slotKeyPrefix: string
-): ExtractedTelegramFileSlot[] {
-  const slots: ExtractedTelegramFileSlot[] = [];
+): ExtractedFileSlot[] {
+  const slots: ExtractedFileSlot[] = [];
   const facts = tdFileFacts(video?.video);
   if (facts !== null) {
     slots.push(
@@ -693,7 +683,7 @@ function extractNestedFileSlots(
   owner: ContentFileOwner,
   value: unknown,
   slotKeyPrefix: string
-): ExtractedTelegramFileSlot[] {
+): ExtractedFileSlot[] {
   const file = tdFileFacts(value);
   if (file !== null) {
     return [
@@ -729,7 +719,7 @@ function thumbnailSlot(
   owner: ContentFileOwner,
   value: unknown,
   slotKey: string
-): ExtractedTelegramFileSlot | undefined {
+): ExtractedFileSlot | undefined {
   const thumbnail = asPlainRecord(value);
   const facts = tdFileFacts(thumbnail?.file);
   if (facts === null) {
@@ -747,8 +737,8 @@ function thumbnailSlot(
   });
 }
 
-function extractNotificationGroupFileSlots(groups: JsonObject[]): ExtractedTelegramFileSlot[] {
-  const slots: ExtractedTelegramFileSlot[] = [];
+function extractNotificationGroupFileSlots(groups: JsonObject[]): ExtractedFileSlot[] {
+  const slots: ExtractedFileSlot[] = [];
 
   for (const group of groups) {
     const groupId = safeTdlibId(group.id);
@@ -762,7 +752,7 @@ function extractNotificationGroupFileSlots(groups: JsonObject[]): ExtractedTeleg
           slots.push(
             ...extractMessageFileSlots(
               {
-                owner: telegramMessageRef({ chatId, messageId })
+                owner: messageRef({ chatId, messageId })
               },
               asPlainRecord(message?.content)
             )
@@ -776,7 +766,7 @@ function extractNotificationGroupFileSlots(groups: JsonObject[]): ExtractedTeleg
           slots.push(
             ...extractMessageFileSlots(
               {
-                owner: telegramActiveNotificationRef({
+                owner: activeNotificationRef({
                   groupId,
                   notificationId
                 })
@@ -846,13 +836,13 @@ function fileSlot(input: {
   facts: TdFileFacts;
   fileName?: string | null;
   height?: number | null;
-  mediaKind: TelegramFileMediaKind;
+  mediaKind: FileMediaKind;
   mimeType?: string | null;
-  owner: ExtractedTelegramFileSlot['owner'];
-  renderKind: TelegramFileRenderKind;
+  owner: ExtractedFileSlot['owner'];
+  renderKind: FileRenderKind;
   slotKey: string;
   width?: number | null;
-}): ExtractedTelegramFileSlot {
+}): ExtractedFileSlot {
   return {
     byteSize: input.facts.byteSize,
     durationSeconds: input.durationSeconds ?? null,
@@ -870,7 +860,7 @@ function fileSlot(input: {
 }
 
 function tdFileFacts(value: unknown): TdFileFacts | null {
-  const file = telegramWireFileOrUndefined(value);
+  const file = tdFileOrUndefined(value);
   if (file === undefined) {
     return null;
   }
@@ -915,7 +905,7 @@ function safeString(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
-function stickerMediaKind(renderKind: TelegramFileRenderKind): TelegramFileMediaKind {
+function stickerMediaKind(renderKind: FileRenderKind): FileMediaKind {
   if (renderKind === 'image') {
     return 'photo';
   }
@@ -939,7 +929,7 @@ function stickerMimeType(sticker: Record<string, unknown> | undefined): string {
   }
 }
 
-function stickerRenderKind(sticker: Record<string, unknown> | undefined): TelegramFileRenderKind {
+function stickerRenderKind(sticker: Record<string, unknown> | undefined): FileRenderKind {
   const format = asPlainRecord(sticker?.format);
   switch (format?._) {
     case 'stickerFormatWebp':

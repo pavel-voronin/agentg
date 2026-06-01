@@ -1,22 +1,22 @@
 import {
-  telegramAutomaticDownloadPolicyRules,
-  telegramExplicitDownloadPolicyRules,
-  type TelegramMediaDownloadPolicyCause,
-  type TelegramMediaDownloadPolicyRule
+  automaticDownloadPolicyRules,
+  explicitDownloadPolicyRules,
+  type MediaDownloadPolicyCause,
+  type MediaDownloadPolicyRule
 } from './policyRules.js';
-import type { ExtractedTelegramFileSlot } from './types.js';
+import type { ExtractedFileSlot } from './types.js';
 
-export type TelegramFilePolicyInput = {
-  cause: TelegramMediaDownloadPolicyCause;
+type FilePolicyInput = {
+  cause: MediaDownloadPolicyCause;
   current: {
     sourceFingerprint: string;
     status: string;
   } | null;
-  slot: Pick<ExtractedTelegramFileSlot, 'byteSize' | 'mediaKind'>;
+  slot: Pick<ExtractedFileSlot, 'byteSize' | 'mediaKind'>;
   sourceFingerprint: string;
 };
 
-export type TelegramFilePolicyDecision =
+export type FilePolicyDecision =
   | {
       action: 'deny';
       reason: string;
@@ -30,11 +30,9 @@ export type TelegramFilePolicyDecision =
       reason: string;
     };
 
-export type { TelegramMediaDownloadPolicyCause } from './policyRules.js';
+export type { MediaDownloadPolicyCause } from './policyRules.js';
 
-export function decideTelegramFilePolicy(
-  input: TelegramFilePolicyInput
-): TelegramFilePolicyDecision {
+export function decideFilePolicy(input: FilePolicyInput): FilePolicyDecision {
   if (
     input.current?.sourceFingerprint === input.sourceFingerprint &&
     input.current.status === 'ready'
@@ -56,9 +54,7 @@ export function decideTelegramFilePolicy(
   }
 
   const rules =
-    input.cause === 'explicit_request'
-      ? telegramExplicitDownloadPolicyRules
-      : telegramAutomaticDownloadPolicyRules;
+    input.cause === 'explicit_request' ? explicitDownloadPolicyRules : automaticDownloadPolicyRules;
   const rule = rules.find((candidate) => ruleMatches(candidate, input));
 
   if (rule === undefined) {
@@ -86,10 +82,7 @@ export function decideTelegramFilePolicy(
   };
 }
 
-function ruleMatches(
-  rule: TelegramMediaDownloadPolicyRule,
-  input: TelegramFilePolicyInput
-): boolean {
+function ruleMatches(rule: MediaDownloadPolicyRule, input: FilePolicyInput): boolean {
   return rule.mediaKind === input.slot.mediaKind && rule.causes.includes(input.cause);
 }
 

@@ -1,14 +1,16 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  telegramFileDownloadRequest,
-  type TelegramFileDownloadRow
-} from '../src/files/subsystem.js';
+import { fileDownloadRequest, logTdlibCleanupError } from '../src/files/queue.js';
+import type { FileDownloadRow } from '../src/files/runtime.js';
 
 describe('Telegram file download worker', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('uses TDLib download list transport for message-owned files', () => {
     expect(
-      telegramFileDownloadRequest({
+      fileDownloadRequest({
         ...downloadRow(),
         latestTdlibFileId: 123,
         priority: 32,
@@ -19,17 +21,17 @@ describe('Telegram file download worker', () => {
         }
       })
     ).toEqual({
-      _: 'addFileToDownloads',
-      chat_id: -10042,
-      file_id: 123,
-      message_id: 777,
+      chatId: -10042,
+      fileId: 123,
+      kind: 'message',
+      messageId: 777,
       priority: 32
     });
   });
 
   it('uses async downloadFile transport for non-message files', () => {
     expect(
-      telegramFileDownloadRequest({
+      fileDownloadRequest({
         ...downloadRow(),
         latestTdlibFileId: 456,
         priority: 8,
@@ -38,8 +40,8 @@ describe('Telegram file download worker', () => {
         }
       })
     ).toEqual({
-      _: 'downloadFile',
-      file_id: 456,
+      fileId: 456,
+      kind: 'file',
       limit: 0,
       offset: 0,
       priority: 8,
@@ -49,15 +51,32 @@ describe('Telegram file download worker', () => {
 
   it('rejects priorities outside TDLib native range', () => {
     expect(() =>
-      telegramFileDownloadRequest({
+      fileDownloadRequest({
         ...downloadRow(),
         priority: 33
       })
     ).toThrow('TDLib priority must be an integer from 1 to 32');
   });
+
+  it("treats TDLib cleanup Can't find file as a no-op", () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    logTdlibCleanupError('asset-a', new Error("Can't find file"));
+
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('keeps warning for real TDLib cleanup failures', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    logTdlibCleanupError('asset-a', new Error('TDLib transport failed'));
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0]?.[0]).toContain('telegram.file_download_cleanup_failed');
+  });
 });
 
-function downloadRow(): TelegramFileDownloadRow {
+function downloadRow(): FileDownloadRow {
   return {
     assetKey: 'asset-a',
     byteSize: 1024,

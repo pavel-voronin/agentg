@@ -1,28 +1,27 @@
 import { and, eq, inArray, sql } from 'drizzle-orm';
 
-import type { TelegramDatabase } from '../database/client.js';
-import type { TelegramFileQueueStats } from '../events/contracts.js';
+import type { Database } from '../database/client.js';
 import {
-  TELEGRAM_ACTIVE_NOTIFICATION_MODEL,
-  TELEGRAM_CHAT_MODEL,
-  TELEGRAM_DEFAULT_BACKGROUND_MODEL,
-  TELEGRAM_EMOJI_CHAT_THEMES_MODEL,
-  TELEGRAM_MESSAGE_MODEL,
-  TELEGRAM_QUICK_REPLY_MESSAGE_MODEL,
-  TELEGRAM_STICKER_SET_MODEL,
-  TELEGRAM_STORY_MODEL,
-  TELEGRAM_USER_MODEL,
-  telegramActiveNotificationModelParts,
-  telegramActiveNotificationRef,
-  telegramChatRef,
-  telegramDefaultBackgroundRef,
-  telegramEmojiChatThemesRef,
-  telegramMessageRef,
-  telegramMessageModelParts,
-  telegramQuickReplyMessageRef,
-  telegramStickerSetRef,
-  telegramStoryRef,
-  telegramUserRef
+  ACTIVE_NOTIFICATION_MODEL,
+  CHAT_MODEL,
+  DEFAULT_BACKGROUND_MODEL,
+  EMOJI_CHAT_THEMES_MODEL,
+  MESSAGE_MODEL,
+  QUICK_REPLY_MESSAGE_MODEL,
+  STICKER_SET_MODEL,
+  STORY_MODEL,
+  USER_MODEL,
+  activeNotificationModelParts,
+  activeNotificationRef,
+  chatRef,
+  defaultBackgroundRef,
+  emojiChatThemesRef,
+  messageRef,
+  messageModelParts,
+  quickReplyMessageRef,
+  stickerSetRef,
+  storyRef,
+  userRef
 } from '../model/refs.js';
 import {
   telegramFileAssets,
@@ -30,19 +29,31 @@ import {
   telegramFileSlots
 } from '../database/schema.js';
 import type {
-  TelegramFileMediaKind,
-  TelegramFileOwner,
-  TelegramFileOwnerKey,
-  TelegramFileOwnerModel,
-  TelegramFileRef,
-  TelegramFileRenderKind,
-  TelegramFileStatus
+  FileMediaKind,
+  FileOwner,
+  FileOwnerKey,
+  FileOwnerModel,
+  FileRef,
+  FileRenderKind,
+  FileStatus
 } from './types.js';
-import { telegramFileRefId } from './types.js';
+import { fileRefId } from './types.js';
 
-export type { TelegramFileOwnerKey } from './types.js';
+type FileQueueStats = {
+  downloadingCount: number;
+  failedCount: number;
+  knownCount: number;
+  knownDownloadedBytes: number;
+  knownRemainingBytes: number;
+  knownTotalBytes: number;
+  queuedCount: number;
+  readyCount: number;
+  remainingCount: number;
+  totalCount: number;
+  unknownRemainingCount: number;
+};
 
-type TelegramFileRefRow = {
+type FileRefRow = {
   assetByteSize: number | null;
   assetDownloadedByteSize: number | null;
   assetDownloadError: string | null;
@@ -66,19 +77,19 @@ type TelegramFileRefRow = {
   width: number | null;
 };
 
-const TELEGRAM_FILE_STATIC_PREFIX = '/telegram-files/';
+const FILE_STATIC_PREFIX = '/telegram-files/';
 
-export async function readTelegramFileOwnersForAsset(
-  database: TelegramDatabase,
+export async function readFileOwnersForAsset(
+  database: Database,
   assetKey: string
-): Promise<TelegramFileOwnerKey[]> {
-  return readTelegramFileOwnersForAssets(database, [assetKey]);
+): Promise<FileOwnerKey[]> {
+  return readFileOwnersForAssets(database, [assetKey]);
 }
 
-export async function readTelegramFileOwnersForAssets(
-  database: TelegramDatabase,
+export async function readFileOwnersForAssets(
+  database: Database,
   assetKeys: string[]
-): Promise<TelegramFileOwnerKey[]> {
+): Promise<FileOwnerKey[]> {
   const uniqueAssetKeys = [...new Set(assetKeys)];
   if (uniqueAssetKeys.length === 0) {
     return [];
@@ -100,9 +111,7 @@ export async function readTelegramFileOwnersForAssets(
   );
 }
 
-export async function readTelegramFileQueueStats(
-  database: TelegramDatabase
-): Promise<TelegramFileQueueStats> {
+export async function readFileQueueStats(database: Database): Promise<FileQueueStats> {
   const [row] = await database
     .select({
       downloadingCount: sql<number>`(select count(*) from ${telegramFileDownloadJobs} where ${telegramFileDownloadJobs.status} = ${'downloading'})::int`,
@@ -135,18 +144,18 @@ export async function readTelegramFileQueueStats(
   };
 }
 
-export async function readTelegramFileRefsForOwners(
-  database: TelegramDatabase,
-  owners: TelegramFileOwnerKey[]
-): Promise<Map<string, TelegramFileRef[]>> {
+export async function readFileRefsForOwners(
+  database: Database,
+  owners: FileOwnerKey[]
+): Promise<Map<string, FileRef[]>> {
   const ownerIds = [...new Set(owners.map((owner) => owner.ownerId))];
   if (ownerIds.length === 0) {
     return new Map();
   }
 
   const ownerKeys = new Set(owners.map(ownerKey));
-  const rows = await readTelegramFileRefRows(database, ownerIds);
-  const refsByOwner = new Map<string, TelegramFileRef[]>();
+  const rows = await readFileRefRows(database, ownerIds);
+  const refsByOwner = new Map<string, FileRef[]>();
 
   for (const row of rows) {
     const key = ownerKey({
@@ -156,7 +165,7 @@ export async function readTelegramFileRefsForOwners(
     if (!ownerKeys.has(key)) {
       continue;
     }
-    refsByOwner.set(key, [...(refsByOwner.get(key) ?? []), toTelegramFileRef(row)]);
+    refsByOwner.set(key, [...(refsByOwner.get(key) ?? []), toFileRef(row)]);
   }
 
   return new Map(
@@ -167,32 +176,32 @@ export async function readTelegramFileRefsForOwners(
   );
 }
 
-export async function readTelegramFileRef(
-  database: TelegramDatabase,
-  owner: TelegramFileOwner,
+export async function readFileRef(
+  database: Database,
+  owner: FileOwner,
   slotKey: string
-): Promise<TelegramFileRef | null> {
-  const row = await readTelegramFileRefRow(database, owner, slotKey);
-  return row === null ? null : toTelegramFileRef(row);
+): Promise<FileRef | null> {
+  const row = await readFileRefRow(database, owner, slotKey);
+  return row === null ? null : toFileRef(row);
 }
 
-export async function readTelegramFileRefRow(
-  database: TelegramDatabase,
-  owner: TelegramFileOwner,
+export async function readFileRefRow(
+  database: Database,
+  owner: FileOwner,
   slotKey: string
-): Promise<TelegramFileRefRow | null> {
-  const [row] = await readTelegramFileRefRows(database, [owner.id], {
+): Promise<FileRefRow | null> {
+  const [row] = await readFileRefRows(database, [owner.id], {
     ownerModel: owner._model,
     slotKey
   });
   return row ?? null;
 }
 
-function readTelegramFileRefRows(
-  database: TelegramDatabase,
+function readFileRefRows(
+  database: Database,
   ownerIds: string[],
-  filter: { ownerModel?: TelegramFileOwnerModel; slotKey?: string } = {}
-): Promise<TelegramFileRefRow[]> {
+  filter: { ownerModel?: FileOwnerModel; slotKey?: string } = {}
+): Promise<FileRefRow[]> {
   const where = [
     inArray(telegramFileSlots.ownerId, ownerIds),
     filter.ownerModel === undefined
@@ -236,7 +245,7 @@ function readTelegramFileRefRows(
     .where(and(...where));
 }
 
-function toTelegramFileRef(row: TelegramFileRefRow): TelegramFileRef {
+function toFileRef(row: FileRefRow): FileRef {
   const owner = ownerRef(assertOwnerModel(row.ownerModel), row.ownerId);
   const status = effectiveFileStatus(row);
   return {
@@ -248,7 +257,7 @@ function toTelegramFileRef(row: TelegramFileRefRow): TelegramFileRef {
     durationSeconds: row.durationSeconds,
     fileName: row.fileName,
     height: row.height,
-    id: telegramFileRefId({
+    id: fileRefId({
       ownerId: row.ownerId,
       ownerModel: owner._model,
       slotKey: row.slotKey
@@ -262,13 +271,13 @@ function toTelegramFileRef(row: TelegramFileRefRow): TelegramFileRef {
     updatedAt: maxDate(row.assetUpdatedAt, row.slotUpdatedAt).toISOString(),
     url:
       status === 'ready' && row.assetRelativePath !== null
-        ? `${TELEGRAM_FILE_STATIC_PREFIX}${encodeRelativeUrlPath(row.assetRelativePath)}`
+        ? `${FILE_STATIC_PREFIX}${encodeRelativeUrlPath(row.assetRelativePath)}`
         : null,
     width: row.width
   };
 }
 
-function effectiveFileStatus(row: TelegramFileRefRow): TelegramFileStatus {
+function effectiveFileStatus(row: FileRefRow): FileStatus {
   if (row.assetStatus === 'ready') {
     return 'ready';
   }
@@ -281,47 +290,47 @@ function effectiveFileStatus(row: TelegramFileRefRow): TelegramFileStatus {
   return 'known';
 }
 
-function ownerRef(ownerModel: TelegramFileOwnerModel, ownerId: string): TelegramFileOwner {
-  if (ownerModel === TELEGRAM_ACTIVE_NOTIFICATION_MODEL) {
-    const parts = telegramActiveNotificationModelParts(ownerId);
-    return telegramActiveNotificationRef({
+function ownerRef(ownerModel: FileOwnerModel, ownerId: string): FileOwner {
+  if (ownerModel === ACTIVE_NOTIFICATION_MODEL) {
+    const parts = activeNotificationModelParts(ownerId);
+    return activeNotificationRef({
       groupId: parts?.groupId ?? ownerId,
       notificationId: parts?.notificationId ?? ownerId
     });
   }
-  if (ownerModel === TELEGRAM_CHAT_MODEL) {
-    return telegramChatRef(ownerId);
+  if (ownerModel === CHAT_MODEL) {
+    return chatRef(ownerId);
   }
-  if (ownerModel === TELEGRAM_DEFAULT_BACKGROUND_MODEL) {
-    return telegramDefaultBackgroundRef(ownerId);
+  if (ownerModel === DEFAULT_BACKGROUND_MODEL) {
+    return defaultBackgroundRef(ownerId);
   }
-  if (ownerModel === TELEGRAM_EMOJI_CHAT_THEMES_MODEL) {
-    return telegramEmojiChatThemesRef();
+  if (ownerModel === EMOJI_CHAT_THEMES_MODEL) {
+    return emojiChatThemesRef();
   }
-  if (ownerModel === TELEGRAM_QUICK_REPLY_MESSAGE_MODEL) {
-    return telegramQuickReplyMessageRef(ownerId);
+  if (ownerModel === QUICK_REPLY_MESSAGE_MODEL) {
+    return quickReplyMessageRef(ownerId);
   }
-  if (ownerModel === TELEGRAM_STICKER_SET_MODEL) {
-    return telegramStickerSetRef(ownerId);
+  if (ownerModel === STICKER_SET_MODEL) {
+    return stickerSetRef(ownerId);
   }
-  if (ownerModel === TELEGRAM_STORY_MODEL) {
-    const parts = telegramMessageModelParts(ownerId);
-    return telegramStoryRef({
+  if (ownerModel === STORY_MODEL) {
+    const parts = messageModelParts(ownerId);
+    return storyRef({
       posterChatId: parts?.chatId ?? ownerId,
       storyId: parts?.messageId ?? ownerId
     });
   }
-  if (ownerModel === TELEGRAM_USER_MODEL) {
-    return telegramUserRef(ownerId);
+  if (ownerModel === USER_MODEL) {
+    return userRef(ownerId);
   }
-  const parts = telegramMessageModelParts(ownerId);
-  return telegramMessageRef({
+  const parts = messageModelParts(ownerId);
+  return messageRef({
     chatId: parts?.chatId ?? ownerId,
     messageId: parts?.messageId ?? ownerId
   });
 }
 
-function canRequestFile(row: TelegramFileRefRow, status: TelegramFileStatus): boolean {
+function canRequestFile(row: FileRefRow, status: FileStatus): boolean {
   return (
     status !== 'ready' &&
     status !== 'queued' &&
@@ -334,11 +343,11 @@ function encodeRelativeUrlPath(relativePath: string): string {
   return relativePath.split('/').map(encodeURIComponent).join('/');
 }
 
-export function ownerKey(owner: TelegramFileOwnerKey): string {
+export function ownerKey(owner: FileOwnerKey): string {
   return `${owner.ownerModel}:${owner.ownerId}`;
 }
 
-function uniqueOwners(owners: TelegramFileOwnerKey[]): TelegramFileOwnerKey[] {
+function uniqueOwners(owners: FileOwnerKey[]): FileOwnerKey[] {
   return [...new Map(owners.map((owner) => [ownerKey(owner), owner])).values()];
 }
 
@@ -352,24 +361,24 @@ function maxDate(left: Date, right: Date): Date {
   return left > right ? left : right;
 }
 
-function assertOwnerModel(value: string): TelegramFileOwnerModel {
+function assertOwnerModel(value: string): FileOwnerModel {
   if (
-    value === TELEGRAM_ACTIVE_NOTIFICATION_MODEL ||
-    value === TELEGRAM_CHAT_MODEL ||
-    value === TELEGRAM_DEFAULT_BACKGROUND_MODEL ||
-    value === TELEGRAM_EMOJI_CHAT_THEMES_MODEL ||
-    value === TELEGRAM_MESSAGE_MODEL ||
-    value === TELEGRAM_QUICK_REPLY_MESSAGE_MODEL ||
-    value === TELEGRAM_STICKER_SET_MODEL ||
-    value === TELEGRAM_STORY_MODEL ||
-    value === TELEGRAM_USER_MODEL
+    value === ACTIVE_NOTIFICATION_MODEL ||
+    value === CHAT_MODEL ||
+    value === DEFAULT_BACKGROUND_MODEL ||
+    value === EMOJI_CHAT_THEMES_MODEL ||
+    value === MESSAGE_MODEL ||
+    value === QUICK_REPLY_MESSAGE_MODEL ||
+    value === STICKER_SET_MODEL ||
+    value === STORY_MODEL ||
+    value === USER_MODEL
   ) {
     return value;
   }
   throw new Error(`Unsupported Telegram file owner model: ${value}`);
 }
 
-function assertMediaKind(value: string): TelegramFileMediaKind {
+function assertMediaKind(value: string): FileMediaKind {
   if (
     value === 'avatar' ||
     value === 'document' ||
@@ -383,7 +392,7 @@ function assertMediaKind(value: string): TelegramFileMediaKind {
   throw new Error(`Unsupported Telegram file media kind: ${value}`);
 }
 
-function assertRenderKind(value: string): TelegramFileRenderKind {
+function assertRenderKind(value: string): FileRenderKind {
   if (value === 'audio' || value === 'download' || value === 'image' || value === 'video') {
     return value;
   }
