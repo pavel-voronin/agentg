@@ -1,4 +1,4 @@
-import type { ContentProvider } from '@agentg/control-plane-sdk/slots';
+import type { ContentProvider } from '@agentg/framework/cp';
 
 export const controlPlaneContentProvider = {
   contents: [

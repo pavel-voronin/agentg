@@ -1,3 +1,3 @@
-import type { SlotLayout } from '@agentg/control-plane-sdk/slots';
+import type { SlotLayout } from '@agentg/framework/cp';
 
 export const controlPlaneSlotLayout = {} satisfies SlotLayout;

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 
-import type { SlotContext } from '@agentg/control-plane-sdk/slots';
+import type { SlotContext } from '@agentg/framework/cp';
 import EventsPanel from '../../../components/eventsPanel.vue';
 import { useEventsStore } from '../../../stores/events.js';
 import { eventFiltersPanelView, eventListItems } from '../../../view-models/eventsPanelView.js';

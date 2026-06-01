@@ -3,8 +3,8 @@ import {
   createContentCatalogIndex,
   resolveSlotContents,
   tagsCompatible
-} from '@agentg/control-plane-sdk/slots';
-import type { ContentCatalog, SlotLayout } from '@agentg/control-plane-sdk/slots';
+} from '@agentg/framework/cp';
+import type { ContentCatalog, SlotLayout } from '@agentg/framework/cp';
 
 const catalog = [
   {

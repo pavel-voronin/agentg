@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createSlotRuntime } from '@agentg/control-plane-sdk/slots';
-import type { ContentCatalog, ContentDefinition } from '@agentg/control-plane-sdk/slots';
+import { createSlotRuntime } from '@agentg/framework/cp';
+import type { ContentCatalog, ContentDefinition } from '@agentg/framework/cp';
 
 function contentDefinition(
   contentId: string,
