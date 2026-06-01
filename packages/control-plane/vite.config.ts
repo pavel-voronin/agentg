@@ -6,12 +6,10 @@ import vue from '@vitejs/plugin-vue';
 import Icons from 'unplugin-icons/vite';
 import { defineConfig, type Plugin, type UserConfig } from 'vite';
 
+import { controlPlaneProviderDiscovery } from './src/discovery/providerPlugin.js';
+
 const browserSharedModules = new Set(['vue']);
 const browserSharedModuleUrls = new Map([['vue', '/control-plane/runtime/vue.js']]);
-const domainControlPlaneWatchIgnorePatterns = [
-  /\/packages\/(?!control-plane\/)[^/]+\/dist-control-plane\//,
-  /\/packages\/(?!control-plane\/)[^/]+\/src\/control-plane\//
-];
 const nodeRequire = createRequire(import.meta.url);
 const vueRuntimeFilePath = nodeRequire.resolve('vue/dist/vue.runtime.esm-browser.js');
 
@@ -29,6 +27,7 @@ export default defineConfig(({ command }): UserConfig => {
       exclude: devServer ? ['pinia', ...browserSharedModules] : [...browserSharedModules]
     },
     plugins: [
+      controlPlaneProviderDiscovery(),
       ...(devServer ? [rewriteBrowserSharedModuleImports()] : [externalizeBrowserSharedModules()]),
       vue(),
       Icons({ autoInstall: false, compiler: 'vue3' }),
@@ -52,9 +51,6 @@ export default defineConfig(({ command }): UserConfig => {
       },
       warmup: {
         clientFiles: ['./src/main.ts']
-      },
-      watch: {
-        ignored: domainControlPlaneWatchIgnorePatterns
       }
     }
   };
@@ -72,10 +68,10 @@ function externalizeBrowserSharedModules(): Plugin {
 function rewriteBrowserSharedModuleImports(): Plugin {
   return {
     enforce: 'post',
-    name: 'rewrite-browser-shared-module-imports',
     load(id) {
       return isBrowserSharedModuleUrl(id) ? readFileSync(vueRuntimeFilePath, 'utf8') : null;
     },
+    name: 'rewrite-browser-shared-module-imports',
     resolveId(source) {
       return isBrowserSharedModuleUrl(source) ? source : null;
     },

@@ -4,7 +4,7 @@ import SolarBillListBold from '~icons/solar/bill-list-bold';
 import SolarEyeBold from '~icons/solar/eye-bold';
 import SolarWidget2Bold from '~icons/solar/widget-2-bold';
 
-import UiButton from '@agentg/control-plane-sdk/ui';
+import { UiButton } from '@agentg/framework/cp';
 
 const props = defineProps<{
   active: boolean;

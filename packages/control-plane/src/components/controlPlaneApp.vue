@@ -2,15 +2,15 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import SolarWidget2Bold from '~icons/solar/widget-2-bold';
 
-import { provideControlPlaneHost } from '@agentg/control-plane-sdk/host';
+import { provideControlPlaneHost } from '@agentg/framework/cp';
 import {
   createSlotRuntime,
   provideSlotRuntime,
   SlotDebugLayer,
   SlotOutlet
-} from '@agentg/control-plane-sdk/slots';
-import UiButton from '@agentg/control-plane-sdk/ui';
-import UiStatusBadge from '@agentg/control-plane-sdk/ui/status-badge';
+} from '@agentg/framework/cp';
+import { UiButton } from '@agentg/framework/cp';
+import { UiStatusBadge } from '@agentg/framework/cp';
 
 import { useControlPlaneRuntime } from '../runtime/useControlPlaneRuntime.js';
 import { useAppShellStore } from '../stores/appShell.js';

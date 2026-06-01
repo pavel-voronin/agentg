@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { SlotOutlet } from '@agentg/control-plane-sdk/slots';
+import { SlotOutlet } from '@agentg/framework/cp';
 </script>
 
 <template>
