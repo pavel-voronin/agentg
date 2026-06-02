@@ -1,17 +1,10 @@
-import type { TelegramDatabase } from '../database/client.js';
+import type { Database } from '../database/client.js';
 import { telegramBasicGroups } from '../database/schema.js';
-import {
-  telegramWireId,
-  telegramWireJsonObject,
-  type TelegramWireUpdateByType
-} from '../tdlib/wire.js';
+import { tdId, tdJsonObject, type UpdateByType } from '../tdlib/value.js';
 
-type TelegramWireBasicGroup = TelegramWireUpdateByType<'updateBasicGroup'>['basic_group'];
+type BasicGroup = UpdateByType<'updateBasicGroup'>['basic_group'];
 
-export async function storeBasicGroup(
-  database: TelegramDatabase,
-  basicGroup: TelegramWireBasicGroup
-): Promise<void> {
+export async function storeBasicGroup(database: Database, basicGroup: BasicGroup): Promise<void> {
   const row = telegramBasicGroupRow(basicGroup);
   await database.insert(telegramBasicGroups).values(row).onConflictDoUpdate({
     set: row,
@@ -19,19 +12,17 @@ export async function storeBasicGroup(
   });
 }
 
-function telegramBasicGroupRow(
-  basicGroup: TelegramWireBasicGroup
-): typeof telegramBasicGroups.$inferInsert {
+function telegramBasicGroupRow(basicGroup: BasicGroup): typeof telegramBasicGroups.$inferInsert {
   return {
     id: String(basicGroup.id),
     isActive: basicGroup.is_active,
     memberCount: basicGroup.member_count,
-    status: telegramWireJsonObject(basicGroup.status),
+    status: tdJsonObject(basicGroup.status),
     upgradedToSupergroupId: nullableZeroId(basicGroup.upgraded_to_supergroup_id)
   };
 }
 
 function nullableZeroId(value: number | string | null | undefined): string | null {
-  const id = telegramWireId(value);
+  const id = tdId(value);
   return id === undefined || id === '0' ? null : id;
 }

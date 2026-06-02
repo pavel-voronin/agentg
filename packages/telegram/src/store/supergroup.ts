@@ -1,19 +1,13 @@
-import type { JsonValue } from '@agentg/events/json';
+import type { JsonValue } from '@agentg/framework';
 
-import type { TelegramDatabase } from '../database/client.js';
+import type { Database } from '../database/client.js';
 import { telegramSupergroups } from '../database/schema.js';
-import {
-  telegramWireJsonObject,
-  telegramWireJsonValue,
-  type TelegramWireSupergroupUpdate
-} from '../tdlib/wire.js';
+import { tdJsonObject, tdJsonValue } from '../tdlib/value.js';
+import type { updateSupergroup as SupergroupUpdate } from 'tdlib-types';
 
-type TelegramWireSupergroup = TelegramWireSupergroupUpdate['supergroup'];
+type Supergroup = SupergroupUpdate['supergroup'];
 
-export async function storeSupergroup(
-  database: TelegramDatabase,
-  supergroup: TelegramWireSupergroup
-): Promise<void> {
+export async function storeSupergroup(database: Database, supergroup: Supergroup): Promise<void> {
   const row = telegramSupergroupRow(supergroup);
   await database.insert(telegramSupergroups).values(row).onConflictDoUpdate({
     set: row,
@@ -21,11 +15,9 @@ export async function storeSupergroup(
   });
 }
 
-function telegramSupergroupRow(
-  supergroup: TelegramWireSupergroup
-): typeof telegramSupergroups.$inferInsert {
+function telegramSupergroupRow(supergroup: Supergroup): typeof telegramSupergroups.$inferInsert {
   return {
-    activeStoryState: telegramWireJsonValueOrNull(supergroup.active_story_state),
+    activeStoryState: tdJsonValueOrNull(supergroup.active_story_state),
     boostLevel: supergroup.boost_level,
     date: new Date(supergroup.date * 1000),
     hasAutomaticTranslation: supergroup.has_automatic_translation,
@@ -44,15 +36,15 @@ function telegramSupergroupRow(
     joinToSendMessages: supergroup.join_to_send_messages,
     memberCount: supergroup.member_count,
     paidMessageStarCount: String(supergroup.paid_message_star_count),
-    restrictionInfo: telegramWireJsonValueOrNull(supergroup.restriction_info),
+    restrictionInfo: tdJsonValueOrNull(supergroup.restriction_info),
     showMessageSender: supergroup.show_message_sender,
     signMessages: supergroup.sign_messages,
-    status: telegramWireJsonObject(supergroup.status),
-    usernames: telegramWireJsonValueOrNull(supergroup.usernames),
-    verificationStatus: telegramWireJsonValueOrNull(supergroup.verification_status)
+    status: tdJsonObject(supergroup.status),
+    usernames: tdJsonValueOrNull(supergroup.usernames),
+    verificationStatus: tdJsonValueOrNull(supergroup.verification_status)
   };
 }
 
-function telegramWireJsonValueOrNull(value: unknown): JsonValue {
-  return telegramWireJsonValue(value ?? null) ?? null;
+function tdJsonValueOrNull(value: unknown): JsonValue {
+  return tdJsonValue(value ?? null) ?? null;
 }

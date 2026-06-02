@@ -1,18 +1,17 @@
-import type { JsonValue } from '@agentg/events/json';
+import type { JsonValue } from '@agentg/framework';
 
-import type { TelegramDatabase } from '../database/client.js';
+import type { Database } from '../database/client.js';
 import { telegramUserPrivacySettingRules } from '../database/schema.js';
-import { telegramWireJsonValue, type TelegramWireUpdateByType } from '../tdlib/wire.js';
+import { tdJsonValue, type UpdateByType } from '../tdlib/value.js';
 
-type TelegramWireUserPrivacySettingRulesUpdate =
-  TelegramWireUpdateByType<'updateUserPrivacySettingRules'>;
+type UserPrivacySettingRulesUpdate = UpdateByType<'updateUserPrivacySettingRules'>;
 
 export async function upsertUserPrivacySettingRules(
-  database: TelegramDatabase,
-  update: TelegramWireUserPrivacySettingRulesUpdate
+  database: Database,
+  update: UserPrivacySettingRulesUpdate
 ): Promise<void> {
   const row: typeof telegramUserPrivacySettingRules.$inferInsert = {
-    rules: requiredTelegramWireJsonValue(update.rules),
+    rules: requiredJsonValue(update.rules),
     settingKey: update.setting._
   };
 
@@ -22,8 +21,8 @@ export async function upsertUserPrivacySettingRules(
   });
 }
 
-function requiredTelegramWireJsonValue(value: unknown): JsonValue {
-  const json = telegramWireJsonValue(value);
+function requiredJsonValue(value: unknown): JsonValue {
+  const json = tdJsonValue(value);
   if (json === undefined) {
     throw new Error('Expected Telegram wire JSON value');
   }

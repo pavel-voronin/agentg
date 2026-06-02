@@ -1,23 +1,19 @@
-import type { JsonValue } from '@agentg/events/json';
+import type { JsonValue } from '@agentg/framework';
 import { and, eq, sql, type SQL } from 'drizzle-orm';
 
-import type { TelegramDatabase } from '../database/client.js';
+import type { Database } from '../database/client.js';
 import { telegramChatPositions, telegramChats } from '../database/schema.js';
-import {
-  telegramWireJsonObject,
-  type TelegramWireChatAddedToListUpdate,
-  type TelegramWireUpdateByType,
-  type TelegramWireObject
-} from '../tdlib/wire.js';
+import { tdJsonObject, type TypedObject, type UpdateByType } from '../tdlib/value.js';
+import type { updateChatAddedToList as ChatAddedToListUpdate } from 'tdlib-types';
 import { chatListKey } from './chatListKey.js';
 
-type TelegramWireChatRemovedFromListUpdate = TelegramWireUpdateByType<'updateChatRemovedFromList'>;
+type ChatRemovedFromListUpdate = UpdateByType<'updateChatRemovedFromList'>;
 
 export async function storeChatListMembership(
-  database: TelegramDatabase,
-  update: TelegramWireChatAddedToListUpdate
+  database: Database,
+  update: ChatAddedToListUpdate
 ): Promise<void> {
-  const chatList = telegramWireJsonObject(update.chat_list);
+  const chatList = tdJsonObject(update.chat_list);
   const row: typeof telegramChats.$inferInsert = {
     chatLists: [chatList],
     id: String(update.chat_id)
@@ -35,8 +31,8 @@ export async function storeChatListMembership(
 }
 
 export async function removeChatListMembership(
-  database: TelegramDatabase,
-  update: TelegramWireChatRemovedFromListUpdate
+  database: Database,
+  update: ChatRemovedFromListUpdate
 ): Promise<void> {
   const chatId = String(update.chat_id);
   const listKey = chatListKey(update.chat_list);
@@ -62,7 +58,7 @@ export async function removeChatListMembership(
     );
 }
 
-function addChatListMembershipSql(listKey: string, chatList: TelegramWireObject): SQL<JsonValue> {
+function addChatListMembershipSql(listKey: string, chatList: TypedObject): SQL<JsonValue> {
   return sql<JsonValue>`(
     coalesce(
       (

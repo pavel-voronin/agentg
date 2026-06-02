@@ -1,21 +1,13 @@
-import type { TelegramDatabase } from '../database/client.js';
+import type { Database } from '../database/client.js';
 import { telegramChatInviteLinks, telegramChatMembers } from '../database/schema.js';
-import {
-  telegramWireId,
-  telegramWireJsonObject,
-  telegramWireJsonValue,
-  type TelegramWireUpdateByType
-} from '../tdlib/wire.js';
+import { tdId, tdJsonObject, tdJsonValue, type UpdateByType } from '../tdlib/value.js';
 
-type TelegramWireChatMemberUpdate = TelegramWireUpdateByType<'updateChatMember'>;
-export type TelegramWireChatInviteLink = NonNullable<TelegramWireChatMemberUpdate['invite_link']>;
-type TelegramWireChatMember = TelegramWireChatMemberUpdate['new_chat_member'];
-type TelegramWireMessageSender = TelegramWireChatMember['member_id'];
+type ChatMemberUpdate = UpdateByType<'updateChatMember'>;
+export type ChatInviteLink = NonNullable<ChatMemberUpdate['invite_link']>;
+type ChatMember = ChatMemberUpdate['new_chat_member'];
+type MessageSender = ChatMember['member_id'];
 
-export async function storeChatMember(
-  database: TelegramDatabase,
-  update: TelegramWireChatMemberUpdate
-): Promise<void> {
+export async function storeChatMember(database: Database, update: ChatMemberUpdate): Promise<void> {
   const chatId = String(update.chat_id);
 
   await database.transaction(async (transaction) => {
@@ -29,9 +21,9 @@ export async function storeChatMember(
 }
 
 export async function upsertChatInviteLink(
-  database: TelegramDatabase,
+  database: Database,
   chatId: string,
-  inviteLink: TelegramWireChatInviteLink
+  inviteLink: ChatInviteLink
 ): Promise<void> {
   const row: typeof telegramChatInviteLinks.$inferInsert = {
     chatId,
@@ -48,7 +40,7 @@ export async function upsertChatInviteLink(
     memberLimit: inviteLink.member_limit,
     name: inviteLink.name,
     pendingJoinRequestCount: inviteLink.pending_join_request_count,
-    subscriptionPricing: telegramWireJsonValue(inviteLink.subscription_pricing ?? null) ?? null
+    subscriptionPricing: tdJsonValue(inviteLink.subscription_pricing ?? null) ?? null
   };
 
   await database
@@ -61,16 +53,16 @@ export async function upsertChatInviteLink(
 }
 
 async function upsertChatMember(
-  database: TelegramDatabase,
+  database: Database,
   chatId: string,
-  chatMember: TelegramWireChatMember
+  chatMember: ChatMember
 ): Promise<void> {
   const row: typeof telegramChatMembers.$inferInsert = {
     chatId,
-    inviterUserId: telegramWireId(chatMember.inviter_user_id),
+    inviterUserId: tdId(chatMember.inviter_user_id),
     joinedChatDate: unixDate(chatMember.joined_chat_date),
     memberId: messageSenderId(chatMember.member_id),
-    status: telegramWireJsonObject(chatMember.status),
+    status: tdJsonObject(chatMember.status),
     tag: chatMember.tag
   };
 
@@ -83,7 +75,7 @@ async function upsertChatMember(
     });
 }
 
-function messageSenderId(sender: TelegramWireMessageSender): string {
+function messageSenderId(sender: MessageSender): string {
   if (sender._ === 'messageSenderUser') {
     return String(sender.user_id);
   }

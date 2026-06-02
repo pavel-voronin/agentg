@@ -1,9 +1,9 @@
-type TelegramWireChatList = {
+type ChatList = {
   _: string;
   chat_folder_id?: number | string;
 };
 
-export function chatListKey(list: TelegramWireChatList): string {
+export function chatListKey(list: ChatList): string {
   if (list._ === 'chatListMain') {
     return 'main';
   }

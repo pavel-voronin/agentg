@@ -1,17 +1,17 @@
-import type { TelegramDatabase } from '../database/client.js';
+import type { Database } from '../database/client.js';
 import { telegramUsers } from '../database/schema.js';
-import { telegramWireJsonObject, type TelegramWireUpdateByType } from '../tdlib/wire.js';
+import { tdJsonObject, type UpdateByType } from '../tdlib/value.js';
 
-type TelegramWireUserStatus = TelegramWireUpdateByType<'updateUserStatus'>['status'];
+type UserStatus = UpdateByType<'updateUserStatus'>['status'];
 
 export async function storeUserStatus(
-  database: TelegramDatabase,
+  database: Database,
   userId: number | string,
-  status: TelegramWireUserStatus
+  status: UserStatus
 ): Promise<void> {
   const row = {
     id: String(userId),
-    status: telegramWireJsonObject(status)
+    status: tdJsonObject(status)
   };
 
   await database

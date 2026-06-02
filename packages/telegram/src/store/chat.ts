@@ -1,26 +1,23 @@
 import { and, eq } from 'drizzle-orm';
 
-import type { TelegramDatabase } from '../database/client.js';
+import type { Database } from '../database/client.js';
 import { telegramChatPositions, telegramChats } from '../database/schema.js';
-import type { TelegramFileSubsystem } from '../files/subsystem.js';
-import type { TelegramMediaDownloadPolicyCause } from '../files/policy.js';
-import {
-  telegramWireId,
-  telegramWireJsonObject,
-  telegramWireJsonValue,
-  type TelegramWireChat,
-  type TelegramWireChatLastMessageUpdate,
-  type TelegramWireChatNotificationSettingsUpdate,
-  type TelegramWireChatPositionUpdate,
-  type TelegramWireMessage,
-  type TelegramWireObject
-} from '../tdlib/wire.js';
+import type { FileSubsystem } from '../files/index.js';
+import type { MediaDownloadPolicyCause } from '../files/policy.js';
+import { tdId, tdJsonObject, tdJsonValue, type TypedObject } from '../tdlib/value.js';
+import type {
+  chat as Chat,
+  message as Message,
+  updateChatLastMessage as ChatLastMessageUpdate,
+  updateChatNotificationSettings as ChatNotificationSettingsUpdate,
+  updateChatPosition as ChatPositionUpdate
+} from 'tdlib-types';
 
-type TelegramWireChatPosition = TelegramWireChat['positions'][number];
+type ChatPosition = Chat['positions'][number];
 
 export type TelegramChatFragment = typeof telegramChats.$inferInsert;
 
-export async function storeChat(database: TelegramDatabase, chat: TelegramWireChat): Promise<void> {
+export async function storeChat(database: Database, chat: Chat): Promise<void> {
   const row = telegramChatRow(chat);
   await database.insert(telegramChats).values(row).onConflictDoUpdate({
     set: row,
@@ -31,7 +28,7 @@ export async function storeChat(database: TelegramDatabase, chat: TelegramWireCh
 }
 
 export async function upsertTelegramChatFragment(
-  database: TelegramDatabase,
+  database: Database,
   row: TelegramChatFragment
 ): Promise<void> {
   await database.insert(telegramChats).values(row).onConflictDoUpdate({
@@ -41,8 +38,8 @@ export async function upsertTelegramChatFragment(
 }
 
 export async function storeChatLastMessage(
-  database: TelegramDatabase,
-  update: TelegramWireChatLastMessageUpdate
+  database: Database,
+  update: ChatLastMessageUpdate
 ): Promise<void> {
   const lastMessage = update.last_message ?? null;
   const row: typeof telegramChats.$inferInsert = {
@@ -60,12 +57,12 @@ export async function storeChatLastMessage(
 }
 
 export async function storeChatNotificationSettings(
-  database: TelegramDatabase,
-  update: TelegramWireChatNotificationSettingsUpdate
+  database: Database,
+  update: ChatNotificationSettingsUpdate
 ): Promise<void> {
   const row: typeof telegramChats.$inferInsert = {
     id: String(update.chat_id),
-    notificationSettings: telegramWireJsonObject(update.notification_settings)
+    notificationSettings: tdJsonObject(update.notification_settings)
   };
 
   await database.insert(telegramChats).values(row).onConflictDoUpdate({
@@ -75,8 +72,8 @@ export async function storeChatNotificationSettings(
 }
 
 export async function storeChatPosition(
-  database: TelegramDatabase,
-  update: TelegramWireChatPositionUpdate
+  database: Database,
+  update: ChatPositionUpdate
 ): Promise<void> {
   const row = telegramChatPositionRow(String(update.chat_id), update.position);
 
@@ -102,17 +99,17 @@ export async function storeChatPosition(
 }
 
 export function recordChatFiles(
-  files: TelegramFileSubsystem,
-  chat: TelegramWireChat,
-  cause: TelegramMediaDownloadPolicyCause
+  files: FileSubsystem,
+  chat: Chat,
+  cause: MediaDownloadPolicyCause
 ): Promise<void> {
   return files.recordChatFiles(chat, cause);
 }
 
 export async function replaceTelegramChatPositions(
-  database: TelegramDatabase,
+  database: Database,
   chatId: string,
-  positions: TelegramWireChat['positions']
+  positions: Chat['positions']
 ): Promise<void> {
   await database.delete(telegramChatPositions).where(eq(telegramChatPositions.chatId, chatId));
 
@@ -124,15 +121,15 @@ export async function replaceTelegramChatPositions(
   await database.insert(telegramChatPositions).values(rows);
 }
 
-function telegramChatRow(chat: TelegramWireChat): typeof telegramChats.$inferInsert {
-  const source = telegramWireJsonObject(chat);
+function telegramChatRow(chat: Chat): typeof telegramChats.$inferInsert {
+  const source = tdJsonObject(chat);
   const lastMessage = chat.last_message ?? null;
   return {
     accentColorId: chat.accent_color_id,
     actionBar: source.action_bar,
     availableReactions: source.available_reactions,
     background: source.background,
-    backgroundCustomEmojiId: telegramWireId(chat.background_custom_emoji_id),
+    backgroundCustomEmojiId: tdId(chat.background_custom_emoji_id),
     blockList: source.block_list,
     businessBotManageBar: source.business_bot_manage_bar,
     canBeDeletedForAllUsers: chat.can_be_deleted_for_all_users,
@@ -150,8 +147,8 @@ function telegramChatRow(chat: TelegramWireChat): typeof telegramChats.$inferIns
     isTranslatable: chat.is_translatable,
     lastMessageChatId: lastMessage === null ? null : String(lastMessage.chat_id),
     lastMessageId: lastMessage === null ? null : String(lastMessage.id),
-    lastReadInboxMessageId: telegramWireId(chat.last_read_inbox_message_id),
-    lastReadOutboxMessageId: telegramWireId(chat.last_read_outbox_message_id),
+    lastReadInboxMessageId: tdId(chat.last_read_inbox_message_id),
+    lastReadOutboxMessageId: tdId(chat.last_read_outbox_message_id),
     messageAutoDeleteTime: chat.message_auto_delete_time,
     messageSenderId: source.message_sender_id,
     notificationSettings: source.notification_settings,
@@ -159,11 +156,11 @@ function telegramChatRow(chat: TelegramWireChat): typeof telegramChats.$inferIns
     permissions: source.permissions,
     photo: source.photo,
     profileAccentColorId: chat.profile_accent_color_id,
-    profileBackgroundCustomEmojiId: telegramWireId(chat.profile_background_custom_emoji_id),
-    replyMarkupMessageId: telegramWireId(chat.reply_markup_message_id),
+    profileBackgroundCustomEmojiId: tdId(chat.profile_background_custom_emoji_id),
+    replyMarkupMessageId: tdId(chat.reply_markup_message_id),
     theme: source.theme,
     title: chat.title,
-    type: telegramWireJsonObject(chat.type),
+    type: tdJsonObject(chat.type),
     unreadCount: chat.unread_count,
     unreadMentionCount: chat.unread_mention_count,
     unreadPollVoteCount: chat.unread_poll_vote_count,
@@ -176,14 +173,14 @@ function telegramChatRow(chat: TelegramWireChat): typeof telegramChats.$inferIns
 
 function telegramChatPositionRows(
   chatId: string,
-  positions: TelegramWireChat['positions']
+  positions: Chat['positions']
 ): (typeof telegramChatPositions.$inferInsert)[] {
   return positions.map((position) => telegramChatPositionRow(chatId, position));
 }
 
 function telegramChatPositionRow(
   chatId: string,
-  position: TelegramWireChatPosition
+  position: ChatPosition
 ): typeof telegramChatPositions.$inferInsert {
   const listKey = chatPositionListKey(position.list);
 
@@ -192,11 +189,11 @@ function telegramChatPositionRow(
     isPinned: position.is_pinned,
     listKey,
     order: position.order,
-    source: telegramWireJsonValue(position.source)
+    source: tdJsonValue(position.source)
   };
 }
 
-function chatPositionListKey(list: TelegramWireChatPosition['list']): string {
+function chatPositionListKey(list: ChatPosition['list']): string {
   if (list._ === 'chatListMain') {
     return 'main';
   }
@@ -207,12 +204,12 @@ function chatPositionListKey(list: TelegramWireChatPosition['list']): string {
   return `folder:${String(list.chat_folder_id)}`;
 }
 
-export function telegramChatLastMessage(chat: TelegramWireChat): TelegramWireMessage | null {
+export function telegramChatLastMessage(chat: Chat): Message | null {
   return chat.last_message ?? null;
 }
 
-export function telegramChatType(chat: TelegramWireChat): string {
-  const value = chat.type as TelegramWireObject;
+export function telegramChatType(chat: Chat): string {
+  const value = chat.type as TypedObject;
   if (value._ === 'chatTypePrivate') {
     return 'private';
   }

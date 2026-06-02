@@ -1,24 +1,18 @@
-import type { JsonValue } from '@agentg/events/json';
+import type { JsonValue } from '@agentg/framework';
 
-import type { TelegramDatabase } from '../database/client.js';
+import type { Database } from '../database/client.js';
 import { telegramChatPhotos, telegramFiles, telegramUsers } from '../database/schema.js';
-import {
-  telegramWireDate,
-  telegramWireId,
-  telegramWireJsonObject,
-  telegramWireJsonValue,
-  type TelegramWireFile,
-  type TelegramWireUpdateByType
-} from '../tdlib/wire.js';
+import { tdDate, tdId, tdJsonObject, tdJsonValue, type UpdateByType } from '../tdlib/value.js';
+import type { file as File } from 'tdlib-types';
 
-type TelegramWireUserFullInfoUpdate = TelegramWireUpdateByType<'updateUserFullInfo'>;
-type TelegramWireUserFullInfo = TelegramWireUserFullInfoUpdate['user_full_info'];
-type TelegramWireChatPhoto = NonNullable<TelegramWireUserFullInfo['photo']>;
+type UserFullInfoUpdate = UpdateByType<'updateUserFullInfo'>;
+type UserFullInfo = UserFullInfoUpdate['user_full_info'];
+type ChatPhoto = NonNullable<UserFullInfo['photo']>;
 
 export async function storeUserFullInfo(
-  database: TelegramDatabase,
+  database: Database,
   userId: string,
-  info: TelegramWireUserFullInfo
+  info: UserFullInfo
 ): Promise<void> {
   const photos = userFullInfoChatPhotos(info);
   const storedPhotoIds = new Set<string>();
@@ -39,10 +33,7 @@ export async function storeUserFullInfo(
   });
 }
 
-async function storeChatPhotoFiles(
-  database: TelegramDatabase,
-  photo: TelegramWireChatPhoto
-): Promise<void> {
+async function storeChatPhotoFiles(database: Database, photo: ChatPhoto): Promise<void> {
   const files = chatPhotoFiles(photo);
   const storedFileIds = new Set<number>();
 
@@ -55,12 +46,12 @@ async function storeChatPhotoFiles(
   }
 }
 
-async function storeFile(database: TelegramDatabase, file: TelegramWireFile): Promise<void> {
+async function storeFile(database: Database, file: File): Promise<void> {
   const row: typeof telegramFiles.$inferInsert = {
     expectedSize: String(file.expected_size),
     id: file.id,
-    local: telegramWireJsonObject(file.local),
-    remote: telegramWireJsonObject(file.remote),
+    local: tdJsonObject(file.local),
+    remote: tdJsonObject(file.remote),
     size: nullablePositiveId(file.size)
   };
 
@@ -70,18 +61,15 @@ async function storeFile(database: TelegramDatabase, file: TelegramWireFile): Pr
   });
 }
 
-async function storeChatPhoto(
-  database: TelegramDatabase,
-  photo: TelegramWireChatPhoto
-): Promise<void> {
+async function storeChatPhoto(database: Database, photo: ChatPhoto): Promise<void> {
   const row: typeof telegramChatPhotos.$inferInsert = {
     addedDate: new Date(photo.added_date * 1000),
-    animation: requiredTelegramWireJsonValue(photo.animation ?? null),
+    animation: requiredJsonValue(photo.animation ?? null),
     id: photo.id,
-    minithumbnail: requiredTelegramWireJsonValue(photo.minithumbnail ?? null),
-    sizes: requiredTelegramWireJsonValue(photo.sizes),
-    smallAnimation: requiredTelegramWireJsonValue(photo.small_animation ?? null),
-    sticker: requiredTelegramWireJsonValue(photo.sticker ?? null)
+    minithumbnail: requiredJsonValue(photo.minithumbnail ?? null),
+    sizes: requiredJsonValue(photo.sizes),
+    smallAnimation: requiredJsonValue(photo.small_animation ?? null),
+    sticker: requiredJsonValue(photo.sticker ?? null)
   };
 
   await database.insert(telegramChatPhotos).values(row).onConflictDoUpdate({
@@ -90,21 +78,18 @@ async function storeChatPhoto(
   });
 }
 
-function userFullInfoRow(
-  userId: string,
-  info: TelegramWireUserFullInfo
-): typeof telegramUsers.$inferInsert {
+function userFullInfoRow(userId: string, info: UserFullInfo): typeof telegramUsers.$inferInsert {
   return {
-    bio: nullableTelegramWireJsonValue(info.bio ?? null),
-    birthdate: nullableTelegramWireJsonValue(info.birthdate ?? null),
-    blockList: nullableTelegramWireJsonValue(info.block_list ?? null),
-    botInfo: nullableTelegramWireJsonValue(info.bot_info ?? null),
-    botVerification: nullableTelegramWireJsonValue(info.bot_verification ?? null),
-    businessInfo: nullableTelegramWireJsonValue(info.business_info ?? null),
+    bio: nullableJsonValue(info.bio ?? null),
+    birthdate: nullableJsonValue(info.birthdate ?? null),
+    blockList: nullableJsonValue(info.block_list ?? null),
+    botInfo: nullableJsonValue(info.bot_info ?? null),
+    botVerification: nullableJsonValue(info.bot_verification ?? null),
+    businessInfo: nullableJsonValue(info.business_info ?? null),
     canBeCalled: info.can_be_called,
-    firstProfileAudio: nullableTelegramWireJsonValue(info.first_profile_audio ?? null),
+    firstProfileAudio: nullableJsonValue(info.first_profile_audio ?? null),
     giftCount: info.gift_count,
-    giftSettings: requiredTelegramWireJsonValue(info.gift_settings),
+    giftSettings: requiredJsonValue(info.gift_settings),
     groupInCommonCount: info.group_in_common_count,
     hasPostedToProfileStories: info.has_posted_to_profile_stories,
     hasPrivateCalls: info.has_private_calls,
@@ -113,30 +98,30 @@ function userFullInfoRow(
     hasSponsoredMessagesEnabled: info.has_sponsored_messages_enabled,
     id: userId,
     incomingPaidMessageStarCount: String(info.incoming_paid_message_star_count),
-    mainProfileTab: nullableTelegramWireJsonValue(info.main_profile_tab ?? null),
+    mainProfileTab: nullableJsonValue(info.main_profile_tab ?? null),
     needPhoneNumberPrivacyException: info.need_phone_number_privacy_exception,
-    note: nullableTelegramWireJsonValue(info.note ?? null),
+    note: nullableJsonValue(info.note ?? null),
     outgoingPaidMessageStarCount: String(info.outgoing_paid_message_star_count),
-    pendingRating: nullableTelegramWireJsonValue(info.pending_rating ?? null),
-    pendingRatingDate: nullableTelegramWireDate(info.pending_rating_date),
+    pendingRating: nullableJsonValue(info.pending_rating ?? null),
+    pendingRatingDate: nullableDate(info.pending_rating_date),
     personalChatId: nullableZeroId(info.personal_chat_id),
     personalPhotoId: chatPhotoReferenceId(info.personal_photo ?? null),
     photoId: chatPhotoReferenceId(info.photo ?? null),
     publicPhotoId: chatPhotoReferenceId(info.public_photo ?? null),
-    rating: nullableTelegramWireJsonValue(info.rating ?? null),
+    rating: nullableJsonValue(info.rating ?? null),
     setChatBackground: info.set_chat_background,
     supportsVideoCalls: info.supports_video_calls,
     usesUnofficialApp: info.uses_unofficial_app
   };
 }
 
-function userFullInfoChatPhotos(info: TelegramWireUserFullInfo): TelegramWireChatPhoto[] {
+function userFullInfoChatPhotos(info: UserFullInfo): ChatPhoto[] {
   return [info.personal_photo ?? null, info.photo ?? null, info.public_photo ?? null].filter(
-    (photo): photo is TelegramWireChatPhoto => photo !== null
+    (photo): photo is ChatPhoto => photo !== null
   );
 }
 
-function chatPhotoFiles(photo: TelegramWireChatPhoto): TelegramWireFile[] {
+function chatPhotoFiles(photo: ChatPhoto): File[] {
   const animation = photo.animation ?? null;
   const smallAnimation = photo.small_animation ?? null;
 
@@ -147,16 +132,16 @@ function chatPhotoFiles(photo: TelegramWireChatPhoto): TelegramWireFile[] {
   ];
 }
 
-function chatPhotoReferenceId(photo: TelegramWireChatPhoto | null): string | null {
+function chatPhotoReferenceId(photo: ChatPhoto | null): string | null {
   return nullableZeroId(photo?.id);
 }
 
-function nullableTelegramWireDate(value: number): Date | null {
-  return telegramWireDate(value) ?? null;
+function nullableDate(value: number): Date | null {
+  return tdDate(value) ?? null;
 }
 
 function nullableZeroId(value: number | string | null | undefined): string | null {
-  const id = telegramWireId(value);
+  const id = tdId(value);
   return id === undefined || id === '0' ? null : id;
 }
 
@@ -164,12 +149,12 @@ function nullablePositiveId(value: number): string | null {
   return value > 0 ? String(value) : null;
 }
 
-function nullableTelegramWireJsonValue(value: unknown): JsonValue | null {
-  return telegramWireJsonValue(value ?? null) ?? null;
+function nullableJsonValue(value: unknown): JsonValue | null {
+  return tdJsonValue(value ?? null) ?? null;
 }
 
-function requiredTelegramWireJsonValue(value: unknown): JsonValue {
-  const json = telegramWireJsonValue(value);
+function requiredJsonValue(value: unknown): JsonValue {
+  const json = tdJsonValue(value);
   if (json === undefined) {
     throw new Error('Expected Telegram wire JSON value');
   }

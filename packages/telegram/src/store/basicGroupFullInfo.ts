@@ -1,23 +1,18 @@
-import type { JsonValue } from '@agentg/events/json';
+import type { JsonValue } from '@agentg/framework';
 
-import type { TelegramDatabase } from '../database/client.js';
+import type { Database } from '../database/client.js';
 import { telegramBasicGroups, telegramChatPhotos, telegramFiles } from '../database/schema.js';
-import {
-  telegramWireId,
-  telegramWireJsonObject,
-  telegramWireJsonValue,
-  type TelegramWireFile,
-  type TelegramWireUpdateByType
-} from '../tdlib/wire.js';
+import { tdId, tdJsonObject, tdJsonValue, type UpdateByType } from '../tdlib/value.js';
+import type { file as File } from 'tdlib-types';
 
-type TelegramWireBasicGroupFullInfoUpdate = TelegramWireUpdateByType<'updateBasicGroupFullInfo'>;
-type TelegramWireBasicGroupFullInfo = TelegramWireBasicGroupFullInfoUpdate['basic_group_full_info'];
-type TelegramWireChatPhoto = NonNullable<TelegramWireBasicGroupFullInfo['photo']>;
+type BasicGroupFullInfoUpdate = UpdateByType<'updateBasicGroupFullInfo'>;
+type BasicGroupFullInfo = BasicGroupFullInfoUpdate['basic_group_full_info'];
+type ChatPhoto = NonNullable<BasicGroupFullInfo['photo']>;
 
 export async function storeBasicGroupFullInfo(
-  database: TelegramDatabase,
+  database: Database,
   basicGroupId: string,
-  info: TelegramWireBasicGroupFullInfo
+  info: BasicGroupFullInfo
 ): Promise<void> {
   const photo = info.photo ?? null;
   if (photo !== null) {
@@ -32,10 +27,7 @@ export async function storeBasicGroupFullInfo(
   });
 }
 
-async function storeChatPhotoFiles(
-  database: TelegramDatabase,
-  photo: TelegramWireChatPhoto
-): Promise<void> {
+async function storeChatPhotoFiles(database: Database, photo: ChatPhoto): Promise<void> {
   const files = chatPhotoFiles(photo);
   const storedFileIds = new Set<number>();
 
@@ -48,12 +40,12 @@ async function storeChatPhotoFiles(
   }
 }
 
-async function storeFile(database: TelegramDatabase, file: TelegramWireFile): Promise<void> {
+async function storeFile(database: Database, file: File): Promise<void> {
   const row: typeof telegramFiles.$inferInsert = {
     expectedSize: String(file.expected_size),
     id: file.id,
-    local: telegramWireJsonObject(file.local),
-    remote: telegramWireJsonObject(file.remote),
+    local: tdJsonObject(file.local),
+    remote: tdJsonObject(file.remote),
     size: nullablePositiveId(file.size)
   };
 
@@ -63,18 +55,15 @@ async function storeFile(database: TelegramDatabase, file: TelegramWireFile): Pr
   });
 }
 
-async function storeChatPhoto(
-  database: TelegramDatabase,
-  photo: TelegramWireChatPhoto
-): Promise<void> {
+async function storeChatPhoto(database: Database, photo: ChatPhoto): Promise<void> {
   const row: typeof telegramChatPhotos.$inferInsert = {
     addedDate: new Date(photo.added_date * 1000),
-    animation: requiredTelegramWireJsonValue(photo.animation ?? null),
+    animation: requiredJsonValue(photo.animation ?? null),
     id: photo.id,
-    minithumbnail: requiredTelegramWireJsonValue(photo.minithumbnail ?? null),
-    sizes: requiredTelegramWireJsonValue(photo.sizes),
-    smallAnimation: requiredTelegramWireJsonValue(photo.small_animation ?? null),
-    sticker: requiredTelegramWireJsonValue(photo.sticker ?? null)
+    minithumbnail: requiredJsonValue(photo.minithumbnail ?? null),
+    sizes: requiredJsonValue(photo.sizes),
+    smallAnimation: requiredJsonValue(photo.small_animation ?? null),
+    sticker: requiredJsonValue(photo.sticker ?? null)
   };
 
   await database.insert(telegramChatPhotos).values(row).onConflictDoUpdate({
@@ -85,23 +74,23 @@ async function storeChatPhoto(
 
 function basicGroupFullInfoRow(
   basicGroupId: string,
-  info: TelegramWireBasicGroupFullInfo
+  info: BasicGroupFullInfo
 ): typeof telegramBasicGroups.$inferInsert {
   const photo = info.photo ?? null;
   return {
-    botCommands: requiredTelegramWireJsonValue(info.bot_commands),
+    botCommands: requiredJsonValue(info.bot_commands),
     canHideMembers: info.can_hide_members,
     canToggleAggressiveAntiSpam: info.can_toggle_aggressive_anti_spam,
     creatorUserId: nullableZeroId(info.creator_user_id),
     description: info.description,
     id: basicGroupId,
-    inviteLink: telegramWireJsonValue(info.invite_link ?? null) ?? null,
-    members: requiredTelegramWireJsonValue(info.members),
+    inviteLink: tdJsonValue(info.invite_link ?? null) ?? null,
+    members: requiredJsonValue(info.members),
     photoId: photo === null ? null : photo.id
   };
 }
 
-function chatPhotoFiles(photo: TelegramWireChatPhoto): TelegramWireFile[] {
+function chatPhotoFiles(photo: ChatPhoto): File[] {
   const animation = photo.animation ?? null;
   const smallAnimation = photo.small_animation ?? null;
 
@@ -113,7 +102,7 @@ function chatPhotoFiles(photo: TelegramWireChatPhoto): TelegramWireFile[] {
 }
 
 function nullableZeroId(value: number | string | null | undefined): string | null {
-  const id = telegramWireId(value);
+  const id = tdId(value);
   return id === undefined || id === '0' ? null : id;
 }
 
@@ -121,8 +110,8 @@ function nullablePositiveId(value: number): string | null {
   return value > 0 ? String(value) : null;
 }
 
-function requiredTelegramWireJsonValue(value: unknown): JsonValue {
-  const json = telegramWireJsonValue(value);
+function requiredJsonValue(value: unknown): JsonValue {
+  const json = tdJsonValue(value);
   if (json === undefined) {
     throw new Error('Expected Telegram wire JSON value');
   }

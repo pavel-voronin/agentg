@@ -1,19 +1,16 @@
-import type { TelegramDatabase } from '../database/client.js';
+import type { Database } from '../database/client.js';
 import { telegramSecretChats } from '../database/schema.js';
-import { telegramWireJsonObject, type TelegramWireUpdateByType } from '../tdlib/wire.js';
+import { tdJsonObject, type UpdateByType } from '../tdlib/value.js';
 
-type TelegramWireSecretChat = TelegramWireUpdateByType<'updateSecretChat'>['secret_chat'];
+type SecretChat = UpdateByType<'updateSecretChat'>['secret_chat'];
 
-export async function upsertSecretChat(
-  database: TelegramDatabase,
-  secretChat: TelegramWireSecretChat
-): Promise<void> {
+export async function upsertSecretChat(database: Database, secretChat: SecretChat): Promise<void> {
   const row: typeof telegramSecretChats.$inferInsert = {
     id: secretChat.id,
     isOutbound: secretChat.is_outbound,
     keyHash: secretChat.key_hash,
     layer: secretChat.layer,
-    state: telegramWireJsonObject(secretChat.state),
+    state: tdJsonObject(secretChat.state),
     userId: String(secretChat.user_id)
   };
 

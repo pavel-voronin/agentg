@@ -1,14 +1,15 @@
-import type { TelegramDatabase } from '../database/client.js';
+import type { Database } from '../database/client.js';
 import { telegramUsers } from '../database/schema.js';
-import { telegramWireJsonObject, type TelegramWireUser } from '../tdlib/wire.js';
+import { tdJsonObject } from '../tdlib/value.js';
+import type { user as User } from 'tdlib-types';
 
-export async function storeUser(database: TelegramDatabase, user: TelegramWireUser): Promise<void> {
+export async function storeUser(database: Database, user: User): Promise<void> {
   const row = {
     firstName: user.first_name,
     id: String(user.id),
     isPremium: user.is_premium,
     lastName: user.last_name,
-    type: telegramWireJsonObject(user.type)
+    type: tdJsonObject(user.type)
   };
 
   await database.insert(telegramUsers).values(row).onConflictDoUpdate({

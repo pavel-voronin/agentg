@@ -1,22 +1,18 @@
-import type { JsonValue } from '@agentg/events/json';
+import type { JsonValue } from '@agentg/framework';
 
-import type { TelegramDatabase } from '../database/client.js';
+import type { Database } from '../database/client.js';
 import { telegramFiles } from '../database/schema.js';
-import {
-  telegramWireJsonObject,
-  telegramWireJsonValue,
-  type TelegramWireFile,
-  type TelegramWireUpdateByType
-} from '../tdlib/wire.js';
+import { tdJsonObject, tdJsonValue, type UpdateByType } from '../tdlib/value.js';
+import type { file as File } from 'tdlib-types';
 import { upsertTelegramChatFragment } from './chat.js';
 
-type TelegramWireChatPhotoUpdate = TelegramWireUpdateByType<'updateChatPhoto'>;
-type TelegramWireChatPhotoInfo = NonNullable<TelegramWireChatPhotoUpdate['photo']>;
+type ChatPhotoUpdate = UpdateByType<'updateChatPhoto'>;
+type ChatPhotoInfo = NonNullable<ChatPhotoUpdate['photo']>;
 
 export async function storeChatPhotoInfo(
-  database: TelegramDatabase,
+  database: Database,
   chatId: string,
-  photo: TelegramWireChatPhotoInfo | null
+  photo: ChatPhotoInfo | null
 ): Promise<void> {
   await database.transaction(async (transaction) => {
     if (photo !== null) {
@@ -31,7 +27,7 @@ export async function storeChatPhotoInfo(
   });
 }
 
-function chatPhotoInfoValue(photo: TelegramWireChatPhotoInfo | null): JsonValue {
+function chatPhotoInfoValue(photo: ChatPhotoInfo | null): JsonValue {
   if (photo === null) {
     return null;
   }
@@ -41,24 +37,24 @@ function chatPhotoInfoValue(photo: TelegramWireChatPhotoInfo | null): JsonValue 
     big: fileReferenceValue(photo.big),
     has_animation: photo.has_animation,
     is_personal: photo.is_personal,
-    minithumbnail: telegramWireJsonValue(photo.minithumbnail ?? null) ?? null,
+    minithumbnail: tdJsonValue(photo.minithumbnail ?? null) ?? null,
     small: fileReferenceValue(photo.small)
   };
 }
 
-function fileReferenceValue(file: TelegramWireFile): JsonValue {
+function fileReferenceValue(file: File): JsonValue {
   return {
     _: 'file',
     id: file.id
   };
 }
 
-async function storeFile(database: TelegramDatabase, file: TelegramWireFile): Promise<void> {
+async function storeFile(database: Database, file: File): Promise<void> {
   const row: typeof telegramFiles.$inferInsert = {
     expectedSize: String(file.expected_size),
     id: file.id,
-    local: telegramWireJsonObject(file.local),
-    remote: telegramWireJsonObject(file.remote),
+    local: tdJsonObject(file.local),
+    remote: tdJsonObject(file.remote),
     size: nullablePositiveId(file.size)
   };
 
