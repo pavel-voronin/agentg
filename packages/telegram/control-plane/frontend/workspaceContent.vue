@@ -1,0 +1,459 @@
+<script setup lang="ts">
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
+
+import {
+  type SlotContext,
+  type SlotDebugRegistration,
+  type SlotItemResolution,
+  type SlotItemRenderState,
+  type SlotResolution,
+  type SlotRenderState,
+  useSlotRuntime
+} from '@agentg/framework/cp';
+
+import { chatSidebarView } from './chatSidebarView.js';
+import ChatSidebar from './components/chatSidebar.vue';
+import ChatSidebarResizer from './components/chatSidebarResizer.vue';
+import WorkspacePrimaryPanel from './components/workspacePrimaryPanel.vue';
+import { useTelegramDirectoryState } from './directoryState.js';
+import { readStorage, writeStorage } from './storage.js';
+import { useChatSidebarResize } from './useChatSidebarResize.js';
+import type { ChatListMode, ControlPlaneChat, TelegramDirectoryChat } from './views.js';
+import {
+  buildChatHeaderView,
+  buildChatNavigation,
+  chatListFilter,
+  controlPlaneChats,
+  normalizedChatQuery,
+  preferredChatListSelection,
+  providerFileUrl,
+  visibleDirectoryChats as filterDirectoryChats
+} from './workspaceChat.js';
+import {
+  compareWorkspaceTabs,
+  initialItemState,
+  slotItemKey,
+  workspaceTabFromItem,
+  type WorkspaceTab
+} from './workspaceSlots.js';
+
+const props = defineProps<{
+  slotContext?: SlotContext | undefined;
+}>();
+
+const telegramStoragePrefix = 'agentg.telegram.controlPlane';
+const directoryState = useTelegramDirectoryState();
+const slotRuntime = useSlotRuntime();
+const storedChatListSelection = readStoredChatListSelection();
+const activePrimaryTabId = ref(readStorage(`${telegramStoragePrefix}.primaryTabId`) ?? '');
+const chatFilter = ref(readStorage(`${telegramStoragePrefix}.chatFilter`) ?? '');
+const chatFolderId = ref<number | null>(storedChatListSelection.folderId);
+const chatListMode = ref<ChatListMode>(storedChatListSelection.mode);
+const selectedChatId = ref(readStorage(`${telegramStoragePrefix}.selectedChatId`) ?? null);
+const primaryItemStates = shallowRef<ReadonlyMap<string, SlotItemRenderState>>(new Map());
+const emptyContentAttrs: Record<string, unknown> = {};
+let primaryDebugRegistration: SlotDebugRegistration | null = null;
+
+const {
+  maxWidth: chatSidebarMaxWidth,
+  minWidth: chatSidebarMinWidth,
+  resizeWithKeyboard: resizeChatSidebarWithKeyboard,
+  resizing: isResizingChatSidebar,
+  start: startChatSidebarResize,
+  stop: stopChatSidebarResize,
+  style: chatInterfaceStyle,
+  width: chatSidebarWidth
+} = useChatSidebarResize(`${telegramStoragePrefix}.chatSidebarWidth`);
+
+const primarySlot = {
+  slotId: 'telegram.workspace.primary',
+  tags: ['telegram.workspace']
+};
+
+const chatNavigation = computed(() =>
+  buildChatNavigation(directoryState.chats.value, directoryState.folders.value)
+);
+const visibleDirectoryChats = computed(() =>
+  filterDirectoryChats({
+    chatFilter: chatFilter.value,
+    chatListMode: chatListMode.value,
+    chats: directoryState.chats.value,
+    folderId: chatFolderId.value,
+    selectedChatId: selectedChatId.value
+  })
+);
+const chats = computed<ControlPlaneChat[]>(() => controlPlaneChats(visibleDirectoryChats.value));
+const chatSidebar = computed(() =>
+  chatSidebarView(
+    {
+      chatFilter: chatFilter.value,
+      chatFolderId: chatFolderId.value,
+      chatListMode: chatListMode.value,
+      chatNavigation: chatNavigation.value,
+      chats: chats.value
+    },
+    selectedChatId.value
+  )
+);
+const primaryResolvedItems = computed<SlotItemResolution[]>(() =>
+  slotRuntime.compatibleContent(primarySlot.tags).map((content, index) => ({
+    content,
+    contentId: content.contentId,
+    index,
+    kind: 'content'
+  }))
+);
+const primaryResolution = computed<SlotResolution>(() =>
+  primaryResolvedItems.value.length === 0
+    ? { kind: 'empty' }
+    : {
+        items: primaryResolvedItems.value,
+        kind: 'contents',
+        overflowCount: 0
+      }
+);
+const primarySlotState = computed<SlotRenderState>(() => {
+  if (primaryResolution.value.kind === 'empty') {
+    return { kind: 'empty' };
+  }
+  return {
+    items: primaryResolution.value.items.map(
+      (item) => primaryItemStates.value.get(slotItemKey(item)) ?? initialItemState(item)
+    ),
+    kind: 'contents',
+    overflowCount: primaryResolution.value.overflowCount
+  };
+});
+const primaryTabs = computed(() =>
+  primaryResolvedItems.value.map(workspaceTabFromItem).filter(isDefined).sort(compareWorkspaceTabs)
+);
+const activePrimaryTab = computed(
+  () => primaryTabs.value.find((tab) => tab.item.contentId === activePrimaryTabId.value) ?? null
+);
+const selectedChat = computed(() =>
+  selectedChatId.value === null
+    ? null
+    : (directoryState.chats.value.find((chat) => chat.id === selectedChatId.value) ?? null)
+);
+const selectedChatAvatarUrl = computed(() =>
+  selectedChat.value === null
+    ? null
+    : providerFileUrl(
+        selectedChat.value.avatar.small?.url ?? selectedChat.value.avatar.big?.url ?? null
+      )
+);
+const selectedChatHeader = computed(() =>
+  buildChatHeaderView(selectedChat.value, selectedChatAvatarUrl.value)
+);
+const nestedSlotContext = computed(() => ({
+  ...(props.slotContext ?? {}),
+  closeSelectedChat,
+  selectedChatAvatarUrl: selectedChatAvatarUrl.value,
+  selectedChatId: selectedChatId.value
+}));
+
+watch(
+  selectedChatId,
+  (chatId) => {
+    writeStorage(`${telegramStoragePrefix}.selectedChatId`, chatId ?? '');
+  },
+  { immediate: true }
+);
+
+watch(
+  () => ({
+    hydrated: directoryState.hydrated.value,
+    navigation: chatNavigation.value
+  }),
+  ensureSelectedFolderExists,
+  { immediate: true }
+);
+
+watch(
+  primaryResolvedItems,
+  (items) => {
+    const nextKeys = new Set(items.map(slotItemKey));
+    primaryItemStates.value = new Map(
+      [...primaryItemStates.value.entries()].filter(([key]) => nextKeys.has(key))
+    );
+  },
+  { immediate: true }
+);
+
+watch(
+  primaryTabs,
+  (tabs) => {
+    if (tabs.length === 0) {
+      activePrimaryTabId.value = '';
+      writeStorage(`${telegramStoragePrefix}.primaryTabId`, '');
+      return;
+    }
+    const firstTab = tabs[0];
+    if (
+      firstTab !== undefined &&
+      !tabs.some((tab) => tab.item.contentId === activePrimaryTabId.value)
+    ) {
+      selectPrimaryTab(firstTab.item.contentId);
+    }
+  },
+  { immediate: true }
+);
+
+watch(
+  () => ({
+    resolution: primaryResolution.value,
+    slotId: primarySlot.slotId,
+    state: primarySlotState.value,
+    tags: [...primarySlot.tags],
+    target: null
+  }),
+  (entry) => {
+    if (primaryDebugRegistration === null) {
+      primaryDebugRegistration = slotRuntime.registerDebugEntry(entry);
+      return;
+    }
+    primaryDebugRegistration.update(entry);
+  },
+  { immediate: true }
+);
+
+onBeforeUnmount(() => {
+  primaryDebugRegistration?.unregister();
+  primaryDebugRegistration = null;
+  stopChatSidebarResize();
+});
+
+function clearChatSearch(): void {
+  chatFilter.value = '';
+  writeStorage(`${telegramStoragePrefix}.chatFilter`, '');
+}
+
+function searchChats(value: string): void {
+  chatFilter.value = value;
+  writeStorage(`${telegramStoragePrefix}.chatFilter`, value);
+}
+
+function selectPrimaryTab(contentId: string): void {
+  if (!primaryTabs.value.some((tab) => tab.item.contentId === contentId)) {
+    return;
+  }
+  activePrimaryTabId.value = contentId;
+  writeStorage(`${telegramStoragePrefix}.primaryTabId`, contentId);
+}
+
+function setPrimaryItemState(item: SlotItemResolution, state: SlotItemRenderState): void {
+  primaryItemStates.value = new Map(primaryItemStates.value).set(slotItemKey(item), state);
+}
+
+function setActivePrimaryItemState(state: SlotItemRenderState): void {
+  const tab = activePrimaryTab.value;
+  if (tab === null) {
+    return;
+  }
+  setPrimaryItemState(tab.item, state);
+}
+
+async function openChat(chatId: string): Promise<void> {
+  const normalizedChatId = chatId.trim();
+  if (normalizedChatId.length === 0) {
+    return;
+  }
+  const chat = await findChatById(normalizedChatId);
+  selectChatList(preferredChatListSelection(chat));
+  selectedChatId.value = normalizedChatId;
+}
+
+async function toggleChat(chatId: string): Promise<void> {
+  if (selectedChatId.value === chatId) {
+    closeSelectedChat();
+    return;
+  }
+  selectedChatId.value = chatId;
+}
+
+async function findChatById(chatId: string): Promise<TelegramDirectoryChat> {
+  const chat = directoryState.chats.value.find((item) => item.id === chatId);
+  if (chat === undefined) {
+    throw new Error(`Chat ${chatId} is not available in the chat directory`);
+  }
+  return chat;
+}
+
+function openMainChats(): void {
+  selectMainChatList();
+}
+
+function openArchiveChats(): void {
+  chatListMode.value = 'archive';
+  chatFolderId.value = null;
+  chatFilter.value = '';
+  writeStorage(`${telegramStoragePrefix}.chatFilter`, '');
+  writeStoredChatListSelection({ folderId: null, mode: 'archive' });
+}
+
+function openFolderChats(folderId: number): void {
+  if (!Number.isSafeInteger(folderId)) {
+    return;
+  }
+  chatListMode.value = 'folder';
+  chatFolderId.value = folderId;
+  chatFilter.value = '';
+  writeStorage(`${telegramStoragePrefix}.chatFilter`, '');
+  writeStoredChatListSelection({ folderId, mode: 'folder' });
+}
+
+function selectMainChatList(): void {
+  chatListMode.value = 'main';
+  chatFolderId.value = null;
+  chatFilter.value = '';
+  writeStorage(`${telegramStoragePrefix}.chatFilter`, '');
+  writeStoredChatListSelection({ folderId: null, mode: 'main' });
+}
+
+function closeSelectedChat(): void {
+  selectedChatId.value = null;
+}
+
+function pushLocalError(error: unknown): void {
+  console.error(error);
+}
+
+function hasChatFolder(folderId: number | null): boolean {
+  return (
+    Number.isSafeInteger(folderId) &&
+    chatNavigation.value.folders.some((folder) => folder.id === folderId)
+  );
+}
+
+function ensureSelectedFolderExists(): void {
+  if (!directoryState.hydrated.value) {
+    return;
+  }
+  if (normalizedChatQuery(chatFilter.value).length === 0 && chatListMode.value === 'folder') {
+    if (!hasChatFolder(chatFolderId.value)) {
+      selectMainChatList();
+    }
+  }
+}
+
+function selectChatList(selection: { folderId: number | null; mode: ChatListMode }): void {
+  if (selection.mode === 'main') {
+    selectMainChatList();
+    return;
+  }
+  if (selection.mode === 'archive') {
+    chatListMode.value = 'archive';
+    chatFolderId.value = null;
+    writeStoredChatListSelection({ folderId: null, mode: 'archive' });
+    return;
+  }
+  if (selection.folderId !== null) {
+    chatListMode.value = 'folder';
+    chatFolderId.value = selection.folderId;
+    writeStoredChatListSelection(selection);
+  }
+}
+
+function readStoredChatListSelection(): { folderId: number | null; mode: ChatListMode } {
+  const raw = readStorage(`${telegramStoragePrefix}.chatListSelection`);
+  if (raw === null) {
+    return { folderId: null, mode: 'main' };
+  }
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (
+      isPlainRecord(parsed) &&
+      parsed.mode === 'folder' &&
+      Number.isSafeInteger(parsed.folderId)
+    ) {
+      return { folderId: parsed.folderId as number, mode: 'folder' };
+    }
+    if (isPlainRecord(parsed) && parsed.mode === 'archive') {
+      return { folderId: null, mode: 'archive' };
+    }
+  } catch {
+    return { folderId: null, mode: 'main' };
+  }
+  return { folderId: null, mode: 'main' };
+}
+
+function writeStoredChatListSelection(selection: {
+  folderId: number | null;
+  mode: ChatListMode;
+}): void {
+  writeStorage(
+    `${telegramStoragePrefix}.chatListSelection`,
+    JSON.stringify(
+      selection.mode === 'folder' && Number.isSafeInteger(selection.folderId)
+        ? { folderId: selection.folderId, mode: 'folder' }
+        : { mode: selection.mode === 'archive' ? 'archive' : 'main' }
+    )
+  );
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isDefined<T>(value: T | undefined): value is T {
+  return value !== undefined;
+}
+</script>
+
+<template>
+  <div class="telegram-workspace">
+    <section
+      class="telegram-workspace__chat-interface"
+      :data-resizing="isResizingChatSidebar ? 'true' : undefined"
+      :style="chatInterfaceStyle"
+    >
+      <ChatSidebar
+        :view="chatSidebar"
+        @archive-open="openArchiveChats"
+        @chat-open="(chatId) => void openChat(chatId).catch(pushLocalError)"
+        @chat-toggle="(chatId) => void toggleChat(chatId).catch(pushLocalError)"
+        @folder-open="openFolderChats"
+        @main-open="openMainChats"
+        @search-clear="clearChatSearch"
+        @search-input="searchChats"
+      />
+
+      <ChatSidebarResizer
+        :max-width="chatSidebarMaxWidth"
+        :min-width="chatSidebarMinWidth"
+        :width="chatSidebarWidth"
+        @keyboard-resize="resizeChatSidebarWithKeyboard"
+        @resize-start="startChatSidebarResize"
+      />
+
+      <WorkspacePrimaryPanel
+        :active-tab="activePrimaryTab"
+        :active-tab-id="activePrimaryTabId"
+        :chat-header="selectedChatHeader"
+        :content-attrs="emptyContentAttrs"
+        :selected-chat-id="selectedChatId"
+        :slot-context="nestedSlotContext"
+        :tabs="primaryTabs"
+        @close-chat="closeSelectedChat"
+        @select-tab="selectPrimaryTab"
+        @state-change="setActivePrimaryItemState"
+      />
+    </section>
+  </div>
+</template>
+
+<style scoped>
+@reference "tailwindcss";
+
+.telegram-workspace {
+  @apply h-full min-h-0 overflow-hidden;
+}
+
+.telegram-workspace__chat-interface {
+  @apply relative grid h-full min-h-0 min-w-0 grid-cols-[var(--telegram-chat-sidebar-width)_minmax(0,1fr)] overflow-hidden rounded-lg border border-zinc-200 bg-white;
+}
+
+.telegram-workspace__chat-interface[data-resizing='true'] {
+  @apply cursor-col-resize select-none;
+}
+</style>
