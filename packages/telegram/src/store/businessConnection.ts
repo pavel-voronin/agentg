@@ -1,25 +1,18 @@
-import type { TelegramDatabase } from '../database/client.js';
+import type { Database } from '../database/client.js';
 import { telegramBusinessConnections } from '../database/schema.js';
-import {
-  telegramWireDate,
-  telegramWireJsonValue,
-  type TelegramWireUpdateByType
-} from '../tdlib/wire.js';
+import { tdDate, tdJsonValue, type UpdateByType } from '../tdlib/value.js';
 
-type TelegramWireBusinessConnection =
-  TelegramWireUpdateByType<'updateBusinessConnection'>['connection'];
+type BusinessConnection = UpdateByType<'updateBusinessConnection'>['connection'];
 
 export async function storeBusinessConnection(
-  database: TelegramDatabase,
-  connection: TelegramWireBusinessConnection
+  database: Database,
+  connection: BusinessConnection
 ): Promise<void> {
   const row: typeof telegramBusinessConnections.$inferInsert = {
     date: requiredTelegramDate(connection.date),
     id: connection.id,
     isEnabled: connection.is_enabled,
-    rights: connection.is_enabled
-      ? (telegramWireJsonValue(connection.rights ?? null) ?? null)
-      : null,
+    rights: connection.is_enabled ? (tdJsonValue(connection.rights ?? null) ?? null) : null,
     userChatId: String(connection.user_chat_id),
     userId: String(connection.user_id)
   };
@@ -31,7 +24,7 @@ export async function storeBusinessConnection(
 }
 
 function requiredTelegramDate(value: number): Date {
-  const date = telegramWireDate(value);
+  const date = tdDate(value);
   if (date === undefined) {
     throw new Error(`Business connection has invalid date: ${String(value)}`);
   }

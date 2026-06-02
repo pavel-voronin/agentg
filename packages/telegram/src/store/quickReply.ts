@@ -1,31 +1,25 @@
-import type { JsonValue } from '@agentg/events/json';
+import type { JsonValue } from '@agentg/framework';
 import { and, eq, inArray } from 'drizzle-orm';
 
-import type { TelegramDatabase } from '../database/client.js';
-import { TELEGRAM_QUICK_REPLY_MESSAGE_MODEL } from '../model/refs.js';
+import type { Database } from '../database/client.js';
+import { QUICK_REPLY_MESSAGE_MODEL } from '../model/refs.js';
 import {
   telegramFileSlots,
   telegramQuickReplyMessages,
   telegramQuickReplyShortcuts
 } from '../database/schema.js';
-import {
-  telegramWireId,
-  telegramWireJsonValue,
-  type TelegramWireUpdateByType
-} from '../tdlib/wire.js';
+import { tdId, tdJsonValue, type UpdateByType } from '../tdlib/value.js';
 
-type TelegramWireQuickReplyShortcut =
-  TelegramWireUpdateByType<'updateQuickReplyShortcut'>['shortcut'];
-type TelegramWireQuickReplyMessage =
-  TelegramWireUpdateByType<'updateQuickReplyShortcutMessages'>['messages'][number];
+type QuickReplyShortcut = UpdateByType<'updateQuickReplyShortcut'>['shortcut'];
+type QuickReplyMessage = UpdateByType<'updateQuickReplyShortcutMessages'>['messages'][number];
 
 export async function upsertQuickReplyShortcut(
-  database: TelegramDatabase,
-  shortcut: TelegramWireQuickReplyShortcut
+  database: Database,
+  shortcut: QuickReplyShortcut
 ): Promise<void> {
   await database.transaction(async (transaction) => {
     const firstMessage = shortcut.first_message;
-    const messageId = requiredTelegramWireId(firstMessage.id);
+    const messageId = requiredId(firstMessage.id);
     const messageRow = quickReplyMessageRow(firstMessage, shortcut.id, 0);
 
     await transaction.insert(telegramQuickReplyMessages).values(messageRow).onConflictDoUpdate({
@@ -48,7 +42,7 @@ export async function upsertQuickReplyShortcut(
 }
 
 export async function deleteQuickReplyShortcut(
-  database: TelegramDatabase,
+  database: Database,
   shortcutId: number
 ): Promise<void> {
   await database.transaction(async (transaction) => {
@@ -65,7 +59,7 @@ export async function deleteQuickReplyShortcut(
         .delete(telegramFileSlots)
         .where(
           and(
-            eq(telegramFileSlots.ownerModel, TELEGRAM_QUICK_REPLY_MESSAGE_MODEL),
+            eq(telegramFileSlots.ownerModel, QUICK_REPLY_MESSAGE_MODEL),
             inArray(telegramFileSlots.ownerId, messageIds)
           )
         );
@@ -81,9 +75,9 @@ export async function deleteQuickReplyShortcut(
 }
 
 export async function replaceQuickReplyShortcutMessages(
-  database: TelegramDatabase,
+  database: Database,
   input: {
-    messages: TelegramWireQuickReplyMessage[];
+    messages: QuickReplyMessage[];
     shortcutId: number;
   }
 ): Promise<void> {
@@ -101,7 +95,7 @@ export async function replaceQuickReplyShortcutMessages(
         .delete(telegramFileSlots)
         .where(
           and(
-            eq(telegramFileSlots.ownerModel, TELEGRAM_QUICK_REPLY_MESSAGE_MODEL),
+            eq(telegramFileSlots.ownerModel, QUICK_REPLY_MESSAGE_MODEL),
             inArray(telegramFileSlots.ownerId, currentMessageIds)
           )
         );
@@ -122,38 +116,38 @@ export async function replaceQuickReplyShortcutMessages(
 }
 
 export function quickReplyMessageRow(
-  message: TelegramWireQuickReplyMessage,
+  message: QuickReplyMessage,
   shortcutId: number,
   order: number
 ): typeof telegramQuickReplyMessages.$inferInsert {
   return {
     canBeEdited: message.can_be_edited,
-    content: requiredTelegramWireJsonValue(message.content),
-    id: requiredTelegramWireId(message.id),
+    content: requiredJsonValue(message.content),
+    id: requiredId(message.id),
     mediaAlbumId: zeroIdToNull(message.media_album_id),
     order,
-    replyMarkup: requiredTelegramWireJsonValue(message.reply_markup ?? null),
+    replyMarkup: requiredJsonValue(message.reply_markup ?? null),
     replyToMessageId: zeroIdToNull(message.reply_to_message_id),
-    sendingState: requiredTelegramWireJsonValue(message.sending_state ?? null),
+    sendingState: requiredJsonValue(message.sending_state ?? null),
     shortcutId,
-    viaBotUserId: requiredTelegramWireId(message.via_bot_user_id)
+    viaBotUserId: requiredId(message.via_bot_user_id)
   };
 }
 
 function zeroIdToNull(value: number | string): string | null {
-  return String(value) === '0' ? null : requiredTelegramWireId(value);
+  return String(value) === '0' ? null : requiredId(value);
 }
 
-function requiredTelegramWireId(value: number | string): string {
-  const id = telegramWireId(value);
+function requiredId(value: number | string): string {
+  const id = tdId(value);
   if (id === undefined) {
     throw new Error('Expected Telegram wire id');
   }
   return id;
 }
 
-function requiredTelegramWireJsonValue(value: unknown): JsonValue {
-  const json = telegramWireJsonValue(value);
+function requiredJsonValue(value: unknown): JsonValue {
+  const json = tdJsonValue(value);
   if (json === undefined) {
     throw new Error('Expected Telegram wire JSON value');
   }

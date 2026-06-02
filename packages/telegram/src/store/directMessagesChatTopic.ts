@@ -1,23 +1,18 @@
-import type { TelegramDatabase } from '../database/client.js';
+import type { Database } from '../database/client.js';
 import { telegramDirectMessagesChatTopics } from '../database/schema.js';
-import {
-  telegramWireJsonObject,
-  telegramWireJsonValue,
-  type TelegramWireUpdateByType
-} from '../tdlib/wire.js';
+import { tdJsonObject, tdJsonValue, type UpdateByType } from '../tdlib/value.js';
 
-type TelegramWireDirectMessagesChatTopic =
-  TelegramWireUpdateByType<'updateDirectMessagesChatTopic'>['topic'];
+type DirectMessagesChatTopic = UpdateByType<'updateDirectMessagesChatTopic'>['topic'];
 
 export async function storeDirectMessagesChatTopic(
-  database: TelegramDatabase,
-  topic: TelegramWireDirectMessagesChatTopic
+  database: Database,
+  topic: DirectMessagesChatTopic
 ): Promise<void> {
   const lastMessage = topic.last_message ?? null;
   const row: typeof telegramDirectMessagesChatTopics.$inferInsert = {
     canSendUnpaidMessages: topic.can_send_unpaid_messages,
     chatId: String(topic.chat_id),
-    draftMessage: telegramWireJsonValue(topic.draft_message ?? null) ?? null,
+    draftMessage: tdJsonValue(topic.draft_message ?? null) ?? null,
     id: String(topic.id),
     isMarkedAsUnread: topic.is_marked_as_unread,
     lastMessageChatId: lastMessage === null ? null : String(lastMessage.chat_id),
@@ -25,7 +20,7 @@ export async function storeDirectMessagesChatTopic(
     lastReadInboxMessageId: String(topic.last_read_inbox_message_id),
     lastReadOutboxMessageId: String(topic.last_read_outbox_message_id),
     order: topic.order,
-    senderId: telegramWireJsonObject(topic.sender_id),
+    senderId: tdJsonObject(topic.sender_id),
     unreadCount: String(topic.unread_count),
     unreadReactionCount: String(topic.unread_reaction_count)
   };

@@ -1,22 +1,18 @@
 import { eq } from 'drizzle-orm';
 
-import type { JsonValue } from '@agentg/events/json';
+import type { JsonValue } from '@agentg/framework';
 
-import type { TelegramDatabase } from '../database/client.js';
+import type { Database } from '../database/client.js';
 import { telegramSavedMessagesTags, telegramSavedMessagesTopics } from '../database/schema.js';
-import {
-  telegramWireJsonObject,
-  telegramWireJsonValue,
-  type TelegramWireUpdateByType
-} from '../tdlib/wire.js';
+import { tdJsonObject, tdJsonValue, type UpdateByType } from '../tdlib/value.js';
 import { reactionTypeKey } from './reaction.js';
 
-type TelegramWireSavedMessagesTagsUpdate = TelegramWireUpdateByType<'updateSavedMessagesTags'>;
-type TelegramWireSavedMessagesTopic = TelegramWireUpdateByType<'updateSavedMessagesTopic'>['topic'];
+type SavedMessagesTagsUpdate = UpdateByType<'updateSavedMessagesTags'>;
+type SavedMessagesTopic = UpdateByType<'updateSavedMessagesTopic'>['topic'];
 
 export async function replaceSavedMessagesTags(
-  database: TelegramDatabase,
-  update: TelegramWireSavedMessagesTagsUpdate
+  database: Database,
+  update: SavedMessagesTagsUpdate
 ): Promise<void> {
   const savedMessagesTopicId = String(update.saved_messages_topic_id);
 
@@ -39,18 +35,18 @@ export async function replaceSavedMessagesTags(
 }
 
 export async function upsertSavedMessagesTopic(
-  database: TelegramDatabase,
-  topic: TelegramWireSavedMessagesTopic
+  database: Database,
+  topic: SavedMessagesTopic
 ): Promise<void> {
   const lastMessage = topic.last_message ?? null;
   const row: typeof telegramSavedMessagesTopics.$inferInsert = {
-    draftMessage: requiredTelegramWireJsonValue(topic.draft_message ?? null),
+    draftMessage: requiredJsonValue(topic.draft_message ?? null),
     id: String(topic.id),
     isPinned: topic.is_pinned,
     lastMessageChatId: lastMessage === null ? null : String(lastMessage.chat_id),
     lastMessageId: lastMessage === null ? null : String(lastMessage.id),
     order: topic.order,
-    type: telegramWireJsonObject(topic.type)
+    type: tdJsonObject(topic.type)
   };
 
   await database.insert(telegramSavedMessagesTopics).values(row).onConflictDoUpdate({
@@ -59,8 +55,8 @@ export async function upsertSavedMessagesTopic(
   });
 }
 
-function requiredTelegramWireJsonValue(value: unknown): JsonValue {
-  const json = telegramWireJsonValue(value);
+function requiredJsonValue(value: unknown): JsonValue {
+  const json = tdJsonValue(value);
   if (json === undefined) {
     throw new Error('Expected Telegram wire JSON value');
   }

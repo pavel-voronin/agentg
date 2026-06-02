@@ -1,24 +1,20 @@
 import { and, eq } from 'drizzle-orm';
 
-import type { JsonValue } from '@agentg/events/json';
+import type { JsonValue } from '@agentg/framework';
 
-import type { TelegramDatabase } from '../database/client.js';
+import type { Database } from '../database/client.js';
 import { telegramStories } from '../database/schema.js';
-import {
-  telegramWireDate,
-  telegramWireJsonValue,
-  type TelegramWireUpdateByType
-} from '../tdlib/wire.js';
+import { tdDate, tdJsonValue, type UpdateByType } from '../tdlib/value.js';
 
-type TelegramWireStory = TelegramWireUpdateByType<'updateStory'>['story'];
+type Story = UpdateByType<'updateStory'>['story'];
 type StoryFailureMetadata = {
   canPostStoryResult?: unknown;
   error?: unknown;
 };
 
 export async function upsertStory(
-  database: TelegramDatabase,
-  story: TelegramWireStory,
+  database: Database,
+  story: Story,
   failure: StoryFailureMetadata = {}
 ): Promise<void> {
   const row = storyRow(story, failure);
@@ -33,7 +29,7 @@ export async function upsertStory(
 }
 
 export async function deleteStory(
-  database: TelegramDatabase,
+  database: Database,
   input: {
     posterChatId: string;
     storyId: number;
@@ -50,17 +46,17 @@ export async function deleteStory(
 }
 
 function storyRow(
-  story: TelegramWireStory,
+  story: Story,
   failure: StoryFailureMetadata
 ): typeof telegramStories.$inferInsert {
-  const date = telegramWireDate(story.date);
+  const date = tdDate(story.date);
   if (date === undefined) {
     throw new Error('Expected story date');
   }
 
   return {
-    albumIds: requiredTelegramWireJsonValue(story.album_ids),
-    areas: requiredTelegramWireJsonValue(story.areas),
+    albumIds: requiredJsonValue(story.album_ids),
+    areas: requiredJsonValue(story.areas),
     canBeAddedToAlbum: story.can_be_added_to_album,
     canBeDeleted: story.can_be_deleted,
     canBeEdited: story.can_be_edited,
@@ -68,35 +64,35 @@ function storyRow(
     canBeReplied: story.can_be_replied,
     canGetInteractions: story.can_get_interactions,
     canGetStatistics: story.can_get_statistics,
-    canPostStoryResult: nullableTelegramWireJsonValue(failure.canPostStoryResult ?? null),
+    canPostStoryResult: nullableJsonValue(failure.canPostStoryResult ?? null),
     canSetPrivacySettings: story.can_set_privacy_settings,
     canToggleIsPostedToChatPage: story.can_toggle_is_posted_to_chat_page,
-    caption: requiredTelegramWireJsonValue(story.caption),
-    chosenReactionType: requiredTelegramWireJsonValue(story.chosen_reaction_type ?? null),
-    content: requiredTelegramWireJsonValue(story.content),
+    caption: requiredJsonValue(story.caption),
+    chosenReactionType: requiredJsonValue(story.chosen_reaction_type ?? null),
+    content: requiredJsonValue(story.content),
     date,
-    error: nullableTelegramWireJsonValue(failure.error ?? null),
+    error: nullableJsonValue(failure.error ?? null),
     hasExpiredViewers: story.has_expired_viewers,
     id: story.id,
-    interactionInfo: requiredTelegramWireJsonValue(story.interaction_info ?? null),
+    interactionInfo: requiredJsonValue(story.interaction_info ?? null),
     isBeingEdited: story.is_being_edited,
     isBeingPosted: story.is_being_posted,
     isEdited: story.is_edited,
     isPostedToChatPage: story.is_posted_to_chat_page,
     isVisibleOnlyForSelf: story.is_visible_only_for_self,
     posterChatId: String(story.poster_chat_id),
-    posterId: requiredTelegramWireJsonValue(story.poster_id ?? null),
-    privacySettings: requiredTelegramWireJsonValue(story.privacy_settings),
-    repostInfo: requiredTelegramWireJsonValue(story.repost_info ?? null)
+    posterId: requiredJsonValue(story.poster_id ?? null),
+    privacySettings: requiredJsonValue(story.privacy_settings),
+    repostInfo: requiredJsonValue(story.repost_info ?? null)
   };
 }
 
-function nullableTelegramWireJsonValue(value: unknown): JsonValue | null {
-  return value === null ? null : requiredTelegramWireJsonValue(value);
+function nullableJsonValue(value: unknown): JsonValue | null {
+  return value === null ? null : requiredJsonValue(value);
 }
 
-function requiredTelegramWireJsonValue(value: unknown): JsonValue {
-  const json = telegramWireJsonValue(value);
+function requiredJsonValue(value: unknown): JsonValue {
+  const json = tdJsonValue(value);
   if (json === undefined) {
     throw new Error('Expected Telegram wire JSON value');
   }

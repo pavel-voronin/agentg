@@ -1,51 +1,44 @@
 import { and, eq } from 'drizzle-orm';
 
-import type { JsonValue } from '@agentg/events/json';
+import type { JsonValue } from '@agentg/framework';
 
-import type { TelegramDatabase } from '../database/client.js';
+import type { Database } from '../database/client.js';
 import {
   telegramPollAnswerOptions,
   telegramPollOptions,
   telegramPolls
 } from '../database/schema.js';
-import {
-  telegramWireId,
-  telegramWireJsonValue,
-  type TelegramWireUpdateByType
-} from '../tdlib/wire.js';
+import { tdId, tdJsonValue, type UpdateByType } from '../tdlib/value.js';
 
-type TelegramWirePoll = TelegramWireUpdateByType<'updatePoll'>['poll'] & {
+type Poll = UpdateByType<'updatePoll'>['poll'] & {
   country_codes?: string[];
   members_only?: boolean;
   vote_restriction_reason?: JsonValue | null;
 };
-type TelegramWirePollAnswerUpdate = TelegramWireUpdateByType<'updatePollAnswer'>;
-type TelegramWireMessageSender = TelegramWirePollAnswerUpdate['voter_id'];
+type PollAnswerUpdate = UpdateByType<'updatePollAnswer'>;
+type MessageSender = PollAnswerUpdate['voter_id'];
 
-export async function replaceTelegramPoll(
-  database: TelegramDatabase,
-  poll: TelegramWirePoll
-): Promise<void> {
+export async function replaceTelegramPoll(database: Database, poll: Poll): Promise<void> {
   await database.transaction(async (transaction) => {
-    const pollId = requiredTelegramWireId(poll.id);
+    const pollId = requiredId(poll.id);
     const pollRow: typeof telegramPolls.$inferInsert = {
       allowsMultipleAnswers: poll.allows_multiple_answers,
       allowsRevoting: poll.allows_revoting,
       canGetVoters: poll.can_get_voters,
-      closeDate: telegramWireTimestamp(poll.close_date),
-      countryCodes: requiredTelegramWireJsonValue(poll.country_codes ?? []),
+      closeDate: tdTimestamp(poll.close_date),
+      countryCodes: requiredJsonValue(poll.country_codes),
       id: pollId,
       isAnonymous: poll.is_anonymous,
       isClosed: poll.is_closed,
-      membersOnly: poll.members_only ?? false,
+      membersOnly: poll.members_only,
       openPeriod: poll.open_period,
-      optionOrder: requiredTelegramWireJsonValue(poll.option_order),
-      options: requiredTelegramWireJsonValue(poll.options),
-      question: requiredTelegramWireJsonValue(poll.question),
-      recentVoterIds: requiredTelegramWireJsonValue(poll.recent_voter_ids),
+      optionOrder: requiredJsonValue(poll.option_order),
+      options: requiredJsonValue(poll.options),
+      question: requiredJsonValue(poll.question),
+      recentVoterIds: requiredJsonValue(poll.recent_voter_ids),
       totalVoterCount: poll.total_voter_count,
-      type: requiredTelegramWireJsonValue(poll.type),
-      voteRestrictionReason: requiredTelegramWireJsonValue(poll.vote_restriction_reason ?? null)
+      type: requiredJsonValue(poll.type),
+      voteRestrictionReason: requiredJsonValue(poll.vote_restriction_reason ?? null)
     };
 
     await transaction.insert(telegramPolls).values(pollRow).onConflictDoUpdate({
@@ -56,16 +49,16 @@ export async function replaceTelegramPoll(
     await transaction.delete(telegramPollOptions).where(eq(telegramPollOptions.pollId, pollId));
 
     const optionRows = poll.options.map((option, optionPosition) => ({
-      additionDate: telegramWireTimestamp(option.addition_date),
-      author: requiredTelegramWireJsonValue(option.author ?? null),
+      additionDate: tdTimestamp(option.addition_date),
+      author: requiredJsonValue(option.author ?? null),
       id: option.id,
       isBeingChosen: option.is_being_chosen,
       isChosen: option.is_chosen,
-      media: requiredTelegramWireJsonValue(option.media),
+      media: requiredJsonValue(option.media),
       optionPosition,
       pollId,
-      recentVoterIds: requiredTelegramWireJsonValue(option.recent_voter_ids),
-      text: requiredTelegramWireJsonValue(option.text),
+      recentVoterIds: requiredJsonValue(option.recent_voter_ids),
+      text: requiredJsonValue(option.text),
       votePercentage: option.vote_percentage,
       voterCount: option.voter_count
     })) satisfies (typeof telegramPollOptions.$inferInsert)[];
@@ -77,14 +70,14 @@ export async function replaceTelegramPoll(
 }
 
 export async function replaceTelegramPollAnswerOptions(
-  database: TelegramDatabase,
-  update: TelegramWirePollAnswerUpdate
+  database: Database,
+  update: PollAnswerUpdate
 ): Promise<void> {
   if (update.option_ids.length !== update.option_positions.length) {
     throw new Error('Poll answer option vectors must have equal length');
   }
 
-  const pollId = requiredTelegramWireId(update.poll_id);
+  const pollId = requiredId(update.poll_id);
   const voterId = messageSenderKey(update.voter_id);
 
   await database.transaction(async (transaction) => {
@@ -110,29 +103,29 @@ export async function replaceTelegramPollAnswerOptions(
   });
 }
 
-function telegramWireTimestamp(value: number): Date {
+function tdTimestamp(value: number): Date {
   return new Date(value * 1000);
 }
 
-function requiredTelegramWireId(value: number | string): string {
-  const id = telegramWireId(value);
+function requiredId(value: number | string): string {
+  const id = tdId(value);
   if (id === undefined) {
     throw new Error('Expected Telegram wire id');
   }
   return id;
 }
 
-function requiredTelegramWireJsonValue(value: unknown): JsonValue {
-  const json = telegramWireJsonValue(value);
+function requiredJsonValue(value: unknown): JsonValue {
+  const json = tdJsonValue(value);
   if (json === undefined) {
     throw new Error('Expected Telegram wire JSON value');
   }
   return json;
 }
 
-function messageSenderKey(sender: TelegramWireMessageSender): string {
+function messageSenderKey(sender: MessageSender): string {
   if (sender._ === 'messageSenderUser') {
-    return `user:${requiredTelegramWireId(sender.user_id)}`;
+    return `user:${requiredId(sender.user_id)}`;
   }
-  return `chat:${requiredTelegramWireId(sender.chat_id)}`;
+  return `chat:${requiredId(sender.chat_id)}`;
 }

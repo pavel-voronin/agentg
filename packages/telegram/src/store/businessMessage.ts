@@ -1,15 +1,14 @@
 import { telegramBusinessMessages } from '../database/schema.js';
-import type { TelegramDatabase } from '../database/client.js';
-import type { TelegramWireUpdateByType } from '../tdlib/wire.js';
+import type { Database } from '../database/client.js';
+import { type UpdateByType } from '../tdlib/value.js';
 import { storeMessage } from './message.js';
 
-type TelegramWireBusinessMessage =
-  TelegramWireUpdateByType<'updateBusinessMessageEdited'>['message'];
+type BusinessMessage = UpdateByType<'updateBusinessMessageEdited'>['message'];
 
 export async function storeBusinessMessage(
-  database: TelegramDatabase,
+  database: Database,
   input: {
-    businessMessage: TelegramWireBusinessMessage;
+    businessMessage: BusinessMessage;
     connectionId: string;
   }
 ): Promise<void> {

@@ -1,39 +1,30 @@
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 
-import type { JsonObject, JsonValue } from '@agentg/events/json';
+import type { JsonObject, JsonValue } from '@agentg/framework';
 
-import { TELEGRAM_MESSAGE_MODEL, telegramMessageModelId } from '../model/refs.js';
-import type { TelegramDatabase } from '../database/client.js';
+import { MESSAGE_MODEL, messageModelId } from '../model/refs.js';
+import type { Database } from '../database/client.js';
 import {
   telegramActiveLiveLocationMessages,
   telegramFileSlots,
-  telegramMessageReactions,
   telegramMessages
 } from '../database/schema.js';
-import {
-  telegramWireDate,
-  telegramWireId,
-  telegramWireJsonObject,
-  telegramWireJsonValue,
-  type TelegramWireMessage,
-  type TelegramWireMessageContentUpdate
-} from '../tdlib/wire.js';
-import type { TelegramFileSubsystem } from '../files/subsystem.js';
-import type { TelegramMediaDownloadPolicyCause } from '../files/policy.js';
-import { reactionTypeKey } from './reaction.js';
+import { tdDate, tdId, tdJsonObject, tdJsonValue } from '../tdlib/value.js';
+import type { message as Message, updateMessageContent as MessageContentUpdate } from 'tdlib-types';
+import type { FileSubsystem } from '../files/index.js';
+import type { MediaDownloadPolicyCause } from '../files/policy.js';
 
 type StoreMessageConflict = 'ignore' | 'update';
 type TelegramMessageReaction = NonNullable<
-  NonNullable<
-    NonNullable<TelegramWireMessage['interaction_info']>['reactions']
-  >['reactions'][number]
+  NonNullable<NonNullable<Message['interaction_info']>['reactions']>['reactions'][number]
 >;
+type TelegramMessageInteractionInfo = Message['interaction_info'];
 
 export type TelegramMessageFragment = typeof telegramMessages.$inferInsert;
 
 export async function storeMessage(
-  database: TelegramDatabase,
-  message: TelegramWireMessage,
+  database: Database,
+  message: Message,
   conflict: StoreMessageConflict = 'update'
 ): Promise<boolean> {
   const row: typeof telegramMessages.$inferInsert = {
@@ -43,41 +34,42 @@ export async function storeMessage(
     chatId: String(message.chat_id),
     containsUnreadMention: message.contains_unread_mention,
     containsUnreadPollVotes: undefined,
-    content: telegramWireJsonObject(message.content),
-    date: telegramWireDate(message.date),
-    editDate: telegramWireDate(message.edit_date),
-    effectId: telegramWireId(message.effect_id),
-    factCheck: telegramWireJsonValue(message.fact_check),
-    forwardInfo: telegramWireJsonValue(message.forward_info),
+    content: tdJsonObject(message.content),
+    date: tdDate(message.date),
+    editDate: tdDate(message.edit_date),
+    effectId: tdId(message.effect_id),
+    factCheck: tdJsonValue(message.fact_check),
+    forwardInfo: tdJsonValue(message.forward_info),
     guestBotCallerId: undefined,
     hasTimestampedMedia: message.has_timestamped_media,
     id: String(message.id),
-    importInfo: telegramWireJsonValue(message.import_info),
-    interactionInfo: telegramWireJsonValue(message.interaction_info),
+    importInfo: tdJsonValue(message.import_info),
+    interactionInfo: interactionInfoWithoutReactions(message.interaction_info),
     isChannelPost: message.is_channel_post,
     isFromOffline: message.is_from_offline,
     isOutgoing: message.is_outgoing,
     isPaidStarSuggestedPost: message.is_paid_star_suggested_post,
     isPaidTonSuggestedPost: message.is_paid_ton_suggested_post,
     isPinned: message.is_pinned,
-    mediaAlbumId: telegramWireId(message.media_album_id),
-    paidMessageStarCount: telegramWireId(message.paid_message_star_count),
-    replyMarkup: telegramWireJsonValue(message.reply_markup),
-    replyTo: telegramWireJsonValue(message.reply_to),
-    restrictionInfo: telegramWireJsonValue(message.restriction_info),
-    schedulingState: telegramWireJsonValue(message.scheduling_state),
+    mediaAlbumId: tdId(message.media_album_id),
+    paidMessageStarCount: tdId(message.paid_message_star_count),
+    reactions: reactionStateFromInteractionInfo(message.interaction_info),
+    replyMarkup: tdJsonValue(message.reply_markup),
+    replyTo: tdJsonValue(message.reply_to),
+    restrictionInfo: tdJsonValue(message.restriction_info),
+    schedulingState: tdJsonValue(message.scheduling_state),
     selfDestructIn: message.self_destruct_in,
-    selfDestructType: telegramWireJsonValue(message.self_destruct_type),
+    selfDestructType: tdJsonValue(message.self_destruct_type),
     senderBoostCount: message.sender_boost_count,
-    senderBusinessBotUserId: telegramWireId(message.sender_business_bot_user_id),
-    senderId: telegramWireJsonObject(message.sender_id),
+    senderBusinessBotUserId: tdId(message.sender_business_bot_user_id),
+    senderId: tdJsonObject(message.sender_id),
     senderTag: message.sender_tag,
-    sendingState: telegramWireJsonValue(message.sending_state),
-    suggestedPostInfo: telegramWireJsonValue(message.suggested_post_info),
+    sendingState: tdJsonValue(message.sending_state),
+    suggestedPostInfo: tdJsonValue(message.suggested_post_info),
     summaryLanguageCode: message.summary_language_code,
-    topicId: telegramWireJsonValue(message.topic_id),
-    unreadReactions: telegramWireJsonValue(message.unread_reactions),
-    viaBotUserId: telegramWireId(message.via_bot_user_id)
+    topicId: tdJsonValue(message.topic_id),
+    unreadReactions: tdJsonValue(message.unread_reactions),
+    viaBotUserId: tdId(message.via_bot_user_id)
   };
 
   const insert = database.insert(telegramMessages).values(row);
@@ -107,26 +99,26 @@ export async function storeMessage(
 }
 
 export async function replaceMessageContent(
-  database: TelegramDatabase,
-  update: TelegramWireMessageContentUpdate
+  database: Database,
+  update: MessageContentUpdate
 ): Promise<void> {
   await database
     .insert(telegramMessages)
     .values({
       chatId: String(update.chat_id),
-      content: telegramWireJsonObject(update.new_content),
+      content: tdJsonObject(update.new_content),
       id: String(update.message_id)
     })
     .onConflictDoUpdate({
       set: {
-        content: telegramWireJsonObject(update.new_content)
+        content: tdJsonObject(update.new_content)
       },
       target: [telegramMessages.chatId, telegramMessages.id]
     });
 }
 
 export async function upsertTelegramMessageFragment(
-  database: TelegramDatabase,
+  database: Database,
   row: TelegramMessageFragment
 ): Promise<void> {
   await database
@@ -139,7 +131,7 @@ export async function upsertTelegramMessageFragment(
 }
 
 export async function patchOpenedMessageContent(
-  database: TelegramDatabase,
+  database: Database,
   input: {
     chatId: string;
     messageId: string;
@@ -171,63 +163,26 @@ export async function patchOpenedMessageContent(
 }
 
 export async function replaceMessageReactionSummaries(
-  database: TelegramDatabase,
+  database: Database,
   input: {
     chatId: string;
     messageId: string;
     reactions: readonly TelegramMessageReaction[];
   }
 ): Promise<void> {
-  await database
-    .delete(telegramMessageReactions)
-    .where(
-      and(
-        eq(telegramMessageReactions.chatId, input.chatId),
-        eq(telegramMessageReactions.messageId, input.messageId)
-      )
-    );
-
-  const rowsByReactionType = new Map<string, typeof telegramMessageReactions.$inferInsert>();
-  for (const reaction of input.reactions) {
-    const reactionType = reactionTypeKey(reaction.type);
-    rowsByReactionType.set(reactionType, {
+  await database.transaction(async (transaction) => {
+    const current = await readReactionStateForUpdate(transaction, input);
+    await upsertTelegramMessageFragment(transaction, {
       chatId: input.chatId,
-      isChosen: reaction.is_chosen,
-      messageId: input.messageId,
-      reactionType,
-      recentSenderIds: requiredTelegramWireJsonValue(reaction.recent_sender_ids),
-      totalCount: reaction.total_count,
-      usedSenderId: requiredTelegramWireJsonValue(reaction.used_sender_id ?? null)
+      id: input.messageId,
+      reactions: reactionStateWithSummaries(current, input.reactions)
     });
-  }
-
-  const rows = [...rowsByReactionType.values()];
-
-  if (rows.length === 0) {
-    return;
-  }
-
-  await database
-    .insert(telegramMessageReactions)
-    .values(rows)
-    .onConflictDoUpdate({
-      set: {
-        isChosen: sql`excluded.is_chosen`,
-        recentSenderIds: sql`excluded.recent_sender_ids`,
-        totalCount: sql`excluded.total_count`,
-        usedSenderId: sql`excluded.used_sender_id`
-      },
-      target: [
-        telegramMessageReactions.chatId,
-        telegramMessageReactions.messageId,
-        telegramMessageReactions.reactionType
-      ]
-    });
+  });
 }
 
 export async function replaceActiveLiveLocationMessageSet(
-  database: TelegramDatabase,
-  messages: TelegramWireMessage[]
+  database: Database,
+  messages: Message[]
 ): Promise<void> {
   await database.delete(telegramActiveLiveLocationMessages);
 
@@ -244,7 +199,7 @@ export async function replaceActiveLiveLocationMessageSet(
 }
 
 export async function deleteMessages(
-  database: TelegramDatabase,
+  database: Database,
   input: {
     chatId: string;
     messageIds: string[];
@@ -253,10 +208,10 @@ export async function deleteMessages(
   await database.transaction(async (transaction) => {
     await transaction.delete(telegramFileSlots).where(
       and(
-        eq(telegramFileSlots.ownerModel, TELEGRAM_MESSAGE_MODEL),
+        eq(telegramFileSlots.ownerModel, MESSAGE_MODEL),
         inArray(
           telegramFileSlots.ownerId,
-          input.messageIds.map((messageId) => telegramMessageModelId(input.chatId, messageId))
+          input.messageIds.map((messageId) => messageModelId(input.chatId, messageId))
         )
       )
     );
@@ -270,14 +225,6 @@ export async function deleteMessages(
       );
 
     await transaction
-      .delete(telegramMessageReactions)
-      .where(
-        and(
-          eq(telegramMessageReactions.chatId, input.chatId),
-          inArray(telegramMessageReactions.messageId, input.messageIds)
-        )
-      );
-    await transaction
       .delete(telegramMessages)
       .where(
         and(
@@ -289,17 +236,17 @@ export async function deleteMessages(
 }
 
 export function recordMessageFiles(
-  files: TelegramFileSubsystem,
-  message: TelegramWireMessage,
-  cause: TelegramMediaDownloadPolicyCause
+  files: FileSubsystem,
+  message: Message,
+  cause: MediaDownloadPolicyCause
 ): Promise<void> {
   return files.recordMessageFiles(message, cause);
 }
 
 export function recordMessageContentFiles(
-  files: TelegramFileSubsystem,
-  update: TelegramWireMessageContentUpdate,
-  cause: TelegramMediaDownloadPolicyCause
+  files: FileSubsystem,
+  update: MessageContentUpdate,
+  cause: MediaDownloadPolicyCause
 ): Promise<void> {
   return files.recordMessageContentFiles(update, cause);
 }
@@ -326,12 +273,58 @@ function openedMessageContent(content: JsonValue): JsonValue {
   return content;
 }
 
-function isJsonObject(value: JsonValue): value is JsonObject {
+export function interactionInfoWithoutReactions(
+  input: TelegramMessageInteractionInfo | null | undefined
+): JsonValue | undefined {
+  if (input === undefined) {
+    return undefined;
+  }
+  const value = tdJsonValue(input);
+  if (!isJsonObject(value)) {
+    return value;
+  }
+  const withoutReactions = { ...value };
+  delete withoutReactions.reactions;
+  return withoutReactions;
+}
+
+export function reactionStateFromInteractionInfo(
+  input: TelegramMessageInteractionInfo | null | undefined
+): JsonValue | undefined {
+  return input === undefined ? undefined : (tdJsonValue(input?.reactions ?? null) ?? null);
+}
+
+async function readReactionStateForUpdate(
+  database: Database,
+  input: {
+    chatId: string;
+    messageId: string;
+  }
+): Promise<JsonValue | null> {
+  const [row] = await database
+    .select({ reactions: telegramMessages.reactions })
+    .from(telegramMessages)
+    .where(and(eq(telegramMessages.chatId, input.chatId), eq(telegramMessages.id, input.messageId)))
+    .for('update');
+
+  return row?.reactions ?? null;
+}
+
+function reactionStateWithSummaries(
+  current: JsonValue | null,
+  reactions: readonly TelegramMessageReaction[]
+): JsonValue {
+  const state = isJsonObject(current) ? { ...current } : {};
+  state.reactions = requiredJsonValue(reactions);
+  return state;
+}
+
+function isJsonObject(value: JsonValue | undefined): value is JsonObject {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function requiredTelegramWireJsonValue(value: unknown): JsonValue {
-  const json = telegramWireJsonValue(value);
+function requiredJsonValue(value: unknown): JsonValue {
+  const json = tdJsonValue(value);
   if (json === undefined) {
     throw new Error('Expected Telegram wire JSON value');
   }
