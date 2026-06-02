@@ -1,8 +1,8 @@
-import type { JsonValue } from '@agentg/events/json';
+import type { JsonValue } from '@agentg/framework';
 
-import type { TelegramDatabase } from '../database/client.js';
+import type { Database } from '../database/client.js';
 import { telegramTextCompositionStyles } from '../database/schema.js';
-import { telegramWireJsonValue } from '../tdlib/wire.js';
+import { tdJsonValue } from '../tdlib/value.js';
 
 type TextCompositionStyleRuntimeRecord = Record<string, unknown> & {
   readonly creator_user_id?: unknown;
@@ -17,7 +17,7 @@ type TextCompositionStyleRuntimeRecord = Record<string, unknown> & {
 };
 
 export async function replaceTextCompositionStyles(
-  database: TelegramDatabase,
+  database: Database,
   styles: readonly unknown[]
 ): Promise<void> {
   const rows = styles.map(textCompositionStyleRow);
@@ -123,5 +123,5 @@ function nullableJsonField(
   if (value === undefined || value === null) {
     return null;
   }
-  return telegramWireJsonValue(value) ?? null;
+  return tdJsonValue(value) ?? null;
 }

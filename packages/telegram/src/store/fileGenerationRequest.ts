@@ -1,12 +1,12 @@
-import type { TelegramDatabase } from '../database/client.js';
+import type { Database } from '../database/client.js';
 import { telegramFileGenerationRequests } from '../database/schema.js';
-import type { TelegramWireUpdateByType } from '../tdlib/wire.js';
+import { type UpdateByType } from '../tdlib/value.js';
 
-type TelegramWireFileGenerationStartUpdate = TelegramWireUpdateByType<'updateFileGenerationStart'>;
+type FileGenerationStartUpdate = UpdateByType<'updateFileGenerationStart'>;
 
 export async function upsertFileGenerationRequest(
-  database: TelegramDatabase,
-  update: TelegramWireFileGenerationStartUpdate
+  database: Database,
+  update: FileGenerationStartUpdate
 ): Promise<void> {
   const row: typeof telegramFileGenerationRequests.$inferInsert = {
     conversion: update.conversion,

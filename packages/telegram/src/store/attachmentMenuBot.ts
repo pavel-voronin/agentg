@@ -1,20 +1,15 @@
-import type { JsonValue } from '@agentg/events/json';
+import type { JsonValue } from '@agentg/framework';
 
-import type { TelegramDatabase } from '../database/client.js';
+import type { Database } from '../database/client.js';
 import { telegramAttachmentMenuBots, telegramFiles } from '../database/schema.js';
-import {
-  telegramWireJsonObject,
-  telegramWireJsonValue,
-  type TelegramWireFile,
-  type TelegramWireUpdateByType
-} from '../tdlib/wire.js';
+import { tdJsonObject, tdJsonValue, type UpdateByType } from '../tdlib/value.js';
+import type { file as File } from 'tdlib-types';
 
-type TelegramWireAttachmentMenuBot =
-  TelegramWireUpdateByType<'updateAttachmentMenuBots'>['bots'][number];
+type AttachmentMenuBot = UpdateByType<'updateAttachmentMenuBots'>['bots'][number];
 
 export async function replaceAttachmentMenuBots(
-  database: TelegramDatabase,
-  bots: TelegramWireAttachmentMenuBot[]
+  database: Database,
+  bots: AttachmentMenuBot[]
 ): Promise<void> {
   await database.transaction(async (transaction) => {
     await storeAttachmentMenuBotFiles(transaction, bots);
@@ -27,8 +22,8 @@ export async function replaceAttachmentMenuBots(
 }
 
 async function storeAttachmentMenuBotFiles(
-  database: TelegramDatabase,
-  bots: TelegramWireAttachmentMenuBot[]
+  database: Database,
+  bots: AttachmentMenuBot[]
 ): Promise<void> {
   const storedFileIds = new Set<number>();
 
@@ -43,12 +38,12 @@ async function storeAttachmentMenuBotFiles(
   }
 }
 
-async function storeFile(database: TelegramDatabase, file: TelegramWireFile): Promise<void> {
+async function storeFile(database: Database, file: File): Promise<void> {
   const row: typeof telegramFiles.$inferInsert = {
     expectedSize: String(file.expected_size),
     id: file.id,
-    local: telegramWireJsonObject(file.local),
-    remote: telegramWireJsonObject(file.remote),
+    local: tdJsonObject(file.local),
+    remote: tdJsonObject(file.remote),
     size: nullablePositiveId(file.size)
   };
 
@@ -59,14 +54,14 @@ async function storeFile(database: TelegramDatabase, file: TelegramWireFile): Pr
 }
 
 function attachmentMenuBotRow(
-  bot: TelegramWireAttachmentMenuBot
+  bot: AttachmentMenuBot
 ): typeof telegramAttachmentMenuBots.$inferInsert {
   return {
     androidIconFileId: bot.android_icon?.id ?? null,
     androidSideMenuIconFileId: bot.android_side_menu_icon?.id ?? null,
     botUserId: String(bot.bot_user_id),
     defaultIconFileId: bot.default_icon?.id ?? null,
-    iconColor: nullableTelegramWireJsonValue(bot.icon_color ?? null),
+    iconColor: nullableJsonValue(bot.icon_color ?? null),
     iosAnimatedIconFileId: bot.ios_animated_icon?.id ?? null,
     iosSideMenuIconFileId: bot.ios_side_menu_icon?.id ?? null,
     iosStaticIconFileId: bot.ios_static_icon?.id ?? null,
@@ -74,7 +69,7 @@ function attachmentMenuBotRow(
     macosIconFileId: bot.macos_icon?.id ?? null,
     macosSideMenuIconFileId: bot.macos_side_menu_icon?.id ?? null,
     name: bot.name,
-    nameColor: nullableTelegramWireJsonValue(bot.name_color ?? null),
+    nameColor: nullableJsonValue(bot.name_color ?? null),
     requestWriteAccess: bot.request_write_access,
     showDisclaimerInSideMenu: bot.show_disclaimer_in_side_menu,
     showInAttachmentMenu: bot.show_in_attachment_menu,
@@ -88,7 +83,7 @@ function attachmentMenuBotRow(
   };
 }
 
-function* attachmentMenuBotFiles(bot: TelegramWireAttachmentMenuBot): Generator<TelegramWireFile> {
+function* attachmentMenuBotFiles(bot: AttachmentMenuBot): Generator<File> {
   const files = [
     bot.default_icon,
     bot.ios_static_icon,
@@ -112,6 +107,6 @@ function nullablePositiveId(value: number): string | null {
   return value > 0 ? String(value) : null;
 }
 
-function nullableTelegramWireJsonValue(value: unknown): JsonValue | null {
-  return telegramWireJsonValue(value) ?? null;
+function nullableJsonValue(value: unknown): JsonValue | null {
+  return tdJsonValue(value) ?? null;
 }

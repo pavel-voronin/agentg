@@ -1,23 +1,23 @@
-import type { JsonValue } from '@agentg/events/json';
+import type { JsonValue } from '@agentg/framework';
 
-import type { TelegramDatabase } from '../database/client.js';
-import { telegramChatRef, telegramUserRef } from '../model/refs.js';
+import type { Database } from '../database/client.js';
+import { chatRef, userRef } from '../model/refs.js';
 import { telegramStarRevenueStatuses } from '../database/schema.js';
-import { telegramWireJsonValue, type TelegramWireUpdateByType } from '../tdlib/wire.js';
+import { tdJsonValue, type UpdateByType } from '../tdlib/value.js';
 
-type TelegramWireStarRevenueStatusUpdate = TelegramWireUpdateByType<'updateStarRevenueStatus'>;
+type StarRevenueStatusUpdate = UpdateByType<'updateStarRevenueStatus'>;
 
 export async function upsertStarRevenueStatus(
-  database: TelegramDatabase,
-  update: TelegramWireStarRevenueStatusUpdate
+  database: Database,
+  update: StarRevenueStatusUpdate
 ): Promise<void> {
   const status = update.status;
   const row: typeof telegramStarRevenueStatuses.$inferInsert = {
-    availableAmount: requiredTelegramWireJsonValue(status.available_amount),
-    currentAmount: requiredTelegramWireJsonValue(status.current_amount),
+    availableAmount: requiredJsonValue(status.available_amount),
+    currentAmount: requiredJsonValue(status.current_amount),
     nextWithdrawalIn: status.next_withdrawal_in,
     ownerId: starRevenueOwnerId(update.owner_id),
-    totalAmount: requiredTelegramWireJsonValue(status.total_amount),
+    totalAmount: requiredJsonValue(status.total_amount),
     withdrawalEnabled: status.withdrawal_enabled
   };
 
@@ -27,7 +27,7 @@ export async function upsertStarRevenueStatus(
   });
 }
 
-function starRevenueOwnerId(owner: TelegramWireStarRevenueStatusUpdate['owner_id']): string {
+function starRevenueOwnerId(owner: StarRevenueStatusUpdate['owner_id']): string {
   const ownerRecord = owner as {
     _: string;
     chat_id?: number;
@@ -35,18 +35,18 @@ function starRevenueOwnerId(owner: TelegramWireStarRevenueStatusUpdate['owner_id
   };
 
   if (ownerRecord._ === 'messageSenderUser' && ownerRecord.user_id !== undefined) {
-    const ref = telegramUserRef(String(ownerRecord.user_id));
+    const ref = userRef(String(ownerRecord.user_id));
     return `${ref._model}:${ref.id}`;
   }
   if (ownerRecord._ === 'messageSenderChat' && ownerRecord.chat_id !== undefined) {
-    const ref = telegramChatRef(String(ownerRecord.chat_id));
+    const ref = chatRef(String(ownerRecord.chat_id));
     return `${ref._model}:${ref.id}`;
   }
   throw new Error('Unsupported star revenue owner');
 }
 
-function requiredTelegramWireJsonValue(value: unknown): JsonValue {
-  const json = telegramWireJsonValue(value);
+function requiredJsonValue(value: unknown): JsonValue {
+  const json = tdJsonValue(value);
   if (json === undefined) {
     throw new Error('Expected Telegram wire JSON value');
   }

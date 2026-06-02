@@ -1,18 +1,18 @@
 import { inArray } from 'drizzle-orm';
 
-import type { JsonValue } from '@agentg/events/json';
+import type { JsonValue } from '@agentg/framework';
 
-import type { TelegramDatabase } from '../database/client.js';
+import type { Database } from '../database/client.js';
 import { telegramSuggestedActions } from '../database/schema.js';
-import { telegramWireJsonValue, type TelegramWireUpdateByType } from '../tdlib/wire.js';
+import { tdJsonValue, type UpdateByType } from '../tdlib/value.js';
 
-type TelegramWireSuggestedActionsUpdate = TelegramWireUpdateByType<'updateSuggestedActions'>;
-type TelegramWireSuggestedAction = TelegramWireSuggestedActionsUpdate['added_actions'][number];
+type SuggestedActionsUpdate = UpdateByType<'updateSuggestedActions'>;
+type SuggestedAction = SuggestedActionsUpdate['added_actions'][number];
 type TelegramSuggestedActionRow = typeof telegramSuggestedActions.$inferInsert;
 
 export async function applySuggestedActionsDelta(
-  database: TelegramDatabase,
-  update: TelegramWireSuggestedActionsUpdate
+  database: Database,
+  update: SuggestedActionsUpdate
 ): Promise<void> {
   const removedActionKeys = [...new Set(update.removed_actions.map(suggestedActionKey))];
 
@@ -33,7 +33,7 @@ export async function applySuggestedActionsDelta(
   });
 }
 
-function suggestedActionRow(action: TelegramWireSuggestedAction): TelegramSuggestedActionRow {
+function suggestedActionRow(action: SuggestedAction): TelegramSuggestedActionRow {
   const row: TelegramSuggestedActionRow = {
     actionKey: suggestedActionKey(action),
     authorizationDelay: null,
@@ -50,9 +50,9 @@ function suggestedActionRow(action: TelegramWireSuggestedAction): TelegramSugges
     case 'suggestedActionCustom':
       return {
         ...row,
-        description: requiredTelegramWireJsonValue(action.description),
+        description: requiredJsonValue(action.description),
         name: action.name,
-        title: requiredTelegramWireJsonValue(action.title),
+        title: requiredJsonValue(action.title),
         url: action.url
       };
     case 'suggestedActionConvertToBroadcastGroup':
@@ -84,7 +84,7 @@ function suggestedActionRow(action: TelegramWireSuggestedAction): TelegramSugges
   return assertNeverSuggestedAction(action);
 }
 
-function suggestedActionKey(action: TelegramWireSuggestedAction): string {
+function suggestedActionKey(action: SuggestedAction): string {
   switch (action._) {
     case 'suggestedActionCustom':
       return `suggestedActionCustom:${action.name}`;
@@ -111,8 +111,8 @@ function suggestedActionKey(action: TelegramWireSuggestedAction): string {
   return assertNeverSuggestedAction(action);
 }
 
-function requiredTelegramWireJsonValue(value: unknown): JsonValue {
-  const json = telegramWireJsonValue(value);
+function requiredJsonValue(value: unknown): JsonValue {
+  const json = tdJsonValue(value);
   if (json === undefined) {
     throw new Error('Expected Telegram wire JSON value');
   }

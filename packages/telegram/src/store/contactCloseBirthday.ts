@@ -1,15 +1,13 @@
-import type { TelegramDatabase } from '../database/client.js';
+import type { Database } from '../database/client.js';
 import { telegramCloseBirthdayUsers } from '../database/schema.js';
-import { telegramWireJsonObject, type TelegramWireUpdateByType } from '../tdlib/wire.js';
+import { tdJsonObject, type UpdateByType } from '../tdlib/value.js';
 
-type TelegramWireContactCloseBirthdaysUpdate =
-  TelegramWireUpdateByType<'updateContactCloseBirthdays'>;
-type TelegramWireCloseBirthdayUser =
-  TelegramWireContactCloseBirthdaysUpdate['close_birthday_users'][number];
+type ContactCloseBirthdaysUpdate = UpdateByType<'updateContactCloseBirthdays'>;
+type CloseBirthdayUser = ContactCloseBirthdaysUpdate['close_birthday_users'][number];
 
 export async function replaceContactCloseBirthdayUsers(
-  database: TelegramDatabase,
-  closeBirthdayUsers: readonly TelegramWireCloseBirthdayUser[]
+  database: Database,
+  closeBirthdayUsers: readonly CloseBirthdayUser[]
 ): Promise<void> {
   await database.transaction(async (transaction) => {
     await transaction.delete(telegramCloseBirthdayUsers);
@@ -23,10 +21,10 @@ export async function replaceContactCloseBirthdayUsers(
 }
 
 function contactCloseBirthdayUserRow(
-  closeBirthdayUser: TelegramWireCloseBirthdayUser
+  closeBirthdayUser: CloseBirthdayUser
 ): typeof telegramCloseBirthdayUsers.$inferInsert {
   return {
-    birthdate: telegramWireJsonObject(closeBirthdayUser.birthdate),
+    birthdate: tdJsonObject(closeBirthdayUser.birthdate),
     userId: String(closeBirthdayUser.user_id)
   };
 }

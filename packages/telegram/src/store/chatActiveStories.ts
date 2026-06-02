@@ -1,15 +1,14 @@
-import type { JsonValue } from '@agentg/events/json';
+import type { JsonValue } from '@agentg/framework';
 
-import type { TelegramDatabase } from '../database/client.js';
+import type { Database } from '../database/client.js';
 import { telegramChatActiveStories } from '../database/schema.js';
-import { telegramWireJsonValue, type TelegramWireUpdateByType } from '../tdlib/wire.js';
+import { tdJsonValue, type UpdateByType } from '../tdlib/value.js';
 
-type TelegramWireChatActiveStories =
-  TelegramWireUpdateByType<'updateChatActiveStories'>['active_stories'];
+type ChatActiveStories = UpdateByType<'updateChatActiveStories'>['active_stories'];
 
 export async function storeChatActiveStories(
-  database: TelegramDatabase,
-  activeStories: TelegramWireChatActiveStories
+  database: Database,
+  activeStories: ChatActiveStories
 ): Promise<void> {
   const row = chatActiveStoriesRow(activeStories);
 
@@ -20,20 +19,20 @@ export async function storeChatActiveStories(
 }
 
 function chatActiveStoriesRow(
-  activeStories: TelegramWireChatActiveStories
+  activeStories: ChatActiveStories
 ): typeof telegramChatActiveStories.$inferInsert {
   return {
     canBeArchived: activeStories.can_be_archived,
     chatId: String(activeStories.chat_id),
-    list: telegramWireJsonValue(activeStories.list ?? null) ?? null,
+    list: tdJsonValue(activeStories.list ?? null) ?? null,
     maxReadStoryId: activeStories.max_read_story_id,
     order: String(activeStories.order),
-    stories: requiredTelegramWireJsonValue(activeStories.stories)
+    stories: requiredJsonValue(activeStories.stories)
   };
 }
 
-function requiredTelegramWireJsonValue(value: unknown): JsonValue {
-  const json = telegramWireJsonValue(value);
+function requiredJsonValue(value: unknown): JsonValue {
+  const json = tdJsonValue(value);
   if (json === undefined) {
     throw new Error('Expected Telegram wire JSON value');
   }

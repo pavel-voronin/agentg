@@ -1,12 +1,12 @@
-import type { TelegramDatabase } from '../database/client.js';
+import type { Database } from '../database/client.js';
 import { telegramChatRevenueAmounts } from '../database/schema.js';
-import type { TelegramWireUpdateByType } from '../tdlib/wire.js';
+import { type UpdateByType } from '../tdlib/value.js';
 
-type TelegramWireChatRevenueAmountUpdate = TelegramWireUpdateByType<'updateChatRevenueAmount'>;
+type ChatRevenueAmountUpdate = UpdateByType<'updateChatRevenueAmount'>;
 
 export async function storeChatRevenueAmount(
-  database: TelegramDatabase,
-  update: TelegramWireChatRevenueAmountUpdate
+  database: Database,
+  update: ChatRevenueAmountUpdate
 ): Promise<void> {
   const row = chatRevenueAmountRow(update);
 
@@ -17,7 +17,7 @@ export async function storeChatRevenueAmount(
 }
 
 function chatRevenueAmountRow(
-  update: TelegramWireChatRevenueAmountUpdate
+  update: ChatRevenueAmountUpdate
 ): typeof telegramChatRevenueAmounts.$inferInsert {
   const amount = update.revenue_amount;
 

@@ -1,18 +1,17 @@
-import type { TelegramDatabase } from '../database/client.js';
-import type { TelegramWireUpdateByType } from '../tdlib/wire.js';
+import type { Database } from '../database/client.js';
+import { type UpdateByType } from '../tdlib/value.js';
 import { storeTelegramBackground } from './chatBackground.js';
 import { upsertTelegramKv } from './kv.js';
 
 export const TELEGRAM_EMOJI_CHAT_THEMES_KV_KEY = 'emoji_chat_themes';
 
-type TelegramWireEmojiChatTheme =
-  TelegramWireUpdateByType<'updateEmojiChatThemes'>['chat_themes'][number];
-type TelegramWireThemeSettings = TelegramWireEmojiChatTheme['light_settings'];
-type TelegramWireBackground = NonNullable<TelegramWireThemeSettings['background']>;
+type EmojiChatTheme = UpdateByType<'updateEmojiChatThemes'>['chat_themes'][number];
+type ThemeSettings = EmojiChatTheme['light_settings'];
+type Background = NonNullable<ThemeSettings['background']>;
 
 export async function storeEmojiChatThemes(
-  database: TelegramDatabase,
-  themes: TelegramWireEmojiChatTheme[]
+  database: Database,
+  themes: EmojiChatTheme[]
 ): Promise<void> {
   await database.transaction(async (transaction) => {
     const storedBackgroundIds = new Set<string>();
@@ -30,9 +29,7 @@ export async function storeEmojiChatThemes(
   });
 }
 
-function* themeBackgrounds(
-  themes: TelegramWireEmojiChatTheme[]
-): Generator<TelegramWireBackground> {
+function* themeBackgrounds(themes: EmojiChatTheme[]): Generator<Background> {
   for (const theme of themes) {
     const lightBackground = theme.light_settings.background ?? null;
     if (lightBackground !== null) {

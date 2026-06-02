@@ -1,17 +1,14 @@
-import type { JsonValue } from '@agentg/events/json';
+import type { JsonValue } from '@agentg/framework';
 
-import type { TelegramDatabase } from '../database/client.js';
+import type { Database } from '../database/client.js';
 import { telegramStickerSets } from '../database/schema.js';
-import { telegramWireJsonValue, type TelegramWireUpdateByType } from '../tdlib/wire.js';
+import { tdJsonValue, type UpdateByType } from '../tdlib/value.js';
 
-type TelegramWireStickerSet = TelegramWireUpdateByType<'updateStickerSet'>['sticker_set'];
+type StickerSet = UpdateByType<'updateStickerSet'>['sticker_set'];
 
-export async function upsertStickerSet(
-  database: TelegramDatabase,
-  stickerSet: TelegramWireStickerSet
-): Promise<void> {
+export async function upsertStickerSet(database: Database, stickerSet: StickerSet): Promise<void> {
   const row: typeof telegramStickerSets.$inferInsert = {
-    emojis: requiredTelegramWireJsonValue(stickerSet.emojis),
+    emojis: requiredJsonValue(stickerSet.emojis),
     id: stickerSet.id,
     isAllowedAsChatEmojiStatus: stickerSet.is_allowed_as_chat_emoji_status,
     isArchived: stickerSet.is_archived,
@@ -21,10 +18,10 @@ export async function upsertStickerSet(
     isViewed: stickerSet.is_viewed,
     name: stickerSet.name,
     needsRepainting: stickerSet.needs_repainting,
-    stickerType: requiredTelegramWireJsonValue(stickerSet.sticker_type),
-    stickers: requiredTelegramWireJsonValue(stickerSet.stickers),
-    thumbnail: requiredTelegramWireJsonValue(stickerSet.thumbnail ?? null),
-    thumbnailOutline: requiredTelegramWireJsonValue(stickerSet.thumbnail_outline ?? null),
+    stickerType: requiredJsonValue(stickerSet.sticker_type),
+    stickers: requiredJsonValue(stickerSet.stickers),
+    thumbnail: requiredJsonValue(stickerSet.thumbnail ?? null),
+    thumbnailOutline: requiredJsonValue(stickerSet.thumbnail_outline ?? null),
     title: stickerSet.title
   };
 
@@ -34,8 +31,8 @@ export async function upsertStickerSet(
   });
 }
 
-function requiredTelegramWireJsonValue(value: unknown): JsonValue {
-  const json = telegramWireJsonValue(value);
+function requiredJsonValue(value: unknown): JsonValue {
+  const json = tdJsonValue(value);
   if (json === undefined) {
     throw new Error('Expected Telegram wire JSON value');
   }

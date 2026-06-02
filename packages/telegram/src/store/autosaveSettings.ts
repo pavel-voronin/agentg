@@ -1,14 +1,12 @@
 import { eq } from 'drizzle-orm';
 
-import type { TelegramDatabase } from '../database/client.js';
+import type { Database } from '../database/client.js';
 import { telegramAutosaveSettings } from '../database/schema.js';
-import type { TelegramWireUpdateByType } from '../tdlib/wire.js';
+import { type UpdateByType } from '../tdlib/value.js';
 
-type TelegramWireAutosaveSettingsUpdate = TelegramWireUpdateByType<'updateAutosaveSettings'>;
-type TelegramWireAutosaveSettingsScope = TelegramWireAutosaveSettingsUpdate['scope'];
-type TelegramWireScopeAutosaveSettings = NonNullable<
-  TelegramWireAutosaveSettingsUpdate['settings']
->;
+type AutosaveSettingsUpdate = UpdateByType<'updateAutosaveSettings'>;
+type AutosaveSettingsScope = AutosaveSettingsUpdate['scope'];
+type ScopeAutosaveSettings = NonNullable<AutosaveSettingsUpdate['settings']>;
 
 export type StoreAutosaveSettingsResult = {
   hasSettings: boolean;
@@ -16,8 +14,8 @@ export type StoreAutosaveSettingsResult = {
 };
 
 export async function storeAutosaveSettings(
-  database: TelegramDatabase,
-  update: TelegramWireAutosaveSettingsUpdate
+  database: Database,
+  update: AutosaveSettingsUpdate
 ): Promise<StoreAutosaveSettingsResult> {
   const scopeKey = autosaveSettingsScopeKey(update.scope);
   const settings = update.settings ?? null;
@@ -40,7 +38,7 @@ export async function storeAutosaveSettings(
 
 function autosaveSettingsRow(
   scopeKey: string,
-  settings: TelegramWireScopeAutosaveSettings
+  settings: ScopeAutosaveSettings
 ): typeof telegramAutosaveSettings.$inferInsert {
   return {
     autosavePhotos: settings.autosave_photos,
@@ -50,7 +48,7 @@ function autosaveSettingsRow(
   };
 }
 
-function autosaveSettingsScopeKey(scope: TelegramWireAutosaveSettingsScope): string {
+function autosaveSettingsScopeKey(scope: AutosaveSettingsScope): string {
   switch (scope._) {
     case 'autosaveSettingsScopePrivateChats':
       return 'private_chats';

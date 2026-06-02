@@ -1,15 +1,15 @@
 import { eq } from 'drizzle-orm';
 
-import type { JsonValue } from '@agentg/events/json';
+import type { JsonValue } from '@agentg/framework';
 
-import type { TelegramDatabase } from '../database/client.js';
+import type { Database } from '../database/client.js';
 import { telegramKv } from '../database/schema.js';
-import type { TelegramWireUpdateByType } from '../tdlib/wire.js';
+import { type UpdateByType } from '../tdlib/value.js';
 import { storeTelegramBackground } from './chatBackground.js';
 import { deleteTelegramKv, upsertTelegramKv } from './kv.js';
 
-type TelegramWireDefaultBackgroundUpdate = TelegramWireUpdateByType<'updateDefaultBackground'>;
-type TelegramWireBackground = NonNullable<TelegramWireDefaultBackgroundUpdate['background']>;
+type DefaultBackgroundUpdate = UpdateByType<'updateDefaultBackground'>;
+type Background = NonNullable<DefaultBackgroundUpdate['background']>;
 
 export type TelegramDefaultBackgroundScope = 'dark' | 'light';
 
@@ -43,9 +43,9 @@ export function defaultBackgroundScopeFromKey(
 }
 
 export async function storeDefaultBackgroundSelection(
-  database: TelegramDatabase,
+  database: Database,
   forDarkTheme: boolean,
-  background: TelegramWireBackground | null
+  background: Background | null
 ): Promise<TelegramDefaultBackgroundSelection> {
   const key = defaultBackgroundKvKey(forDarkTheme);
   const scope: TelegramDefaultBackgroundScope = forDarkTheme ? 'dark' : 'light';
@@ -71,7 +71,7 @@ export async function storeDefaultBackgroundSelection(
 }
 
 export async function readDefaultBackgroundSelection(
-  database: TelegramDatabase,
+  database: Database,
   key: string
 ): Promise<TelegramDefaultBackgroundSelection | null> {
   const scope = defaultBackgroundScopeFromKey(key);

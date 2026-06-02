@@ -1,21 +1,13 @@
-import type { JsonValue } from '@agentg/events/json';
+import type { JsonValue } from '@agentg/framework';
 
-import type { TelegramDatabase } from '../database/client.js';
+import type { Database } from '../database/client.js';
 import { telegramFiles, telegramStickers } from '../database/schema.js';
-import {
-  telegramWireId,
-  telegramWireJsonObject,
-  telegramWireJsonValue,
-  type TelegramWireFile,
-  type TelegramWireUpdateByType
-} from '../tdlib/wire.js';
+import { tdId, tdJsonObject, tdJsonValue, type UpdateByType } from '../tdlib/value.js';
+import type { file as File } from 'tdlib-types';
 
-type TelegramWireSticker = TelegramWireUpdateByType<'updateAnimatedEmojiMessageClicked'>['sticker'];
+type Sticker = UpdateByType<'updateAnimatedEmojiMessageClicked'>['sticker'];
 
-export async function storeSticker(
-  database: TelegramDatabase,
-  sticker: TelegramWireSticker
-): Promise<void> {
+export async function storeSticker(database: Database, sticker: Sticker): Promise<void> {
   await storeFile(database, sticker.sticker);
 
   const thumbnail = sticker.thumbnail ?? null;
@@ -26,12 +18,12 @@ export async function storeSticker(
   const row: typeof telegramStickers.$inferInsert = {
     emoji: sticker.emoji,
     fileId: sticker.sticker.id,
-    format: telegramWireJsonObject(sticker.format),
-    fullType: telegramWireJsonObject(sticker.full_type),
+    format: tdJsonObject(sticker.format),
+    fullType: tdJsonObject(sticker.full_type),
     height: sticker.height,
     id: nullableZeroId(sticker.id),
     setId: nullableZeroId(sticker.set_id),
-    thumbnail: requiredTelegramWireJsonValue(thumbnail),
+    thumbnail: requiredJsonValue(thumbnail),
     width: sticker.width
   };
 
@@ -41,12 +33,12 @@ export async function storeSticker(
   });
 }
 
-async function storeFile(database: TelegramDatabase, file: TelegramWireFile): Promise<void> {
+async function storeFile(database: Database, file: File): Promise<void> {
   const row: typeof telegramFiles.$inferInsert = {
     expectedSize: String(file.expected_size),
     id: file.id,
-    local: telegramWireJsonObject(file.local),
-    remote: telegramWireJsonObject(file.remote),
+    local: tdJsonObject(file.local),
+    remote: tdJsonObject(file.remote),
     size: nullablePositiveId(file.size)
   };
 
@@ -57,7 +49,7 @@ async function storeFile(database: TelegramDatabase, file: TelegramWireFile): Pr
 }
 
 function nullableZeroId(value: number | string | null | undefined): string | null {
-  const id = telegramWireId(value);
+  const id = tdId(value);
   return id === undefined || id === '0' ? null : id;
 }
 
@@ -65,8 +57,8 @@ function nullablePositiveId(value: number): string | null {
   return value > 0 ? String(value) : null;
 }
 
-function requiredTelegramWireJsonValue(value: unknown): JsonValue {
-  const json = telegramWireJsonValue(value);
+function requiredJsonValue(value: unknown): JsonValue {
+  const json = tdJsonValue(value);
   if (json === undefined) {
     throw new Error('Expected Telegram wire JSON value');
   }

@@ -1,17 +1,16 @@
-import type { TelegramDatabase } from '../database/client.js';
+import type { Database } from '../database/client.js';
 import { telegramNotificationSettings } from '../database/schema.js';
-import type { TelegramWireUpdateByType } from '../tdlib/wire.js';
+import { type UpdateByType } from '../tdlib/value.js';
 
-type TelegramWireNotificationSettingsScope =
-  TelegramWireUpdateByType<'updateScopeNotificationSettings'>['scope'];
-type TelegramWireScopeNotificationSettings =
-  TelegramWireUpdateByType<'updateScopeNotificationSettings'>['notification_settings'];
+type NotificationSettingsScope = UpdateByType<'updateScopeNotificationSettings'>['scope'];
+type ScopeNotificationSettings =
+  UpdateByType<'updateScopeNotificationSettings'>['notification_settings'];
 
 export async function upsertScopeNotificationSettings(
-  database: TelegramDatabase,
+  database: Database,
   input: {
-    notificationSettings: TelegramWireScopeNotificationSettings;
-    scope: TelegramWireNotificationSettingsScope;
+    notificationSettings: ScopeNotificationSettings;
+    scope: NotificationSettingsScope;
   }
 ): Promise<string> {
   const scopeKey = notificationSettingsScopeKey(input.scope);
@@ -37,7 +36,7 @@ export async function upsertScopeNotificationSettings(
   return scopeKey;
 }
 
-export function notificationSettingsScopeKey(scope: TelegramWireNotificationSettingsScope): string {
+export function notificationSettingsScopeKey(scope: NotificationSettingsScope): string {
   const scopeType: string = scope._;
 
   if (scopeType === 'notificationSettingsScopePrivateChats') {

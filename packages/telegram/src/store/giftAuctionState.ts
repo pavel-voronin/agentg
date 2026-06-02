@@ -1,6 +1,6 @@
-import type { JsonValue } from '@agentg/events/json';
+import type { JsonValue } from '@agentg/framework';
 
-import type { TelegramDatabase } from '../database/client.js';
+import type { Database } from '../database/client.js';
 import {
   telegramFiles,
   telegramGiftAuctionStates,
@@ -8,22 +8,17 @@ import {
   telegramGifts,
   telegramStickers
 } from '../database/schema.js';
-import {
-  telegramWireJsonObject,
-  telegramWireJsonValue,
-  type TelegramWireFile,
-  type TelegramWireUpdateByType
-} from '../tdlib/wire.js';
+import { tdJsonObject, tdJsonValue, type UpdateByType } from '../tdlib/value.js';
+import type { file as File } from 'tdlib-types';
 
-type TelegramWireGiftAuctionState =
-  TelegramWireUpdateByType<'updateActiveGiftAuctions'>['states'][number];
-type TelegramWireGift = TelegramWireGiftAuctionState['gift'];
-type TelegramWireGiftAuction = NonNullable<TelegramWireGift['auction_info']>;
-type TelegramWireSticker = TelegramWireGift['sticker'];
+type GiftAuctionState = UpdateByType<'updateActiveGiftAuctions'>['states'][number];
+type Gift = GiftAuctionState['gift'];
+type GiftAuction = NonNullable<Gift['auction_info']>;
+type Sticker = Gift['sticker'];
 
 export async function storeGiftAuctionStates(
-  database: TelegramDatabase,
-  states: TelegramWireGiftAuctionState[]
+  database: Database,
+  states: GiftAuctionState[]
 ): Promise<void> {
   for (const state of states) {
     await storeGiftAuctionState(database, state);
@@ -31,8 +26,8 @@ export async function storeGiftAuctionStates(
 }
 
 async function storeGiftAuctionState(
-  database: TelegramDatabase,
-  giftAuctionState: TelegramWireGiftAuctionState
+  database: Database,
+  giftAuctionState: GiftAuctionState
 ): Promise<void> {
   const gift = giftAuctionState.gift;
   const auctionInfo = requiredGiftAuctionInfo(gift);
@@ -42,7 +37,7 @@ async function storeGiftAuctionState(
   const row: typeof telegramGiftAuctionStates.$inferInsert = {
     auctionId: auctionInfo.id,
     giftId: gift.id,
-    state: telegramWireJsonObject(giftAuctionState.state)
+    state: tdJsonObject(giftAuctionState.state)
   };
 
   await database.insert(telegramGiftAuctionStates).values(row).onConflictDoUpdate({
@@ -51,7 +46,7 @@ async function storeGiftAuctionState(
   });
 }
 
-async function storeGift(database: TelegramDatabase, gift: TelegramWireGift): Promise<void> {
+async function storeGift(database: Database, gift: Gift): Promise<void> {
   const auctionInfo = gift.auction_info ?? null;
   if (auctionInfo !== null) {
     await storeGiftAuction(database, auctionInfo);
@@ -60,7 +55,7 @@ async function storeGift(database: TelegramDatabase, gift: TelegramWireGift): Pr
 
   const row: typeof telegramGifts.$inferInsert = {
     auctionId: auctionInfo?.id ?? null,
-    background: telegramWireJsonObject(gift.background),
+    background: tdJsonObject(gift.background),
     defaultSellStarCount: String(gift.default_sell_star_count),
     firstSendDate: unixDate(gift.first_send_date),
     hasColors: gift.has_colors,
@@ -69,13 +64,13 @@ async function storeGift(database: TelegramDatabase, gift: TelegramWireGift): Pr
     isPremium: gift.is_premium,
     lastSendDate: unixDate(gift.last_send_date),
     nextSendDate: unixDate(gift.next_send_date),
-    overallLimits: requiredTelegramWireJsonValue(gift.overall_limits ?? null),
+    overallLimits: requiredJsonValue(gift.overall_limits ?? null),
     publisherChatId: nullableZeroId(gift.publisher_chat_id),
     starCount: String(gift.star_count),
     stickerFileId: gift.sticker.sticker.id,
     upgradeStarCount: String(gift.upgrade_star_count),
     upgradeVariantCount: gift.upgrade_variant_count,
-    userLimits: requiredTelegramWireJsonValue(gift.user_limits ?? null)
+    userLimits: requiredJsonValue(gift.user_limits ?? null)
   };
 
   await database.insert(telegramGifts).values(row).onConflictDoUpdate({
@@ -84,10 +79,7 @@ async function storeGift(database: TelegramDatabase, gift: TelegramWireGift): Pr
   });
 }
 
-async function storeGiftAuction(
-  database: TelegramDatabase,
-  auction: TelegramWireGiftAuction
-): Promise<void> {
+async function storeGiftAuction(database: Database, auction: GiftAuction): Promise<void> {
   const row: typeof telegramGiftAuctions.$inferInsert = {
     giftsPerRound: auction.gifts_per_round,
     id: auction.id,
@@ -100,10 +92,7 @@ async function storeGiftAuction(
   });
 }
 
-async function storeSticker(
-  database: TelegramDatabase,
-  sticker: TelegramWireSticker
-): Promise<void> {
+async function storeSticker(database: Database, sticker: Sticker): Promise<void> {
   await storeFile(database, sticker.sticker);
 
   const thumbnail = sticker.thumbnail ?? null;
@@ -114,12 +103,12 @@ async function storeSticker(
   const row: typeof telegramStickers.$inferInsert = {
     emoji: sticker.emoji,
     fileId: sticker.sticker.id,
-    format: telegramWireJsonObject(sticker.format),
-    fullType: telegramWireJsonObject(sticker.full_type),
+    format: tdJsonObject(sticker.format),
+    fullType: tdJsonObject(sticker.full_type),
     height: sticker.height,
     id: nullableZeroId(sticker.id),
     setId: nullableZeroId(sticker.set_id),
-    thumbnail: requiredTelegramWireJsonValue(thumbnail),
+    thumbnail: requiredJsonValue(thumbnail),
     width: sticker.width
   };
 
@@ -129,12 +118,12 @@ async function storeSticker(
   });
 }
 
-async function storeFile(database: TelegramDatabase, file: TelegramWireFile): Promise<void> {
+async function storeFile(database: Database, file: File): Promise<void> {
   const row: typeof telegramFiles.$inferInsert = {
     expectedSize: String(file.expected_size),
     id: file.id,
-    local: telegramWireJsonObject(file.local),
-    remote: telegramWireJsonObject(file.remote),
+    local: tdJsonObject(file.local),
+    remote: tdJsonObject(file.remote),
     size: nullablePositiveId(file.size)
   };
 
@@ -144,7 +133,7 @@ async function storeFile(database: TelegramDatabase, file: TelegramWireFile): Pr
   });
 }
 
-function requiredGiftAuctionInfo(gift: TelegramWireGift): TelegramWireGiftAuction {
+function requiredGiftAuctionInfo(gift: Gift): GiftAuction {
   const auctionInfo = gift.auction_info ?? null;
   if (auctionInfo === null) {
     throw new Error('Expected GiftAuctionState gift auction_info');
@@ -165,8 +154,8 @@ function unixDate(value: number): Date {
   return new Date(value * 1000);
 }
 
-function requiredTelegramWireJsonValue(value: unknown): JsonValue {
-  const json = telegramWireJsonValue(value);
+function requiredJsonValue(value: unknown): JsonValue {
+  const json = tdJsonValue(value);
   if (json === undefined) {
     throw new Error('Expected Telegram wire JSON value');
   }

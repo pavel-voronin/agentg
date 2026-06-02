@@ -1,15 +1,15 @@
-import type { TelegramLiveCoverageObserver } from '../history/liveCoverage.js';
-import type { TelegramWireConnectionStateUpdate } from '../tdlib/wire.js';
+import type { LiveCoverageObserver } from '../history/liveCoverage.js';
+import type { updateConnectionState as ConnectionStateUpdate } from 'tdlib-types';
 
-type TelegramConnectionStateTracker = {
+type ConnectionStateTracker = {
   markConnectionState(connectionState: string): boolean;
 };
 
 export async function recordConnectionState(
-  update: TelegramWireConnectionStateUpdate,
+  update: ConnectionStateUpdate,
   runtime: {
-    liveCoverageObserver: TelegramLiveCoverageObserver;
-    tdlibStatus: TelegramConnectionStateTracker;
+    liveCoverageObserver: LiveCoverageObserver;
+    tdlibStatus: ConnectionStateTracker;
   }
 ): Promise<void> {
   const connectedForLiveCoverage = runtime.tdlibStatus.markConnectionState(update.state._);

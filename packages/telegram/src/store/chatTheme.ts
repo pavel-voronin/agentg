@@ -1,29 +1,25 @@
-import type { JsonValue } from '@agentg/events/json';
+import type { JsonValue } from '@agentg/framework';
 
-import type { TelegramDatabase } from '../database/client.js';
+import type { Database } from '../database/client.js';
 import { telegramFiles, telegramUpgradedGifts } from '../database/schema.js';
-import {
-  telegramWireJsonObject,
-  telegramWireJsonValue,
-  type TelegramWireFile,
-  type TelegramWireUpdateByType
-} from '../tdlib/wire.js';
+import { tdJsonObject, tdJsonValue, type UpdateByType } from '../tdlib/value.js';
+import type { file as File } from 'tdlib-types';
 import { storeTelegramBackground } from './chatBackground.js';
 import { upsertTelegramChatFragment } from './chat.js';
 
-type TelegramWireChatThemeUpdate = TelegramWireUpdateByType<'updateChatTheme'>;
-type TelegramWireChatTheme = NonNullable<TelegramWireChatThemeUpdate['theme']>;
-type TelegramWireChatThemeGift = Extract<TelegramWireChatTheme, { _: 'chatThemeGift' }>;
-type TelegramWireGiftChatTheme = TelegramWireChatThemeGift['gift_theme'];
-type TelegramWireThemeSettings = TelegramWireGiftChatTheme['light_settings'];
-type TelegramWireUpgradedGift = TelegramWireGiftChatTheme['gift'];
-type TelegramWireBackground = NonNullable<TelegramWireThemeSettings['background']>;
-type TelegramWireSticker = TelegramWireUpgradedGift['model']['sticker'];
+type ChatThemeUpdate = UpdateByType<'updateChatTheme'>;
+type ChatTheme = NonNullable<ChatThemeUpdate['theme']>;
+type ChatThemeGift = Extract<ChatTheme, { _: 'chatThemeGift' }>;
+type GiftChatTheme = ChatThemeGift['gift_theme'];
+type ThemeSettings = GiftChatTheme['light_settings'];
+type UpgradedGift = GiftChatTheme['gift'];
+type Background = NonNullable<ThemeSettings['background']>;
+type Sticker = UpgradedGift['model']['sticker'];
 
 export async function storeChatTheme(
-  database: TelegramDatabase,
+  database: Database,
   chatId: string,
-  theme: TelegramWireChatTheme | null
+  theme: ChatTheme | null
 ): Promise<void> {
   await database.transaction(async (transaction) => {
     if (theme?._ === 'chatThemeGift') {
@@ -38,8 +34,8 @@ export async function storeChatTheme(
 }
 
 async function storeGiftChatThemeAssets(
-  database: TelegramDatabase,
-  giftTheme: TelegramWireGiftChatTheme
+  database: Database,
+  giftTheme: GiftChatTheme
 ): Promise<void> {
   await storeUpgradedGiftFiles(database, giftTheme.gift);
   await storeUpgradedGift(database, giftTheme.gift);
@@ -48,8 +44,8 @@ async function storeGiftChatThemeAssets(
 }
 
 async function storeThemeSettingsBackground(
-  database: TelegramDatabase,
-  settings: TelegramWireThemeSettings
+  database: Database,
+  settings: ThemeSettings
 ): Promise<void> {
   const background = settings.background ?? null;
   if (background === null) {
@@ -59,34 +55,31 @@ async function storeThemeSettingsBackground(
   await storeTelegramBackground(database, background);
 }
 
-async function storeUpgradedGift(
-  database: TelegramDatabase,
-  gift: TelegramWireUpgradedGift
-): Promise<void> {
+async function storeUpgradedGift(database: Database, gift: UpgradedGift): Promise<void> {
   const row: typeof telegramUpgradedGifts.$inferInsert = {
-    backdrop: telegramWireJsonObject(gift.backdrop),
+    backdrop: tdJsonObject(gift.backdrop),
     canSendPurchaseOffer: gift.can_send_purchase_offer,
-    colors: telegramWireJsonValue(gift.colors ?? null) ?? null,
+    colors: tdJsonValue(gift.colors ?? null) ?? null,
     craftProbabilityPerMille: gift.craft_probability_per_mille,
     giftAddress: nullableEmptyString(gift.gift_address),
-    hostId: telegramWireJsonValue(gift.host_id ?? null) ?? null,
+    hostId: tdJsonValue(gift.host_id ?? null) ?? null,
     id: gift.id,
     isBurned: gift.is_burned,
     isCrafted: gift.is_crafted,
     isPremium: gift.is_premium,
     isThemeAvailable: gift.is_theme_available,
     maxUpgradedCount: gift.max_upgraded_count,
-    model: telegramWireJsonObject(gift.model),
+    model: tdJsonObject(gift.model),
     name: gift.name,
     number: gift.number,
-    originalDetails: telegramWireJsonValue(gift.original_details ?? null) ?? null,
+    originalDetails: tdJsonValue(gift.original_details ?? null) ?? null,
     ownerAddress: nullableEmptyString(gift.owner_address),
-    ownerId: telegramWireJsonValue(gift.owner_id ?? null) ?? null,
+    ownerId: tdJsonValue(gift.owner_id ?? null) ?? null,
     ownerName: gift.owner_name,
     publisherChatId: nullableZeroId(gift.publisher_chat_id),
     regularGiftId: gift.regular_gift_id,
-    resaleParameters: telegramWireJsonValue(gift.resale_parameters ?? null) ?? null,
-    symbol: telegramWireJsonObject(gift.symbol),
+    resaleParameters: tdJsonValue(gift.resale_parameters ?? null) ?? null,
+    symbol: tdJsonObject(gift.symbol),
     title: gift.title,
     totalUpgradedCount: gift.total_upgraded_count,
     usedThemeChatId: nullableZeroId(gift.used_theme_chat_id),
@@ -101,10 +94,7 @@ async function storeUpgradedGift(
   });
 }
 
-async function storeUpgradedGiftFiles(
-  database: TelegramDatabase,
-  gift: TelegramWireUpgradedGift
-): Promise<void> {
+async function storeUpgradedGiftFiles(database: Database, gift: UpgradedGift): Promise<void> {
   const storedFileIds = new Set<number>();
 
   for (const file of upgradedGiftFiles(gift)) {
@@ -116,12 +106,12 @@ async function storeUpgradedGiftFiles(
   }
 }
 
-async function storeFile(database: TelegramDatabase, file: TelegramWireFile): Promise<void> {
+async function storeFile(database: Database, file: File): Promise<void> {
   const row: typeof telegramFiles.$inferInsert = {
     expectedSize: String(file.expected_size),
     id: file.id,
-    local: telegramWireJsonObject(file.local),
-    remote: telegramWireJsonObject(file.remote),
+    local: tdJsonObject(file.local),
+    remote: tdJsonObject(file.remote),
     size: nullablePositiveId(file.size)
   };
 
@@ -131,7 +121,7 @@ async function storeFile(database: TelegramDatabase, file: TelegramWireFile): Pr
   });
 }
 
-function chatThemeValue(theme: TelegramWireChatTheme | null): JsonValue {
+function chatThemeValue(theme: ChatTheme | null): JsonValue {
   if (theme === null) {
     return null;
   }
@@ -149,7 +139,7 @@ function chatThemeValue(theme: TelegramWireChatTheme | null): JsonValue {
   };
 }
 
-function giftChatThemeValue(giftTheme: TelegramWireGiftChatTheme): JsonValue {
+function giftChatThemeValue(giftTheme: GiftChatTheme): JsonValue {
   return {
     _: 'giftChatTheme',
     dark_settings: themeSettingsValue(giftTheme.dark_settings),
@@ -161,19 +151,19 @@ function giftChatThemeValue(giftTheme: TelegramWireGiftChatTheme): JsonValue {
   };
 }
 
-function themeSettingsValue(settings: TelegramWireThemeSettings): JsonValue {
+function themeSettingsValue(settings: ThemeSettings): JsonValue {
   return {
     _: 'themeSettings',
     accent_color: settings.accent_color,
     animate_outgoing_message_fill: settings.animate_outgoing_message_fill,
     background: backgroundReferenceValue(settings.background ?? null),
-    base_theme: telegramWireJsonObject(settings.base_theme),
+    base_theme: tdJsonObject(settings.base_theme),
     outgoing_message_accent_color: settings.outgoing_message_accent_color,
-    outgoing_message_fill: telegramWireJsonValue(settings.outgoing_message_fill ?? null) ?? null
+    outgoing_message_fill: tdJsonValue(settings.outgoing_message_fill ?? null) ?? null
   };
 }
 
-function backgroundReferenceValue(background: TelegramWireBackground | null): JsonValue {
+function backgroundReferenceValue(background: Background | null): JsonValue {
   if (background === null) {
     return null;
   }
@@ -184,12 +174,12 @@ function backgroundReferenceValue(background: TelegramWireBackground | null): Js
   };
 }
 
-function* upgradedGiftFiles(gift: TelegramWireUpgradedGift): Generator<TelegramWireFile> {
+function* upgradedGiftFiles(gift: UpgradedGift): Generator<File> {
   yield* stickerFiles(gift.model.sticker);
   yield* stickerFiles(gift.symbol.sticker);
 }
 
-function* stickerFiles(sticker: TelegramWireSticker): Generator<TelegramWireFile> {
+function* stickerFiles(sticker: Sticker): Generator<File> {
   yield sticker.sticker;
 
   const thumbnail = sticker.thumbnail ?? null;

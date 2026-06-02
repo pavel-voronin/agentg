@@ -1,20 +1,21 @@
 import { eq } from 'drizzle-orm';
 
-import type { TelegramDatabase } from '../database/client.js';
+import type { Database } from '../database/client.js';
 import { telegramFileDownloads } from '../database/schema.js';
-import { telegramWireDate, type TelegramWireMessage } from '../tdlib/wire.js';
+import { tdDate } from '../tdlib/value.js';
+import type { message as Message } from 'tdlib-types';
 
-type TelegramWireFileDownload = {
+type FileDownload = {
   add_date: number;
   complete_date: number;
   file_id: number;
   is_paused: boolean;
-  message: TelegramWireMessage;
+  message: Message;
 };
 
 export async function upsertTelegramFileDownload(
-  database: TelegramDatabase,
-  fileDownload: TelegramWireFileDownload
+  database: Database,
+  fileDownload: FileDownload
 ): Promise<void> {
   const row: typeof telegramFileDownloads.$inferInsert = {
     addDate: requiredFileDownloadDate(fileDownload.add_date, 'add_date'),
@@ -32,7 +33,7 @@ export async function upsertTelegramFileDownload(
 }
 
 export async function patchTelegramFileDownload(
-  database: TelegramDatabase,
+  database: Database,
   input: {
     completeDate: number;
     fileId: number;
@@ -54,7 +55,7 @@ export async function patchTelegramFileDownload(
 }
 
 function requiredFileDownloadDate(value: number, fieldName: string): Date {
-  const date = telegramWireDate(value);
+  const date = tdDate(value);
   if (date === undefined) {
     throw new Error(`Telegram file download has invalid ${fieldName}: ${String(value)}`);
   }
@@ -67,7 +68,7 @@ function fileDownloadCompleteDate(value: number): Date {
     return new Date(0);
   }
 
-  const date = telegramWireDate(value);
+  const date = tdDate(value);
   if (date === undefined) {
     throw new Error(`Telegram file download has invalid complete_date: ${String(value)}`);
   }

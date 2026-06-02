@@ -1,28 +1,23 @@
 import { and, eq, inArray } from 'drizzle-orm';
 
-import type { TelegramDatabase } from '../database/client.js';
+import type { Database } from '../database/client.js';
 import {
   telegramActiveNotificationGroups,
   telegramActiveNotifications
 } from '../database/schema.js';
-import {
-  telegramWireDate,
-  telegramWireId,
-  telegramWireJsonValue,
-  type TelegramWireMessage,
-  type TelegramWireUpdateByType
-} from '../tdlib/wire.js';
+import { tdDate, tdId, tdJsonValue, type UpdateByType } from '../tdlib/value.js';
+import type { message as Message } from 'tdlib-types';
 import { storeMessage } from './message.js';
 
-type TelegramWireActiveNotificationsUpdate = TelegramWireUpdateByType<'updateActiveNotifications'>;
-type TelegramWireActiveNotificationGroup = TelegramWireActiveNotificationsUpdate['groups'][number];
-type TelegramWireActiveNotification = TelegramWireActiveNotificationGroup['notifications'][number];
-type TelegramWireNotificationUpdate = TelegramWireUpdateByType<'updateNotification'>;
-type TelegramWireNotificationGroupUpdate = TelegramWireUpdateByType<'updateNotificationGroup'>;
+type ActiveNotificationsUpdate = UpdateByType<'updateActiveNotifications'>;
+type ActiveNotificationGroup = ActiveNotificationsUpdate['groups'][number];
+type ActiveNotification = ActiveNotificationGroup['notifications'][number];
+type NotificationUpdate = UpdateByType<'updateNotification'>;
+type NotificationGroupUpdate = UpdateByType<'updateNotificationGroup'>;
 
 export async function replaceActiveNotificationSnapshot(
-  database: TelegramDatabase,
-  groups: TelegramWireActiveNotificationGroup[]
+  database: Database,
+  groups: ActiveNotificationGroup[]
 ): Promise<void> {
   await database.transaction(async (transaction) => {
     for (const message of notificationMessages(groups)) {
@@ -44,10 +39,10 @@ export async function replaceActiveNotificationSnapshot(
 }
 
 export async function upsertActiveNotification(
-  database: TelegramDatabase,
+  database: Database,
   input: {
     groupId: number;
-    notification: TelegramWireNotificationUpdate['notification'];
+    notification: NotificationUpdate['notification'];
   }
 ): Promise<void> {
   await database.transaction(async (transaction) => {
@@ -76,15 +71,15 @@ export async function upsertActiveNotification(
 }
 
 export async function applyActiveNotificationGroupUpdate(
-  database: TelegramDatabase,
-  update: TelegramWireNotificationGroupUpdate
+  database: Database,
+  update: NotificationGroupUpdate
 ): Promise<void> {
   await database.transaction(async (transaction) => {
     const row: typeof telegramActiveNotificationGroups.$inferInsert = {
       chatId: String(update.chat_id),
       id: update.notification_group_id,
       notificationSettingsChatId: String(update.notification_settings_chat_id),
-      notificationSoundId: telegramWireId(update.notification_sound_id),
+      notificationSoundId: tdId(update.notification_sound_id),
       totalCount: update.total_count,
       type: update.type._
     };
@@ -132,7 +127,7 @@ export async function applyActiveNotificationGroupUpdate(
 }
 
 function groupRow(
-  group: TelegramWireActiveNotificationGroup
+  group: ActiveNotificationGroup
 ): typeof telegramActiveNotificationGroups.$inferInsert {
   return {
     chatId: String(group.chat_id),
@@ -145,14 +140,14 @@ function groupRow(
 }
 
 function notificationRows(
-  group: TelegramWireActiveNotificationGroup
+  group: ActiveNotificationGroup
 ): (typeof telegramActiveNotifications.$inferInsert)[] {
   return group.notifications.map((notification) => notificationRow(group.id, notification));
 }
 
 function notificationRow(
   groupId: number,
-  notification: TelegramWireActiveNotification
+  notification: ActiveNotification
 ): typeof telegramActiveNotifications.$inferInsert {
   const row: typeof telegramActiveNotifications.$inferInsert = {
     callId: null,
@@ -187,10 +182,10 @@ function notificationRow(
     case 'notificationTypeNewPushMessage':
       return {
         ...row,
-        pushContent: telegramWireJsonValue(notification.type.content) ?? null,
+        pushContent: tdJsonValue(notification.type.content) ?? null,
         pushIsOutgoing: notification.type.is_outgoing,
-        pushMessageId: telegramWireId(notification.type.message_id),
-        pushSenderId: telegramWireJsonValue(notification.type.sender_id) ?? null,
+        pushMessageId: tdId(notification.type.message_id),
+        pushSenderId: tdJsonValue(notification.type.sender_id) ?? null,
         pushSenderName: notification.type.sender_name
       };
     case 'notificationTypeNewSecretChat':
@@ -198,9 +193,7 @@ function notificationRow(
   }
 }
 
-function* notificationMessages(
-  groups: TelegramWireActiveNotificationGroup[]
-): Generator<TelegramWireMessage> {
+function* notificationMessages(groups: ActiveNotificationGroup[]): Generator<Message> {
   for (const group of groups) {
     for (const notification of group.notifications) {
       if (notification.type._ === 'notificationTypeNewMessage') {
@@ -211,7 +204,7 @@ function* notificationMessages(
 }
 
 function requiredTelegramDate(value: number): Date {
-  const date = telegramWireDate(value);
+  const date = tdDate(value);
   if (date === undefined) {
     throw new Error(`Active notification has invalid date: ${String(value)}`);
   }

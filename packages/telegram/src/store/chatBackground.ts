@@ -1,25 +1,21 @@
-import type { JsonValue } from '@agentg/events/json';
+import type { JsonValue } from '@agentg/framework';
 
-import type { TelegramDatabase } from '../database/client.js';
+import type { Database } from '../database/client.js';
 import { telegramBackgrounds, telegramFiles } from '../database/schema.js';
-import {
-  telegramWireJsonObject,
-  telegramWireJsonValue,
-  type TelegramWireFile,
-  type TelegramWireUpdateByType
-} from '../tdlib/wire.js';
+import { tdJsonObject, tdJsonValue, type UpdateByType } from '../tdlib/value.js';
+import type { file as File } from 'tdlib-types';
 import { upsertTelegramChatFragment } from './chat.js';
 
-type TelegramWireChatBackgroundUpdate = TelegramWireUpdateByType<'updateChatBackground'>;
-type TelegramWireChatBackground = NonNullable<TelegramWireChatBackgroundUpdate['background']>;
-type TelegramWireBackground = TelegramWireChatBackground['background'];
-type TelegramWireDocument = NonNullable<TelegramWireBackground['document']>;
-type TelegramWireThumbnail = NonNullable<TelegramWireDocument['thumbnail']>;
+type ChatBackgroundUpdate = UpdateByType<'updateChatBackground'>;
+type ChatBackground = NonNullable<ChatBackgroundUpdate['background']>;
+type Background = ChatBackground['background'];
+type Document = NonNullable<Background['document']>;
+type Thumbnail = NonNullable<Document['thumbnail']>;
 
 export async function storeChatBackground(
-  database: TelegramDatabase,
+  database: Database,
   chatId: string,
-  chatBackground: TelegramWireChatBackground | null
+  chatBackground: ChatBackground | null
 ): Promise<void> {
   await database.transaction(async (transaction) => {
     if (chatBackground !== null) {
@@ -34,24 +30,21 @@ export async function storeChatBackground(
 }
 
 export async function storeTelegramBackground(
-  database: TelegramDatabase,
-  background: TelegramWireBackground
+  database: Database,
+  background: Background
 ): Promise<void> {
   await storeBackgroundFiles(database, background);
   await storeBackgroundRow(database, background);
 }
 
-async function storeBackgroundRow(
-  database: TelegramDatabase,
-  background: TelegramWireBackground
-): Promise<void> {
+async function storeBackgroundRow(database: Database, background: Background): Promise<void> {
   const row: typeof telegramBackgrounds.$inferInsert = {
     document: backgroundDocumentValue(background.document ?? null),
     id: background.id,
     isDark: background.is_dark,
     isDefault: background.is_default,
     name: background.name,
-    type: telegramWireJsonObject(background.type)
+    type: tdJsonObject(background.type)
   };
 
   await database.insert(telegramBackgrounds).values(row).onConflictDoUpdate({
@@ -60,10 +53,7 @@ async function storeBackgroundRow(
   });
 }
 
-async function storeBackgroundFiles(
-  database: TelegramDatabase,
-  background: TelegramWireBackground
-): Promise<void> {
+async function storeBackgroundFiles(database: Database, background: Background): Promise<void> {
   const storedFileIds = new Set<number>();
 
   for (const file of backgroundFiles(background)) {
@@ -75,12 +65,12 @@ async function storeBackgroundFiles(
   }
 }
 
-async function storeFile(database: TelegramDatabase, file: TelegramWireFile): Promise<void> {
+async function storeFile(database: Database, file: File): Promise<void> {
   const row: typeof telegramFiles.$inferInsert = {
     expectedSize: String(file.expected_size),
     id: file.id,
-    local: telegramWireJsonObject(file.local),
-    remote: telegramWireJsonObject(file.remote),
+    local: tdJsonObject(file.local),
+    remote: tdJsonObject(file.remote),
     size: nullablePositiveId(file.size)
   };
 
@@ -90,9 +80,7 @@ async function storeFile(database: TelegramDatabase, file: TelegramWireFile): Pr
   });
 }
 
-function chatBackgroundReferenceValue(
-  chatBackground: TelegramWireChatBackground | null
-): JsonValue {
+function chatBackgroundReferenceValue(chatBackground: ChatBackground | null): JsonValue {
   if (chatBackground === null) {
     return null;
   }
@@ -104,7 +92,7 @@ function chatBackgroundReferenceValue(
   };
 }
 
-function backgroundDocumentValue(document: TelegramWireDocument | null): JsonValue | null {
+function backgroundDocumentValue(document: Document | null): JsonValue | null {
   if (document === null) {
     return null;
   }
@@ -115,22 +103,22 @@ function backgroundDocumentValue(document: TelegramWireDocument | null): JsonVal
     document_file_id: document.document.id,
     file_name: document.file_name,
     mime_type: document.mime_type,
-    minithumbnail: telegramWireJsonValue(document.minithumbnail ?? null) ?? null,
+    minithumbnail: tdJsonValue(document.minithumbnail ?? null) ?? null,
     thumbnail: thumbnail === null ? null : thumbnailValue(thumbnail)
   };
 }
 
-function thumbnailValue(thumbnail: TelegramWireThumbnail): JsonValue {
+function thumbnailValue(thumbnail: Thumbnail): JsonValue {
   return {
     _: 'thumbnail',
     file_id: thumbnail.file.id,
-    format: telegramWireJsonObject(thumbnail.format),
+    format: tdJsonObject(thumbnail.format),
     height: thumbnail.height,
     width: thumbnail.width
   };
 }
 
-function* backgroundFiles(background: TelegramWireBackground): Generator<TelegramWireFile> {
+function* backgroundFiles(background: Background): Generator<File> {
   const document = background.document ?? null;
   if (document === null) {
     return;

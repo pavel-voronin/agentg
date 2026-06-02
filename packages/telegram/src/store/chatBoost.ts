@@ -1,13 +1,10 @@
-import type { TelegramDatabase } from '../database/client.js';
+import type { Database } from '../database/client.js';
 import { telegramChatBoosts } from '../database/schema.js';
-import { telegramWireJsonObject, type TelegramWireUpdateByType } from '../tdlib/wire.js';
+import { tdJsonObject, type UpdateByType } from '../tdlib/value.js';
 
-type TelegramWireChatBoostUpdate = TelegramWireUpdateByType<'updateChatBoost'>;
+type ChatBoostUpdate = UpdateByType<'updateChatBoost'>;
 
-export async function storeChatBoost(
-  database: TelegramDatabase,
-  update: TelegramWireChatBoostUpdate
-): Promise<void> {
+export async function storeChatBoost(database: Database, update: ChatBoostUpdate): Promise<void> {
   const row = chatBoostRow(update);
 
   await database
@@ -19,7 +16,7 @@ export async function storeChatBoost(
     });
 }
 
-function chatBoostRow(update: TelegramWireChatBoostUpdate): typeof telegramChatBoosts.$inferInsert {
+function chatBoostRow(update: ChatBoostUpdate): typeof telegramChatBoosts.$inferInsert {
   const boost = update.boost;
 
   return {
@@ -27,7 +24,7 @@ function chatBoostRow(update: TelegramWireChatBoostUpdate): typeof telegramChatB
     count: boost.count,
     expirationDate: unixDate(boost.expiration_date),
     id: boost.id,
-    source: telegramWireJsonObject(boost.source),
+    source: tdJsonObject(boost.source),
     startDate: unixDate(boost.start_date)
   };
 }
