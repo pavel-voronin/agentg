@@ -1,6 +1,6 @@
-export type TelegramDateLike = Date | number | string;
+export type DateLike = Date | number | string;
 
-export function toTelegramDate(value: TelegramDateLike | null): Date | null {
+export function toDate(value: DateLike | null): Date | null {
   if (value === null) {
     return null;
   }
@@ -15,6 +15,6 @@ export function toTelegramDate(value: TelegramDateLike | null): Date | null {
   return date;
 }
 
-export function toNullableIsoString(value: TelegramDateLike | null): string | null {
-  return toTelegramDate(value)?.toISOString() ?? null;
+export function toNullableIsoString(value: DateLike | null): string | null {
+  return toDate(value)?.toISOString() ?? null;
 }

@@ -1,6 +1,6 @@
-import type { TelegramMessageTextEntity } from './api.js';
+import type { MessageTextEntity } from './schemas.js';
 
-export function telegramMessageContentFormattedText(content: unknown): unknown {
+export function messageContentFormattedText(content: unknown): unknown {
   const object = recordValue(content);
   if (object?._ === 'messageText') {
     return object.text;
@@ -18,16 +18,16 @@ export function formattedTextValue(value: unknown): string | null {
   return text.length === 0 ? null : text;
 }
 
-export function extractFormattedTextLinkEntities(value: unknown): TelegramMessageTextEntity[] {
+export function extractFormattedTextLinkEntities(value: unknown): MessageTextEntity[] {
   const formattedText = recordValue(value);
   const text = typeof formattedText?.text === 'string' ? formattedText.text : '';
   const sourceEntities = Array.isArray(formattedText?.entities) ? formattedText.entities : [];
   const entities = sourceEntities
-    .map((entity) => telegramTextLinkEntity(entity, text))
-    .filter((entity): entity is TelegramMessageTextEntity => entity !== undefined)
+    .map((entity) => textLinkEntity(entity, text))
+    .filter((entity): entity is MessageTextEntity => entity !== undefined)
     .sort(compareTextEntities);
 
-  const result: TelegramMessageTextEntity[] = [];
+  const result: MessageTextEntity[] = [];
   let consumedUntil = 0;
   for (const entity of entities) {
     if (entity.offset < consumedUntil) {
@@ -39,10 +39,7 @@ export function extractFormattedTextLinkEntities(value: unknown): TelegramMessag
   return result;
 }
 
-function telegramTextLinkEntity(
-  value: unknown,
-  text: string
-): TelegramMessageTextEntity | undefined {
+function textLinkEntity(value: unknown, text: string): MessageTextEntity | undefined {
   const entity = recordValue(value);
   const type = recordValue(entity?.type);
   const offset = safeInteger(entity?.offset);
@@ -96,10 +93,7 @@ function parseHttpUrl(value: string): string | null {
   }
 }
 
-function compareTextEntities(
-  left: TelegramMessageTextEntity,
-  right: TelegramMessageTextEntity
-): number {
+function compareTextEntities(left: MessageTextEntity, right: MessageTextEntity): number {
   if (left.offset !== right.offset) {
     return left.offset - right.offset;
   }

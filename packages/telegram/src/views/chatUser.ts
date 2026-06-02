@@ -1,21 +1,21 @@
-import type { JsonObject } from '@agentg/events/json';
+import type { JsonObject } from '@agentg/framework';
 import { inArray, sql } from 'drizzle-orm';
 
-import type { TelegramDatabase } from '../database/client.js';
+import type { Database } from '../database/client.js';
 import { telegramUsers } from '../database/schema.js';
 import { asPlainRecord, stringifyTelegramId } from './chat.js';
 
-export type TelegramChatUserInfo = {
+export type ChatUserInfo = {
   isBot: boolean;
   isPremium: boolean | null;
   telegramUserId: string;
 };
 
-export async function readTelegramChatUsersByChat(
-  database: TelegramDatabase,
+export async function readChatUsersByChat(
+  database: Database,
   chats: JsonObject[]
-): Promise<Map<string, TelegramChatUserInfo>> {
-  const userIds = chats.map(telegramChatUserId).filter(isDefined);
+): Promise<Map<string, ChatUserInfo>> {
+  const userIds = chats.map(chatUserId).filter(isDefined);
   if (userIds.length === 0) {
     return new Map();
   }
@@ -32,7 +32,7 @@ export async function readTelegramChatUsersByChat(
   return new Map(users.map((user) => [user.telegramUserId, user]));
 }
 
-export function telegramChatUserId(chat: JsonObject): string | undefined {
+export function chatUserId(chat: JsonObject): string | undefined {
   const type = asPlainRecord(chat.type);
   const userId = type?.user_id ?? type?.userId;
   return stringifyTelegramId(userId);

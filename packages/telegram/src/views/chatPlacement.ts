@@ -1,8 +1,8 @@
-import type { JsonObject } from '@agentg/events/json';
+import type { JsonObject } from '@agentg/framework';
 
 import { asPlainRecord, parsePositiveBigInt } from './chat.js';
 
-export type TelegramChatPlacement =
+export type ChatPlacement =
   | {
       isPinned: boolean;
       kind: 'archive';
@@ -20,7 +20,7 @@ export type TelegramChatPlacement =
       order: string;
     };
 
-export function telegramChatPlacements(chat: JsonObject): TelegramChatPlacement[] {
+export function chatPlacements(chat: JsonObject): ChatPlacement[] {
   return chatPositions(chat)
     .map((position) => {
       const list = asPlainRecord(position.list);
@@ -61,8 +61,8 @@ export function telegramChatPlacements(chat: JsonObject): TelegramChatPlacement[
     .filter(isDefined);
 }
 
-export function isListableTelegramChat(chat: JsonObject): boolean {
-  return telegramChatPlacements(chat).length > 0;
+export function isListableChat(chat: JsonObject): boolean {
+  return chatPlacements(chat).length > 0;
 }
 
 function chatPositions(chat: JsonObject): Record<string, unknown>[] {

@@ -1,10 +1,10 @@
-import type { JsonObject, JsonValue } from '@agentg/events/json';
+import type { JsonObject, JsonValue } from '@agentg/framework';
 import { ilike } from 'drizzle-orm';
 
 import { telegramChats } from '../database/schema.js';
 import { orSql } from './sql.js';
 
-export type TelegramChatStorageRow = {
+export type ChatStorageRow = {
   chat: JsonObject;
   lastMessageId: string | null;
   telegramChatId: string;
@@ -30,7 +30,7 @@ export function chatSearchWhere(value: string) {
   return orSql(ilike(telegramChats.title, `%${value}%`), ilike(telegramChats.id, `%${value}%`));
 }
 
-export function toTelegramChatStorageRow(row: {
+export function toChatStorageRow(row: {
   id?: string | null;
   isMarkedAsUnread?: boolean | null;
   lastMessageId?: string | null;
@@ -41,7 +41,7 @@ export function toTelegramChatStorageRow(row: {
   title: string | null;
   type: JsonValue | null;
   unreadCount?: number | null;
-}): TelegramChatStorageRow {
+}): ChatStorageRow {
   const chat: JsonObject = {};
   assignJsonField(chat, 'type', row.type);
   assignJsonField(chat, 'notification_settings', row.notificationSettings);

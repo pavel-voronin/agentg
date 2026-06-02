@@ -1,30 +1,24 @@
-import {
-  telegramChatRef,
-  telegramMessageRef,
-  telegramMessageSenderRef
-} from '@agentg/telegram/model-refs';
-import type { JsonValue } from '@agentg/events/json';
+import type { JsonValue } from '@agentg/framework';
 import { inArray, sql } from 'drizzle-orm';
 
-import type { TelegramDatabase } from '../database/client.js';
+import type { Database } from '../database/client.js';
 import { telegramChats, telegramMessages, telegramUsers } from '../database/schema.js';
-import {
-  ownerKey,
-  readTelegramFileRefsForOwners,
-  type TelegramFileOwnerKey
-} from '../files/read.js';
-import type { TelegramFileRef, TelegramMessageTextEntity, TelegramReadMessage } from './api.js';
-import { toNullableIsoString, type TelegramDateLike } from './dates.js';
+import { chatRef, messageRef, messageSenderRef } from '../model/refs.js';
+import { ownerKey, readFileRefsForOwners } from '../files/read.js';
+import type { FileOwnerKey } from '../files/types.js';
+import type { FileRef, MessageReaction, MessageTextEntity, ReadMessage } from './schemas.js';
+import { toNullableIsoString, type DateLike } from './date.js';
 import { asPlainRecord, parseNonNegativeBigInt, stringifyTelegramId } from './chat.js';
 import { extractFormattedTextLinkEntities, formattedTextValue } from './messageText.js';
 
-export type TelegramMessageStorageRow = {
+export type MessageStorageRow = {
   contentType: string;
-  deletedAt: TelegramDateLike | null;
-  editDate: TelegramDateLike | null;
+  deletedAt: DateLike | null;
+  editDate: DateLike | null;
   isDeleted: boolean;
   isOutgoing: boolean;
-  messageDate: TelegramDateLike | null;
+  messageDate: DateLike | null;
+  reactions: JsonValue | null;
   replyTo: JsonValue | null;
   senderId: string | null;
   senderType: string | null;
@@ -34,12 +28,12 @@ export type TelegramMessageStorageRow = {
   textEntities: JsonValue | null;
 };
 
-type TelegramSenderRow = {
+type SenderRow = {
   senderId: string | null;
   senderType: string | null;
 };
 
-type TelegramSenderDisplayInfo = {
+type SenderDisplayInfo = {
   displayName: string;
 };
 
@@ -51,6 +45,7 @@ export function readMessageSelection() {
     isDeleted: sql<boolean>`false`,
     isOutgoing: sql<boolean>`coalesce(${telegramMessages.isOutgoing}, false)`,
     messageDate: telegramMessages.date,
+    reactions: telegramMessages.reactions,
     replyTo: messageReplyExpression(),
     senderId: sql<
       string | null
@@ -80,18 +75,15 @@ export function messageTextEntitiesExpression() {
   end`;
 }
 
-export function toReadMessage(
-  message: TelegramMessageStorageRow,
-  files: TelegramFileRef[] = []
-): TelegramReadMessage {
+export function toReadMessage(message: MessageStorageRow, files: FileRef[] = []): ReadMessage {
   const replyTo = telegramMessageReply(message);
 
   return {
-    ...telegramMessageRef({
+    ...messageRef({
       chatId: message.telegramChatId,
       messageId: message.telegramMessageId
     }),
-    chat: telegramChatRef(message.telegramChatId),
+    chat: chatRef(message.telegramChatId),
     contentType: message.contentType,
     deletedAt: toNullableIsoString(message.deletedAt),
     editDate: toNullableIsoString(message.editDate),
@@ -101,8 +93,9 @@ export function toReadMessage(
       files
     },
     messageDate: toNullableIsoString(message.messageDate),
+    reactions: messageReactionsFromStorage(message.reactions),
     replyTo,
-    sender: telegramMessageSenderRef(message.senderType, message.senderId),
+    sender: messageSenderRef(message.senderType, message.senderId),
     senderDisplayName: null,
     senderType: message.senderType,
     serviceAction: null,
@@ -112,10 +105,58 @@ export function toReadMessage(
   };
 }
 
+function messageReactionsFromStorage(value: JsonValue | null): MessageReaction[] {
+  if (!isJsonObject(value) || !Array.isArray(value.reactions)) {
+    return [];
+  }
+  return value.reactions.map(messageReactionFromStorage).filter(isDefined);
+}
+
+function messageReactionFromStorage(value: JsonValue): MessageReaction | undefined {
+  const reaction = asPlainRecord(value);
+  const reactionType = messageReactionTypeKey(asPlainRecord(reaction?.type));
+  const totalCount = nonNegativeInteger(reaction?.total_count);
+  if (reactionType === undefined || totalCount === undefined) {
+    return undefined;
+  }
+  return {
+    isChosen: reaction?.is_chosen === true,
+    reactionType,
+    recentSenderIds: Array.isArray(reaction?.recent_sender_ids) ? reaction.recent_sender_ids : [],
+    totalCount,
+    usedSenderId: reaction?.used_sender_id ?? null
+  };
+}
+
+function messageReactionTypeKey(reaction: Record<string, unknown> | undefined): string | undefined {
+  if (reaction?._ === 'reactionTypeEmoji' && typeof reaction.emoji === 'string') {
+    return `emoji:${reaction.emoji}`;
+  }
+  if (
+    reaction?._ === 'reactionTypeCustomEmoji' &&
+    (typeof reaction.custom_emoji_id === 'number' || typeof reaction.custom_emoji_id === 'string')
+  ) {
+    return `custom_emoji:${String(reaction.custom_emoji_id)}`;
+  }
+  return reaction?._ === 'reactionTypePaid' ? 'paid' : undefined;
+}
+
+function nonNegativeInteger(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : undefined;
+}
+
+function isJsonObject(value: JsonValue | null): value is Record<string, JsonValue> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isDefined<T>(value: T | undefined): value is T {
+  return value !== undefined;
+}
+
 export function messageTextEntitiesFromStorage(
   text: string | null,
   entities: JsonValue | null | undefined
-): TelegramMessageTextEntity[] {
+): MessageTextEntity[] {
   if (text === null) {
     return [];
   }
@@ -126,11 +167,11 @@ export function messageTextEntitiesFromStorage(
 }
 
 export async function toReadMessages(
-  database: TelegramDatabase,
-  messages: TelegramMessageStorageRow[]
-): Promise<TelegramReadMessage[]> {
+  database: Database,
+  messages: MessageStorageRow[]
+): Promise<ReadMessage[]> {
   const senderInfoByKey = await readSenderDisplayInfo(database, messages);
-  const filesByOwner = await readTelegramFileRefsForOwners(database, messageFileOwners(messages));
+  const filesByOwner = await readFileRefsForOwners(database, messageFileOwners(messages));
 
   return messages.map((message) => {
     const messageOwner = telegramMessageFileOwner(message);
@@ -149,13 +190,13 @@ function messageReplyExpression() {
   return sql<JsonValue | null>`${telegramMessages.replyTo}`;
 }
 
-function messageFileOwners(messages: TelegramMessageStorageRow[]): TelegramFileOwnerKey[] {
+function messageFileOwners(messages: MessageStorageRow[]): FileOwnerKey[] {
   return messages.map(telegramMessageFileOwner);
 }
 
-function telegramMessageFileOwner(message: TelegramMessageStorageRow): TelegramFileOwnerKey {
+function telegramMessageFileOwner(message: MessageStorageRow): FileOwnerKey {
   return {
-    ownerId: telegramMessageRef({
+    ownerId: messageRef({
       chatId: message.telegramChatId,
       messageId: message.telegramMessageId
     }).id,
@@ -163,7 +204,7 @@ function telegramMessageFileOwner(message: TelegramMessageStorageRow): TelegramF
   };
 }
 
-function telegramMessageReply(message: TelegramMessageStorageRow): TelegramReadMessage['replyTo'] {
+function telegramMessageReply(message: MessageStorageRow): ReadMessage['replyTo'] {
   const reply = asPlainRecord(message.replyTo);
   const messageId = stringifyTelegramId(reply?.message_id) ?? stringifyTelegramId(reply?.messageId);
   if (messageId === undefined) {
@@ -175,16 +216,16 @@ function telegramMessageReply(message: TelegramMessageStorageRow): TelegramReadM
     message.telegramChatId;
 
   return {
-    chat: telegramChatRef(chatId),
-    message: telegramMessageRef({ chatId, messageId }),
+    chat: chatRef(chatId),
+    message: messageRef({ chatId, messageId }),
     telegramMessageId: messageId
   };
 }
 
 async function readSenderDisplayInfo(
-  database: TelegramDatabase,
-  messages: TelegramSenderRow[]
-): Promise<Map<string, TelegramSenderDisplayInfo>> {
+  database: Database,
+  messages: SenderRow[]
+): Promise<Map<string, SenderDisplayInfo>> {
   const userIds = dedupeStrings(
     messages
       .filter((message) => message.senderType === 'messageSenderUser')
@@ -197,7 +238,7 @@ async function readSenderDisplayInfo(
       .map((message) => message.senderId)
       .filter(isString)
   );
-  const senderInfoByKey = new Map<string, TelegramSenderDisplayInfo>();
+  const senderInfoByKey = new Map<string, SenderDisplayInfo>();
 
   if (userIds.length > 0) {
     const users = await database
@@ -274,7 +315,7 @@ function dedupeStrings(values: string[]): string[] {
   return [...new Set(values)];
 }
 
-export function telegramReadMessagePreview(message: TelegramReadMessage): {
+export function telegramReadMessagePreview(message: ReadMessage): {
   placeholder: boolean;
   text: string;
 } {
@@ -366,10 +407,7 @@ function stickerLabel(value: unknown): string {
     : 'Sticker';
 }
 
-export function telegramOutgoingMessageRead(
-  chat: JsonValue,
-  messageIdValue: string
-): boolean | null {
+export function telegramOutgoingMessageRead(chat: unknown, messageIdValue: string): boolean | null {
   const messageId = parseNonNegativeBigInt(messageIdValue);
   const record = asPlainRecord(chat);
   const lastReadOutboxMessageId = parseNonNegativeBigInt(

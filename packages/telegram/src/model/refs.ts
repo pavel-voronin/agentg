@@ -1,84 +1,84 @@
-export const TELEGRAM_ACTIVE_NOTIFICATION_MODEL = 'telegram.activeNotification' as const;
-export const TELEGRAM_CHAT_MODEL = 'telegram.chat' as const;
-export const TELEGRAM_CHAT_FOLDER_MODEL = 'telegram.chatFolder' as const;
-export const TELEGRAM_DEFAULT_BACKGROUND_MODEL = 'telegram.defaultBackground' as const;
-export const TELEGRAM_EMOJI_CHAT_THEMES_MODEL = 'telegram.emojiChatThemes' as const;
-export const TELEGRAM_MESSAGE_MODEL = 'telegram.message' as const;
-export const TELEGRAM_QUICK_REPLY_MESSAGE_MODEL = 'telegram.quickReplyMessage' as const;
-export const TELEGRAM_STICKER_SET_MODEL = 'telegram.stickerSet' as const;
-export const TELEGRAM_STORY_MODEL = 'telegram.story' as const;
-export const TELEGRAM_USER_MODEL = 'telegram.user' as const;
+export const ACTIVE_NOTIFICATION_MODEL = 'telegram.activeNotification' as const;
+export const CHAT_MODEL = 'telegram.chat' as const;
+export const CHAT_FOLDER_MODEL = 'telegram.chatFolder' as const;
+export const DEFAULT_BACKGROUND_MODEL = 'telegram.defaultBackground' as const;
+export const EMOJI_CHAT_THEMES_MODEL = 'telegram.emojiChatThemes' as const;
+export const MESSAGE_MODEL = 'telegram.message' as const;
+export const QUICK_REPLY_MESSAGE_MODEL = 'telegram.quickReplyMessage' as const;
+export const STICKER_SET_MODEL = 'telegram.stickerSet' as const;
+export const STORY_MODEL = 'telegram.story' as const;
+export const USER_MODEL = 'telegram.user' as const;
 
-export type TelegramActiveNotificationModelRef = {
-  _model: typeof TELEGRAM_ACTIVE_NOTIFICATION_MODEL;
+export type ActiveNotificationModelRef = {
+  _model: typeof ACTIVE_NOTIFICATION_MODEL;
   id: string;
 };
 
-export type TelegramChatModelRef = {
-  _model: typeof TELEGRAM_CHAT_MODEL;
+export type ChatModelRef = {
+  _model: typeof CHAT_MODEL;
   id: string;
 };
 
-export type TelegramChatFolderModelRef = {
-  _model: typeof TELEGRAM_CHAT_FOLDER_MODEL;
+export type ChatFolderModelRef = {
+  _model: typeof CHAT_FOLDER_MODEL;
   id: string;
 };
 
-export type TelegramDefaultBackgroundModelRef = {
-  _model: typeof TELEGRAM_DEFAULT_BACKGROUND_MODEL;
+export type DefaultBackgroundModelRef = {
+  _model: typeof DEFAULT_BACKGROUND_MODEL;
   id: string;
 };
 
-export type TelegramEmojiChatThemesModelRef = {
-  _model: typeof TELEGRAM_EMOJI_CHAT_THEMES_MODEL;
+export type EmojiChatThemesModelRef = {
+  _model: typeof EMOJI_CHAT_THEMES_MODEL;
   id: string;
 };
 
-export type TelegramMessageModelRef = {
-  _model: typeof TELEGRAM_MESSAGE_MODEL;
+export type MessageModelRef = {
+  _model: typeof MESSAGE_MODEL;
   id: string;
 };
 
-export type TelegramQuickReplyMessageModelRef = {
-  _model: typeof TELEGRAM_QUICK_REPLY_MESSAGE_MODEL;
+export type QuickReplyMessageModelRef = {
+  _model: typeof QUICK_REPLY_MESSAGE_MODEL;
   id: string;
 };
 
-export type TelegramStickerSetModelRef = {
-  _model: typeof TELEGRAM_STICKER_SET_MODEL;
+export type StickerSetModelRef = {
+  _model: typeof STICKER_SET_MODEL;
   id: string;
 };
 
-export type TelegramStoryModelRef = {
-  _model: typeof TELEGRAM_STORY_MODEL;
+export type StoryModelRef = {
+  _model: typeof STORY_MODEL;
   id: string;
 };
 
-export type TelegramUserModelRef = {
-  _model: typeof TELEGRAM_USER_MODEL;
+export type UserModelRef = {
+  _model: typeof USER_MODEL;
   id: string;
 };
 
-export type TelegramSenderModelRef = TelegramChatModelRef | TelegramUserModelRef;
+export type SenderModelRef = ChatModelRef | UserModelRef;
 
-export function telegramActiveNotificationRef(input: {
+export function activeNotificationRef(input: {
   groupId: number | string;
   notificationId: number | string;
-}): TelegramActiveNotificationModelRef {
+}): ActiveNotificationModelRef {
   return {
-    _model: TELEGRAM_ACTIVE_NOTIFICATION_MODEL,
-    id: telegramActiveNotificationModelId(input.groupId, input.notificationId)
+    _model: ACTIVE_NOTIFICATION_MODEL,
+    id: activeNotificationModelId(input.groupId, input.notificationId)
   };
 }
 
-export function telegramActiveNotificationModelId(
+export function activeNotificationModelId(
   groupId: number | string,
   notificationId: number | string
 ): string {
   return `${String(groupId)}:${String(notificationId)}`;
 }
 
-export function telegramActiveNotificationModelParts(
+export function activeNotificationModelParts(
   id: string
 ): { groupId: string; notificationId: string } | null {
   const separator = id.lastIndexOf(':');
@@ -91,51 +91,46 @@ export function telegramActiveNotificationModelParts(
   };
 }
 
-export function telegramChatRef(chatId: string): TelegramChatModelRef {
+export function chatRef(chatId: string): ChatModelRef {
   return {
-    _model: TELEGRAM_CHAT_MODEL,
+    _model: CHAT_MODEL,
     id: chatId
   };
 }
 
-export function telegramChatFolderRef(folderId: number | string): TelegramChatFolderModelRef {
+export function chatFolderRef(folderId: number | string): ChatFolderModelRef {
   return {
-    _model: TELEGRAM_CHAT_FOLDER_MODEL,
+    _model: CHAT_FOLDER_MODEL,
     id: String(folderId)
   };
 }
 
-export function telegramDefaultBackgroundRef(key: string): TelegramDefaultBackgroundModelRef {
+export function defaultBackgroundRef(key: string): DefaultBackgroundModelRef {
   return {
-    _model: TELEGRAM_DEFAULT_BACKGROUND_MODEL,
+    _model: DEFAULT_BACKGROUND_MODEL,
     id: key
   };
 }
 
-export function telegramEmojiChatThemesRef(): TelegramEmojiChatThemesModelRef {
+export function emojiChatThemesRef(): EmojiChatThemesModelRef {
   return {
-    _model: TELEGRAM_EMOJI_CHAT_THEMES_MODEL,
+    _model: EMOJI_CHAT_THEMES_MODEL,
     id: 'emoji_chat_themes'
   };
 }
 
-export function telegramMessageRef(input: {
-  chatId: string;
-  messageId: string;
-}): TelegramMessageModelRef {
+export function messageRef(input: { chatId: string; messageId: string }): MessageModelRef {
   return {
-    _model: TELEGRAM_MESSAGE_MODEL,
-    id: telegramMessageModelId(input.chatId, input.messageId)
+    _model: MESSAGE_MODEL,
+    id: messageModelId(input.chatId, input.messageId)
   };
 }
 
-export function telegramMessageModelId(chatId: string, messageId: string): string {
+export function messageModelId(chatId: string, messageId: string): string {
   return `${chatId}:${messageId}`;
 }
 
-export function telegramMessageModelParts(
-  id: string
-): { chatId: string; messageId: string } | null {
+export function messageModelParts(id: string): { chatId: string; messageId: string } | null {
   const separator = id.lastIndexOf(':');
   if (separator <= 0 || separator === id.length - 1) {
     return null;
@@ -146,53 +141,50 @@ export function telegramMessageModelParts(
   };
 }
 
-export function telegramQuickReplyMessageRef(messageId: string): TelegramQuickReplyMessageModelRef {
+export function quickReplyMessageRef(messageId: string): QuickReplyMessageModelRef {
   return {
-    _model: TELEGRAM_QUICK_REPLY_MESSAGE_MODEL,
+    _model: QUICK_REPLY_MESSAGE_MODEL,
     id: messageId
   };
 }
 
-export function telegramStickerSetRef(stickerSetId: string): TelegramStickerSetModelRef {
+export function stickerSetRef(stickerSetId: string): StickerSetModelRef {
   return {
-    _model: TELEGRAM_STICKER_SET_MODEL,
+    _model: STICKER_SET_MODEL,
     id: stickerSetId
   };
 }
 
-export function telegramStoryRef(input: {
-  posterChatId: string;
-  storyId: number | string;
-}): TelegramStoryModelRef {
+export function storyRef(input: { posterChatId: string; storyId: number | string }): StoryModelRef {
   return {
-    _model: TELEGRAM_STORY_MODEL,
-    id: telegramStoryModelId(input.posterChatId, input.storyId)
+    _model: STORY_MODEL,
+    id: storyModelId(input.posterChatId, input.storyId)
   };
 }
 
-export function telegramStoryModelId(posterChatId: string, storyId: number | string): string {
+export function storyModelId(posterChatId: string, storyId: number | string): string {
   return `${posterChatId}:${String(storyId)}`;
 }
 
-export function telegramUserRef(userId: string): TelegramUserModelRef {
+export function userRef(userId: string): UserModelRef {
   return {
-    _model: TELEGRAM_USER_MODEL,
+    _model: USER_MODEL,
     id: userId
   };
 }
 
-export function telegramMessageSenderRef(
+export function messageSenderRef(
   senderType: string | null | undefined,
   senderId: string | null | undefined
-): TelegramSenderModelRef | null {
+): SenderModelRef | null {
   if (senderId === null || senderId === undefined) {
     return null;
   }
   if (senderType === 'messageSenderUser') {
-    return telegramUserRef(senderId);
+    return userRef(senderId);
   }
   if (senderType === 'messageSenderChat') {
-    return telegramChatRef(senderId);
+    return chatRef(senderId);
   }
   return null;
 }
