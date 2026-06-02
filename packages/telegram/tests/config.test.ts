@@ -1,60 +1,70 @@
-import { resolve } from 'node:path';
-
 import { describe, expect, it } from 'vitest';
 
-import { loadTelegramIngestionConfig } from '../src/config.js';
+import { readAuthConfig, readConfig, readDatabaseConfig } from '../src/config.js';
 
-const repositoryRoot = resolve(process.cwd(), '../..');
+describe('Telegram config', () => {
+  it('reads required module config and local defaults', () => {
+    const config = readConfig({
+      DATABASE_URL: 'postgres://agentg:agentg@127.0.0.1:5432/agentg',
+      NATS_URL: 'nats://127.0.0.1:4222',
+      REGISTRY_URL: 'http://127.0.0.1:8701'
+    });
 
-describe('loadTelegramIngestionConfig', () => {
-  it('uses local ingestion defaults', () => {
-    const config = loadTelegramIngestionConfig({});
+    expect(config).toEqual({
+      apiHash: undefined,
+      apiId: undefined,
+      databaseUrl: 'postgres://agentg:agentg@127.0.0.1:5432/agentg',
+      host: undefined,
+      natsUrl: 'nats://127.0.0.1:4222',
+      port: 8702,
+      registryUrl: 'http://127.0.0.1:8701',
+      tdlibDatabaseDirectory: './td-data/database',
+      tdlibFilesDirectory: './td-data/files'
+    });
+  });
+
+  it('parses Telegram api id and process overrides', () => {
+    const config = readConfig({
+      DATABASE_URL: 'postgres://agentg:agentg@127.0.0.1:5432/agentg',
+      HOST: '0.0.0.0',
+      NATS_URL: 'nats://127.0.0.1:4222',
+      PORT: '8080',
+      REGISTRY_URL: 'http://127.0.0.1:8701',
+      TDLIB_DATABASE_DIR: '/td/database',
+      TDLIB_FILES_DIR: '/td/files',
+      TELEGRAM_API_HASH: 'hash',
+      TELEGRAM_API_ID: '12345'
+    });
 
     expect(config).toMatchObject({
-      databaseUrl: 'postgres://agentg:agentg@localhost:5432/agentg',
-      nats: {
-        url: 'nats://localhost:4222'
-      },
-      internalRpc: {
-        host: '127.0.0.1',
-        port: 18081
-      },
-      serviceRpcUrl: 'http://127.0.0.1:18081',
-      services: {
-        serviceDirectory: {
-          url: 'http://127.0.0.1:18084'
-        }
-      },
-      telegram: {
-        databaseDirectory: resolve(repositoryRoot, 'td-data/database'),
-        filesDirectory: resolve(repositoryRoot, 'td-data/files')
-      }
-    });
-  });
-
-  it('parses Telegram api id', () => {
-    const config = loadTelegramIngestionConfig({
-      TELEGRAM_API_ID: '12345',
-      TELEGRAM_API_HASH: 'hash'
-    });
-
-    expect(config.telegram.apiId).toBe(12345);
-    expect(config.telegram.apiHash).toBe('hash');
-  });
-
-  it('parses internal RPC bind config', () => {
-    const config = loadTelegramIngestionConfig({
-      SERVICE_DIRECTORY_RPC_URL: 'http://service-directory:8080',
-      TELEGRAM_RPC_HOST: '0.0.0.0',
-      TELEGRAM_RPC_PORT: '8080',
-      TELEGRAM_RPC_URL: 'http://telegram:8080'
-    });
-
-    expect(config.internalRpc).toEqual({
+      apiHash: 'hash',
+      apiId: 12345,
       host: '0.0.0.0',
-      port: 8080
+      port: 8080,
+      tdlibDatabaseDirectory: '/td/database',
+      tdlibFilesDirectory: '/td/files'
     });
-    expect(config.serviceRpcUrl).toBe('http://telegram:8080');
-    expect(config.services.serviceDirectory.url).toBe('http://service-directory:8080');
+  });
+
+  it('supports auth-only and database-only config readers', () => {
+    expect(
+      readAuthConfig({
+        TELEGRAM_API_HASH: 'hash',
+        TELEGRAM_API_ID: '12345'
+      })
+    ).toEqual({
+      apiHash: 'hash',
+      apiId: 12345,
+      tdlibDatabaseDirectory: './td-data/database',
+      tdlibFilesDirectory: './td-data/files'
+    });
+
+    expect(
+      readDatabaseConfig({
+        DATABASE_URL: 'postgres://agentg:agentg@127.0.0.1:5432/agentg'
+      })
+    ).toEqual({
+      databaseUrl: 'postgres://agentg:agentg@127.0.0.1:5432/agentg'
+    });
   });
 });

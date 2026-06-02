@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { telegramTdlibPriorities } from '../src/tdlib/priority.js';
-import { createTelegramTdlibScheduler } from '../src/tdlib/scheduler.js';
+import { priorities } from '../src/tdlib/priority.js';
+import { createScheduler } from '../src/tdlib/scheduler.js';
 
 describe('Telegram TDLib scheduler', () => {
   it('runs higher priority operations before lower priority queued operations', async () => {
@@ -10,7 +10,7 @@ describe('Telegram TDLib scheduler', () => {
     const runningCanFinish = new Promise<void>((resolve) => {
       releaseRunning = resolve;
     });
-    const scheduler = createTelegramTdlibScheduler(
+    const scheduler = createScheduler(
       {
         async invoke(request) {
           const name = String(request._);
@@ -26,16 +26,10 @@ describe('Telegram TDLib scheduler', () => {
       }
     );
 
-    const first = scheduler.invoke({ _: 'low-running' }, { priority: telegramTdlibPriorities.low });
+    const first = scheduler.invoke({ _: 'low-running' }, { priority: priorities.low });
     await waitUntil(() => calls.includes('low-running'));
-    const lowQueued = scheduler.invoke(
-      { _: 'low-queued' },
-      { priority: telegramTdlibPriorities.low }
-    );
-    const highQueued = scheduler.invoke(
-      { _: 'high-queued' },
-      { priority: telegramTdlibPriorities.maximum }
-    );
+    const lowQueued = scheduler.invoke({ _: 'low-queued' }, { priority: priorities.low });
+    const highQueued = scheduler.invoke({ _: 'high-queued' }, { priority: priorities.maximum });
 
     releaseRunning?.();
     await Promise.all([first, highQueued, lowQueued]);
