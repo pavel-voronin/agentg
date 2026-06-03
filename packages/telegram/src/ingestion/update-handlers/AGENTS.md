@@ -1,8 +1,5 @@
 # Update Handlers
 
-- Do not import, depend on, wrap, call, or adapt deleted old-contour packages such as `@agentg/events`, `@agentg/service-directory`,
-  `@agentg/database`. If one appears necessary, stop and report the boundary violation before editing code.
-
 - This folder contains one handler file per TDLib update type.
 - Handler file names must match the TDLib update type, for example
   `updateNewMessage.ts`.

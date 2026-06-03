@@ -43,12 +43,6 @@
   `npm run check:registry`, `npm run check:control-plane`, or
   `npm run check:telegram` when only one of those packages changed. Keep
   `npm run check` as the full repository gate before final integration.
-- Current module packages must not import, depend on, wrap, call, or adapt
-  deleted old-contour packages such as `@agentg/events`,
-  `@agentg/service-directory`, `@agentg/database`, or another removed package.
-  If any removed package appears necessary, or if a search shows it
-  participating in the current contour, stop immediately and report the
-  boundary violation before editing code.
 - Vue component styling must be scoped to the component. Every Vue component
   style block must use `<style scoped>`, and component templates may assign only
   one semantic CSS class per element. Tailwind utilities belong inside the

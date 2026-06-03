@@ -6,10 +6,7 @@
   when presenting the change.
 - This package defines the current module runtime vocabulary only: `module`,
   `resource`, `process`, `procedure`, event bus, and Registry.
-- This package is the module boundary foundation. It must not import, depend on,
-  wrap, call, or adapt deleted old-contour packages such as `@agentg/events`, `@agentg/service-directory`,
-  `@agentg/database`. If one appears necessary, stop
-  and report the boundary violation before editing code.
+- This package is the module boundary foundation.
 - Do not add domain-specific code here. Telegram, history sync, files, TDLib,
   database schemas, and Control Plane screens belong outside this package.
 - Keep public API small. A new exported function is allowed only when it names a framework concept directly.

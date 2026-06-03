@@ -1,8 +1,5 @@
 # Store
 
-- Do not import, depend on, wrap, call, or adapt deleted old-contour packages such as `@agentg/events`, `@agentg/service-directory`,
-  `@agentg/database`. If one appears necessary, stop and report the boundary violation before editing code.
-
 - This folder owns Telegram persistence functions.
 - Store functions accept validated TDLib input types directly and translate them
   into Drizzle writes against `src/database/schema.ts`.

@@ -1,8 +1,5 @@
 # Ingestion
 
-- Do not import, depend on, wrap, call, or adapt deleted old-contour packages such as `@agentg/events`, `@agentg/service-directory`,
-  `@agentg/database`. If one appears necessary, stop and report the boundary violation before editing code.
-
 - This folder owns TDLib update ingestion for the current Telegram module.
 - Preserve update handler coverage mechanically: every reviewed handler file must
   have a matching current handler file and registry entry until the reviewed handler inventory is complete.

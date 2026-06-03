@@ -1,7 +1,7 @@
 # Telegram Control Plane Components
 
 - This folder contains browser-only Vue components for Telegram Control Plane.
-- Do not import backend code, Telegram runtime code, TDLib code, storage code, or deleted old-contour packages.
+- Do not import backend code, Telegram runtime code, TDLib code, storage code,.
 - Vue components must use `<script setup lang="ts">` and `<style scoped>`.
 - Keep components focused and small. If a component grows beyond one clear UI
   responsibility, split it into child components and move non-render logic to

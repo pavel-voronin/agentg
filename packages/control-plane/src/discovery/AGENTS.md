@@ -1,8 +1,5 @@
 # Discovery Rules
 
-- Do not import, depend on, wrap, call, or adapt deleted old-contour packages such as `@agentg/events`, `@agentg/service-directory`,
-  `@agentg/database`. If one appears necessary, stop and report the boundary violation before editing code.
-
 - Discovery scans module-owned Control Plane contributions under
   `packages/*/control-plane/controlPlane.ts`.
 - The discovered entrypoint is a Control Plane-specific file, not runtime module

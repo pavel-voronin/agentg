@@ -5,10 +5,6 @@
   violations, failed checks, risky assumptions, and any workaround before or
   when presenting the change.
 - This package is the deployable Registry runner for the module boundary.
-- Do not import, depend on, wrap, call, or adapt deleted old-contour packages such as
-  `@agentg/events`, `@agentg/service-directory`,
-  `@agentg/database`. If one
-  appears necessary, stop and report the boundary violation before editing code.
 - Registry logic, contracts, registry, client, and helpers belong to
   `@agentg/framework`; this package only provides config and process
   startup.

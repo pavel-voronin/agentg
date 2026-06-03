@@ -2,10 +2,6 @@
 
 - This package is the new Control Plane process. It owns the shell, HTTP server,
   WebSocket host, and filesystem discovery of module Control Plane entrypoints.
-- Do not import, depend on, wrap, call, or adapt deleted old-contour packages such as
-  `@agentg/events`, `@agentg/service-directory`,
-  `@agentg/database`. If one
-  appears necessary, stop and report the boundary violation before editing code.
 - Use `@agentg/framework` for event bus, registry access, config, and
   procedure calls.
 - Do not read module `controlPlane` fields from registry manifests. Module

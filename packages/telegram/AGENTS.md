@@ -5,10 +5,6 @@
   violations, failed checks, risky assumptions, and any workaround before or
   when presenting the change.
 - This package is the current Telegram module built on `@agentg/framework`.
-- Do not import, depend on, wrap, call, or adapt deleted old-contour packages such as
-  `@agentg/events`, `@agentg/service-directory`,
-  `@agentg/database`. If one
-  appears necessary, stop and report the boundary violation before editing code.
 - Do not copy replaced implementation details without an explicit decision.
 - Keep module setup readable from `src/module.ts`: resources, events, procedures,
   and processes must be visible there.
