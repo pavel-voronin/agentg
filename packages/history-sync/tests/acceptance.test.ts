@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { TELEGRAM_HISTORY_PAST_BOUNDARY } from '../../src/constants.js';
+import type { HistorySyncTarget, HistorySyncTemplate } from '../src/model/types.js';
+import { TELEGRAM_HISTORY_PAST_BOUNDARY } from '../src/range/constants.js';
+import { expressionBoundary, historySyncRange } from '../src/range/ranges.js';
+import { projectSyncIntervalsForChat } from '../src/sync/reconciler.js';
 import {
   editHistorySyncTargetDirectly,
   materializeTemplatesForChat,
   updateLinkedTargetsForTemplate
-} from '../../src/materialization.js';
-import { projectSyncIntervalsForChat } from '../../src/reconciler.js';
-import { expressionBoundary, historySyncRange } from '../../src/ranges.js';
-import type { HistorySyncTarget, HistorySyncTemplate } from '../../src/types.js';
+} from '../src/target/materialization.js';
 
 describe('history sync acceptance', () => {
   it('materializes a target for a newly discovered matching chat and projects it for Telegram', () => {

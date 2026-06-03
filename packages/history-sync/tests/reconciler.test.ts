@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { TELEGRAM_HISTORY_PAST_BOUNDARY } from '../../src/constants.js';
-import { isOneShotHistorySyncTarget, projectSyncIntervalsForChat } from '../../src/reconciler.js';
-import { absoluteBoundary, expressionBoundary, historySyncRange } from '../../src/ranges.js';
-import type { HistorySyncTarget } from '../../src/types.js';
+import type { HistorySyncTarget } from '../src/model/types.js';
+import { TELEGRAM_HISTORY_PAST_BOUNDARY } from '../src/range/constants.js';
+import { absoluteBoundary, expressionBoundary, historySyncRange } from '../src/range/ranges.js';
+import { isOneShotHistorySyncTarget, projectSyncIntervalsForChat } from '../src/sync/reconciler.js';
 
 describe('history sync projection', () => {
   it('projects an absolute target to a Telegram interval', () => {

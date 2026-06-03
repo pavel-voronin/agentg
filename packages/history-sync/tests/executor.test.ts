@@ -1,16 +1,15 @@
-import type { IntegrationEvent } from '@agentg/events/envelope';
+import type { EventBus, EventSubscription } from '@agentg/framework';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { HistorySyncDatabase as AppDatabase } from '../../src/database.js';
-import { runHistorySync } from '../../src/executor.js';
-import { expressionBoundary, historySyncRange } from '../../src/ranges.js';
-import { historySyncTargets, historySyncTemplates } from '../../src/schema.js';
-import type { TelegramHistoryClient } from '../../src/telegramClient.js';
-import type { HistorySyncTarget } from '../../src/types.js';
+import type { Database } from '../src/database/client.js';
+import { historySyncTargets, historySyncTemplates } from '../src/database/schema.js';
+import type { HistorySyncTarget, TelegramHistoryClient } from '../src/model/types.js';
+import { expressionBoundary, historySyncRange } from '../src/range/ranges.js';
+import { runHistorySync } from '../src/sync/executor.js';
 
 describe('history sync executor', () => {
   it('deletes targets for chats that are no longer listed by Telegram', async () => {
-    const publishedEvents: IntegrationEvent[] = [];
+    const events = createFakeEventBus();
     const database = createFakeHistorySyncDatabase([
       {
         chatId: 'chat-orphan',
@@ -19,46 +18,41 @@ describe('history sync executor', () => {
       }
     ]);
     const listChats = vi.fn(() => Promise.resolve([]));
-    const client = {
-      ensureHistoryCoverage: vi.fn(),
-      getHistoryCoverage: vi.fn(),
+    const telegram = createFakeTelegramHistoryClient({
       listChats
-    } as unknown as TelegramHistoryClient;
-    const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    });
 
-    try {
-      await runHistorySync(database as unknown as AppDatabase, client, {
-        chatLoadBatchSize: 100,
-        discoverChats: false,
-        messageLimit: 100,
-        publishEvent: (event) => {
-          publishedEvents.push(event);
-        },
-        requestDelayMs: 0,
-        syncWindowDays: 30
-      });
-    } finally {
-      consoleLog.mockRestore();
-    }
+    await runHistorySync(database as unknown as Database, telegram, events, {
+      chatLoadBatchSize: 100,
+      discoverChats: false,
+      messageLimit: 100,
+      requestDelayMs: 0,
+      windowDays: 30
+    });
 
     expect(listChats).toHaveBeenCalledWith({
       discover: false,
       loadBatchSize: 100
     });
     expect(database.deletedTargetIds()).toEqual(['target-orphan']);
-    expect(publishedEvents).toEqual(
+    expect(events.published()).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({
+        {
           data: {
             chatId: 'chat-orphan',
             targetId: 'target-orphan'
           },
           type: 'history-sync.target.auto_deleted'
-        })
+        }
       ])
     );
   });
 });
+
+type PublishedEvent = {
+  data?: unknown;
+  type: string;
+};
 
 type HistorySyncTargetRow = {
   id: string;
@@ -66,6 +60,60 @@ type HistorySyncTargetRow = {
   telegramChatId: string;
   templateId: string | null;
 };
+
+function createFakeEventBus(): EventBus & {
+  published(): PublishedEvent[];
+} {
+  const publishedEvents: PublishedEvent[] = [];
+  return {
+    publish(type: string, data?: unknown) {
+      publishedEvents.push({ data, type });
+    },
+    published() {
+      return publishedEvents;
+    },
+    start() {
+      return Promise.resolve();
+    },
+    stop() {
+      return Promise.resolve();
+    },
+    subscribe() {
+      return {
+        unsubscribe: () => undefined
+      } satisfies EventSubscription;
+    }
+  };
+}
+
+function createFakeTelegramHistoryClient(
+  overrides: Partial<TelegramHistoryClient>
+): TelegramHistoryClient {
+  return {
+    countMessagesInIntervals: vi.fn(() => Promise.resolve({ counts: [] })),
+    ensureHistoryCoverage: vi.fn(() =>
+      Promise.resolve({
+        alreadyCovered: false,
+        coveredIntervals: [],
+        fetchedMessages: 0,
+        pages: 0,
+        reachedBeginning: false,
+        remainingIntervals: [],
+        storedMessages: 0
+      })
+    ),
+    getChatHistoryFacts: vi.fn(() =>
+      Promise.resolve({
+        chat: null,
+        earliestMessageDate: null,
+        messageCount: 0
+      })
+    ),
+    getHistoryCoverage: vi.fn(() => Promise.resolve({ coverage: [] })),
+    listChats: vi.fn(() => Promise.resolve([])),
+    ...overrides
+  };
+}
 
 function createFakeHistorySyncDatabase(targets: HistorySyncTarget[]) {
   let currentTargets = targets.map(toHistorySyncTargetRow);
@@ -104,31 +152,14 @@ function createFakeHistorySyncDatabase(targets: HistorySyncTarget[]) {
           selectedTable = table;
           return query;
         },
-        limit() {
-          return query;
-        },
         orderBy() {
           return query;
         },
         then(resolve: (value: unknown[]) => unknown, reject?: (reason: unknown) => unknown) {
           return Promise.resolve(selectRows(selectedTable)).then(resolve, reject);
-        },
-        where() {
-          return query;
         }
       };
       return query;
-    },
-    update() {
-      return {
-        set() {
-          return {
-            where(): Promise<void> {
-              return Promise.resolve();
-            }
-          };
-        }
-      };
     }
   };
 

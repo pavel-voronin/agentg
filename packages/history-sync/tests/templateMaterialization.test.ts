@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
+import type {
+  HistorySyncRange,
+  HistorySyncTarget,
+  HistorySyncTemplate
+} from '../src/model/types.js';
+import { expressionBoundary, historySyncRange } from '../src/range/ranges.js';
 import {
   editHistorySyncTargetDirectly,
   materializeTemplatesForChat,
   updateLinkedTargetsForTemplate
-} from '../../src/materialization.js';
-import { expressionBoundary, historySyncRange } from '../../src/ranges.js';
-import type { HistorySyncRange, HistorySyncTarget, HistorySyncTemplate } from '../../src/types.js';
+} from '../src/target/materialization.js';
 
 describe('history template materialization', () => {
   it('creates a linked target when a discovered chat matches a template', () => {

@@ -6,7 +6,7 @@ import {
   expressionBoundary,
   historySyncRange,
   projectHistorySyncRange
-} from '../../src/ranges.js';
+} from '../src/range/ranges.js';
 
 describe('history range projection', () => {
   const now = new Date('2026-04-28T00:00:00.000Z');
@@ -27,9 +27,7 @@ describe('history range projection', () => {
     expect(
       projectHistorySyncRange(
         historySyncRange(expressionBoundary('now-30d'), expressionBoundary('now')),
-        {
-          now
-        }
+        { now }
       )
     ).toEqual({
       endAt: now,
@@ -41,9 +39,7 @@ describe('history range projection', () => {
     expect(
       projectHistorySyncRange(
         historySyncRange(expressionBoundary('now-1m'), expressionBoundary('now')),
-        {
-          now
-        }
+        { now }
       )
     ).toEqual({
       endAt: now,
@@ -93,9 +89,7 @@ describe('history range projection', () => {
     expect(() =>
       projectHistorySyncRange(
         historySyncRange(expressionBoundary('now-1m1h'), expressionBoundary('now')),
-        {
-          now
-        }
+        { now }
       )
     ).toThrow('Unknown history boundary expression: now-1m1h');
   });
@@ -131,7 +125,7 @@ describe('history range projection', () => {
     );
   });
 
-  it('projects an absolute start and expression end such as 2026-01-01 to now', () => {
+  it('projects an absolute start and expression end', () => {
     expect(
       projectHistorySyncRange(
         historySyncRange(absoluteBoundary('2026-01-01T00:00:00.000Z'), expressionBoundary('now')),
@@ -160,7 +154,7 @@ describe('history range projection', () => {
     });
   });
 
-  it('stores boundary literals as literals instead of nulls', () => {
+  it('stores boundary literals as expressions', () => {
     expect(expressionBoundary('past')).toEqual({
       expression: 'past',
       kind: 'expression'
