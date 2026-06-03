@@ -1,18 +1,18 @@
 import { createHash } from 'node:crypto';
 
-import type { HistorySyncDatabase as AppDatabase } from './database.js';
+import type { Database } from '../database/client.js';
 
-import { parseHistorySyncTargetUpsertCommand } from './commands.js';
-import { historySyncRangeKey } from './ranges.js';
+import type { HistorySyncRange, HistorySyncTarget } from '../model/types.js';
+import { parseHistorySyncTargetUpsertCommand } from '../range/commands.js';
+import { historySyncRangeKey } from '../range/ranges.js';
 import {
   deleteHistorySyncTarget,
   listHistorySyncTargets,
   upsertHistorySyncTarget
 } from './store.js';
-import type { HistorySyncRange, HistorySyncTarget } from './types.js';
 
 export async function upsertManualHistorySyncTargetFromCommand(
-  database: AppDatabase,
+  database: Database,
   command: unknown
 ): Promise<HistorySyncTarget> {
   const input = parseHistorySyncTargetUpsertCommand(command, 'history-sync.upsertTarget');
@@ -34,7 +34,7 @@ export async function upsertManualHistorySyncTargetFromCommand(
 }
 
 export async function deleteManualHistorySyncTargetFromCommand(
-  database: AppDatabase,
+  database: Database,
   command: unknown
 ): Promise<HistorySyncTarget> {
   const input = asRecord(command);

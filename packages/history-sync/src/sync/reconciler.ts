@@ -4,8 +4,8 @@ import {
   projectHistorySyncRange,
   splitIntervals,
   type HistorySyncRangeProjectionContext
-} from './ranges.js';
-import type { HistorySyncInterval, HistorySyncTarget } from './types.js';
+} from '../range/ranges.js';
+import type { HistorySyncInterval, HistorySyncTarget } from '../model/types.js';
 
 export type HistorySyncProjectionOptions = HistorySyncRangeProjectionContext & {
   chatId: string;

@@ -4,7 +4,7 @@ import {
   expressionBoundary,
   historySyncRange
 } from './ranges.js';
-import type { HistorySyncBoundary, HistorySyncRange } from './types.js';
+import type { HistorySyncBoundary, HistorySyncRange } from '../model/types.js';
 
 export type HistorySyncTargetUpsertCommand = {
   chatId: string;

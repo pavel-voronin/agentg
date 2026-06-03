@@ -3,7 +3,7 @@ import {
   floorToTelegramSecond,
   normalizeTelegramHistoryInterval
 } from './time.js';
-import type { HistorySyncBoundary, HistorySyncInterval, HistorySyncRange } from './types.js';
+import type { HistorySyncBoundary, HistorySyncInterval, HistorySyncRange } from '../model/types.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;

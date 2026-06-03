@@ -1,10 +1,10 @@
-import { sameHistorySyncRange } from './ranges.js';
 import type {
   HistorySyncTarget,
   HistorySyncTemplate,
   HistorySyncTemplateMatch,
   TelegramChatForHistorySync
-} from './types.js';
+} from '../model/types.js';
+import { sameHistorySyncRange } from '../range/ranges.js';
 
 export function materializeTemplatesForChat(
   templates: HistorySyncTemplate[],

@@ -1,13 +1,11 @@
 import { asc, eq, sql } from 'drizzle-orm';
 
-import type { HistorySyncDatabase as AppDatabase } from './database.js';
-import { historySyncTargets, historySyncTemplates } from './schema.js';
-import { canonicalizeHistorySyncRange } from './ranges.js';
-import type { HistorySyncRange, HistorySyncTarget, HistorySyncTemplate } from './types.js';
+import type { Database } from '../database/client.js';
+import type { HistorySyncRange, HistorySyncTarget, HistorySyncTemplate } from '../model/types.js';
+import { canonicalizeHistorySyncRange } from '../range/ranges.js';
+import { historySyncTargets, historySyncTemplates } from '../database/schema.js';
 
-export async function listHistorySyncTemplates(
-  database: AppDatabase
-): Promise<HistorySyncTemplate[]> {
+export async function listHistorySyncTemplates(database: Database): Promise<HistorySyncTemplate[]> {
   const rows = await database
     .select({
       id: historySyncTemplates.id,
@@ -25,7 +23,7 @@ export async function listHistorySyncTemplates(
 }
 
 export async function upsertHistorySyncTemplate(
-  database: AppDatabase,
+  database: Database,
   template: HistorySyncTemplate
 ): Promise<void> {
   const range = canonicalizeHistorySyncRange(template.range);
@@ -46,7 +44,7 @@ export async function upsertHistorySyncTemplate(
     });
 }
 
-export async function listHistorySyncTargets(database: AppDatabase): Promise<HistorySyncTarget[]> {
+export async function listHistorySyncTargets(database: Database): Promise<HistorySyncTarget[]> {
   const rows = await database
     .select({
       id: historySyncTargets.id,
@@ -66,7 +64,7 @@ export async function listHistorySyncTargets(database: AppDatabase): Promise<His
 }
 
 export async function upsertHistorySyncTarget(
-  database: AppDatabase,
+  database: Database,
   target: HistorySyncTarget
 ): Promise<void> {
   const range = canonicalizeHistorySyncRange(target.range);
@@ -90,7 +88,7 @@ export async function upsertHistorySyncTarget(
 }
 
 export async function deleteHistorySyncTarget(
-  database: AppDatabase,
+  database: Database,
   targetId: string
 ): Promise<HistorySyncTarget | undefined> {
   const [deleted] = await database
@@ -116,7 +114,7 @@ export async function deleteHistorySyncTarget(
 }
 
 export async function upsertHistorySyncTargets(
-  database: AppDatabase,
+  database: Database,
   targets: HistorySyncTarget[]
 ): Promise<void> {
   for (const target of targets) {

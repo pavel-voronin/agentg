@@ -1,4 +1,4 @@
-import type { HistorySyncInterval } from './types.js';
+import type { HistorySyncInterval } from '../model/types.js';
 
 export const TELEGRAM_HISTORY_TICK_MS = 1000;
 

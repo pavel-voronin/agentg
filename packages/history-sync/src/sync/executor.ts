@@ -1,33 +1,31 @@
-import type { HistorySyncDatabase as AppDatabase } from './database.js';
-import { createIntegrationEvent, type IntegrationEvent } from '@agentg/events/envelope';
-import type { JsonObject } from '@agentg/events/json';
+import type { EventBus } from '@agentg/framework';
 
-import { TELEGRAM_HISTORY_PAST_BOUNDARY } from './constants.js';
-import { materializeTemplatesForChat } from './materialization.js';
+import type { Database } from '../database/client.js';
+import type {
+  HistorySyncInterval,
+  HistorySyncTarget,
+  TelegramHistoryClient
+} from '../model/types.js';
+import { TELEGRAM_HISTORY_PAST_BOUNDARY } from '../range/constants.js';
+import { floorToTelegramSecond } from '../range/time.js';
+import { materializeTemplatesForChat } from '../target/materialization.js';
 import { isOneShotHistorySyncTarget, projectSyncIntervalsForChat } from './reconciler.js';
 import {
   deleteHistorySyncTarget,
   listHistorySyncTargets,
   listHistorySyncTemplates,
   upsertHistorySyncTargets
-} from './store.js';
-import type { TelegramHistoryClient } from './telegramClient.js';
-import type {
-  HistorySyncInterval,
-  HistorySyncTarget,
-  TelegramChatForHistorySync
-} from './types.js';
+} from '../target/store.js';
 
-export type HistorySyncOptions = {
+export type SyncOptions = {
   chatLoadBatchSize: number;
-  discoverChats?: boolean;
+  discoverChats?: boolean | undefined;
   messageLimit: number;
-  publishEvent?: (event: IntegrationEvent) => void;
   requestDelayMs: number;
-  syncWindowDays: number;
+  windowDays: number;
 };
 
-type SyncRequestResult = {
+type SyncResult = {
   coveredIntervals: number;
   fetchedMessages: number;
   pages: number;
@@ -37,30 +35,32 @@ type SyncRequestResult = {
 };
 
 export async function runHistorySync(
-  database: AppDatabase,
-  client: TelegramHistoryClient,
-  options: HistorySyncOptions
+  database: Database,
+  telegram: TelegramHistoryClient,
+  events: EventBus,
+  options: SyncOptions
 ): Promise<void> {
-  const safeOptions = normalizeHistorySyncOptions(options);
-  const syncNow = truncateToTelegramSecond(new Date());
-  emitHistorySyncEvent(safeOptions, 'history-sync.sync.started', {
+  const safeOptions = normalizeSyncOptions(options);
+  const syncNow = floorToTelegramSecond(new Date());
+  events.publish('history-sync.sync.started', {
     now: syncNow.toISOString()
   });
 
-  const chats = await client.listChats({
+  const chats = await telegram.listChats({
     discover: safeOptions.discoverChats === true,
     loadBatchSize: safeOptions.chatLoadBatchSize
   });
-  const targets = await materializeHistorySyncTargets(database, chats, safeOptions);
-  const result = await requestTelegramCoverageForTargets(
-    client,
+  const targets = await materializeHistorySyncTargets(database, chats, events);
+  const result = await requestCoverageForTargets(
     database,
+    telegram,
+    events,
     targets,
     syncNow,
     safeOptions
   );
 
-  emitHistorySyncEvent(safeOptions, 'history-sync.sync.completed', {
+  events.publish('history-sync.sync.completed', {
     chats: chats.length,
     coveredIntervals: result.coveredIntervals,
     fetchedMessages: result.fetchedMessages,
@@ -72,17 +72,17 @@ export async function runHistorySync(
 }
 
 async function materializeHistorySyncTargets(
-  database: AppDatabase,
-  chats: TelegramChatForHistorySync[],
-  options: HistorySyncOptions
+  database: Database,
+  chats: Awaited<ReturnType<TelegramHistoryClient['listChats']>>,
+  events: EventBus
 ): Promise<HistorySyncTarget[]> {
   const templates = await listHistorySyncTemplates(database);
   const chatIds = new Set(chats.map((chat) => chat.id));
   let targets = await deleteTargetsForUnlistedChats(
     database,
+    events,
     await listHistorySyncTargets(database),
-    chatIds,
-    options
+    chatIds
   );
   for (const chat of chats) {
     targets = materializeTemplatesForChat(templates, chat, targets);
@@ -93,10 +93,10 @@ async function materializeHistorySyncTargets(
 }
 
 async function deleteTargetsForUnlistedChats(
-  database: AppDatabase,
+  database: Database,
+  events: EventBus,
   targets: HistorySyncTarget[],
-  chatIds: Set<string>,
-  options: HistorySyncOptions
+  chatIds: Set<string>
 ): Promise<HistorySyncTarget[]> {
   const activeTargets: HistorySyncTarget[] = [];
   for (const target of targets) {
@@ -104,9 +104,10 @@ async function deleteTargetsForUnlistedChats(
       activeTargets.push(target);
       continue;
     }
+
     const deleted = await deleteHistorySyncTarget(database, target.id);
     if (deleted !== undefined) {
-      emitHistorySyncEvent(options, 'history-sync.target.auto_deleted', {
+      events.publish('history-sync.target.auto_deleted', {
         chatId: target.chatId,
         targetId: target.id
       });
@@ -115,15 +116,16 @@ async function deleteTargetsForUnlistedChats(
   return activeTargets;
 }
 
-async function requestTelegramCoverageForTargets(
-  client: TelegramHistoryClient,
-  database: AppDatabase,
+async function requestCoverageForTargets(
+  database: Database,
+  telegram: TelegramHistoryClient,
+  events: EventBus,
   targets: HistorySyncTarget[],
   now: Date,
-  options: HistorySyncOptions
-): Promise<SyncRequestResult> {
+  options: SyncOptions
+): Promise<SyncResult> {
   const chatIds = [...new Set(targets.map((target) => target.chatId))].sort();
-  const result: SyncRequestResult = {
+  const result: SyncResult = {
     coveredIntervals: 0,
     fetchedMessages: 0,
     pages: 0,
@@ -139,40 +141,33 @@ async function requestTelegramCoverageForTargets(
         past: TELEGRAM_HISTORY_PAST_BOUNDARY
       },
       now,
-      syncWindowMilliseconds: options.syncWindowDays * 24 * 60 * 60 * 1000,
+      syncWindowMilliseconds: options.windowDays * 24 * 60 * 60 * 1000,
       targets
     });
 
     for (const interval of intervals.slice(0, 1)) {
-      const syncResult = await requestTelegramCoverage(client, chatId, interval, options);
-      result.coveredIntervals += syncResult.coveredIntervals.length;
-      result.fetchedMessages += syncResult.fetchedMessages;
-      result.pages += syncResult.pages;
-      result.remainingIntervals += syncResult.remainingIntervals.length;
-      result.reachedBeginning ||= syncResult.reachedBeginning;
-      result.storedMessages += syncResult.storedMessages;
+      const sync = await requestTelegramCoverage(telegram, chatId, interval, options);
+      result.coveredIntervals += sync.coveredIntervals.length;
+      result.fetchedMessages += sync.fetchedMessages;
+      result.pages += sync.pages;
+      result.remainingIntervals += sync.remainingIntervals.length;
+      result.reachedBeginning ||= sync.reachedBeginning;
+      result.storedMessages += sync.storedMessages;
     }
 
-    await deleteCompletedOneShotTargets(database, client, targets, chatId, now, options);
+    await deleteCompletedOneShotTargets(database, telegram, events, targets, chatId, now);
   }
-
-  console.log(
-    JSON.stringify({
-      event: 'history-sync.sync_pass_complete',
-      ...result
-    })
-  );
 
   return result;
 }
 
-async function requestTelegramCoverage(
-  client: TelegramHistoryClient,
+function requestTelegramCoverage(
+  telegram: TelegramHistoryClient,
   chatId: string,
   interval: HistorySyncInterval,
-  options: Pick<HistorySyncOptions, 'messageLimit' | 'requestDelayMs'>
+  options: Pick<SyncOptions, 'messageLimit' | 'requestDelayMs'>
 ) {
-  return client.ensureHistoryCoverage({
+  return telegram.ensureHistoryCoverage({
     chatId,
     endAt: interval.endAt.toISOString(),
     limit: options.messageLimit,
@@ -183,12 +178,12 @@ async function requestTelegramCoverage(
 }
 
 async function deleteCompletedOneShotTargets(
-  database: AppDatabase,
-  client: TelegramHistoryClient,
+  database: Database,
+  telegram: TelegramHistoryClient,
+  events: EventBus,
   targets: HistorySyncTarget[],
   chatId: string,
-  now: Date,
-  options: Pick<HistorySyncOptions, 'publishEvent'>
+  now: Date
 ): Promise<void> {
   for (const target of targets.filter((candidate) => candidate.chatId === chatId)) {
     if (!isOneShotHistorySyncTarget(target)) {
@@ -207,7 +202,7 @@ async function deleteCompletedOneShotTargets(
       continue;
     }
 
-    const coverage = await client.getHistoryCoverage({ chatId });
+    const coverage = await telegram.getHistoryCoverage({ chatId });
     const targetCovered = coverage.coverage.some((interval) => {
       const startAt = new Date(interval.startAt);
       const endAt = new Date(interval.endAt);
@@ -219,7 +214,7 @@ async function deleteCompletedOneShotTargets(
 
     const deleted = await deleteHistorySyncTarget(database, target.id);
     if (deleted !== undefined) {
-      emitHistorySyncEvent(options, 'history-sync.target.auto_deleted', {
+      events.publish('history-sync.target.auto_deleted', {
         chatId: target.chatId,
         targetId: target.id
       });
@@ -227,30 +222,12 @@ async function deleteCompletedOneShotTargets(
   }
 }
 
-function normalizeHistorySyncOptions(options: HistorySyncOptions): HistorySyncOptions {
+function normalizeSyncOptions(options: SyncOptions): SyncOptions {
   return {
     chatLoadBatchSize: Math.max(1, options.chatLoadBatchSize),
     discoverChats: options.discoverChats ?? true,
     messageLimit: Math.min(100, Math.max(1, options.messageLimit)),
-    ...(options.publishEvent === undefined ? {} : { publishEvent: options.publishEvent }),
     requestDelayMs: Math.max(0, options.requestDelayMs),
-    syncWindowDays: Math.max(1, options.syncWindowDays)
+    windowDays: Math.max(1, options.windowDays)
   };
-}
-
-function emitHistorySyncEvent(
-  options: Pick<HistorySyncOptions, 'publishEvent'>,
-  type: string,
-  data: JsonObject
-): void {
-  options.publishEvent?.(
-    createIntegrationEvent({
-      data,
-      type
-    })
-  );
-}
-
-function truncateToTelegramSecond(date: Date): Date {
-  return new Date(Math.floor(date.getTime() / 1000) * 1000);
 }

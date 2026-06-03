@@ -1,13 +1,13 @@
-import type { JsonObject } from '@agentg/events/json';
+import type { JsonObject } from '@agentg/framework';
 
-import { TELEGRAM_HISTORY_PAST_BOUNDARY } from './constants.js';
+import type { HistorySyncInterval, HistorySyncRange, HistorySyncTarget } from './types.js';
+import { TELEGRAM_HISTORY_PAST_BOUNDARY } from '../range/constants.js';
 import {
   canonicalizeHistorySyncRange,
   projectHistorySyncRange,
   type HistorySyncRangeProjectionContext
-} from './ranges.js';
-import { floorToTelegramSecond, normalizeTelegramHistoryInterval } from './time.js';
-import type { HistorySyncInterval, HistorySyncRange, HistorySyncTarget } from './types.js';
+} from '../range/ranges.js';
+import { floorToTelegramSecond, normalizeTelegramHistoryInterval } from '../range/time.js';
 
 export type HistorySyncTargetResponse = {
   chatId: string;
