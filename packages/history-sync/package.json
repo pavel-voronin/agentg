@@ -4,44 +4,27 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./control-plane": "./src/control-plane/index.ts"
+    ".": "./src/module.ts"
   },
   "scripts": {
-    "dev": "tsx watch --clear-screen=false src/main.ts",
-    "dev:control-plane-assets": "vite build --watch --config viteControlPlane.config.ts",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "tsx src/migrateMain.ts",
-    "build": "npm run build:server && npm run build:control-plane",
-    "build:control-plane": "vite build --config viteControlPlane.config.ts",
-    "build:server": "vite build",
-    "start": "node dist/main.js",
+    "db:migrate": "tsx src/database/migrateMain.ts",
+    "dev": "tsx watch --clear-screen=false src/main.ts",
     "test": "vitest run",
-    "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@agentg/control-plane-sdk": "file:../control-plane-sdk",
-    "@agentg/database": "file:../database",
-    "@agentg/events": "file:../events",
-    "@agentg/infra": "file:../infra",
     "@agentg/framework": "file:../framework",
-    "@agentg/service-directory": "file:../service-directory",
-    "@agentg/telegram": "file:../telegram",
     "dotenv": "17.4.2",
     "drizzle-orm": "^0.45.2",
-    "nats": "^2.29.3",
-    "pg": "8.20.0",
     "vue": "^3.5.33",
     "zod": "^4.4.1"
   },
   "devDependencies": {
     "@types/node": "24.10.0",
-    "@types/pg": "8.15.6",
-    "@vitejs/plugin-vue": "^6.0.6",
     "drizzle-kit": "^0.31.10",
     "tsx": "4.21.0",
     "typescript": "6.0.3",
-    "vite": "8.0.10",
     "vitest": "4.1.5"
   }
 }

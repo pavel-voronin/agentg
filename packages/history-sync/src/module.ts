@@ -1,74 +1,54 @@
-import type { EventBus } from '@agentg/events/bus';
-import {
-  defineControlPlane,
-  defineModule,
-  defineEvents,
-  defineProcedures,
-  registerSubsystem,
-  setRequired
-} from '@agentg/framework';
-import type { Module } from '@agentg/framework';
+import { defineModule } from '@agentg/framework';
 
-import {
-  HistorySyncControlPlaneSubsystem,
-  type HistorySyncControlPlane
-} from './control-plane/subsystem.js';
-import type { HistorySyncDatabase } from './database.js';
-import { useDatabase } from './database/subsystem.js';
-import { useEvents } from './events/subsystem.js';
-import { deleteTarget } from './rpc/deleteTarget.js';
-import { getChatHistorySyncState } from './rpc/getChatHistorySyncState.js';
-import { requestSync } from './rpc/requestSync.js';
-import { upsertTarget } from './rpc/upsertTarget.js';
-import type { HistorySyncServiceOptions } from './service/runService.js';
-import { useService } from './service/subsystem.js';
-import { useTelegram } from './telegram/subsystem.js';
-import type { TelegramReadClient } from './telegramClient.js';
+import { readConfig } from './config.js';
+import { createDatabase } from './database/client.js';
+import type { TelegramHistoryClient } from './model/types.js';
+import { procedures } from './procedures/index.js';
+import { createController } from './sync/controller.js';
 
-const EVENT_TYPES = [
-  'history-sync.sync.accepted',
-  'history-sync.sync.completed',
-  'history-sync.sync.failed',
-  'history-sync.sync.requested',
-  'history-sync.sync.started',
-  'history-sync.target.auto_deleted',
-  'history-sync.target.deleted',
-  'history-sync.target.upserted'
-] as const;
+export const historySyncModule = defineModule('history-sync', {
+  config: readConfig,
+  setup({ background, config, events, resource, rpc }) {
+    const database = resource('database', ({ startup }) => {
+      const databaseResource = createDatabase(config.databaseUrl);
 
-const procedures = {
-  deleteTarget,
-  getChatHistorySyncState,
-  requestSync,
-  upsertTarget
-};
+      startup(() => databaseResource.start());
 
-type ProcedureResources = {
-  database: HistorySyncDatabase;
-  eventBus: EventBus;
-  requestSync?: (reason: string, chatId?: string) => void;
-  telegram?: TelegramReadClient;
-};
+      return databaseResource.db;
+    });
+    const telegram = rpc<TelegramHistoryClient>('telegram');
+    const controller = createController(database, telegram, events, {
+      chatLoadBatchSize: config.chatLoadBatchSize,
+      messageLimit: config.messageLimit,
+      requestDelayMs: config.requestDelayMs,
+      windowDays: config.windowDays
+    });
 
-type HistorySyncModule = Module<
-  ProcedureResources,
-  ProcedureResources,
-  typeof procedures,
-  HistorySyncControlPlane,
-  HistorySyncServiceOptions
->;
+    background('sync', () => {
+      const subscriptions = [
+        events.subscribe('telegram.update.chat.directory.updated', () => {
+          controller.request('chat-updated');
+        })
+      ];
 
-export const historySyncModule: HistorySyncModule = defineModule('history-sync', () => {
-  defineControlPlane(new HistorySyncControlPlaneSubsystem());
-  defineEvents(EVENT_TYPES);
-  defineProcedures(procedures);
-  setRequired(true);
-  registerSubsystem(useDatabase());
-  registerSubsystem(useEvents());
-  registerSubsystem(useTelegram());
-  registerSubsystem(useService());
+      controller.request('startup');
+      return async () => {
+        for (const subscription of subscriptions) {
+          subscription.unsubscribe();
+        }
+        controller.stop();
+        await controller.wait();
+      };
+    });
+
+    return {
+      procedures: procedures({
+        controller,
+        database,
+        events,
+        telegram
+      }),
+      required: true
+    };
+  }
 });
-
-export function runHistorySyncModule(options: HistorySyncServiceOptions): Promise<void> {
-  return historySyncModule.run(options);
-}

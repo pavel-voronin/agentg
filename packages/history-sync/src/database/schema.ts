@@ -1,6 +1,6 @@
 import { index, jsonb, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 
-import type { JsonObject } from '@agentg/events/json';
+import type { JsonObject } from '@agentg/framework';
 
 export const historySyncTemplates = pgTable('history_sync_templates', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

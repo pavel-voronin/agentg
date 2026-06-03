@@ -1,58 +1,20 @@
-import { resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { httpRpc, nats, registry } from '@agentg/framework';
 
-import { checkDatabase, createDatabasePool } from '@agentg/database/database';
-import { createNatsEventBus } from '@agentg/events/bus';
+import { readConfig } from './config.js';
+import { historySyncModule } from './module.js';
 
-import { loadHistorySyncServiceConfig } from './config.js';
-import { createHistorySyncDatabase } from './database.js';
-import { runHistorySyncModule } from './module.js';
-
-if (isMainModule()) {
-  await runHistorySyncMain();
-}
-
-async function runHistorySyncMain(): Promise<void> {
-  const config = loadHistorySyncServiceConfig();
-  const pool = createDatabasePool(config.databaseUrl);
-  const database = createHistorySyncDatabase(pool);
-
-  try {
-    const databaseHealth = await checkDatabase(pool);
-    console.log(
-      JSON.stringify({
-        event: 'history-sync.startup_healthcheck',
-        postgres: {
-          now: databaseHealth.now.toISOString(),
-          version: databaseHealth.postgresVersion
-        }
-      })
-    );
-
-    const eventBus = await createNatsEventBus(config.nats);
-    await runHistorySyncModule({
-      database,
-      eventBus,
-      internalRpc: config.internalRpc,
-      serviceRpcUrl: config.serviceRpcUrl,
-      services: config.services,
-      sync: config.sync
-    });
-  } catch (error) {
-    console.error(
-      JSON.stringify({
-        event: 'history-sync.failed',
-        error: error instanceof Error ? error.message : String(error)
-      })
-    );
-    process.exitCode = 1;
-  } finally {
-    await pool.end();
+const config = readConfig(process.env);
+const app = historySyncModule({
+  config,
+  connect: {
+    events: nats(config.natsUrl),
+    rpc: httpRpc(
+      config.host === undefined ? { port: config.port } : { host: config.host, port: config.port }
+    ),
+    registry: registry(config.registryUrl)
   }
-}
+});
 
-function isMainModule(): boolean {
-  return (
-    process.argv[1] !== undefined && fileURLToPath(import.meta.url) === resolve(process.argv[1])
-  );
-}
+await app.start();
+
+console.log('history-sync started');
