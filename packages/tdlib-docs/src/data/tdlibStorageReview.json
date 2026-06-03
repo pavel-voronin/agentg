@@ -5391,150 +5391,6 @@
     {
       "columns": [
         {
-          "id": "telegram_message_reactions.chat_id",
-          "name": "chat_id",
-          "notes": [],
-          "nullable": false,
-          "pgType": "bigint",
-          "role": "primary-key",
-          "sourceFields": [
-            "Message.message.chat_id",
-            "Update.updateMessageReactions.chat_id",
-            "Update.updateMessageInteractionInfo.chat_id",
-            "Update.updateMessageReaction.chat_id",
-            "Update.updateMessageSendFailed.message",
-            "Update.updateMessageSendSucceeded.message"
-          ]
-        },
-        {
-          "id": "telegram_message_reactions.message_id",
-          "name": "message_id",
-          "notes": [],
-          "nullable": false,
-          "pgType": "bigint",
-          "role": "primary-key",
-          "sourceFields": [
-            "Message.message.id",
-            "Update.updateMessageReactions.message_id",
-            "Update.updateMessageInteractionInfo.message_id",
-            "Update.updateMessageReaction.message_id",
-            "Update.updateMessageSendFailed.old_message_id",
-            "Update.updateMessageSendSucceeded.message",
-            "Update.updateMessageSendSucceeded.old_message_id"
-          ]
-        },
-        {
-          "id": "telegram_message_reactions.reaction_type",
-          "name": "reaction_type",
-          "notes": [
-            "ReactionType is normalized to canonical text for the message-reaction primary key."
-          ],
-          "nullable": false,
-          "pgType": "text",
-          "role": "primary-key",
-          "sourceFields": [
-            "MessageReaction.messageReaction.type",
-            "Update.updateMessageInteractionInfo.interaction_info",
-            "Update.updateMessageReaction.old_reaction_types",
-            "Update.updateMessageReaction.new_reaction_types",
-            "Update.updateMessageReactions.reactions",
-            "Update.updateMessageSendSucceeded.message"
-          ]
-        },
-        {
-          "id": "telegram_message_reactions.is_chosen",
-          "name": "is_chosen",
-          "notes": [],
-          "nullable": false,
-          "pgType": "boolean",
-          "role": "data",
-          "sourceFields": [
-            "MessageReaction.messageReaction.is_chosen",
-            "Update.updateMessageInteractionInfo.interaction_info",
-            "Update.updateMessageReaction.actor_id",
-            "Update.updateMessageReaction.old_reaction_types",
-            "Update.updateMessageReaction.new_reaction_types",
-            "Update.updateMessageReactions.reactions",
-            "Update.updateMessageSendSucceeded.message"
-          ]
-        },
-        {
-          "id": "telegram_message_reactions.recent_sender_ids",
-          "name": "recent_sender_ids",
-          "notes": [],
-          "nullable": false,
-          "pgType": "jsonb",
-          "role": "data",
-          "sourceFields": [
-            "MessageReaction.messageReaction.recent_sender_ids",
-            "Update.updateMessageInteractionInfo.interaction_info",
-            "Update.updateMessageReaction.actor_id",
-            "Update.updateMessageReaction.old_reaction_types",
-            "Update.updateMessageReaction.new_reaction_types",
-            "Update.updateMessageReactions.reactions",
-            "Update.updateMessageSendSucceeded.message"
-          ]
-        },
-        {
-          "id": "telegram_message_reactions.total_count",
-          "name": "total_count",
-          "notes": [],
-          "nullable": false,
-          "pgType": "integer",
-          "role": "data",
-          "sourceFields": [
-            "MessageReaction.messageReaction.total_count",
-            "Update.updateMessageInteractionInfo.interaction_info",
-            "Update.updateMessageReaction.old_reaction_types",
-            "Update.updateMessageReaction.new_reaction_types",
-            "Update.updateMessageReactions.reactions",
-            "Update.updateMessageSendSucceeded.message"
-          ]
-        },
-        {
-          "id": "telegram_message_reactions.used_sender_id",
-          "name": "used_sender_id",
-          "notes": ["MessageSender is stored as embedded JSONB."],
-          "nullable": true,
-          "pgType": "jsonb",
-          "role": "data",
-          "sourceFields": [
-            "MessageReaction.messageReaction.used_sender_id",
-            "Update.updateMessageInteractionInfo.interaction_info",
-            "Update.updateMessageReaction.actor_id",
-            "Update.updateMessageReaction.old_reaction_types",
-            "Update.updateMessageReaction.new_reaction_types",
-            "Update.updateMessageReactions.reactions",
-            "Update.updateMessageSendSucceeded.message"
-          ]
-        }
-      ],
-      "foreignKeys": [],
-      "indexes": [],
-      "indirectSourceTypes": [
-        "Message",
-        "MessageSender",
-        "ReactionType",
-        "MessageInteractionInfo",
-        "MessageReactions"
-      ],
-      "name": "telegram_message_reactions",
-      "notes": [
-        "Seeded from storage review table decision for MessageReaction.",
-        "Rows can also be replaced from updateMessageInteractionInfo.interaction_info.reactions.reactions using chat_id and message_id from the update envelope. A null interaction_info or null reactions payload clears the owner-scoped reaction row set.",
-        "updateMessageReaction applies actor-level old/new ReactionType deltas to aggregate reaction rows and must not replace the entire owner-scoped reaction row set.",
-        "updateMessageReactions replaces the full owner-scoped reaction summary row set for one message."
-      ],
-      "primaryKey": [
-        "telegram_message_reactions.chat_id",
-        "telegram_message_reactions.message_id",
-        "telegram_message_reactions.reaction_type"
-      ],
-      "sourceTypes": ["MessageReaction"]
-    },
-    {
-      "columns": [
-        {
           "id": "telegram_messages.chat_id",
           "name": "chat_id",
           "notes": [],
@@ -5879,13 +5735,45 @@
         {
           "id": "telegram_messages.interaction_info",
           "name": "interaction_info",
-          "notes": ["MessageInteractionInfo is stored as embedded JSONB."],
+          "notes": [
+            "MessageInteractionInfo is stored as embedded JSONB with the nested reactions field omitted. Message reaction state is stored in telegram_messages.reactions."
+          ],
           "nullable": true,
           "pgType": "jsonb",
           "role": "data",
           "sourceFields": [
             "Message.message.interaction_info",
             "Update.updateMessageInteractionInfo.interaction_info"
+          ]
+        },
+        {
+          "id": "telegram_messages.reactions",
+          "name": "reactions",
+          "notes": [
+            "Message reaction state is stored separately from interaction_info so message reads can return reaction summaries from the message row without joining a child table.",
+            "Full Message and updateMessageInteractionInfo payloads store interaction_info with its nested reactions field omitted, and store the nested MessageReactions value in this column. Sparse reaction updates mutate this column only."
+          ],
+          "nullable": true,
+          "pgType": "jsonb",
+          "role": "data",
+          "sourceFields": [
+            "Message.message.interaction_info",
+            "MessageReaction.messageReaction.type",
+            "MessageReaction.messageReaction.total_count",
+            "MessageReaction.messageReaction.is_chosen",
+            "MessageReaction.messageReaction.used_sender_id",
+            "MessageReaction.messageReaction.recent_sender_ids",
+            "MessageReactions.messageReactions.reactions",
+            "MessageReactions.messageReactions.are_tags",
+            "MessageReactions.messageReactions.paid_reactors",
+            "MessageReactions.messageReactions.can_get_added_reactions",
+            "Update.updateMessageInteractionInfo.interaction_info",
+            "Update.updateMessageReaction.actor_id",
+            "Update.updateMessageReaction.old_reaction_types",
+            "Update.updateMessageReaction.new_reaction_types",
+            "Update.updateMessageReactions.reactions",
+            "Update.updateMessageSendFailed.message",
+            "Update.updateMessageSendSucceeded.message"
           ]
         },
         {
@@ -6013,9 +5901,9 @@
         "Checklist",
         "ChecklistTask",
         "Contact",
-        "DatedFile",
         "DateTimeFormattingType",
         "DateTimePartPrecision",
+        "DatedFile",
         "DiceStickers",
         "Document",
         "EncryptedCredentials",
@@ -6125,6 +6013,7 @@
       "name": "telegram_messages",
       "notes": [
         "Seeded from storage review table decision for Message.",
+        "Message.interaction_info is persisted without nested reactions; message reaction state is persisted on telegram_messages.reactions.",
         "updateMessageContentOpened mutates existing embedded Message.content for voice/video-note opened flags by chat_id and message_id; it must not insert partial message rows or replace the full content payload."
       ],
       "primaryKey": ["telegram_messages.chat_id", "telegram_messages.id"],
@@ -14061,17 +13950,6 @@
             ]
           },
           {
-            "id": "delete-message-reactions",
-            "op": "deleteRows",
-            "table": "telegram_message_reactions",
-            "condition": "from_cache is false and is_permanent is true",
-            "description": "Delete stored reaction rows for the affected chat and message ids.",
-            "sourceFields": [
-              "Update.updateDeleteMessages.chat_id",
-              "Update.updateDeleteMessages.message_ids"
-            ]
-          },
-          {
             "id": "delete-message-rows",
             "op": "deleteRows",
             "table": "telegram_messages",
@@ -15486,38 +15364,19 @@
       "handlerPlan": {
         "maturity": 1,
         "status": "draft",
-        "summary": "Replace stored interaction_info, replace derived reaction summary rows from the nested reactions payload, and publish a message update.",
+        "summary": "Replace stored interaction_info without nested reactions, replace the message-row reaction state from the nested reactions payload, and publish a message update.",
         "steps": [
           {
-            "id": "upsert-message-interaction-info",
+            "id": "upsert-message-interaction-state",
             "op": "upsertTable",
             "table": "telegram_messages",
             "columns": [
               "telegram_messages.chat_id",
               "telegram_messages.id",
-              "telegram_messages.interaction_info"
+              "telegram_messages.interaction_info",
+              "telegram_messages.reactions"
             ],
-            "description": "Upsert the message row fragment keyed by chat_id and message_id, storing interaction_info as the complete replacement value for telegram_messages.interaction_info. A null interaction_info clears the stored JSONB field.",
-            "sourceFields": [
-              "Update.updateMessageInteractionInfo.chat_id",
-              "Update.updateMessageInteractionInfo.message_id",
-              "Update.updateMessageInteractionInfo.interaction_info"
-            ]
-          },
-          {
-            "id": "replace-message-reaction-summary-rows",
-            "op": "replaceRows",
-            "table": "telegram_message_reactions",
-            "columns": [
-              "telegram_message_reactions.chat_id",
-              "telegram_message_reactions.message_id",
-              "telegram_message_reactions.reaction_type",
-              "telegram_message_reactions.total_count",
-              "telegram_message_reactions.is_chosen",
-              "telegram_message_reactions.used_sender_id",
-              "telegram_message_reactions.recent_sender_ids"
-            ],
-            "description": "Replace all reaction summary rows for the addressed message with rows derived from interaction_info.reactions.reactions. Use chat_id and message_id from the update as owner keys. If interaction_info is null or interaction_info.reactions is null, replace the owner set with an empty set.",
+            "description": "Upsert the message row fragment keyed by chat_id and message_id. Store interaction_info with its nested reactions field omitted, and store interaction_info.reactions in telegram_messages.reactions. A null interaction_info clears both stored interaction_info and reaction state.",
             "sourceFields": [
               "Update.updateMessageInteractionInfo.chat_id",
               "Update.updateMessageInteractionInfo.message_id",
@@ -15528,7 +15387,7 @@
             "id": "publish-message-updated",
             "op": "publishEvent",
             "event": "telegram.message.updated",
-            "description": "Publish that the addressed message changed after storage. The event should be built from the refreshed stored message row, not from the update payload alone, because the update carries interaction state but not message content fields.",
+            "description": "Publish that the addressed message changed after storage. Build the event from refreshed stored message state, not from the sparse update payload alone.",
             "sourceFields": [
               "Update.updateMessageInteractionInfo.chat_id",
               "Update.updateMessageInteractionInfo.message_id",
@@ -15678,7 +15537,7 @@
       "handlerPlan": {
         "maturity": 1,
         "status": "draft",
-        "summary": "Apply the public actor reaction delta to per-message reaction summary rows and publish a message refresh.",
+        "summary": "Apply the public actor reaction delta to telegram_messages.reactions and publish a message refresh.",
         "steps": [
           {
             "id": "return-when-reaction-delta-empty",
@@ -15691,59 +15550,15 @@
             ]
           },
           {
-            "id": "decrement-removed-reaction-rows",
+            "id": "lock-message-reaction-state",
             "op": "upsertTable",
-            "table": "telegram_message_reactions",
+            "table": "telegram_messages",
             "columns": [
-              "telegram_message_reactions.chat_id",
-              "telegram_message_reactions.message_id",
-              "telegram_message_reactions.reaction_type",
-              "telegram_message_reactions.total_count",
-              "telegram_message_reactions.is_chosen",
-              "telegram_message_reactions.used_sender_id",
-              "telegram_message_reactions.recent_sender_ids"
+              "telegram_messages.chat_id",
+              "telegram_messages.id",
+              "telegram_messages.reactions"
             ],
-            "description": "For each canonical ReactionType present in old_reaction_types and absent from new_reaction_types, update the existing row for chat_id/message_id/reaction_type by decrementing total_count by 1, removing actor_id from recent_sender_ids when present, and clearing is_chosen plus used_sender_id only when actor_id is the current account sender. Do not insert missing rows for removed reactions.",
-            "sourceFields": [
-              "Update.updateMessageReaction.chat_id",
-              "Update.updateMessageReaction.message_id",
-              "Update.updateMessageReaction.actor_id",
-              "Update.updateMessageReaction.old_reaction_types",
-              "Update.updateMessageReaction.new_reaction_types"
-            ]
-          },
-          {
-            "id": "delete-empty-removed-reaction-rows",
-            "op": "deleteRows",
-            "table": "telegram_message_reactions",
-            "columns": [
-              "telegram_message_reactions.chat_id",
-              "telegram_message_reactions.message_id",
-              "telegram_message_reactions.reaction_type"
-            ],
-            "condition": "a removed reaction row has total_count less than or equal to 0 after applying the decrement",
-            "description": "Delete reaction rows for removed reaction types whose aggregate count is exhausted after the actor removal.",
-            "sourceFields": [
-              "Update.updateMessageReaction.chat_id",
-              "Update.updateMessageReaction.message_id",
-              "Update.updateMessageReaction.old_reaction_types",
-              "Update.updateMessageReaction.new_reaction_types"
-            ]
-          },
-          {
-            "id": "upsert-added-reaction-rows",
-            "op": "upsertTable",
-            "table": "telegram_message_reactions",
-            "columns": [
-              "telegram_message_reactions.chat_id",
-              "telegram_message_reactions.message_id",
-              "telegram_message_reactions.reaction_type",
-              "telegram_message_reactions.total_count",
-              "telegram_message_reactions.is_chosen",
-              "telegram_message_reactions.used_sender_id",
-              "telegram_message_reactions.recent_sender_ids"
-            ],
-            "description": "For each canonical ReactionType present in new_reaction_types and absent from old_reaction_types, insert or update the row for chat_id/message_id/reaction_type. Insert missing rows with total_count 1, is_chosen false unless actor_id is the current account sender, used_sender_id as actor_id only for the current account sender otherwise JSON null, and recent_sender_ids initialized from actor_id. For existing rows, increment total_count by 1, move actor_id to the front of recent_sender_ids with the stored cap, and set is_chosen plus used_sender_id only when actor_id is the current account sender.",
+            "description": "Within a transaction, lock the addressed message row by chat_id and message_id, read telegram_messages.reactions, apply removed and added ReactionType deltas to the embedded reaction summary list, and write the updated JSONB value back to telegram_messages.reactions. Removed reactions decrement total_count and disappear when the count reaches 0; added reactions increment or create a summary item; current-account actor updates is_chosen and used_sender_id.",
             "sourceFields": [
               "Update.updateMessageReaction.chat_id",
               "Update.updateMessageReaction.message_id",
@@ -15756,7 +15571,7 @@
             "id": "publish-message-reaction-updated",
             "op": "publishEvent",
             "event": "telegram.message.updated",
-            "description": "Publish a message refresh for the affected chat_id/message_id after the reaction-row delta is stored. Use date as occurredAt for the reaction change; build message display data from refreshed stored state instead of assuming the update carries message content.",
+            "description": "Publish a message refresh for the affected chat_id/message_id after the embedded reaction-state delta is stored. Use date as occurredAt for the reaction change and build message display data from refreshed stored state.",
             "sourceFields": [
               "Update.updateMessageReaction.chat_id",
               "Update.updateMessageReaction.message_id",
@@ -15768,10 +15583,9 @@
           }
         ],
         "notes": [
-          "ReactionType values must be canonicalized the same way as telegram_message_reactions.reaction_type before set comparison or row lookup.",
-          "This update is a delta, not a full replacement. Do not use replaceRows for the whole owner reaction set.",
-          "No root update field is ignored. No runEffect is required.",
-          "recent_sender_ids can be maintained from deltas for the reacting actor, but a later full MessageReaction snapshot remains the authoritative source for the complete top recent-sender list."
+          "ReactionType values must be canonicalized before set comparison or embedded summary lookup.",
+          "This update is a delta, not a full replacement. Do not replace the whole Message row or interaction_info.",
+          "No root update field is ignored. No runEffect is required."
         ]
       },
       "notes": []
@@ -15781,22 +15595,18 @@
       "handlerPlan": {
         "maturity": 1,
         "status": "draft",
-        "summary": "Replace the stored reaction summary rows for one message and publish a message update event using the TDLib reaction-change timestamp.",
+        "summary": "Replace the stored message-row reaction summary list for one message and publish a message update event using the TDLib reaction-change timestamp.",
         "steps": [
           {
-            "id": "replace-message-reaction-summary-rows",
-            "op": "replaceRows",
-            "table": "telegram_message_reactions",
+            "id": "replace-message-reaction-state",
+            "op": "upsertTable",
+            "table": "telegram_messages",
             "columns": [
-              "telegram_message_reactions.chat_id",
-              "telegram_message_reactions.message_id",
-              "telegram_message_reactions.reaction_type",
-              "telegram_message_reactions.total_count",
-              "telegram_message_reactions.is_chosen",
-              "telegram_message_reactions.used_sender_id",
-              "telegram_message_reactions.recent_sender_ids"
+              "telegram_messages.chat_id",
+              "telegram_messages.id",
+              "telegram_messages.reactions"
             ],
-            "description": "Replace all reaction summary rows for the addressed message with rows derived from reactions. Use chat_id and message_id from the update as owner keys. Canonicalize each MessageReaction.type value into reaction_type so emoji, custom emoji, and paid reactions do not collide. An empty reactions vector replaces the owner set with an empty set.",
+            "description": "For the addressed message row, replace the reaction summary list in telegram_messages.reactions with the update reactions vector. Do not replace telegram_messages.interaction_info because this update carries reaction summaries but not view_count, forward_count, reply_info, or full MessageReactions metadata.",
             "sourceFields": [
               "Update.updateMessageReactions.chat_id",
               "Update.updateMessageReactions.message_id",
@@ -15807,7 +15617,7 @@
             "id": "publish-message-reactions-updated",
             "op": "publishEvent",
             "event": "telegram.message.updated",
-            "description": "Publish that the addressed message reaction summary changed after durable storage. Use date as occurredAt for the reaction change. Build any message DTO from refreshed stored state, not from the update payload alone, because this update carries reaction summary rows but not message content fields.",
+            "description": "Publish that the addressed message reaction state changed after durable storage. Use date as occurredAt for the reaction change and build display data from refreshed stored state.",
             "sourceFields": [
               "Update.updateMessageReactions.chat_id",
               "Update.updateMessageReactions.message_id",
@@ -15817,9 +15627,8 @@
           }
         ],
         "notes": [
-          "Do not use delegateType because updateMessageReactions supplies owner keys plus a vector of child payloads, not a standalone MessageReaction payload with its own owner identity.",
-          "Do not patch telegram_messages.interaction_info from this update unless runtime deliberately supports a nested JSONB merge that preserves MessageReactions fields not carried by the update.",
-          "The reaction summary table is the durable path for this update."
+          "Do not use delegateType because updateMessageReactions supplies owner keys plus a vector of child payloads, not a standalone Message payload.",
+          "Do not patch telegram_messages.interaction_info from this update."
         ]
       },
       "notes": []
@@ -15886,7 +15695,7 @@
             "id": "persist-failed-message",
             "op": "delegateType",
             "type": "Message",
-            "description": "Persist the failed message through the Message storage path with update-on-conflict semantics. This must replace the stored temporary outgoing message state, including telegram_messages.sending_state from message.sending_state. Do not use conflict-do-nothing here.",
+            "description": "Persist the failed message through the Message storage path with update-on-conflict semantics. This replaces the stored temporary outgoing message state, stores interaction_info without nested reactions, and stores reaction state on telegram_messages.reactions.",
             "sourceFields": ["Update.updateMessageSendFailed.message"]
           },
           {
@@ -15896,21 +15705,6 @@
             "effectKind": "file-system",
             "condition": "old_message_id differs from message.id",
             "description": "Delete file-slot ownership rows for the previous temporary message id after the failed Message snapshot has been persisted under message.id.",
-            "sourceFields": [
-              "Update.updateMessageSendFailed.message",
-              "Update.updateMessageSendFailed.old_message_id"
-            ]
-          },
-          {
-            "id": "delete-temporary-message-reactions",
-            "op": "deleteRows",
-            "table": "telegram_message_reactions",
-            "columns": [
-              "telegram_message_reactions.chat_id",
-              "telegram_message_reactions.message_id"
-            ],
-            "condition": "old_message_id differs from message.id",
-            "description": "Delete reaction rows owned by the previous temporary message id. Any reaction rows for the failed Message snapshot must come from the Message storage path under message.id.",
             "sourceFields": [
               "Update.updateMessageSendFailed.message",
               "Update.updateMessageSendFailed.old_message_id"
@@ -15968,23 +15762,7 @@
             "id": "persist-final-message",
             "op": "delegateType",
             "type": "Message",
-            "description": "Persist the final sent message through the Message storage path keyed by message.chat_id and message.id, replacing any existing final row with the complete Message payload.",
-            "sourceFields": ["Update.updateMessageSendSucceeded.message"]
-          },
-          {
-            "id": "replace-final-message-reactions",
-            "op": "replaceRows",
-            "table": "telegram_message_reactions",
-            "columns": [
-              "telegram_message_reactions.chat_id",
-              "telegram_message_reactions.message_id",
-              "telegram_message_reactions.reaction_type",
-              "telegram_message_reactions.total_count",
-              "telegram_message_reactions.is_chosen",
-              "telegram_message_reactions.used_sender_id",
-              "telegram_message_reactions.recent_sender_ids"
-            ],
-            "description": "Replace reaction summary rows for the final message from message.interaction_info.reactions.reactions, using message.chat_id and message.id as owner keys. If the final Message has no interaction_info.reactions payload, clear the owner-scoped reaction rows for the final message.",
+            "description": "Persist the final sent message through the Message storage path keyed by message.chat_id and message.id, replacing any existing final row with the complete Message payload. The Message storage path stores interaction_info without nested reactions and stores the final reaction state on telegram_messages.reactions.",
             "sourceFields": ["Update.updateMessageSendSucceeded.message"]
           },
           {
@@ -16014,21 +15792,6 @@
             "effectKind": "file-system",
             "condition": "old_message_id differs from message.id",
             "description": "Delete file slot rows owned by the previous temporary message id after final-message file slots have been recorded.",
-            "sourceFields": [
-              "Update.updateMessageSendSucceeded.message",
-              "Update.updateMessageSendSucceeded.old_message_id"
-            ]
-          },
-          {
-            "id": "delete-temporary-message-reactions",
-            "op": "deleteRows",
-            "table": "telegram_message_reactions",
-            "columns": [
-              "telegram_message_reactions.chat_id",
-              "telegram_message_reactions.message_id"
-            ],
-            "condition": "old_message_id differs from message.id",
-            "description": "Delete stale reaction rows keyed by message.chat_id and old_message_id so no child rows remain attached to the temporary outgoing message id.",
             "sourceFields": [
               "Update.updateMessageSendSucceeded.message",
               "Update.updateMessageSendSucceeded.old_message_id"
@@ -16165,7 +15928,7 @@
         ],
         "notes": [
           "UnreadReaction is embedded value data stored through Message.unread_reactions; it has no independent table row and no stable child key.",
-          "Do not reuse telegram_message_reactions for this update. MessageReaction rows are aggregate reaction summaries; UnreadReaction is the current unread-reaction list on one Message."
+          "Do not reuse telegram_messages.reactions for this update. MessageReaction values are aggregate reaction summaries; UnreadReaction is the current unread-reaction list on one Message."
         ]
       },
       "notes": []
@@ -55823,7 +55586,7 @@
       "type": "MessageInteractionInfo",
       "maturity": 2,
       "storage": "embedded",
-      "storageTarget": "Message.interaction_info",
+      "storageTarget": "Message.interaction_info without reactions; Message.reactions for reaction state",
       "schemaDesign": {
         "constructors": [
           {
@@ -55854,7 +55617,9 @@
               },
               {
                 "name": "reactions",
-                "notes": [],
+                "notes": [
+                  "Stored outside telegram_messages.interaction_info on telegram_messages.reactions."
+                ],
                 "target": {
                   "kind": "embedded-payload"
                 },
@@ -55872,7 +55637,7 @@
           "schema": "storage-decision",
           "status": "done",
           "maturity": 1,
-          "decision": "This is aggregate interaction state for one Message. updateMessageInteractionInfo addresses the owning message by chat_id and message_id and replaces this field.",
+          "decision": "This is aggregate interaction state for one Message. updateMessageInteractionInfo addresses the owning message by chat_id and message_id and replaces interaction_info, while nested reactions are stored separately on telegram_messages.reactions.",
           "constructors": [
             {
               "name": "messageInteractionInfo",
@@ -55908,13 +55673,15 @@
             "event": "The value can appear in durable owner payloads or persisted draft/result state, so it is not live-only."
           },
           "openQuestions": [],
-          "notes": []
+          "notes": [
+            "Storage deliberately splits MessageInteractionInfo.reactions out of telegram_messages.interaction_info and into telegram_messages.reactions."
+          ]
         },
         {
           "schema": "storage-decision",
           "status": "done",
           "maturity": 2,
-          "decision": "MessageInteractionInfo is the nullable interaction_info value embedded in the Message row. Its constructor has no id; updateMessageInteractionInfo supplies chat_id and message_id only to locate the owning Message and replace interaction_info, while nested Message updates and Message-return procedures expose it through Message.interaction_info. Related maturity 2 decisions keep Message as the chat_id/id table and keep MessageReplyInfo, MessageReactions, and MessageSender as embedded/reference values, so this type does not need a separate owner-scoped record.",
+          "decision": "MessageInteractionInfo is the nullable interaction_info value stored on the Message row with its nested reactions field omitted. updateMessageInteractionInfo supplies chat_id and message_id to locate the owning Message and replace interaction_info, while MessageInteractionInfo.reactions is split into telegram_messages.reactions for cheap message reads and sparse reaction updates.",
           "constructors": [
             {
               "name": "messageInteractionInfo",
@@ -55953,7 +55720,8 @@
           },
           "openQuestions": [],
           "notes": [
-            "Maturity 2 review rechecked the constructor, direct Message field, updateMessageInteractionInfo, nested Message update paths, Message-return and message-mutation procedures, and related maturity 2 decisions for Message, MessageReplyInfo, MessageReactions, and MessageSender. The previous maturity 1 review was used only as critique input; independent evidence supports embedded storage at Message.interaction_info."
+            "Maturity 2 review rechecked the constructor, direct Message field, updateMessageInteractionInfo, nested Message update paths, Message-return and message-mutation procedures, and related maturity 2 decisions for Message, MessageReplyInfo, MessageReactions, and MessageSender. The previous maturity 1 review was used only as critique input; independent evidence supports embedded storage at Message.interaction_info.",
+            "Storage deliberately splits MessageInteractionInfo.reactions out of telegram_messages.interaction_info and into telegram_messages.reactions."
           ]
         }
       ]
@@ -56161,8 +55929,8 @@
     {
       "type": "MessageReaction",
       "maturity": 2,
-      "storage": "table",
-      "storageTarget": "chat_id = Message.chat_id, message_id = Message.id, reaction_type = ReactionType",
+      "storage": "embedded",
+      "storageTarget": "telegram_messages.reactions.reactions",
       "schemaDesign": {
         "constructors": [
           {
@@ -56171,8 +55939,7 @@
                 "name": "type",
                 "notes": [],
                 "target": {
-                  "fieldId": "telegram_message_reactions.reaction_type",
-                  "kind": "table-column"
+                  "kind": "embedded-payload"
                 },
                 "tdlibType": "ReactionType"
               },
@@ -56180,8 +55947,7 @@
                 "name": "total_count",
                 "notes": [],
                 "target": {
-                  "fieldId": "telegram_message_reactions.total_count",
-                  "kind": "table-column"
+                  "kind": "embedded-payload"
                 },
                 "tdlibType": "int32"
               },
@@ -56189,8 +55955,7 @@
                 "name": "is_chosen",
                 "notes": [],
                 "target": {
-                  "fieldId": "telegram_message_reactions.is_chosen",
-                  "kind": "table-column"
+                  "kind": "embedded-payload"
                 },
                 "tdlibType": "Bool"
               },
@@ -56198,8 +55963,7 @@
                 "name": "used_sender_id",
                 "notes": [],
                 "target": {
-                  "fieldId": "telegram_message_reactions.used_sender_id",
-                  "kind": "table-column"
+                  "kind": "embedded-payload"
                 },
                 "tdlibType": "MessageSender"
               },
@@ -56207,8 +55971,7 @@
                 "name": "recent_sender_ids",
                 "notes": [],
                 "target": {
-                  "fieldId": "telegram_message_reactions.recent_sender_ids",
-                  "kind": "table-column"
+                  "kind": "embedded-payload"
                 },
                 "tdlibType": "vector<MessageSender>"
               }
@@ -56224,7 +55987,7 @@
           "schema": "storage-decision",
           "status": "done",
           "maturity": 1,
-          "decision": "This is one reaction summary item inside MessageReactions.reactions. updateMessageReactions replaces the reaction summary list for the owning message.",
+          "decision": "This is one reaction summary item inside the owning message reaction state. updateMessageReactions replaces the summary list for the owning message, and updateMessageReaction applies actor-level deltas to that same embedded list.",
           "constructors": [
             {
               "name": "messageReaction",
@@ -56238,34 +56001,41 @@
             }
           ],
           "uses": {
+            "directTypeUse": ["MessageReactions.reactions:vector<messageReaction>"],
             "directUpdateUse": ["updateMessageReactions.reactions:vector<messageReaction>"],
-            "indirectUpdateUse": [
-              "updateMessageReactions addresses the owning message by chat_id and message_id and provides the replacement reaction summary items"
-            ],
-            "directTypeUse": ["MessageReactions.reactions"],
             "indirectTypeUse": [
-              "MessageInteractionInfo.reactions exposes MessageReaction through MessageReactions.reactions"
+              "Message.interaction_info:messageInteractionInfo -> MessageInteractionInfo.reactions -> MessageReactions.reactions",
+              "Telegram message storage splits MessageInteractionInfo.reactions into telegram_messages.reactions for cheap message reads."
+            ],
+            "indirectUpdateUse": [
+              "updateMessageInteractionInfo can carry MessageReaction through interaction_info.reactions.reactions",
+              "Message payload updates can carry MessageReaction through nested Message.interaction_info.reactions.reactions",
+              "updateMessageReaction mutates the same embedded reaction summary list by ReactionType delta."
             ],
             "procedureUse": [
-              "add/remove/set reaction procedures mutate the owning message reaction state by chat_id, message_id, and reaction type"
+              "Message-return procedures expose MessageReaction through Message.interaction_info.reactions.reactions.",
+              "Reaction mutation procedures address the owning Message by chat_id, message_id, and ReactionType."
             ]
           },
           "rejectedStorage": {
-            "extend": "It does not structurally extend a single owner row; it is a nested value.",
-            "facet": "No separate owner-keyed lifecycle exists outside the owning field.",
-            "pair": "There is no key/value companion type.",
-            "kv": "The value belongs to concrete owner payloads, not account/global singleton state.",
-            "event": "The value can appear in durable owner payloads or persisted draft/result state, so it is not live-only.",
-            "embedded": "a reaction is an independently keyed row inside a message reaction collection, not an inline value owned only by the parent message payload"
+            "table": "The selected durable read path keeps message reaction summaries on telegram_messages.reactions. A child table would make ordinary message reads depend on an extra owner-scoped lookup.",
+            "extend": "MessageReaction is not a one-to-one extension of Message or MessageReactions.",
+            "facet": "MessageReaction is one item in an embedded reaction summary list, not a one-per-owner facet.",
+            "pair": "There is no companion key/value type whose association alone forms the stored record.",
+            "kv": "MessageReaction belongs to a concrete Message, not to account/global singleton state.",
+            "event": "MessageReaction is durable current message reaction state, not a live-only signal."
           },
           "openQuestions": [],
-          "notes": []
+          "notes": [
+            "ReactionType remains the stable key inside the embedded reaction summary list.",
+            "updateMessageReaction must serialize read-modify-write access to telegram_messages.reactions for the addressed message row."
+          ]
         },
         {
           "schema": "storage-decision",
           "status": "done",
           "maturity": 2,
-          "decision": "MessageReaction is the per-reaction aggregate child row for one Message. A Message can have many reaction summaries, MessageReaction.type is the stable local reaction key, updateMessageReactions supplies chat_id and message_id while replacing those rows, and reaction procedures/updateMessageReaction address the same message reaction state by owning Message key plus ReactionType. Store rows keyed by Message.chat_id, Message.id, and the ReactionType value.",
+          "decision": "MessageReaction is retained as an embedded item under telegram_messages.reactions.reactions. A Message can have many reaction summaries keyed by ReactionType, but the application read path needs the current summaries with the message row; updateMessageReactions replaces the embedded summary list and updateMessageReaction mutates it by actor delta.",
           "constructors": [
             {
               "name": "messageReaction",
@@ -56281,39 +56051,35 @@
           "uses": {
             "directTypeUse": ["MessageReactions.reactions:vector<messageReaction>"],
             "directUpdateUse": [
-              "updateMessageReactions(chat_id:int53, message_id:int53, date:int32, reactions:vector<messageReaction>) replaces the reaction summary rows for one Message"
+              "updateMessageReactions(chat_id:int53, message_id:int53, date:int32, reactions:vector<messageReaction>)"
             ],
             "indirectTypeUse": [
-              "MessageInteractionInfo.reactions:messageReactions -> MessageReactions.reactions",
               "Message.interaction_info:messageInteractionInfo -> MessageInteractionInfo.reactions -> MessageReactions.reactions",
-              "MessageReaction.type uses ReactionType as the local reaction key; used_sender_id and recent_sender_ids use MessageSender typed User/Chat references"
+              "MessageReaction.type uses ReactionType as the local reaction key; used_sender_id and recent_sender_ids use MessageSender typed User/Chat references."
             ],
             "indirectUpdateUse": [
-              "updateMessageInteractionInfo(chat_id:int53, message_id:int53, interaction_info:messageInteractionInfo) can carry MessageReaction through interaction_info.reactions.reactions",
-              "updateNewMessage, updateMessageSendSucceeded, updateMessageSendFailed, updateActiveLiveLocationMessages, updateChatLastMessage, updateChatReplyMarkup, and updateNewGuestQuery can carry MessageReaction through nested Message.interaction_info.reactions.reactions",
-              "updateMessageReaction(chat_id:int53, message_id:int53, actor_id:MessageSender, date:int32, old_reaction_types:vector<ReactionType>, new_reaction_types:vector<ReactionType>) mutates the same per-message reaction state by ReactionType without carrying a MessageReaction payload"
+              "updateMessageInteractionInfo(chat_id:int53, message_id:int53, interaction_info:messageInteractionInfo) can carry MessageReaction through interaction_info.reactions.reactions.",
+              "Message-carrying updates can carry MessageReaction through nested Message.interaction_info.reactions.reactions.",
+              "updateMessageReaction(chat_id:int53, message_id:int53, actor_id:MessageSender, date:int32, old_reaction_types:vector<ReactionType>, new_reaction_types:vector<ReactionType>) mutates the same embedded summary list by ReactionType."
             ],
             "procedureUse": [
               "No procedure accepts or returns MessageReaction directly.",
-              "addMessageReaction(chat_id:int53, message_id:int53, reaction_type:ReactionType), removeMessageReaction(chat_id:int53, message_id:int53, reaction_type:ReactionType), and setMessageReactions(chat_id:int53, message_id:int53, reaction_types:vector<ReactionType>) mutate reaction state for one Message by reaction type.",
-              "addPendingPaidMessageReaction(chat_id:int53, message_id:int53, star_count:int53, type:PaidReactionType), removePendingPaidMessageReactions(chat_id:int53, message_id:int53), commitPendingPaidMessageReactions(chat_id:int53, message_id:int53), and setPaidMessageReactionType(chat_id:int53, message_id:int53, type:PaidReactionType) mutate paid reaction state for one Message.",
-              "deleteMessageReactionsFromSender(chat_id:int53, message_id:int53, sender_id:MessageSender), deleteAllRecentMessageReactionsFromSender(chat_id:int53, sender_id:MessageSender), reportMessageReactions(chat_id:int53, message_id:int53, sender_id:MessageSender), and getMessageAddedReactions(chat_id:int53, message_id:int53, reaction_type:ReactionType) operate on detailed sender reactions connected to the same MessageReaction aggregates.",
-              "Message-return procedures expose MessageReaction through Message.interaction_info.reactions.reactions, including getMessage, getMessages, getChatHistory, searchChatMessages, sendMessage, editMessageText, forwardMessages, and resendMessages."
+              "addMessageReaction, removeMessageReaction, setMessageReactions, paid-reaction procedures, sender-reaction deletion/reporting, and getMessageAddedReactions operate on reaction state for one Message.",
+              "Message-return procedures expose MessageReaction through Message.interaction_info.reactions.reactions."
             ]
           },
           "rejectedStorage": {
-            "embedded": "MessageReaction is not only an opaque nested list item under MessageReactions.reactions. A message can have many reaction summaries keyed by ReactionType, and updates/procedures address the owning Message reaction state by chat_id, message_id, and reaction type.",
-            "extend": "MessageReaction is not a one-to-one structural extension of Message or MessageReactions; one Message can have many reaction summary rows.",
-            "facet": "The value is one row in an owner-scoped collection with a stable local ReactionType key, so the maturity 2 owner-scoped table rule selects table rather than a one-aspect-per-owner facet.",
-            "pair": "There is no companion key type and value type whose association alone forms the stored record; the row is keyed by the owning Message identity plus the nested ReactionType value.",
-            "kv": "MessageReaction belongs to a concrete Message, not to an account-level or global singleton key.",
-            "event": "MessageReaction is current message reaction state carried in Message payloads and replacement updates; it is needed after restart and is not a live-only signal."
+            "table": "The target architecture stores message reaction state on telegram_messages.reactions so ordinary message reads do not need a child-table read. The owner remains Message.chat_id plus Message.id; ReactionType is the embedded local key.",
+            "extend": "MessageReaction is not a one-to-one structural extension of Message or MessageReactions; a message can have many reaction summaries.",
+            "facet": "The state is a list item in the message reaction state, not a one-aspect-per-owner record.",
+            "pair": "There is no separate key/value pair type; the item is part of MessageReactions.reactions.",
+            "kv": "MessageReaction belongs to one concrete Message, not an account/global singleton key.",
+            "event": "MessageReaction is durable current message state carried in Message payloads and reaction updates."
           },
           "openQuestions": [],
           "notes": [
-            "MessageReaction has no chat_id or message_id fields; ingestion must attach the owning Message key from updateMessageReactions, updateMessageInteractionInfo, nested Message payloads, or message-return context before upserting rows.",
-            "The local row key is the nested ReactionType variant in MessageReaction.type; storage must canonicalize emoji, custom-emoji, and paid reaction variants so distinct reaction types do not collide.",
-            "The previous maturity 1 embedded decision underclassified the owner-scoped child shape. Maturity 2 review used it only as critique input, then rechecked the constructor, direct updateMessageReactions payload, updateMessageReaction, reaction procedures, and related completed maturity 2 decisions for Chat, Message, and MessageInteractionInfo; those decisions establish the owner path while the keyed reaction item satisfies the owner-scoped table test."
+            "The stored message interaction_info column omits the nested reactions field; telegram_messages.reactions is the durable reaction-state column.",
+            "A later full MessageReactions snapshot remains authoritative for metadata fields that sparse reaction updates do not carry."
           ]
         }
       ]
@@ -56322,7 +56088,7 @@
       "type": "MessageReactions",
       "maturity": 2,
       "storage": "embedded",
-      "storageTarget": "MessageInteractionInfo.reactions",
+      "storageTarget": "telegram_messages.reactions",
       "schemaDesign": {
         "constructors": [
           {
@@ -56371,7 +56137,7 @@
           "schema": "storage-decision",
           "status": "done",
           "maturity": 1,
-          "decision": "This is the reaction aggregate field inside MessageInteractionInfo. Per-message reaction updates replace the owner message reaction state; the aggregate has no independent identity.",
+          "decision": "This is the reaction aggregate for one Message. It is stored on telegram_messages.reactions instead of inside telegram_messages.interaction_info so message reads can use one row while interaction_info remains free of nested reaction state.",
           "constructors": [
             {
               "name": "messageReactions",
@@ -56384,36 +56150,37 @@
             }
           ],
           "uses": {
-            "directUpdateUse": [
-              "updateMessageReactions.reactions:vector<messageReaction> replaces the item list represented by MessageReactions.reactions"
+            "directTypeUse": ["MessageInteractionInfo.reactions:messageReactions"],
+            "directUpdateUse": ["updateMessageReactions.reactions:vector<messageReaction>"],
+            "indirectTypeUse": [
+              "Message.interaction_info exposes MessageReactions through MessageInteractionInfo.reactions before storage splitting."
             ],
             "indirectUpdateUse": [
-              "updateMessageInteractionInfo can carry MessageReactions through MessageInteractionInfo.reactions"
-            ],
-            "directTypeUse": ["MessageInteractionInfo.reactions"],
-            "indirectTypeUse": [
-              "Message.interaction_info exposes MessageReactions through MessageInteractionInfo.reactions"
+              "updateMessageInteractionInfo can carry MessageReactions through MessageInteractionInfo.reactions.",
+              "updateMessageReaction mutates the stored MessageReactions.reactions list without replacing interaction_info."
             ],
             "procedureUse": [
-              "getMessageAddedReactions and add/remove/set reaction procedures operate on the owning Message reaction state"
+              "Message-return procedures expose MessageReactions through Message.interaction_info.reactions."
             ]
           },
           "rejectedStorage": {
-            "table": "No standalone reactions id exists; chat_id/message_id identify the owning Message.",
-            "extend": "It does not structurally extend a single owner row; it is a nested value.",
-            "facet": "The stored shape is the reactions field of MessageInteractionInfo, not a separate owner-keyed row.",
-            "pair": "There is no key/value companion type.",
-            "kv": "The value belongs to concrete owner payloads, not account/global singleton state.",
-            "event": "The value can appear in durable owner payloads or persisted draft/result state, so it is not live-only."
+            "table": "MessageReactions has no standalone id or local key; chat_id/message_id identify the owning Message row.",
+            "extend": "MessageReactions is a nullable owner value, not a structural one-per-owner extension with a separate id.",
+            "facet": "Owner-keyed reaction updates mutate a field on the Message row, not a separate facet row.",
+            "pair": "There is no companion key/value type whose association forms this value.",
+            "kv": "MessageReactions belongs to a concrete Message, not account/global singleton state.",
+            "event": "MessageReactions is durable current message state carried in Message payloads and reaction updates."
           },
           "openQuestions": [],
-          "notes": []
+          "notes": [
+            "Store MessageInteractionInfo without its reactions field; store the reactions field in telegram_messages.reactions."
+          ]
         },
         {
           "schema": "storage-decision",
           "status": "done",
           "maturity": 2,
-          "decision": "MessageReactions is the nullable reaction aggregate embedded in MessageInteractionInfo.reactions. The constructor has no owner id or standalone key, and its only direct type use is that owner field. MessageInteractionInfo is embedded in the Message table row, while updateMessageReactions, updateMessageReaction, and reaction procedures use chat_id and message_id only to locate the owning Message and mutate its nested reaction state. Related maturity 2 decisions keep Message as the chat_id/id table, MessageInteractionInfo embedded at Message.interaction_info, and MessageReaction and PaidReactor embedded under MessageReactions.",
+          "decision": "MessageReactions is the nullable reaction aggregate stored on telegram_messages.reactions. Full Message and updateMessageInteractionInfo payloads split MessageInteractionInfo.reactions into this column; updateMessageReactions replaces the embedded reactions list; updateMessageReaction applies actor deltas to that list. MessageInteractionInfo remains stored on telegram_messages.interaction_info without nested reactions.",
           "constructors": [
             {
               "name": "messageReactions",
@@ -56428,36 +56195,35 @@
           "uses": {
             "directTypeUse": ["MessageInteractionInfo.reactions:messageReactions"],
             "directUpdateUse": [
-              "updateMessageReactions(chat_id:int53, message_id:int53, date:int32, reactions:vector<messageReaction>) updates the MessageReactions.reactions list for the owning Message"
+              "updateMessageReactions(chat_id:int53, message_id:int53, date:int32, reactions:vector<messageReaction>)"
             ],
             "indirectTypeUse": [
-              "Message.interaction_info:messageInteractionInfo exposes MessageReactions through MessageInteractionInfo.reactions",
-              "Message payloads containing interaction_info appear in Chat.last_message, topic last_message fields, notifications, public forwards, file downloads, message thread/search/result wrappers, and BusinessMessage wrappers"
+              "Message.interaction_info:messageInteractionInfo exposes MessageReactions through MessageInteractionInfo.reactions before storage splitting.",
+              "Message payloads containing interaction_info can carry MessageReactions through nested Message.interaction_info.reactions."
             ],
             "indirectUpdateUse": [
-              "updateMessageInteractionInfo(chat_id:int53, message_id:int53, interaction_info:messageInteractionInfo) can replace MessageInteractionInfo.reactions as part of the owning Message interaction info",
-              "updateMessageReaction(chat_id:int53, message_id:int53, actor_id:MessageSender, old_reaction_types:vector<ReactionType>, new_reaction_types:vector<ReactionType>) mutates the same owning Message reaction state without carrying a MessageReactions payload",
-              "updateNewMessage, updateMessageSendSucceeded, updateMessageSendFailed, updateActiveLiveLocationMessages, updateChatLastMessage, updateChatReplyMarkup, and updateNewGuestQuery can carry MessageReactions through nested Message.interaction_info.reactions"
+              "updateMessageInteractionInfo can replace MessageReactions as part of a full interaction-info snapshot.",
+              "updateMessageReaction mutates the owning Message reaction summaries without carrying a full MessageReactions payload.",
+              "Message-carrying updates can carry MessageReactions through nested Message.interaction_info.reactions."
             ],
             "procedureUse": [
               "No procedure accepts or returns MessageReactions directly.",
-              "Message-return procedures expose it through Message.interaction_info.reactions, including getMessage, getMessages, getChatHistory, getMessageThread, searchChatMessages, sendMessage, editMessageText, forwardMessages, and resendMessages.",
-              "Reaction mutation and query procedures address the owning Message by chat_id and message_id: addMessageReaction, removeMessageReaction, setMessageReactions, addPendingPaidMessageReaction, removePendingPaidMessageReactions, commitPendingPaidMessageReactions, setPaidMessageReactionType, deleteMessageReactionsFromSender, reportMessageReactions, getMessageAddedReactions, and getMessageAvailableReactions.",
-              "deleteAllRecentMessageReactionsFromSender mutates recent reactions for messages in a chat by chat_id and sender_id; it does not give MessageReactions an independent identity."
+              "Message-return procedures expose it through Message.interaction_info.reactions.",
+              "Reaction mutation and query procedures address the owning Message by chat_id and message_id."
             ]
           },
           "rejectedStorage": {
-            "table": "MessageReactions has no standalone id or stable local key. chat_id and message_id identify the owning Message row, not a MessageReactions row.",
-            "extend": "It is not a structural one-per-owner extension; it is a nullable field value inside MessageInteractionInfo.",
-            "facet": "Owner-keyed updates and procedures mutate Message reaction state, but the stored shape is still the ordinary MessageInteractionInfo.reactions field rather than a separate owner-scoped record.",
+            "table": "MessageReactions has no standalone id or local key; the durable owner is telegram_messages(chat_id, id).",
+            "extend": "It is not a structural one-per-owner extension; it is a nullable reaction-state value on Message.",
+            "facet": "The target storage is the ordinary Message row column telegram_messages.reactions, not a separate owner-scoped row.",
             "pair": "There is no companion key/value type whose association forms the stored MessageReactions value.",
-            "kv": "The value belongs to a concrete Message through MessageInteractionInfo, not an account-level or global singleton key.",
-            "event": "The value represents current message reaction state carried in durable Message payloads and used by later message/reaction procedures, so it is not live-only."
+            "kv": "MessageReactions belongs to one concrete Message, not an account-level or global singleton key.",
+            "event": "MessageReactions is durable current message reaction state, not a live-only signal."
           },
           "openQuestions": [],
           "notes": [
-            "updateMessageReactions and updateMessageReaction are owner-keyed partial reaction updates; apply them to Message.chat_id/id and the embedded MessageInteractionInfo.reactions value, not to independent MessageReactions rows.",
-            "Maturity 2 keeps the maturity 1 embedded decision after rechecking the constructor, direct owner field, Message and MessageInteractionInfo owners, partial reaction updates, reaction procedures, and related storage targets for Message, MessageInteractionInfo, MessageReaction, PaidReactor, ReactionType, and MessageSender. The earlier maturity 1 review was used only as critique input."
+            "updateMessageReactions carries only reaction summary items, so it must update telegram_messages.reactions and must not replace telegram_messages.interaction_info.",
+            "updateMessageReaction is a delta and must not replace the full reaction-state value."
           ]
         }
       ]
@@ -60075,7 +59841,7 @@
       "type": "PaidReactor",
       "maturity": 2,
       "storage": "embedded",
-      "storageTarget": "LiveStoryDonors.top_donors, MessageReactions.paid_reactors",
+      "storageTarget": "LiveStoryDonors.top_donors, telegram_messages.reactions.paid_reactors",
       "schemaDesign": {
         "constructors": [
           {
@@ -64912,7 +64678,7 @@
       "type": "ReactionType",
       "maturity": 2,
       "storage": "embedded",
-      "storageTarget": "default_reaction_type, ChatAvailableReactions.reactions, MessageReaction.type, SavedMessagesTag.tag, Story.chosen_reaction_type, StoryAreaType.reaction_type, UnreadReaction.type",
+      "storageTarget": "default_reaction_type, ChatAvailableReactions.reactions, MessageReaction.type inside telegram_messages.reactions, SavedMessagesTag.tag, Story.chosen_reaction_type, StoryAreaType.reaction_type, UnreadReaction.type",
       "schemaDesign": {
         "constructors": [
           {
@@ -65025,7 +64791,7 @@
           "schema": "storage-decision",
           "status": "done",
           "maturity": 2,
-          "decision": "ReactionType is a discriminated reaction value, not an independently stored reaction entity. reactionTypeEmoji.emoji, reactionTypeCustomEmoji.custom_emoji_id, and reactionTypePaid identify the value variant; they do not define a standalone row. Durable retention happens as the account default_reaction_type value, inside stored owner payloads, or as the local ReactionType key of MessageReaction rows. InputStoryAreaType.reaction_type is procedure input only, and AddedReaction, AvailableReaction, and StoryInteractionType carry ReactionType through fresh result payloads rather than storage targets.",
+          "decision": "ReactionType is a discriminated reaction value, not an independently stored reaction entity. reactionTypeEmoji.emoji, reactionTypeCustomEmoji.custom_emoji_id, and reactionTypePaid identify the value variant; they do not define a standalone row. Durable retention happens as the account default_reaction_type value, inside stored owner payloads, or as the local ReactionType key of embedded MessageReaction summary items. InputStoryAreaType.reaction_type is procedure input only, and AddedReaction, AvailableReaction, and StoryInteractionType carry ReactionType through fresh result payloads rather than storage targets.",
           "constructors": [
             {
               "name": "reactionTypeCustomEmoji",
@@ -65095,7 +64861,7 @@
           "openQuestions": [],
           "notes": [
             "The maturity 1 target named input/result-only paths. Keep storage limited to default_reaction_type, ChatAvailableReactions, MessageReaction, SavedMessagesTag, Story, StoryAreaType, and UnreadReaction; do not add durable ReactionType targets for InputStoryAreaType, AddedReaction, AvailableReaction, or StoryInteractionType unless those owner types receive separate durable storage decisions.",
-            "MessageReaction.type uses ReactionType as a table key, so storage must canonicalize the emoji, custom_emoji_id, and paid variants before comparing or serializing the key.",
+            "MessageReaction.type uses ReactionType as an embedded summary key, so storage must canonicalize the emoji, custom_emoji_id, and paid variants before comparing or serializing the key.",
             "Maturity 2 keeps the embedded kind from the existing maturity 1 critique but narrows the storage target to owner paths with retained state. Related decisions inspected include Chat, ChatAvailableReactions, Message, MessageInteractionInfo, MessageReaction, SavedMessagesTag/SavedMessagesTags, Story, StoryAreaType, UnreadReaction, and PaidReactionType; they support treating ReactionType as owner-field value data or a nested MessageReaction key, not as a standalone table or global reaction catalog."
           ]
         }
@@ -78770,7 +78536,7 @@
           "schema": "storage-decision",
           "status": "done",
           "maturity": 2,
-          "decision": "UnreadReaction is a replaceable value item in Message.unread_reactions. The constructor has no own id or stable local key, and updateMessageUnreadReactions supplies chat_id and message_id only to locate the owning Message row before replacing the unread_reactions vector. Related completed decisions keep Message as the chat_id/id table, ReactionType as embedded value data, MessageSender as an embedded typed User/Chat reference, and MessageReaction as a separate owner-scoped table shape that does not apply to unread reaction list items.",
+          "decision": "UnreadReaction is a replaceable value item in Message.unread_reactions. The constructor has no own id or stable local key, and updateMessageUnreadReactions supplies chat_id and message_id only to locate the owning Message row before replacing the unread_reactions vector. Related completed decisions keep Message as the chat_id/id table, ReactionType as embedded value data, MessageSender as an embedded typed User/Chat reference, and MessageReaction as an embedded summary item under telegram_messages.reactions that does not apply to unread reaction list items.",
           "constructors": [
             {
               "name": "unreadReaction",
@@ -78809,8 +78575,8 @@
           },
           "openQuestions": [],
           "notes": [
-            "Do not reuse the MessageReaction table shape for UnreadReaction: updateMessageUnreadReactions replaces the entire Message.unread_reactions vector for chat_id/message_id and carries Chat.unread_reaction_count as separate aggregate state; no update or procedure addresses one unread item by ReactionType or sender.",
-            "Maturity 1 chose the correct embedded target, but it did not distinguish UnreadReaction from the completed MessageReaction owner-scoped table decision or separate the Chat unread_reaction_count aggregate from the Message.unread_reactions payload. Maturity 2 rechecked the constructor, direct Message field, replacement update, reaction read procedures, and completed decisions for Message, Chat, ReactionType, MessageSender, MessageInteractionInfo, MessageReactions, and MessageReaction."
+            "Do not reuse the MessageReaction embedded reaction-state shape for UnreadReaction: updateMessageUnreadReactions replaces the entire Message.unread_reactions vector for chat_id/message_id and carries Chat.unread_reaction_count as separate aggregate state; no update or procedure addresses one unread item by ReactionType or sender.",
+            "Maturity 1 chose the correct embedded target, but it did not distinguish UnreadReaction from the completed MessageReaction embedded reaction-state decision or separate the Chat unread_reaction_count aggregate from the Message.unread_reactions payload. Maturity 2 rechecked the constructor, direct Message field, replacement update, reaction read procedures, and completed decisions for Message, Chat, ReactionType, MessageSender, MessageInteractionInfo, MessageReactions, and MessageReaction."
           ]
         }
       ]
