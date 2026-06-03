@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 
-import { useControlPlaneHost } from '@agentg/control-plane-sdk/host';
-import type { SlotContext } from '@agentg/control-plane-sdk/slots';
+import { useControlPlaneHost } from '@agentg/framework/cp';
+import type { SlotContext } from '@agentg/framework/cp';
 
 import SelectedWorkspace from './components/selectedWorkspace.vue';
-import { applyHistorySyncTimelineEvent } from './selectedHistorySyncEvents.js';
+import { applyTimelineEvent } from './selectedEvents.js';
 import { normalizeViewportDays, selectedWorkspaceView } from './selectedWorkspaceView.js';
 import { readStorage, writeStorage } from './storage.js';
 import {
@@ -25,7 +25,7 @@ const props = defineProps<{
 }>();
 
 const SELECTED_HISTORY_SYNC_LOADING_FEEDBACK_DELAY_MS = 240;
-const historySyncStoragePrefix = 'agentg.history-sync.controlPlane';
+const storagePrefix = 'agentg.history-sync.controlPlane';
 const host = useControlPlaneHost();
 const selectedHistorySyncState = ref<SelectedHistorySyncState | null>(null);
 const selectedHistorySyncLoadingVisible = ref(false);
@@ -70,7 +70,11 @@ onMounted(() => {
     if (selectedHistorySyncState.value === null || selectedHistorySyncStatus.value !== 'ready') {
       return;
     }
-    applyHistorySyncTimelineEvent(selectedHistorySyncState.value, event as ControlPlaneEvent);
+    if (applyTimelineEvent(selectedHistorySyncState.value, event as ControlPlaneEvent)) {
+      selectedHistorySyncState.value = cloneSelectedHistorySyncState(
+        selectedHistorySyncState.value
+      );
+    }
   });
 });
 
@@ -125,17 +129,14 @@ function clearTimelineScale(): void {
 function selectTimelineScale(value: number): void {
   if (viewportDays.value === value) {
     defaultViewportDays.value = normalizeViewportDays(value);
-    writeStorage(
-      `${historySyncStoragePrefix}.defaultViewportDays`,
-      String(defaultViewportDays.value)
-    );
+    writeStorage(`${storagePrefix}.defaultViewportDays`, String(defaultViewportDays.value));
   }
   viewportDays.value = normalizeViewportDays(value);
 }
 
 function readStoredViewportDays(): number {
   return normalizeViewportDays(
-    readStorage(`${historySyncStoragePrefix}.defaultViewportDays`) ?? DEFAULT_VIEWPORT_DAYS
+    readStorage(`${storagePrefix}.defaultViewportDays`) ?? DEFAULT_VIEWPORT_DAYS
   );
 }
 
@@ -199,6 +200,7 @@ function normalizeSelectedHistorySyncChat(value: unknown): SelectedHistorySyncCh
 function normalizeHistorySyncInterval(value: unknown): HistorySyncInterval {
   const input = asRecord(value);
   return removeUndefinedProperties({
+    coveredAt: asString(input?.coveredAt),
     endAt: asString(input?.endAt) ?? '',
     messageCount:
       input?.messageCount === undefined ? undefined : asNonNegativeInteger(input.messageCount),
@@ -237,6 +239,16 @@ function normalizeHistorySyncBoundary(value: unknown): HistorySyncBoundary {
   return {
     expression: asString(input?.expression) ?? '',
     kind: 'expression'
+  };
+}
+
+function cloneSelectedHistorySyncState(value: SelectedHistorySyncState): SelectedHistorySyncState {
+  return {
+    chat: value.chat === null ? null : { ...value.chat },
+    coverage: value.coverage.map((interval) => ({ ...interval })),
+    desired: value.desired.map((interval) => ({ ...interval })),
+    missing: value.missing.map((interval) => ({ ...interval })),
+    targets: value.targets.map((target) => ({ ...target }))
   };
 }
 

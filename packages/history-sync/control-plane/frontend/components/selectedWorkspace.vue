@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 
-import UiButton from '@agentg/control-plane-sdk/ui';
+import { UiButton } from '@agentg/framework/cp';
 import type { SelectedWorkspaceView, TimelineScaleButtonView } from '../views.js';
-import HistorySyncTimeline from './historySyncTimeline.vue';
+import TimelinePanel from './timelinePanel.vue';
 
 defineProps<{
   view: SelectedWorkspaceView;
@@ -115,7 +115,7 @@ function scaleButtonVariant(scale: TimelineScaleButtonView): 'neutral' | 'select
               </div>
             </div>
           </div>
-          <HistorySyncTimeline
+          <TimelinePanel
             :data="view.historySyncState"
             :viewport-days="view.viewportDays"
             @add-target="(start, end) => emit('customTarget', start, end)"

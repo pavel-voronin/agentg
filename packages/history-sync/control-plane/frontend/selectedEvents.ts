@@ -15,7 +15,7 @@ type DatedInterval = {
 
 const TELEGRAM_HISTORY_TICK_MS = 1000;
 
-export function applyHistorySyncTimelineEvent(
+export function applyTimelineEvent(
   state: SelectedHistorySyncState,
   event: ControlPlaneEvent
 ): boolean {

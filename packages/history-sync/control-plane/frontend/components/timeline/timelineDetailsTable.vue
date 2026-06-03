@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import UiButton from '@agentg/control-plane-sdk/ui';
+import { UiButton } from '@agentg/framework/cp';
 import type { TimelineDetail, TimelineDetailSection } from '../../timeline/timelineModel.js';
 
 const props = defineProps<{

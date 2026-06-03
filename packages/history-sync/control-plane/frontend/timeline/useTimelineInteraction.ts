@@ -20,6 +20,7 @@ import {
   type TimelineViewport
 } from './timelineModel.js';
 
+// TODO(file-size): Split pointer selection, wheel gestures, hover state, and viewport sync.
 export type TimelineHoverPanelElement = {
   offsetHeight: number;
   offsetWidth: number;

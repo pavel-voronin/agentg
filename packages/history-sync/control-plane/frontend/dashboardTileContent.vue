@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
-import { useControlPlaneHost } from '@agentg/control-plane-sdk/host';
-import UiMetricTile from '@agentg/control-plane-sdk/ui/metric-tile';
+import { useControlPlaneHost } from '@agentg/framework/cp';
+import { UiMetricTile } from '@agentg/framework/cp';
 
 import { coverageUpdateBatchFromEvent, type CoverageUpdateBatch } from './coverageUpdates.js';
 
