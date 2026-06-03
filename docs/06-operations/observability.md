@@ -53,7 +53,6 @@ should be used for live debugging, not recovery.
 `npm run source:audit` checks boundary rules that are easy to regress during
 module work:
 
-- raw tRPC builder imports stay package-local
 - cross-domain storage schema imports stay out of runtime code
 - domain and module table prefixes match ownership
 - Gateway's external RPC and event surface remains covered

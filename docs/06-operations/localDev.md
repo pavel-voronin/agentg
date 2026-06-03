@@ -10,7 +10,7 @@ with Docker Compose providing Postgres and NATS.
 npm install
 npm run infra:up
 npm run db:migrate
-npm run dev:service-directory
+npm run dev:registry
 npm run dev:telegram
 npm run dev:history-sync
 npm run dev:gateway
@@ -27,52 +27,45 @@ History Sync.
 TDLib session, receives live Telegram updates, writes Telegram-shaped records to
 Postgres, computes Telegram history coverage from fetched and received messages,
 publishes live integration events to NATS, and serves the Telegram history fetch
-and coverage RPC surface used by History Sync. It joins Service Directory with
-its advertised RPC URL, procedures, and events.
+and coverage RPC surface used by History Sync. It joins Registry with its
+advertised RPC URL and procedures.
 
 `npm run dev:history-sync` runs the `@agentg/history-sync` package. It owns
 history sync templates, concrete chat targets, range projection, and the history sync
-lifecycle. It joins Service Directory and resolves Telegram through the local
-Service Directory snapshot before internal tRPC calls.
+lifecycle. It joins Registry and resolves Telegram through the local Registry
+snapshot before internal procedure calls.
 
-`npm run dev:service-directory` runs the `@agentg/service-directory` package.
-It stores active service manifests, publishes version invalidations, and serves
-the current topology snapshot.
+`npm run dev:registry` runs the `@agentg/registry` package. It stores
+active module manifests, publishes version invalidations, and serves the current
+topology snapshot.
 
 `npm run dev:control-plane-server` runs the server-side Control Plane boundary.
 It serves the browser-facing operator WebSocket on `127.0.0.1:8789`, subscribes
 to live NATS events, and resolves History Sync and Telegram through Service
-Directory before internal tRPC calls.
+Registry before internal procedure calls.
 
 `npm run dev:control-plane` runs the Vite browser UI on `127.0.0.1:8788`. Its
 `/ws` path is proxied to the Control Plane server during development.
 
 `npm run dev:gateway` runs the `@agentg/gateway` package. It subscribes to live
 NATS events and serves the external agent WebSocket boundary. Gateway currently
-exposes only `telegram.getChat`, resolves Telegram through Service Directory,
+exposes only `telegram.getChat`, resolves Telegram through Registry,
 and forwards only `telegram.login.completed`. Operator views do not require
 Gateway.
 
 ## Internal RPC Addresses
 
-Telegram and History Sync start package-owned internal tRPC HTTP servers.
-Service Directory is the only direct discovery URL. Services join it with their
+Telegram and History Sync start package-owned internal HTTP procedure servers.
+Registry is the only direct discovery URL. Services join it with their
 manifest; consumers resolve procedures from the local snapshot before making
-internal tRPC calls.
+internal procedure calls.
 
 Local development defaults:
 
-- Telegram internal RPC bind: `TELEGRAM_RPC_HOST=127.0.0.1`,
-  `TELEGRAM_RPC_PORT=18081`
-- Telegram advertised service URL: `TELEGRAM_RPC_URL=http://127.0.0.1:18081`
-- History Sync internal RPC bind: `HISTORY_SYNC_RPC_HOST=127.0.0.1`,
-  `HISTORY_SYNC_RPC_PORT=18082`
-- History Sync advertised service URL: `HISTORY_SYNC_RPC_URL=http://127.0.0.1:18082`
-- Service Directory internal RPC bind:
-  `SERVICE_DIRECTORY_RPC_HOST=127.0.0.1`,
-  `SERVICE_DIRECTORY_RPC_PORT=18084`
-- Services to Service Directory URL:
-  `SERVICE_DIRECTORY_RPC_URL=http://127.0.0.1:18084`
+- Telegram local RPC port: `PORT=8702`
+- History Sync local RPC port: `PORT=8704`
+- Registry local RPC port: `PORT=8701`
+- Services to Registry URL: `REGISTRY_URL=http://127.0.0.1:8701`
 - Control Plane server bind: `CONTROL_PLANE_HOST=127.0.0.1`,
   `CONTROL_PLANE_PORT=8789`
 
@@ -80,10 +73,10 @@ Docker Compose uses internal service DNS names:
 
 - Telegram binds `0.0.0.0:8080` inside its container.
 - History Sync binds `0.0.0.0:8080` inside its container.
-- Service Directory binds `0.0.0.0:8080` inside its container.
-- Telegram and History Sync join `http://service-directory:8080`.
-- History Sync, Gateway, and Control Plane resolve service RPC URLs from Service
-  Directory snapshots.
+- Registry binds `0.0.0.0:8080` inside its container.
+- Telegram and History Sync join `http://registry:8080`.
+- History Sync, Gateway, and Control Plane resolve module RPC URLs
+  from Registry snapshots.
 - Control Plane exposes the browser UI on `${CONTROL_PLANE_PORT:-8788}`.
 
 Run the containerized Telegram ingestion path when validating Docker packaging:
@@ -108,10 +101,10 @@ Module runtime environment:
 - `MODULE_MIGRATION_FOLDER`: module-owned Drizzle migration folder
 - `DATABASE_URL`: shared Postgres connection string
 - `NATS_URL`: shared NATS connection string
-- `SERVICE_DIRECTORY_RPC_URL`: Service Directory URL for service manifest join
+- `REGISTRY_URL`: Registry URL for module manifest join
 
-Extension RPC names are namespaced by slug and are declared in the service
-manifest sent to Service Directory. Model extension getters target the model
+Extension RPC names are namespaced by slug and are declared in the module
+manifest sent to Registry. Model extension getters target the model
 marker value, for example `telegram.chat`.
 
 Docker Compose includes a `module-smoke` profile with the `modulesmoke` service.
@@ -122,28 +115,17 @@ module:
 docker compose --profile module-smoke up --build modulesmoke
 ```
 
-## Inspecting Service Directory
+## Inspecting Registry
 
-The current Service Directory snapshot is exposed through
-`@agentg/service-directory/rpc`:
+The current Registry snapshot is exposed by `@agentg/registry` through the
+framework registry client.
 
-```bash
-npx tsx -e "
-import { createServiceDirectoryClient } from '@agentg/service-directory/rpc';
-const client = createServiceDirectoryClient({
-  url: process.env.SERVICE_DIRECTORY_RPC_URL ?? 'http://127.0.0.1:18084'
-});
-console.log(JSON.stringify(await client.refresh(), null, 2));
-client.close();
-"
-```
-
-Service Directory stores active service manifests only. It does not call domain
-or module RPC methods.
+Registry stores active module manifests only. It does not call domain or module
+RPC methods.
 
 Core services register with `required: true`: Telegram ingestion, History Sync,
 Gateway, and Control Plane. Disappearing required services trigger graceful
-shutdown in Service Directory clients. Disappearing optional services only
+shutdown in Registry clients. Disappearing optional services only
 removes their procedures and extensions from snapshots.
 
 ## Debugging `callId` Flows
@@ -180,7 +162,7 @@ Initial local stack includes:
 
 - Telegram ingestion process backed by TDLib
 - History Sync process
-- Service Directory process
+- Registry process
 - Control Plane server and browser UI for operator views
 - Agent Gateway process when testing agent-facing APIs
 - Postgres

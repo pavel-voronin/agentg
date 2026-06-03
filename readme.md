@@ -61,6 +61,40 @@ listens on `127.0.0.1:8789`.
 
 Stop the stack with `Ctrl+C` in the terminal running `npm run dev`.
 
+## Run With Docker Compose
+
+Authenticate TDLib on the host first, because the Docker stack mounts the same
+`td-data/` directory:
+
+```sh
+npm run telegram:auth
+```
+
+Put Telegram credentials in `.env` or export them in the shell:
+
+```sh
+TELEGRAM_API_ID=12345
+TELEGRAM_API_HASH=your_api_hash
+```
+
+Build and start the product stack:
+
+```sh
+docker compose --profile container-client --profile control-plane up --build
+```
+
+This starts Postgres, NATS, Registry, Telegram ingestion, History Sync, Gateway,
+and Control Plane. Open:
+
+[http://127.0.0.1:8788/](http://127.0.0.1:8788/)
+
+Gateway listens on `127.0.0.1:8787`. Stop the stack with `Ctrl+C`, or from
+another terminal:
+
+```sh
+docker compose --profile container-client --profile control-plane down
+```
+
 ## Useful Commands
 
 ```sh
