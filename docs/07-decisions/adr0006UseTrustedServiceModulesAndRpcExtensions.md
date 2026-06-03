@@ -7,7 +7,7 @@ Accepted. Updated by the Service Directory migration.
 ## Context
 
 AgenTG has a working internal contour made of domain services, Postgres, NATS,
-Gateway, and Control Plane. Domains own their tRPC APIs and storage. NATS carries
+Gateway, and Control Plane. Domains own their module RPC APIs and storage. NATS carries
 live facts rather than addressed commands or reads.
 
 The next layer of product value needs additional modules such as summarization,
@@ -34,7 +34,7 @@ schema. Domains and modules write only their owned tables by convention.
 Gateway exposes agent-facing RPC methods directly. Modules do not register
 capabilities with Gateway, and Gateway does not keep a capability registry.
 
-Internal tRPC procedures return direct result bodies. Model objects that callers
+Internal module RPC procedures return direct result bodies. Model objects that callers
 can extend mark themselves inline with `_model` and their existing `id`.
 
 RPC lifecycle events are published by default. Callers can pass:
@@ -139,7 +139,7 @@ Non-goals:
 - No service mesh or dynamic network discovery requirement.
 - No persistent infrastructure-level event log.
 - No shared internal contracts package for domain RPC contracts.
-- No direct browser access to internal module or domain tRPC.
+- No direct browser access to internal module or domain module RPC.
 
 ## Operational Defaults
 
@@ -164,7 +164,7 @@ removes stale services and their extension declarations from its snapshot.
 NATS event subjects for a module should use the module slug as their prefix.
 
 The accepted baseline is guarded by `npm run source:audit`, which checks raw
-tRPC builder imports, cross-domain schema imports, table-prefix ownership,
+module RPC builder imports, cross-domain schema imports, table-prefix ownership,
 Gateway external surface, extension boundary rules, and Service Directory's
 non-execution boundary.
 

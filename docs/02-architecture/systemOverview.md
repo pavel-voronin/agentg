@@ -43,23 +43,23 @@ The agent-facing integration adds a separate live boundary:
 TDLib sidecar
   -> Postgres
   -> NATS Core live integration events
-  <- tRPC history fetch calls from History Sync
+  <- module RPC history fetch calls from History Sync
   -> History Sync service
-  <- tRPC operator calls from Control Plane server
+  <- module RPC operator calls from Control Plane server
   -> Control Plane browser UI
   -> Agent Gateway WebSocket API
   -> agent MCP plugin
 ```
 
 NATS Core is used as an internal, non-durable event bus. Addressed internal
-domain reads and commands use tRPC. Postgres remains the source of recovery
+domain reads and commands use module RPC. Postgres remains the source of recovery
 through Telegram domain tables and Telegram history coverage.
 History Sync is a separate process from Telegram ingestion: it owns templates,
 targets, and sync cadence. Telegram ingestion owns TDLib, Telegram-shaped
 persistence, page continuity, and Telegram history coverage.
 Control Plane is a separate operator boundary: the browser UI calls Control
 Plane server, and Control Plane server resolves internal domain RPC through
-Service Directory before making tRPC calls. The browser UI is composed from
+Service Directory before making module RPC calls. The browser UI is composed from
 slots: Control Plane owns the shell, layout, browser WebSocket, and event fanout;
 domains provide the concrete Control Plane content components and own their view
 state. Control Plane SDK owns the mechanical slot runtime, host bridge, debug
@@ -69,7 +69,7 @@ through Service Directory.
 Default operator layout is derived from domain-declared Control Plane content
 placements. The shell does not hard-code domain content IDs into its own layout.
 Telegram ingestion, History Sync, and trusted modules run as independent
-services inside the same internal contour. They own their storage and tRPC
+services inside the same internal contour. They own their storage and module RPC
 surface, and join Service Directory with their procedures, events, and extension
 getter declarations. Gateway methods are managed directly in Gateway code.
 Callers that need extended views compose them outside the owning domain by

@@ -10,7 +10,7 @@ Owns:
 - TDLib local database.
 - Receiving live Telegram updates.
 - Fetching chat lists and historical messages.
-- Exposing a small internal tRPC API for Telegram client commands and reads.
+- Exposing a small internal module RPC API for Telegram client commands and reads.
 - Handling TDLib inputs through explicit update handlers.
 - Fetching and persisting historical Telegram pages requested by the History Sync
   Sync domain.
@@ -34,7 +34,7 @@ Owns:
 - Projecting target ranges into bounded absolute intervals.
 - Sync cadence and wake-up policy.
 - Asking Telegram to ensure coverage for absolute intervals through the
-  Telegram internal tRPC surface.
+  Telegram internal module RPC surface.
 - Composing operator read models from History Sync target state and
   Telegram-owned coverage/read state.
 - Publishing history sync and target lifecycle events.
@@ -90,7 +90,7 @@ Does not own:
 - Operator UI traffic.
 - Internal orchestration between domains.
 - History Sync target writes or Telegram history coverage writes.
-- Module-owned tRPC implementation.
+- Module-owned module RPC implementation.
 
 ## Trusted Modules
 
@@ -98,7 +98,7 @@ Own:
 
 - A stable slug and service runtime.
 - Module-owned tables and Drizzle migrations.
-- Module-owned tRPC methods.
+- Module-owned module RPC methods.
 - Module-owned NATS events with the slug prefix.
 - Service Directory join and lease renewal for procedures, events, and extension
   getter declarations.

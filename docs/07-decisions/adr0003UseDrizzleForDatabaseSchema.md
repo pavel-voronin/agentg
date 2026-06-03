@@ -22,8 +22,9 @@ Use Drizzle for:
 - Type-safe insert and query code for Postgres.
 
 Each storage-owning domain or module owns its Drizzle schema and generated SQL
-migrations. Shared database infrastructure lives in `@agentg/database`.
-Migrations are applied explicitly with `npm run db:migrate`.
+migrations. The shared Postgres connector lives in `@agentg/framework`;
+module schemas, migration files, and storage code stay module-owned. Migrations
+are applied by the owning module startup or module-owned database commands.
 
 ## Consequences
 

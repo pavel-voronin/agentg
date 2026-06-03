@@ -6,27 +6,26 @@ NATS Core is the internal live event plane. It carries notifications that a
 domain fact happened. It does not carry addressed reads, commands, or
 request/reply RPC.
 
-Internal reads and commands use domain-owned tRPC APIs. Browser and external
-agent protocols are separate edge protocols owned by Control Plane and Gateway.
+Internal reads and commands use module-owned procedures exposed through the
+module framework RPC transport. Browser and external agent protocols are
+separate edge protocols owned by Control Plane and Gateway.
 
 ## Envelope
 
-Every event published to NATS uses the integration event envelope:
+Every event published to NATS uses the event envelope:
 
 ```json
 {
   "id": "evt_...",
   "type": "telegram.history.coverage.changed",
-  "occurredAt": "2026-05-01T00:00:00.000Z",
-  "data": {},
-  "meta": {}
+  "at": "2026-05-01T00:00:00.000Z",
+  "data": {}
 }
 ```
 
 - `type` is also the NATS subject.
 - The first `type` segment names the publishing domain or component.
 - `data` is owned by the publishing domain.
-- `meta` is optional routing/debug metadata, not a read model.
 
 ## Rules
 
@@ -40,16 +39,15 @@ Every event published to NATS uses the integration event envelope:
 
 ## NATS API Usage
 
-Runtime code uses `@agentg/events/bus` as the NATS boundary. That boundary
-exposes only:
+Runtime code uses the event bus provided by `@agentg/framework` as the
+NATS boundary. That boundary exposes only:
 
-- `publish(event)`: publish an integration event on `event.type`.
+- `publish(type, data)`: publish an event on `type`.
 - `subscribe(subject, handler)`: consume matching integration events.
 
 It does not expose request/reply, responder, inbox, or service APIs. Source audit
-after the tRPC migration found no runtime use of NATS request/reply APIs in
-Telegram, History Sync, Gateway, Control Plane, `@agentg/events`, `@agentg/framework`,
-or `@agentg/infra`.
+after the current module migration found no runtime use of NATS request/reply
+APIs in module-boundary modules.
 
 ## Current Subjects
 
@@ -97,13 +95,13 @@ For example, `history-sync.getChatHistorySyncState` publishes
 `history-sync.sync.requested` is a notification that a sync wake-up was accepted at
 the History Sync boundary. It is not consumed as a NATS command.
 
-Service Directory publishes:
+Registry publishes:
 
-- `service_directory.changed`
+- `registry.changed`
 
-`service_directory.changed` carries `{ version }` and is an invalidation signal
-for local Service Directory clients. Consumers recover the actual topology by
-calling Service Directory `getSnapshot`; the event body is not the topology.
+`registry.changed` carries `{ version }` and is an invalidation signal for local
+registry clients. Consumers recover the actual topology by calling registry
+`getSnapshot`; the event body is not the topology.
 If a refreshed snapshot has lost a previously seen `required: true` service, the
 client treats it as a fatal topology failure and starts graceful shutdown.
 
@@ -120,7 +118,7 @@ Gateway subscribes only to `telegram.login.completed` and forwards that event to
 external agent WebSocket clients. All other events remain internal unless a
 Gateway API change explicitly exposes them.
 
-Control Plane server subscribes to `>` and forwards live integration events to
+Control Plane server subscribes to `>` and forwards live events to
 browser clients.
 
 Telegram event `data` embeds Telegram domain objects as inline ModelRefs.
@@ -135,41 +133,36 @@ Stable Telegram message references use `{ "_model": "telegram.message", "id":
 After reconnecting, consumers must rebuild state through these surfaces:
 
 - Gateway external clients: Gateway WebSocket RPC methods backed by Telegram
-  internal tRPC.
+  procedures.
 - Control Plane browser clients: Control Plane WebSocket RPC methods resolved
-  through Service Directory and forwarded to the owning internal tRPC service.
+  through registry and forwarded to the owning procedure service.
 - History Sync: its own Postgres tables plus Telegram read and history-fetch
-  tRPC.
+  module RPC.
 - Telegram ingestion: TDLib session state and Telegram-shaped Postgres storage.
-- Modules: their owned tables plus domain tRPC reads.
-- Service Directory clients: their local snapshot plus Service Directory
-  `getSnapshot` after `service_directory.changed`.
+- Modules: their owned tables plus domain module RPC reads.
+- Registry clients: their local snapshot plus registry `getSnapshot` after
+  `registry.changed`.
 
 ## Internal RPC Ownership
 
-Internal RPC contracts are owned by the serving domain package:
+Internal procedure contracts are owned by the serving module package:
 
-- Telegram owns `@agentg/telegram/domain`, whose public domain entry exposes
-  the typed RPC client and service manifest factory. The Telegram schemas,
-  router, server bind config, storage schema, ingestion, normalization, and
-  TDLib plumbing remain package-internal.
-- History Sync owns `@agentg/history-sync/domain`, whose public domain entry
-  exposes the typed RPC client and service manifest factory. The History Sync
-  schemas, router, server bind config, storage schema, commands, and domain
-  types remain package-internal.
-- Modules own package-local RPC contracts. Module schemas, routers, server bind
-  config, storage schema, registrations, and service runtime remain
-  package-internal.
+- Telegram owns `@agentg/telegram`, whose public module entry exposes
+  the typed procedure surface. The Telegram schemas, storage schema, ingestion,
+  normalization, and TDLib plumbing remain package-internal.
+- History Sync owns `@agentg/history-sync`, whose public module entry
+  exposes the typed procedure surface. The History Sync schemas, storage schema,
+  commands, and domain types remain package-internal.
+- Modules own package-local procedure contracts. Module schemas, storage schema,
+  registrations, and runtime remain package-internal.
 
 Gateway owns the external agent WebSocket protocol. Control Plane owns the
-browser-facing WebSocket protocol. Neither protocol is an internal domain RPC
-contract, and neither browser nor external agent clients call internal tRPC
+browser-facing WebSocket protocol. Neither protocol is an internal procedure
+contract, and neither browser nor external agent clients call module procedures
 directly.
 
-There is no shared internal domain RPC contracts package. Cross-cutting helpers
-are split by owner: `@agentg/events` owns the event bus, event envelope, and
-JSON value helpers; `@agentg/framework` owns RPC call lifecycle helpers and model
-markers; `@agentg/infra` owns runtime config helpers.
+There is no shared internal procedure contracts package. Cross-cutting module
+runtime helpers live in `@agentg/framework`.
 
 ## Removed Command Subjects
 
@@ -178,5 +171,5 @@ These subjects are intentionally removed:
 - `history-sync.target.upsert.requested`
 - `history-sync.target.delete.requested`
 
-Target changes now go through History Sync's domain-owned tRPC API. History Sync
+Target changes now go through History Sync's module-owned procedures. History Sync
 publishes `history-sync.target.upserted` and `history-sync.target.deleted` after the write.

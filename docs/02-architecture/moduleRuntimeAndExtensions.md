@@ -1,7 +1,7 @@
 # Module Runtime And Extensions
 
 Trusted modules are independent internal services that run inside the AgenTG
-runtime contour. A module owns its storage, tRPC surface, events, and extension
+runtime contour. A module owns its storage, module RPC surface, events, and extension
 getter methods. Core domains own their own models, procedures, storage, and fact
 events; they do not know which modules extend them.
 
@@ -10,7 +10,7 @@ events; they do not know which modules extend them.
 Every module has:
 
 - `slug`: stable short name, for example `analysis`
-- `serviceRpcUrl`: internal tRPC service URL
+- `serviceRpcUrl`: internal module RPC service URL
 - `natsUrl`: NATS Core URL
 - `databaseUrl`: Postgres URL
 - `tablePrefix`: owned table prefix, for example `analysis_`
@@ -18,8 +18,8 @@ Every module has:
 - `extensions`: `{ target, extension }` entries declared in its Service
   Directory manifest
 
-The shared helpers live in `@agentg/infra/modules/runtime`. They load runtime
-config only. Service registration is owned by the Service Directory client.
+Runtime config helpers live with the current module runtime owner. Service
+registration is owned by the Registry client.
 
 ## Service Directory
 
@@ -60,11 +60,11 @@ and modules own schemas and migrations in their own packages:
 - `@agentg/history-sync`: `history_sync_*`, journal `__drizzle_migrations_history_sync`
 
 Cross-domain table reads and writes are a boundary violation. A module that
-needs another domain's data calls that domain's tRPC surface.
+needs another domain's data calls that domain's module RPC surface.
 
 ## RPC Results
 
-Internal tRPC methods return their result bodies directly. A read that returns a
+Internal module RPC methods return their result bodies directly. A read that returns a
 chat returns the chat shape, not `{ ok, result, extensions }`.
 
 Models that are valid extension targets mark themselves inline with `_model` and
@@ -84,7 +84,7 @@ no nested `modelRef` object.
 
 ## Procedure Builder And Call Options
 
-Package-local tRPC runtimes expose `rpc` as the procedure builder:
+Package-local module RPC runtimes expose `rpc` as the procedure builder:
 
 ```ts
 readModuleState: rpc
@@ -154,8 +154,6 @@ that need composed views own that composition flow explicitly.
 
 `npm run source:audit` guards the current boundary rules:
 
-- raw `@trpc/server` builder imports are only allowed in package-local
-  `src/rpc/trpc.ts` runtimes
 - cross-domain storage schema imports are rejected
 - domain and module table names must use their owner prefix
 - Gateway's external RPC and event surface stays covered by source and tests
@@ -171,7 +169,7 @@ The audit is part of `npm run check`.
   extension names, and logs.
 - Create a package-owned `src/schema.ts`, `drizzle/` folder, migration command,
   and migration journal table.
-- Use only owned tables for writes. Call other domains through tRPC.
+- Use only owned tables for writes. Call other domains through module RPC.
 - Expose public internal methods through package-local `rpc`.
 - Return public internal results directly.
 - Publish module events with the slug prefix.
