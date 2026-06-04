@@ -1,3 +1,7 @@
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import {
   httpRpc,
   type EventBus,
@@ -208,6 +212,41 @@ describe('Control Plane server boundary', () => {
     } finally {
       await server.close();
       registry.close();
+    }
+  });
+
+  it('serves the browser app entry for nested page routes', async () => {
+    const staticDir = await mkdtemp(join(tmpdir(), 'agentg-control-plane-'));
+    await writeFile(join(staticDir, 'index.html'), '<div id="controlPlaneApp"></div>');
+    const events = createFakeEventBus();
+    const registry = createFakeRegistry({
+      modules: [],
+      version: 0
+    });
+
+    const server = await startServer({
+      config: testServerConfig({ staticDir }),
+      events,
+      registry
+    });
+
+    try {
+      const clientResponse = await fetch(
+        `http://127.0.0.1:${String(server.port)}/client/chats/-100123`
+      );
+      expect(clientResponse.status).toBe(200);
+      expect(clientResponse.headers.get('content-type')).toBe('text/html; charset=utf-8');
+      await expect(clientResponse.text()).resolves.toBe('<div id="controlPlaneApp"></div>');
+
+      const nestedPageResponse = await fetch(
+        `http://127.0.0.1:${String(server.port)}/reports/latency`
+      );
+      expect(nestedPageResponse.status).toBe(200);
+      await expect(nestedPageResponse.text()).resolves.toBe('<div id="controlPlaneApp"></div>');
+    } finally {
+      await server.close();
+      registry.close();
+      await rm(staticDir, { force: true, recursive: true });
     }
   });
 

@@ -42,6 +42,11 @@ type Runtime = {
   vueRuntimeFilePath: string;
 };
 
+type StaticFile = {
+  body: Buffer;
+  filePath: string;
+};
+
 type RpcRequest = {
   id?: unknown;
   method?: unknown;
@@ -279,18 +284,18 @@ async function handleHttpRequest(
     return;
   }
 
-  const body = await readStaticFile(filePath, staticRoot);
-  if (body === null) {
+  const file = await readStaticFile(filePath, staticRoot);
+  if (file === null) {
     sendHttp(response, 404, 'text/plain; charset=utf-8', 'Not Found');
     return;
   }
 
   response.writeHead(200, {
-    'content-length': body.byteLength,
-    'content-type': contentType(filePath)
+    'content-length': file.body.byteLength,
+    'content-type': contentType(file.filePath)
   });
   if (request.method !== 'HEAD') {
-    response.end(body);
+    response.end(file.body);
     return;
   }
   response.end();
@@ -411,9 +416,12 @@ async function sendFile(
   }
 }
 
-async function readStaticFile(filePath: string, staticRoot: string): Promise<Buffer | null> {
+async function readStaticFile(filePath: string, staticRoot: string): Promise<StaticFile | null> {
   try {
-    return await readFile(filePath);
+    return {
+      body: await readFile(filePath),
+      filePath
+    };
   } catch (error) {
     if (isNotFoundError(error) && filePath !== resolve(staticRoot, 'index.html')) {
       return readStaticFile(resolve(staticRoot, 'index.html'), staticRoot);

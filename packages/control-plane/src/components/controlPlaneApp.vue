@@ -1,5 +1,9 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, watch, type Component } from 'vue';
+import SolarBillListBold from '~icons/solar/bill-list-bold';
+import SolarChartSquareBold from '~icons/solar/chart-square-bold';
+import SolarChatSquareCodeBold from '~icons/solar/chat-square-code-bold';
+import SolarHome2Bold from '~icons/solar/home-2-bold';
 import SolarWidget2Bold from '~icons/solar/widget-2-bold';
 
 import { provideControlPlaneHost } from '@agentg/framework/cp';
@@ -10,20 +14,13 @@ import {
   SlotOutlet
 } from '@agentg/framework/cp';
 import { UiButton } from '@agentg/framework/cp';
-import { UiStatusBadge } from '@agentg/framework/cp';
 
 import { useControlPlaneRuntime } from '../runtime/useControlPlaneRuntime.js';
 import { useAppShellStore } from '../stores/appShell.js';
-import { appShellView } from '../view-models/appShellView.js';
-import {
-  controlPlaneContentCatalog,
-  controlPlaneContentProviders,
-  contentCatalogFromProviders,
-  loadRuntimeContentProviders
-} from '../composition/contentProviders.js';
+import { DEFAULT_PAGE_SEGMENT, pathForRoute, routeFromPathname } from '../stores/shellRoute.js';
+import { shellPageContributions, type ShellPageIcon } from '../view-models/pageContributions.js';
+import { controlPlaneContentCatalog } from '../composition/contentProviders.js';
 import { controlPlaneSlotLayout } from '../composition/slots/manifest.js';
-import DashboardPanel from './dashboardPanel.vue';
-import ShellToggleButton from './shellToggleButton.vue';
 
 const appShellStore = useAppShellStore();
 const host = useControlPlaneRuntime();
@@ -37,163 +34,134 @@ const slotRuntime = createSlotRuntime({
 provideControlPlaneHost(host);
 provideSlotRuntime(slotRuntime);
 
-const appShell = computed(() => appShellView(appShellStore));
-const workspaceContext = computed(() => ({}));
+const pageContributions = computed(() =>
+  shellPageContributions(slotRuntime.compatibleContent(['control-plane.page']))
+);
+const defaultPageContribution = computed(
+  () => pageContributions.value.find((page) => page.isDefault) ?? pageContributions.value[0] ?? null
+);
+const defaultPageSegment = computed(
+  () => defaultPageContribution.value?.routeSegment ?? DEFAULT_PAGE_SEGMENT
+);
+const routePath = computed(() => pathForRoute(appShellStore.route, defaultPageSegment.value));
+const activePageSegment = computed(() => appShellStore.route.pageSegment);
+const activePageContribution = computed(
+  () =>
+    pageContributions.value.find((page) => page.routeSegment === activePageSegment.value) ?? null
+);
+const pageContext = computed(() => ({
+  routeSegments: appShellStore.route.segments,
+  setRouteSegments: setPageRouteSegments
+}));
+
+const pageIconComponents = {
+  client: SolarChatSquareCodeBold,
+  events: SolarBillListBold,
+  home: SolarHome2Bold,
+  page: SolarWidget2Bold,
+  telemetry: SolarChartSquareBold
+} satisfies Record<ShellPageIcon, Component>;
 
 type BrowserGlobal = {
-  addEventListener: (type: string, listener: () => void) => void;
-  getComputedStyle: (element: unknown) => {
-    paddingBottom: string;
-    paddingRight: string;
-    paddingTop: string;
+  addEventListener: (type: 'popstate', listener: () => void) => void;
+  history: {
+    pushState: (data: unknown, title: string, url?: string | URL | null) => void;
+    replaceState: (data: unknown, title: string, url?: string | URL | null) => void;
   };
-  innerWidth: number;
-  removeEventListener: (type: string, listener: () => void) => void;
+  location: {
+    hash: string;
+    pathname: string;
+    search: string;
+  };
+  removeEventListener: (type: 'popstate', listener: () => void) => void;
 };
 
-type ShellElement = {
-  getBoundingClientRect: () => {
-    bottom: number;
-    height: number;
-    right: number;
-    top: number;
-  };
-};
-
-const dashboardPreviewVisible = ref(false);
-const dashboardPreviewStyle = ref<Record<string, string>>({});
-const eventsPreviewVisible = ref(false);
-const eventsPreviewStyle = ref<Record<string, string>>({});
-const header = ref<ShellElement | null>(null);
-const mainLayout = ref<ShellElement | null>(null);
-let lastContentCatalogVersion: number | null = null;
-let unsubscribeDirectoryEvents: (() => void) | null = null;
-
-function hideDashboardPreview(): void {
-  dashboardPreviewVisible.value = false;
+function showPage(pageSegment: string): void {
+  appShellStore.setPageRoute(pageSegment);
 }
 
-function hideEventsPreview(): void {
-  eventsPreviewVisible.value = false;
-}
-
-function positionDashboardPreview(): void {
-  const headerElement = header.value;
-  if (!headerElement) return;
-  const headerRect = headerElement.getBoundingClientRect();
-  dashboardPreviewStyle.value = {
-    top: `${String(headerRect.bottom)}px`
-  };
-}
-
-function positionEventsPreview(): void {
-  const mainElement = mainLayout.value;
-  if (!mainElement) return;
-  const rect = mainElement.getBoundingClientRect();
-  const browser = browserGlobal();
-  const styles = browser.getComputedStyle(mainElement);
-  const paddingTop = Number.parseFloat(styles.paddingTop) || 0;
-  const paddingRight = Number.parseFloat(styles.paddingRight) || 0;
-  const paddingBottom = Number.parseFloat(styles.paddingBottom) || 0;
-  eventsPreviewStyle.value = {
-    height: `${String(Math.max(160, rect.height - paddingTop - paddingBottom))}px`,
-    right: `${String(browser.innerWidth - rect.right + paddingRight)}px`,
-    top: `${String(rect.top + paddingTop)}px`,
-    width: '420px'
-  };
-}
-
-function repositionVisiblePreviews(): void {
-  if (dashboardPreviewVisible.value) {
-    positionDashboardPreview();
-  }
-  if (eventsPreviewVisible.value) {
-    positionEventsPreview();
-  }
-}
-
-function showDashboardPreview(): void {
-  if (!appShell.value.dashboardCollapsed) return;
-  positionDashboardPreview();
-  dashboardPreviewVisible.value = true;
-}
-
-function showEventsPreview(): void {
-  if (!appShell.value.eventsPanelCollapsed) return;
-  positionEventsPreview();
-  eventsPreviewVisible.value = true;
-}
-
-function toggleDashboardPanel(): void {
-  const collapsed = !appShell.value.dashboardCollapsed;
-  appShellStore.setDashboardCollapsed(collapsed);
-  if (!collapsed) {
-    hideDashboardPreview();
-  }
-}
-
-function toggleEventsPanel(): void {
-  const collapsed = !appShell.value.eventsPanelCollapsed;
-  appShellStore.setEventsPanelCollapsed(collapsed);
-  if (!collapsed) {
-    hideEventsPreview();
-  }
+function setPageRouteSegments(segments: readonly string[]): void {
+  appShellStore.setPageRouteSegments(segments);
 }
 
 function toggleSlotDebug(): void {
-  appShellStore.setSlotDebugEnabled(!appShell.value.slotDebugEnabled);
-}
-
-async function refreshRuntimeContentProviders(): Promise<void> {
-  const runtimeCatalog = await loadRuntimeContentProviders();
-  if (runtimeCatalog.version === lastContentCatalogVersion) {
-    return;
-  }
-  lastContentCatalogVersion = runtimeCatalog.version;
-  const providers = [...controlPlaneContentProviders, ...runtimeCatalog.providers];
-  slotRuntime.replaceCatalog(contentCatalogFromProviders(providers));
-}
-
-function scheduleRuntimeContentProvidersRefresh(): void {
-  void refreshRuntimeContentProviders().catch((error: unknown) => {
-    console.error(error);
-  });
+  appShellStore.setSlotDebugEnabled(!appShellStore.slotDebugEnabled);
 }
 
 function browserGlobal(): BrowserGlobal {
   return globalThis as unknown as BrowserGlobal;
 }
 
+function syncRouteFromBrowser(): void {
+  const route = routeFromPathname(browserGlobal().location.pathname, defaultPageSegment.value);
+  appShellStore.setRoute(route);
+}
+
+function pageIconComponent(icon: ShellPageIcon): Component {
+  return pageIconComponents[icon];
+}
+
+function syncBrowserRoute(path: string, replace: boolean): void {
+  const browser = browserGlobal();
+  if (browser.location.pathname === path) {
+    return;
+  }
+  const url = `${path}${browser.location.search}${browser.location.hash}`;
+  if (replace) {
+    browser.history.replaceState(null, '', url);
+    return;
+  }
+  browser.history.pushState(null, '', url);
+}
+
+watch(
+  routePath,
+  (path, previousPath) => {
+    syncBrowserRoute(path, previousPath === undefined);
+  },
+  { immediate: true }
+);
+
 onMounted(() => {
-  browserGlobal().addEventListener('resize', repositionVisiblePreviews);
-  unsubscribeDirectoryEvents = host.subscribeEvents((event) => {
-    if (event.type === 'service_directory.changed') {
-      scheduleRuntimeContentProvidersRefresh();
-    }
-  });
-  scheduleRuntimeContentProvidersRefresh();
+  browserGlobal().addEventListener('popstate', syncRouteFromBrowser);
 });
 
 onBeforeUnmount(() => {
-  browserGlobal().removeEventListener('resize', repositionVisiblePreviews);
-  unsubscribeDirectoryEvents?.();
-  unsubscribeDirectoryEvents = null;
+  browserGlobal().removeEventListener('popstate', syncRouteFromBrowser);
 });
 </script>
 
 <template>
   <div class="control-plane-app">
-    <header ref="header" class="control-plane-app__header">
+    <header class="control-plane-app__header">
       <div class="control-plane-app__header-layout">
         <div class="control-plane-app__title-frame">
           <h1 class="control-plane-app__title">AgenTG Control Plane</h1>
+          <nav class="control-plane-app__nav-group" aria-label="Control Plane pages">
+            <UiButton
+              v-for="page in pageContributions"
+              :key="page.contentId"
+              :aria-current="
+                activePageContribution?.contentId === page.contentId ? 'page' : undefined
+              "
+              class="control-plane-app__page-button"
+              :title="page.label"
+              :variant="
+                activePageContribution?.contentId === page.contentId ? 'selected' : 'neutral'
+              "
+              @click="showPage(page.routeSegment)"
+            >
+              <component
+                :is="pageIconComponent(page.icon)"
+                class="control-plane-app__page-icon"
+                aria-hidden="true"
+              />
+              <span>{{ page.label }}</span>
+            </UiButton>
+          </nav>
         </div>
         <div class="control-plane-app__toolbar">
           <div class="control-plane-app__status-group">
-            <UiStatusBadge
-              :kind="appShell.controlPlaneStatus.kind"
-              :label="appShell.controlPlaneStatus.label"
-            />
             <SlotOutlet
               slot-id="control-plane.header.status"
               :tags="['control-plane.header.status']"
@@ -201,88 +169,37 @@ onBeforeUnmount(() => {
           </div>
           <div class="control-plane-app__toggle-group">
             <UiButton
-              :aria-pressed="appShell.slotDebugEnabled"
+              :aria-pressed="appShellStore.slotDebugEnabled"
               class="control-plane-app__slot-debug-button"
               :title="
-                appShell.slotDebugEnabled ? 'Hide slot debug overlay' : 'Show slot debug overlay'
+                appShellStore.slotDebugEnabled
+                  ? 'Hide slot debug overlay'
+                  : 'Show slot debug overlay'
               "
-              :variant="appShell.slotDebugEnabled ? 'danger' : 'neutral'"
+              :variant="appShellStore.slotDebugEnabled ? 'danger' : 'neutral'"
               @click="toggleSlotDebug"
             >
               <SolarWidget2Bold class="control-plane-app__button-icon" aria-hidden="true" />
               <span>Slots</span>
             </UiButton>
-            <ShellToggleButton
-              :active="!appShell.dashboardCollapsed"
-              icon="dashboard"
-              label="Dashboard"
-              title-active="Hide dashboard"
-              title-inactive="Show dashboard"
-              @preview-enter="showDashboardPreview"
-              @preview-leave="hideDashboardPreview"
-              @toggle="toggleDashboardPanel"
-            />
-            <ShellToggleButton
-              :active="!appShell.eventsPanelCollapsed"
-              icon="events"
-              label="Events"
-              title-active="Hide events"
-              title-inactive="Show events"
-              @preview-enter="showEventsPreview"
-              @preview-leave="hideEventsPreview"
-              @toggle="toggleEventsPanel"
-            />
           </div>
         </div>
       </div>
     </header>
 
-    <section
-      v-if="!appShell.dashboardCollapsed"
-      id="dashboardPanel"
-      class="control-plane-app__dashboard-panel"
-    >
-      <DashboardPanel />
-    </section>
-
-    <main
-      id="mainLayout"
-      ref="mainLayout"
-      class="control-plane-app__main-layout"
-      :data-events-collapsed="appShell.eventsPanelCollapsed ? 'true' : undefined"
-    >
+    <main id="mainLayout" class="control-plane-app__page-layout">
       <SlotOutlet
-        :context="workspaceContext"
-        slot-id="control-plane.workspace"
-        :tags="['control-plane.workspace']"
-      />
-      <SlotOutlet
-        v-if="!appShell.eventsPanelCollapsed"
-        :context="{ idPrefix: 'events' }"
-        slot-id="control-plane.events.panel"
-        :tags="['control-plane.events']"
-      />
+        v-if="activePageContribution !== null"
+        :content-id="activePageContribution.contentId"
+        :context="pageContext"
+        slot-id="control-plane.page"
+        :tags="['control-plane.page']"
+      >
+        <div class="control-plane-app__empty-page">No page contribution is available.</div>
+      </SlotOutlet>
+      <div v-else class="control-plane-app__empty-page">No page contribution is available.</div>
     </main>
   </div>
-  <section
-    v-show="dashboardPreviewVisible"
-    id="dashboardPreviewPanel"
-    class="control-plane-app__dashboard-preview"
-    :style="dashboardPreviewStyle"
-  >
-    <DashboardPanel />
-  </section>
-  <section
-    v-show="eventsPreviewVisible"
-    class="control-plane-app__events-preview"
-    :style="eventsPreviewStyle"
-  >
-    <SlotOutlet
-      :context="{ idPrefix: 'eventsPreview' }"
-      slot-id="control-plane.events.preview"
-      :tags="['control-plane.events']"
-    />
-  </section>
   <SlotDebugLayer />
 </template>
 
@@ -301,7 +218,7 @@ onBeforeUnmount(() => {
 }
 
 .control-plane-app__title-frame {
-  @apply min-w-0;
+  @apply flex min-w-0 flex-wrap items-center gap-3;
 }
 
 .control-plane-app__title {
@@ -312,9 +229,24 @@ onBeforeUnmount(() => {
   @apply flex flex-wrap items-center justify-end gap-3;
 }
 
-.control-plane-app__status-group,
+.control-plane-app__status-group {
+  @apply flex flex-wrap items-center justify-end gap-1;
+}
+
 .control-plane-app__toggle-group {
   @apply flex flex-wrap items-center justify-end gap-2;
+}
+
+.control-plane-app__nav-group {
+  @apply flex flex-wrap items-center justify-start gap-2;
+}
+
+.control-plane-app__page-button {
+  @apply gap-1.5 px-2.5 text-xs;
+}
+
+.control-plane-app__page-icon {
+  @apply h-3.5 w-3.5;
 }
 
 .control-plane-app__slot-debug-button {
@@ -325,23 +257,11 @@ onBeforeUnmount(() => {
   @apply h-3.5 w-3.5;
 }
 
-.control-plane-app__dashboard-panel {
-  @apply shrink-0 bg-zinc-100 p-4 pt-0;
+.control-plane-app__page-layout {
+  @apply flex min-h-0 flex-1 overflow-hidden bg-zinc-100 p-4 pt-0;
 }
 
-.control-plane-app__main-layout {
-  @apply grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_420px] gap-4 overflow-hidden bg-zinc-100 p-4 pt-0;
-}
-
-.control-plane-app__main-layout[data-events-collapsed='true'] {
-  @apply grid-cols-[minmax(0,1fr)];
-}
-
-.control-plane-app__dashboard-preview {
-  @apply fixed left-0 right-0 z-40 bg-zinc-100 p-4 pt-0;
-}
-
-.control-plane-app__events-preview {
-  @apply fixed z-40;
+.control-plane-app__empty-page {
+  @apply flex min-h-0 flex-1 items-center justify-center bg-white p-8 text-sm text-zinc-500;
 }
 </style>

@@ -34,18 +34,6 @@ export type ControlPlaneStreamEvent = ControlPlaneEvent & {
 
 export type StatusBadgeKind = 'bad' | 'ok' | 'warn';
 
-export type StatusBadgeView = {
-  kind: StatusBadgeKind;
-  label: string;
-};
-
-export type AppShellView = {
-  controlPlaneStatus: StatusBadgeView;
-  dashboardCollapsed: boolean;
-  eventsPanelCollapsed: boolean;
-  slotDebugEnabled: boolean;
-};
-
 export type AppEventBodyView = {
   raw: string;
   yamlLines: AppEventYamlLine[];

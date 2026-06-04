@@ -107,6 +107,6 @@ function contextString(context: SlotContext | undefined, key: string, fallback: 
 <style scoped>
 @reference "tailwindcss";
 .event-stream-content {
-  @apply h-full;
+  @apply h-full min-h-0 w-full;
 }
 </style>

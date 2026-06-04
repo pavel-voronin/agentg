@@ -13,13 +13,3 @@ export function contentCatalogFromProviders(providers: readonly ContentProvider[
     }))
   );
 }
-
-export function loadRuntimeContentProviders(): Promise<{
-  providers: readonly ContentProvider[];
-  version: number;
-}> {
-  return Promise.resolve({
-    providers: [],
-    version: 1
-  });
-}

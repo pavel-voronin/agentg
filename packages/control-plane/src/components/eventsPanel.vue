@@ -51,6 +51,7 @@ const emit = defineEmits<{
 const eventsVisible = computed(() => props.mode === 'events');
 const filtersVisible = computed(() => props.mode === 'filters');
 const settingsVisible = computed(() => props.mode === 'settings');
+const sidePaneVisible = computed(() => filtersVisible.value || settingsVisible.value);
 const eventFilterToggleVariant = computed(() => (filtersVisible.value ? 'selected' : 'neutral'));
 const eventSettingsToggleVariant = computed(() => (settingsVisible.value ? 'selected' : 'neutral'));
 const eventStreamToggleLabel = computed(() =>
@@ -60,7 +61,7 @@ const eventStreamStateLabel = computed(() => (props.streamPaused ? 'Paused' : 'L
 </script>
 
 <template>
-  <aside :id="panelId" class="events-panel">
+  <section :id="panelId" class="events-panel">
     <div class="events-panel__header">
       <div class="events-panel__title-frame">
         <div class="events-panel__title">Events</div>
@@ -121,49 +122,54 @@ const eventStreamStateLabel = computed(() => (props.streamPaused ? 'Paused' : 'L
         </UiButton>
       </div>
     </div>
-    <EventsList
-      v-show="eventsVisible"
-      :id="eventListId"
-      :events="events"
-      :has-events="hasEvents"
-      @clear-type="(type) => emit('clearType', type)"
-      @mute-change="(type, muted) => emit('muteChange', type, muted)"
-    />
-    <EventFilters
-      v-show="filtersVisible"
-      :id="eventFiltersId"
-      :view="view"
-      @close="emit('closeFilters')"
-      @type-change="(type, enabled) => emit('typeChange', type, enabled)"
-    />
-    <EventSettings
-      v-show="settingsVisible"
-      :id="eventSettingsId"
-      :event-limit="eventLimit"
-      :event-yaml-list-limit="eventYamlListLimit"
-      @close="emit('closeSettings')"
-      @event-limit-change="(value) => emit('eventLimitChange', value)"
-      @event-yaml-list-limit-change="(value) => emit('eventYamlListLimitChange', value)"
-    />
-  </aside>
+    <div class="events-panel__body" :data-side-pane="sidePaneVisible ? 'true' : undefined">
+      <div v-show="eventsVisible || sidePaneVisible" class="events-panel__list-pane">
+        <EventsList
+          :id="eventListId"
+          :events="events"
+          :has-events="hasEvents"
+          @clear-type="(type) => emit('clearType', type)"
+          @mute-change="(type, muted) => emit('muteChange', type, muted)"
+        />
+      </div>
+      <div v-if="sidePaneVisible" class="events-panel__side-pane">
+        <EventFilters
+          v-show="filtersVisible"
+          :id="eventFiltersId"
+          :view="view"
+          @close="emit('closeFilters')"
+          @type-change="(type, enabled) => emit('typeChange', type, enabled)"
+        />
+        <EventSettings
+          v-show="settingsVisible"
+          :id="eventSettingsId"
+          :event-limit="eventLimit"
+          :event-yaml-list-limit="eventYamlListLimit"
+          @close="emit('closeSettings')"
+          @event-limit-change="(value) => emit('eventLimitChange', value)"
+          @event-yaml-list-limit-change="(value) => emit('eventYamlListLimitChange', value)"
+        />
+      </div>
+    </div>
+  </section>
 </template>
 
 <style scoped>
 @reference "tailwindcss";
 .events-panel {
-  @apply flex min-h-0 flex-col overflow-hidden rounded-lg border border-zinc-200 bg-white;
+  @apply flex h-full min-h-0 w-full flex-col overflow-hidden rounded-lg border border-zinc-200 bg-white;
 }
 
 .events-panel__header {
-  @apply flex shrink-0 items-center justify-between gap-2 border-b border-zinc-200 p-3;
+  @apply flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-zinc-200 p-3;
 }
 
 .events-panel__title {
-  @apply text-sm font-semibold;
+  @apply text-base font-semibold;
 }
 
 .events-panel__toolbar {
-  @apply flex shrink-0 items-center gap-2;
+  @apply flex shrink-0 flex-wrap items-center justify-end gap-2;
 }
 
 .events-panel__stream-button {
@@ -204,5 +210,21 @@ const eventStreamStateLabel = computed(() => (props.streamPaused ? 'Paused' : 'L
 
 .events-panel__icon-button-icon {
   @apply h-4 w-4;
+}
+
+.events-panel__body {
+  @apply grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] overflow-hidden;
+}
+
+.events-panel__body[data-side-pane='true'] {
+  @apply grid-rows-[minmax(0,1fr)_minmax(280px,42vh)] xl:grid-cols-[minmax(0,1fr)_minmax(340px,480px)] xl:grid-rows-none;
+}
+
+.events-panel__list-pane {
+  @apply flex min-h-0 min-w-0 flex-col overflow-hidden;
+}
+
+.events-panel__side-pane {
+  @apply flex min-h-0 min-w-0 flex-col overflow-hidden border-t border-zinc-200 xl:border-l xl:border-t-0;
 }
 </style>

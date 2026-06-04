@@ -13,7 +13,7 @@ function contentDefinition(
     load,
     ...(metadata === undefined ? {} : { metadata }),
     revision,
-    tags: ['control-plane.workspace']
+    tags: ['control-plane.client']
   };
 }
 
@@ -22,31 +22,31 @@ describe('slot runtime', () => {
     const initialLoad = () => Promise.resolve({ default: {} });
     const nextLoad = () => Promise.resolve({ default: {} });
     const initialCatalog = [
-      contentDefinition('alpha.workspace', 'module-url-v1', initialLoad)
+      contentDefinition('alpha.client', 'module-url-v1', initialLoad)
     ] satisfies ContentCatalog;
     const runtime = createSlotRuntime({
       catalog: initialCatalog,
       initialLayout: {}
     });
-    const initialContent = runtime.catalogIndex.value.get('alpha.workspace');
+    const initialContent = runtime.catalogIndex.value.get('alpha.client');
 
-    runtime.replaceCatalog([contentDefinition('alpha.workspace', 'module-url-v1', nextLoad)]);
+    runtime.replaceCatalog([contentDefinition('alpha.client', 'module-url-v1', nextLoad)]);
 
-    expect(runtime.catalogIndex.value.get('alpha.workspace')).toBe(initialContent);
+    expect(runtime.catalogIndex.value.get('alpha.client')).toBe(initialContent);
   });
 
   it('replaces content definitions when remote module revisions change', () => {
     const initialLoad = () => Promise.resolve({ default: {} });
     const nextLoad = () => Promise.resolve({ default: {} });
     const runtime = createSlotRuntime({
-      catalog: [contentDefinition('alpha.workspace', 'module-url-v1', initialLoad)],
+      catalog: [contentDefinition('alpha.client', 'module-url-v1', initialLoad)],
       initialLayout: {}
     });
-    const initialContent = runtime.catalogIndex.value.get('alpha.workspace');
+    const initialContent = runtime.catalogIndex.value.get('alpha.client');
 
-    runtime.replaceCatalog([contentDefinition('alpha.workspace', 'module-url-v2', nextLoad)]);
+    runtime.replaceCatalog([contentDefinition('alpha.client', 'module-url-v2', nextLoad)]);
 
-    expect(runtime.catalogIndex.value.get('alpha.workspace')).not.toBe(initialContent);
+    expect(runtime.catalogIndex.value.get('alpha.client')).not.toBe(initialContent);
   });
 
   it('keeps stable content definitions when nested metadata does not change', () => {
@@ -54,7 +54,7 @@ describe('slot runtime', () => {
     const nextLoad = () => Promise.resolve({ default: {} });
     const runtime = createSlotRuntime({
       catalog: [
-        contentDefinition('alpha.workspace', 'module-url-v1', initialLoad, {
+        contentDefinition('alpha.client', 'module-url-v1', initialLoad, {
           tab: {
             label: 'Alpha',
             order: 10
@@ -63,10 +63,10 @@ describe('slot runtime', () => {
       ],
       initialLayout: {}
     });
-    const initialContent = runtime.catalogIndex.value.get('alpha.workspace');
+    const initialContent = runtime.catalogIndex.value.get('alpha.client');
 
     runtime.replaceCatalog([
-      contentDefinition('alpha.workspace', 'module-url-v1', nextLoad, {
+      contentDefinition('alpha.client', 'module-url-v1', nextLoad, {
         tab: {
           label: 'Alpha',
           order: 10
@@ -74,6 +74,6 @@ describe('slot runtime', () => {
       })
     ]);
 
-    expect(runtime.catalogIndex.value.get('alpha.workspace')).toBe(initialContent);
+    expect(runtime.catalogIndex.value.get('alpha.client')).toBe(initialContent);
   });
 });
