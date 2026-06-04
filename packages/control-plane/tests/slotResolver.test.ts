@@ -8,21 +8,21 @@ import type { ContentCatalog, SlotLayout } from '@agentg/framework/cp';
 
 const catalog = [
   {
-    contentId: 'alpha.workspace',
+    contentId: 'alpha.client',
     load: () => Promise.resolve({ default: {} }),
-    tags: ['control-plane.workspace', 'alpha.workspace']
+    tags: ['control-plane.client', 'alpha.client']
   },
   {
-    contentId: 'events.stream.panel',
+    contentId: 'beta.client',
     load: () => Promise.resolve({ default: {} }),
-    tags: ['control-plane.workspace', 'alpha.workspace.content']
+    tags: ['control-plane.client', 'alpha.client.content']
   }
 ] satisfies ContentCatalog;
 
 describe('slot resolver', () => {
   it('matches content when any tag overlaps', () => {
     expect(
-      tagsCompatible(['dashboard.tile', 'control-plane.workspace'], ['control-plane.workspace'])
+      tagsCompatible(['dashboard.tile', 'control-plane.client'], ['control-plane.client'])
     ).toBe(true);
   });
 
@@ -42,8 +42,8 @@ describe('slot resolver', () => {
   it('derives default slot content from compatible provider tags', () => {
     const resolution = resolveSlotContents(
       {
-        slotId: 'control-plane.workspace',
-        tags: ['control-plane.workspace']
+        slotId: 'control-plane.client',
+        tags: ['control-plane.client']
       },
       {},
       createContentCatalogIndex(catalog)
@@ -52,11 +52,11 @@ describe('slot resolver', () => {
     expect(resolution).toMatchObject({
       items: [
         {
-          contentId: 'alpha.workspace',
+          contentId: 'alpha.client',
           kind: 'content'
         },
         {
-          contentId: 'events.stream.panel',
+          contentId: 'beta.client',
           kind: 'content'
         }
       ],
@@ -67,15 +67,15 @@ describe('slot resolver', () => {
 
   it('resolves the layout content for a compatible slot', () => {
     const layout: SlotLayout = {
-      'control-plane.workspace': {
-        items: [{ contentId: 'alpha.workspace' }, { contentId: 'events.stream.panel' }]
+      'control-plane.client': {
+        items: [{ contentId: 'alpha.client' }, { contentId: 'beta.client' }]
       }
     };
 
     const resolution = resolveSlotContents(
       {
-        slotId: 'control-plane.workspace',
-        tags: ['control-plane.workspace']
+        slotId: 'control-plane.client',
+        tags: ['control-plane.client']
       },
       layout,
       createContentCatalogIndex(catalog)
@@ -84,11 +84,35 @@ describe('slot resolver', () => {
     expect(resolution).toMatchObject({
       items: [
         {
-          contentId: 'alpha.workspace',
+          contentId: 'alpha.client',
           kind: 'content'
         },
         {
-          contentId: 'events.stream.panel',
+          contentId: 'beta.client',
+          kind: 'content'
+        }
+      ],
+      kind: 'contents',
+      overflowCount: 0
+    });
+  });
+
+  it('resolves direct content id for a compatible slot', () => {
+    const resolution = resolveSlotContents(
+      {
+        slotId: 'control-plane.page',
+        tags: ['control-plane.client']
+      },
+      {},
+      createContentCatalogIndex(catalog),
+      { contentId: 'beta.client' }
+    );
+
+    expect(resolution).toMatchObject({
+      items: [
+        {
+          contentId: 'beta.client',
+          index: 0,
           kind: 'content'
         }
       ],
@@ -99,15 +123,15 @@ describe('slot resolver', () => {
 
   it('reports missing content instead of falling back', () => {
     const layout: SlotLayout = {
-      'control-plane.workspace': {
+      'control-plane.client': {
         items: [{ contentId: 'unknown.content' }]
       }
     };
 
     const resolution = resolveSlotContents(
       {
-        slotId: 'control-plane.workspace',
-        tags: ['control-plane.workspace']
+        slotId: 'control-plane.client',
+        tags: ['control-plane.client']
       },
       layout,
       createContentCatalogIndex(catalog)
@@ -129,7 +153,7 @@ describe('slot resolver', () => {
   it('reports incompatible content instead of falling back', () => {
     const layout: SlotLayout = {
       'control-plane.dashboard': {
-        items: [{ contentId: 'events.stream.panel' }]
+        items: [{ contentId: 'beta.client' }]
       }
     };
 
@@ -145,7 +169,7 @@ describe('slot resolver', () => {
     expect(resolution).toMatchObject({
       items: [
         {
-          contentId: 'events.stream.panel',
+          contentId: 'beta.client',
           index: 0,
           kind: 'incompatible'
         }
@@ -157,15 +181,15 @@ describe('slot resolver', () => {
 
   it('limits resolved content by maxItems', () => {
     const layout: SlotLayout = {
-      'control-plane.workspace': {
-        items: [{ contentId: 'alpha.workspace' }, { contentId: 'events.stream.panel' }]
+      'control-plane.client': {
+        items: [{ contentId: 'alpha.client' }, { contentId: 'beta.client' }]
       }
     };
 
     const resolution = resolveSlotContents(
       {
-        slotId: 'control-plane.workspace',
-        tags: ['control-plane.workspace']
+        slotId: 'control-plane.client',
+        tags: ['control-plane.client']
       },
       layout,
       createContentCatalogIndex(catalog),
@@ -175,7 +199,7 @@ describe('slot resolver', () => {
     expect(resolution).toMatchObject({
       items: [
         {
-          contentId: 'alpha.workspace',
+          contentId: 'alpha.client',
           index: 0,
           kind: 'content'
         }

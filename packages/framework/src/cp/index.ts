@@ -8,6 +8,7 @@ export {
   parseControlPlaneProviderCatalogResponse,
   parseControlPlaneProviderRegistration
 } from './manifest.js';
+export { slotRoute } from './slotRoute.js';
 export type {
   ControlPlaneContentManifest,
   ControlPlaneContentRegistration,

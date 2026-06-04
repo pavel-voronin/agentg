@@ -25,9 +25,18 @@ export function resolveSlotContents(
   layout: SlotLayout,
   catalog: ReadonlyMap<string, ContentDefinition>,
   options: {
+    contentId?: string | undefined;
     maxItems?: number | undefined;
   } = {}
 ): SlotResolution {
+  if (options.contentId !== undefined) {
+    return {
+      items: [resolveSlotItem(slot, options.contentId, 0, catalog)],
+      kind: 'contents',
+      overflowCount: 0
+    };
+  }
+
   const layoutEntry = layout[slot.slotId];
   if (layoutEntry === undefined || layoutEntry.items.length === 0) {
     return resolveCompatibleSlotContents(slot, catalog, options);

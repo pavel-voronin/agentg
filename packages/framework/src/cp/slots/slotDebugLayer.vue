@@ -408,9 +408,7 @@ function debugRectForTarget(target: HTMLElement): SlotDebugRect | null {
     return slotDebugRectFromDomRect(selfRect);
   }
 
-  const childRects = [...target.querySelectorAll<HTMLElement>('*')]
-    .map((element) => element.getBoundingClientRect())
-    .filter((rect) => rect.width > 0 && rect.height > 0);
+  const childRects = childDebugRects(target);
   if (childRects.length === 0) {
     return null;
   }
@@ -438,6 +436,30 @@ function slotDebugRectFromDomRect(rect: DOMRect): SlotDebugRect {
 
 function observedDebugElements(target: HTMLElement): HTMLElement[] {
   return [target, ...target.querySelectorAll<HTMLElement>('*')];
+}
+
+function childDebugRects(target: HTMLElement): DOMRect[] {
+  return [...target.children].flatMap((child) =>
+    child instanceof HTMLElement ? debugRectsForElement(child) : []
+  );
+}
+
+function debugRectsForElement(element: HTMLElement): DOMRect[] {
+  if (!isVisibleDebugRectElement(element)) {
+    return [];
+  }
+
+  const rect = element.getBoundingClientRect();
+  if (rect.width > 0 && rect.height > 0) {
+    return [rect];
+  }
+
+  return childDebugRects(element);
+}
+
+function isVisibleDebugRectElement(element: HTMLElement): boolean {
+  const style = getComputedStyle(element);
+  return style.display !== 'none' && style.visibility !== 'hidden';
 }
 
 function clamp(value: number, min: number, max: number): number {

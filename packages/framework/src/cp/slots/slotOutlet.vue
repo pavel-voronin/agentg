@@ -23,6 +23,7 @@ type SlotRootRef = ComponentPublicInstance | Element | null;
 
 const props = withDefaults(
   defineProps<{
+    contentId?: string | undefined;
     context?: SlotContext | undefined;
     maxItems?: number | undefined;
     slotId: string;
@@ -51,6 +52,7 @@ const resolution = computed(() =>
     runtime.layout.value,
     runtime.catalogIndex.value,
     {
+      contentId: props.contentId,
       maxItems: props.maxItems
     }
   )
