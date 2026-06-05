@@ -33,3 +33,21 @@ export type { Snapshot } from './registry/contracts.js';
 export { registryModule } from './registry/module.js';
 export { registry } from './registry/remote.js';
 export { selfRegistry } from './registry/self.js';
+export {
+  TELEMETRY_NATS_REPORT_EVENT_TYPE,
+  TELEMETRY_RECORDS_EVENT_TYPE,
+  TELEMETRY_REPORT_EVENT_TYPE,
+  startTelemetryPublisher,
+  telemetryEnabled,
+  timeTelemetryOperation
+} from './telemetry/index.js';
+export type {
+  NatsTelemetryPendingConnection,
+  NatsTelemetryReport,
+  TelemetryMetric,
+  TelemetryRecord,
+  TelemetryRecordBatch,
+  TelemetryReport,
+  TelemetrySlowRecord,
+  TelemetryTotals
+} from './telemetry/index.js';

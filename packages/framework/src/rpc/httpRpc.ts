@@ -1,5 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 
+import { timeTelemetryOperation } from '../telemetry/index.js';
 import type { MaybePromise, ProcedureMap } from '../types.js';
 import type { ProcedureServer, ProcedureServerOptions, RpcFactory } from './rpc.js';
 
@@ -68,32 +69,43 @@ export async function callProcedure<T>(
   timeout?.unref();
 
   try {
-    const response = await fetch(procedureEndpoint(url), {
-      body: JSON.stringify({
-        input,
-        procedure
-      }),
-      headers: {
-        'content-type': 'application/json'
+    return await timeTelemetryOperation(
+      {
+        detail: {
+          url
+        },
+        kind: 'rpc.client',
+        name: procedure
       },
-      method: 'POST',
-      signal: controller.signal
-    });
-    const body: unknown = await response.json();
-    if (!response.ok) {
-      throw new Error(responseErrorMessage(body, response.status));
-    }
-    if (
-      typeof body !== 'object' ||
-      body === null ||
-      !('ok' in body) ||
-      body.ok !== true ||
-      !('result' in body)
-    ) {
-      throw new Error('Procedure response is invalid');
-    }
+      async () => {
+        const response = await fetch(procedureEndpoint(url), {
+          body: JSON.stringify({
+            input,
+            procedure
+          }),
+          headers: {
+            'content-type': 'application/json'
+          },
+          method: 'POST',
+          signal: controller.signal
+        });
+        const body: unknown = await response.json();
+        if (!response.ok) {
+          throw new Error(responseErrorMessage(body, response.status));
+        }
+        if (
+          typeof body !== 'object' ||
+          body === null ||
+          !('ok' in body) ||
+          body.ok !== true ||
+          !('result' in body)
+        ) {
+          throw new Error('Procedure response is invalid');
+        }
 
-    return body.result as T;
+        return body.result as T;
+      }
+    );
   } finally {
     if (timeout !== undefined) {
       clearTimeout(timeout);
@@ -144,7 +156,14 @@ async function handleProcedureRequest(
       return;
     }
 
-    const result = await (procedure as (input: unknown) => MaybePromise<unknown>)(envelope.input);
+    const result = await timeTelemetryOperation(
+      {
+        kind: 'rpc.server',
+        name: envelope.procedure
+      },
+      () =>
+        Promise.resolve((procedure as (input: unknown) => MaybePromise<unknown>)(envelope.input))
+    );
     writeJson(response, 200, {
       ok: true,
       result

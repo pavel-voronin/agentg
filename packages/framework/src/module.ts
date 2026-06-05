@@ -4,6 +4,7 @@ import type { ProcedureServer, RpcFactory } from './rpc/rpc.js';
 import { moduleByName } from './registry/client.js';
 import type { RegistryConnection, RegistryConnector } from './registry/connector.js';
 import type { ExtensionInput, ModuleManifest } from './registry/contracts.js';
+import { startTelemetryPublisher } from './telemetry/publisher.js';
 import type { MaybePromise, ProcedureMap } from './types.js';
 
 type StopProcess = () => MaybePromise<undefined>;
@@ -135,6 +136,7 @@ function createModuleApp<TConfig, TSurface extends ModuleSurface>(
   let runningBackgroundProcesses: RunningProcess[] = [];
   let runningProcedureServer: ProcedureServer | undefined;
   let runningStartupProcesses: RunningProcess[] = [];
+  let runningTelemetryPublisher: StopProcess | undefined;
   let registryConnection: RegistryConnection | undefined;
 
   const moduleSetup: ModuleSetup<TConfig> = {
@@ -216,6 +218,7 @@ function createModuleApp<TConfig, TSurface extends ModuleSurface>(
       let activeRegistryConnection: RegistryConnection | undefined;
       try {
         await events.start();
+        runningTelemetryPublisher = startTelemetryPublisher(events);
         for (const moduleProcess of namedStartupProcesses) {
           const stop = normalizeProcessStop(await moduleProcess.start());
           startedStartup.push({ name: moduleProcess.name, stop });
@@ -244,6 +247,10 @@ function createModuleApp<TConfig, TSurface extends ModuleSurface>(
           await procedureServer.stop();
         }
         await stopProcesses(startedStartup);
+        await stopCallbacks(
+          runningTelemetryPublisher === undefined ? [] : [runningTelemetryPublisher]
+        );
+        runningTelemetryPublisher = undefined;
         await events.stop();
         runningBackgroundProcesses = [];
         runningStartupProcesses = [];
@@ -271,6 +278,10 @@ function createModuleApp<TConfig, TSurface extends ModuleSurface>(
       const startupToStop = runningStartupProcesses;
       runningStartupProcesses = [];
       await stopProcesses(startupToStop);
+      await stopCallbacks(
+        runningTelemetryPublisher === undefined ? [] : [runningTelemetryPublisher]
+      );
+      runningTelemetryPublisher = undefined;
       await events.stop();
     }
   };
