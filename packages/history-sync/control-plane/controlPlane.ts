@@ -7,15 +7,16 @@ const contents = [
     tags: ['control-plane.dashboard.tile']
   },
   {
-    contentId: 'history-sync.workspace',
-    load: () => import('./frontend/workspaceContent.vue'),
+    contentId: 'history-sync.client',
+    load: () => import('./frontend/clientContent.vue'),
     metadata: {
       tab: {
         label: 'History Coverage',
-        order: 20
+        order: 20,
+        routeSegment: 'history'
       }
     },
-    tags: ['telegram.workspace']
+    tags: ['telegram.client']
   }
 ] as const satisfies readonly Omit<ContentDefinition, 'domainId'>[];
 

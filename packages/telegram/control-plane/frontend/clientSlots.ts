@@ -1,12 +1,13 @@
 import type { SlotItemResolution, SlotItemRenderState } from '@agentg/framework/cp';
 
-export type WorkspaceTab = {
+export type ClientTab = {
   item: SlotItemResolution & { kind: 'content' };
   label: string;
   order: number;
+  routeSegment: string;
 };
 
-export function compareWorkspaceTabs(left: WorkspaceTab, right: WorkspaceTab): number {
+export function compareClientTabs(left: ClientTab, right: ClientTab): number {
   if (left.order !== right.order) {
     return left.order - right.order;
   }
@@ -42,7 +43,7 @@ export function slotItemKey(item: SlotItemResolution): string {
   return `${String(item.index)}:${item.contentId}`;
 }
 
-export function workspaceTabFromItem(item: SlotItemResolution): WorkspaceTab | undefined {
+export function clientTabFromItem(item: SlotItemResolution): ClientTab | undefined {
   if (item.kind !== 'content') {
     return undefined;
   }
@@ -50,16 +51,35 @@ export function workspaceTabFromItem(item: SlotItemResolution): WorkspaceTab | u
   const tab = isPlainRecord(metadata.tab) ? metadata.tab : undefined;
   const label = typeof tab?.label === 'string' && tab.label.trim().length > 0 ? tab.label : '';
   const order = typeof tab?.order === 'number' && Number.isFinite(tab.order) ? tab.order : null;
-  if (tab === undefined || label.length === 0 || order === null) {
+  const routeSegment = tab === undefined ? null : clientTabRouteSegment(tab, item.contentId);
+  if (tab === undefined || label.length === 0 || order === null || routeSegment === null) {
     return undefined;
   }
   return {
     item,
     label,
-    order
+    order,
+    routeSegment
   };
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function clientTabRouteSegment(tab: Record<string, unknown>, contentId: string): string | null {
+  const explicitSegment = nonEmptyString(tab.routeSegment);
+  if (explicitSegment !== null) {
+    return explicitSegment;
+  }
+  const fallbackSegment = contentId.split('.').at(-1);
+  return nonEmptyString(fallbackSegment);
+}
+
+function nonEmptyString(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : null;
 }

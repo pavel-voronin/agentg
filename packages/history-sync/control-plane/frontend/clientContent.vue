@@ -4,9 +4,9 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useControlPlaneHost } from '@agentg/framework/cp';
 import type { SlotContext } from '@agentg/framework/cp';
 
-import SelectedWorkspace from './components/selectedWorkspace.vue';
+import SelectedClient from './components/selectedClient.vue';
 import { applyTimelineEvent } from './selectedEvents.js';
-import { normalizeViewportDays, selectedWorkspaceView } from './selectedWorkspaceView.js';
+import { normalizeViewportDays, selectedClientView } from './selectedClientView.js';
 import { readStorage, writeStorage } from './storage.js';
 import {
   DEFAULT_VIEWPORT_DAYS,
@@ -38,7 +38,7 @@ let loadingFeedbackTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
 const selectedChatId = computed(() => contextString(props.slotContext, 'selectedChatId'));
 const view = computed(() =>
-  selectedWorkspaceView({
+  selectedClientView({
     defaultViewportDays: defaultViewportDays.value,
     selectedChatId: selectedChatId.value,
     selectedHistorySyncLoadingVisible: selectedHistorySyncLoadingVisible.value,
@@ -276,7 +276,7 @@ function removeUndefinedProperties(value: Record<string, unknown>): Record<strin
 </script>
 
 <template>
-  <SelectedWorkspace
+  <SelectedClient
     :view="view"
     @custom-target="addCustomTarget"
     @delete-target="deleteTarget"

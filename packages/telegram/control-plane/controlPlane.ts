@@ -20,12 +20,12 @@ const contents = [
         order: 10
       }
     },
-    tags: ['telegram.workspace']
+    tags: ['telegram.client']
   },
   {
-    contentId: 'telegram.workspace',
-    load: () => import('./frontend/workspaceContent.vue'),
-    tags: ['control-plane.workspace']
+    contentId: 'telegram.client',
+    load: () => import('./frontend/clientContent.vue'),
+    tags: ['control-plane.client']
   },
   {
     contentId: 'telegram.status.tdlib',

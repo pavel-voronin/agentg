@@ -4,11 +4,11 @@ import {
   type SelectedHistorySyncChat,
   type SelectedHistorySyncState,
   type SelectedHistorySyncStatus,
-  type SelectedWorkspaceView,
+  type SelectedClientView,
   type TimelineScaleButtonView
 } from './views.js';
 
-export type SelectedWorkspaceViewSource = {
+export type SelectedClientViewSource = {
   defaultViewportDays: number;
   selectedChatId: string | null;
   selectedHistorySyncLoadingVisible: boolean;
@@ -17,7 +17,7 @@ export type SelectedWorkspaceViewSource = {
   viewportDays: number | null;
 };
 
-export function selectedWorkspaceView(source: SelectedWorkspaceViewSource): SelectedWorkspaceView {
+export function selectedClientView(source: SelectedClientViewSource): SelectedClientView {
   if (source.selectedChatId === null) {
     return { status: 'empty' };
   }
@@ -70,7 +70,7 @@ function selectedChatHistorySyncLabel(chat: SelectedHistorySyncChat): string | n
   return null;
 }
 
-function timelineScaleButtons(source: SelectedWorkspaceViewSource): TimelineScaleButtonView[] {
+function timelineScaleButtons(source: SelectedClientViewSource): TimelineScaleButtonView[] {
   return TIMELINE_SCALE_PRESETS.map((preset) => ({
     active: source.viewportDays === preset.value,
     isDefault: source.defaultViewportDays === preset.value,

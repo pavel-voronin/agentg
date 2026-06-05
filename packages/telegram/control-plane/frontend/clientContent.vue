@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue';
 
 import {
+  slotRoute,
   type SlotContext,
   type SlotDebugRegistration,
   type SlotItemResolution,
@@ -14,7 +15,7 @@ import {
 import { chatSidebarView } from './chatSidebarView.js';
 import ChatSidebar from './components/chatSidebar.vue';
 import ChatSidebarResizer from './components/chatSidebarResizer.vue';
-import WorkspacePrimaryPanel from './components/workspacePrimaryPanel.vue';
+import ClientPrimaryPanel from './components/clientPrimaryPanel.vue';
 import { useTelegramDirectoryState } from './directoryState.js';
 import { readStorage, writeStorage } from './storage.js';
 import { useChatSidebarResize } from './useChatSidebarResize.js';
@@ -28,14 +29,19 @@ import {
   preferredChatListSelection,
   providerFileUrl,
   visibleDirectoryChats as filterDirectoryChats
-} from './workspaceChat.js';
+} from './clientChat.js';
 import {
-  compareWorkspaceTabs,
+  chatIdFromClientRouteSegments,
+  clientRouteSegmentsForChat,
+  tabSegmentFromClientRouteSegments
+} from './clientRoute.js';
+import {
+  compareClientTabs,
   initialItemState,
   slotItemKey,
-  workspaceTabFromItem,
-  type WorkspaceTab
-} from './workspaceSlots.js';
+  clientTabFromItem,
+  type ClientTab
+} from './clientSlots.js';
 
 const props = defineProps<{
   slotContext?: SlotContext | undefined;
@@ -45,11 +51,9 @@ const telegramStoragePrefix = 'agentg.telegram.controlPlane';
 const directoryState = useTelegramDirectoryState();
 const slotRuntime = useSlotRuntime();
 const storedChatListSelection = readStoredChatListSelection();
-const activePrimaryTabId = ref(readStorage(`${telegramStoragePrefix}.primaryTabId`) ?? '');
 const chatFilter = ref(readStorage(`${telegramStoragePrefix}.chatFilter`) ?? '');
 const chatFolderId = ref<number | null>(storedChatListSelection.folderId);
 const chatListMode = ref<ChatListMode>(storedChatListSelection.mode);
-const selectedChatId = ref(readStorage(`${telegramStoragePrefix}.selectedChatId`) ?? null);
 const primaryItemStates = shallowRef<ReadonlyMap<string, SlotItemRenderState>>(new Map());
 const emptyContentAttrs: Record<string, unknown> = {};
 let primaryDebugRegistration: SlotDebugRegistration | null = null;
@@ -66,12 +70,21 @@ const {
 } = useChatSidebarResize(`${telegramStoragePrefix}.chatSidebarWidth`);
 
 const primarySlot = {
-  slotId: 'telegram.workspace.primary',
-  tags: ['telegram.workspace']
+  slotId: 'telegram.client.primary',
+  tags: ['telegram.client']
 };
 
+const route = computed(() => slotRoute(props.slotContext));
 const chatNavigation = computed(() =>
   buildChatNavigation(directoryState.chats.value, directoryState.folders.value)
+);
+const routeChatId = computed(() => chatIdFromClientRouteSegments(route.value.segments));
+const routePrimaryTabSegment = computed(() =>
+  tabSegmentFromClientRouteSegments(route.value.segments)
+);
+const selectedChatId = ref(initialSelectedChatId());
+const selectedChatRoute = computed(() =>
+  selectedChatId.value === null ? route.value : route.value.child(2)
 );
 const visibleDirectoryChats = computed(() =>
   filterDirectoryChats({
@@ -125,11 +138,23 @@ const primarySlotState = computed<SlotRenderState>(() => {
   };
 });
 const primaryTabs = computed(() =>
-  primaryResolvedItems.value.map(workspaceTabFromItem).filter(isDefined).sort(compareWorkspaceTabs)
+  primaryResolvedItems.value.map(clientTabFromItem).filter(isDefined).sort(compareClientTabs)
 );
-const activePrimaryTab = computed(
-  () => primaryTabs.value.find((tab) => tab.item.contentId === activePrimaryTabId.value) ?? null
-);
+const defaultPrimaryTab = computed(() => primaryTabs.value[0] ?? null);
+const routedPrimaryTab = computed(() => {
+  const routeSegment = routePrimaryTabSegment.value;
+  return routeSegment === null
+    ? null
+    : (primaryTabs.value.find((tab) => tab.routeSegment === routeSegment) ?? null);
+});
+const activePrimaryTab = computed(() => {
+  const routedTab = routedPrimaryTab.value;
+  if (routedTab !== null) {
+    return routedTab;
+  }
+  return defaultPrimaryTab.value;
+});
+const activePrimaryTabId = computed(() => activePrimaryTab.value?.item.contentId ?? '');
 const selectedChat = computed(() =>
   selectedChatId.value === null
     ? null
@@ -145,18 +170,45 @@ const selectedChatAvatarUrl = computed(() =>
 const selectedChatHeader = computed(() =>
   buildChatHeaderView(selectedChat.value, selectedChatAvatarUrl.value)
 );
+const activePrimaryTabRoute = computed(() =>
+  routedPrimaryTab.value !== null && !isDefaultPrimaryTab(routedPrimaryTab.value)
+    ? selectedChatRoute.value.child(1)
+    : selectedChatRoute.value
+);
+const nestedRouteContext = computed(() => activePrimaryTabRoute.value.context);
 const nestedSlotContext = computed(() => ({
-  ...(props.slotContext ?? {}),
+  ...nestedRouteContext.value,
   closeSelectedChat,
   selectedChatAvatarUrl: selectedChatAvatarUrl.value,
   selectedChatId: selectedChatId.value
 }));
 
 watch(
+  routeChatId,
+  (chatId) => {
+    if (selectedChatId.value !== chatId) {
+      selectedChatId.value = chatId;
+    }
+  },
+  { immediate: true }
+);
+
+watch(
   selectedChatId,
   (chatId) => {
     writeStorage(`${telegramStoragePrefix}.selectedChatId`, chatId ?? '');
+    writeSelectedChatRoute(chatId);
   },
+  { immediate: true }
+);
+
+watch(
+  () => ({
+    chats: directoryState.chats.value,
+    hydrated: directoryState.hydrated.value,
+    selectedChatId: selectedChatId.value
+  }),
+  selectSelectedChatListFromDirectory,
   { immediate: true }
 );
 
@@ -181,21 +233,13 @@ watch(
 );
 
 watch(
-  primaryTabs,
-  (tabs) => {
-    if (tabs.length === 0) {
-      activePrimaryTabId.value = '';
-      writeStorage(`${telegramStoragePrefix}.primaryTabId`, '');
-      return;
-    }
-    const firstTab = tabs[0];
-    if (
-      firstTab !== undefined &&
-      !tabs.some((tab) => tab.item.contentId === activePrimaryTabId.value)
-    ) {
-      selectPrimaryTab(firstTab.item.contentId);
-    }
-  },
+  () => ({
+    chatId: selectedChatId.value,
+    routeChatId: routeChatId.value,
+    routeTabSegment: routePrimaryTabSegment.value,
+    tab: activePrimaryTab.value
+  }),
+  normalizePrimaryTabRoute,
   { immediate: true }
 );
 
@@ -234,11 +278,11 @@ function searchChats(value: string): void {
 }
 
 function selectPrimaryTab(contentId: string): void {
-  if (!primaryTabs.value.some((tab) => tab.item.contentId === contentId)) {
+  const tab = primaryTabs.value.find((item) => item.item.contentId === contentId);
+  if (tab === undefined || selectedChatId.value === null) {
     return;
   }
-  activePrimaryTabId.value = contentId;
-  writeStorage(`${telegramStoragePrefix}.primaryTabId`, contentId);
+  route.value.replace(clientRouteSegmentsForChat(selectedChatId.value, routeSegmentForTab(tab)));
 }
 
 function setPrimaryItemState(item: SlotItemResolution, state: SlotItemRenderState): void {
@@ -312,6 +356,57 @@ function selectMainChatList(): void {
 
 function closeSelectedChat(): void {
   selectedChatId.value = null;
+}
+
+function initialSelectedChatId(): string | null {
+  return routeChatId.value;
+}
+
+function writeSelectedChatRoute(chatId: string | null): void {
+  if (routeChatId.value === chatId) {
+    return;
+  }
+  route.value.replace(clientRouteSegmentsForChat(chatId, routeSegmentForCurrentRoute()));
+}
+
+function normalizePrimaryTabRoute(): void {
+  const chatId = selectedChatId.value;
+  const tab = activePrimaryTab.value;
+  if (chatId === null || tab === null || routeChatId.value !== chatId) {
+    return;
+  }
+  if (routedPrimaryTab.value !== null && isDefaultPrimaryTab(routedPrimaryTab.value)) {
+    route.value.replace(clientRouteSegmentsForChat(chatId, null, selectedChatRoute.value.rest(1)));
+    return;
+  }
+  const routeSegment = routeSegmentForTab(tab);
+  if (routeSegment !== null && routePrimaryTabSegment.value !== routeSegment) {
+    route.value.replace(clientRouteSegmentsForChat(chatId, routeSegment));
+  }
+}
+
+function routeSegmentForTab(tab: ClientTab | null): string | null {
+  return tab === null || isDefaultPrimaryTab(tab) ? null : tab.routeSegment;
+}
+
+function routeSegmentForCurrentRoute(): string | null {
+  const routedTab = routedPrimaryTab.value;
+  return routedTab === null ? routePrimaryTabSegment.value : routeSegmentForTab(routedTab);
+}
+
+function isDefaultPrimaryTab(tab: ClientTab): boolean {
+  return tab.item.contentId === defaultPrimaryTab.value?.item.contentId;
+}
+
+function selectSelectedChatListFromDirectory(): void {
+  const chatId = selectedChatId.value;
+  if (!directoryState.hydrated.value || chatId === null) {
+    return;
+  }
+  const chat = directoryState.chats.value.find((item) => item.id === chatId);
+  if (chat !== undefined) {
+    selectChatList(preferredChatListSelection(chat));
+  }
 }
 
 function pushLocalError(error: unknown): void {
@@ -401,9 +496,9 @@ function isDefined<T>(value: T | undefined): value is T {
 </script>
 
 <template>
-  <div class="telegram-workspace">
+  <div class="telegram-client">
     <section
-      class="telegram-workspace__chat-interface"
+      class="telegram-client__chat-interface"
       :data-resizing="isResizingChatSidebar ? 'true' : undefined"
       :style="chatInterfaceStyle"
     >
@@ -426,7 +521,7 @@ function isDefined<T>(value: T | undefined): value is T {
         @resize-start="startChatSidebarResize"
       />
 
-      <WorkspacePrimaryPanel
+      <ClientPrimaryPanel
         :active-tab="activePrimaryTab"
         :active-tab-id="activePrimaryTabId"
         :chat-header="selectedChatHeader"
@@ -445,15 +540,15 @@ function isDefined<T>(value: T | undefined): value is T {
 <style scoped>
 @reference "tailwindcss";
 
-.telegram-workspace {
-  @apply h-full min-h-0 overflow-hidden;
+.telegram-client {
+  @apply h-full min-h-0 w-full flex-1 overflow-hidden;
 }
 
-.telegram-workspace__chat-interface {
-  @apply relative grid h-full min-h-0 min-w-0 grid-cols-[var(--telegram-chat-sidebar-width)_minmax(0,1fr)] overflow-hidden rounded-lg border border-zinc-200 bg-white;
+.telegram-client__chat-interface {
+  @apply relative grid h-full min-h-0 w-full min-w-0 grid-cols-[var(--telegram-chat-sidebar-width)_minmax(0,1fr)] overflow-hidden rounded-lg border border-zinc-200 bg-white;
 }
 
-.telegram-workspace__chat-interface[data-resizing='true'] {
+.telegram-client__chat-interface[data-resizing='true'] {
   @apply cursor-col-resize select-none;
 }
 </style>

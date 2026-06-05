@@ -80,7 +80,7 @@ export type TimelineScaleButtonView = {
   value: number;
 };
 
-export type SelectedWorkspaceView =
+export type SelectedClientView =
   | {
       status: 'empty';
     }
