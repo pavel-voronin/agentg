@@ -15,6 +15,7 @@ describe('Telegram config', () => {
       apiId: undefined,
       databaseUrl: 'postgres://agentg:agentg@127.0.0.1:5432/agentg',
       host: undefined,
+      ingestionUpdateConcurrency: 10,
       natsUrl: 'nats://127.0.0.1:4222',
       port: 8702,
       registryUrl: 'http://127.0.0.1:8701',
@@ -32,6 +33,7 @@ describe('Telegram config', () => {
       REGISTRY_URL: 'http://127.0.0.1:8701',
       TDLIB_DATABASE_DIR: '/td/database',
       TDLIB_FILES_DIR: '/td/files',
+      TELEGRAM_INGESTION_UPDATE_CONCURRENCY: '2',
       TELEGRAM_API_HASH: 'hash',
       TELEGRAM_API_ID: '12345'
     });
@@ -40,6 +42,7 @@ describe('Telegram config', () => {
       apiHash: 'hash',
       apiId: 12345,
       host: '0.0.0.0',
+      ingestionUpdateConcurrency: 2,
       port: 8080,
       tdlibDatabaseDirectory: '/td/database',
       tdlibFilesDirectory: '/td/files'

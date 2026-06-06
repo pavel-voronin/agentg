@@ -11,6 +11,7 @@ describe('telegramModule', () => {
         apiId: undefined,
         databaseUrl: 'postgres://agentg:agentg@127.0.0.1:1/agentg',
         host: undefined,
+        ingestionUpdateConcurrency: 10,
         natsUrl: 'nats://test',
         port: 0,
         registryUrl: 'http://127.0.0.1:1',

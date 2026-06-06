@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 
 import type { Database } from '../database/client.js';
 import { telegramChatPositions, telegramChats } from '../database/schema.js';
@@ -118,7 +118,17 @@ export async function replaceTelegramChatPositions(
     return;
   }
 
-  await database.insert(telegramChatPositions).values(rows);
+  await database
+    .insert(telegramChatPositions)
+    .values(rows)
+    .onConflictDoUpdate({
+      set: {
+        isPinned: sql.raw('excluded."is_pinned"'),
+        order: sql.raw('excluded."order"'),
+        source: sql.raw('excluded."source"')
+      },
+      target: [telegramChatPositions.chatId, telegramChatPositions.listKey]
+    });
 }
 
 function telegramChatRow(chat: Chat): typeof telegramChats.$inferInsert {
@@ -175,7 +185,16 @@ function telegramChatPositionRows(
   chatId: string,
   positions: Chat['positions']
 ): (typeof telegramChatPositions.$inferInsert)[] {
-  return positions.map((position) => telegramChatPositionRow(chatId, position));
+  const rows = new Map<string, typeof telegramChatPositions.$inferInsert>();
+  for (const position of positions) {
+    const row = telegramChatPositionRow(chatId, position);
+    rows.set(chatPositionRowKey(row), row);
+  }
+  return [...rows.values()];
+}
+
+function chatPositionRowKey(row: typeof telegramChatPositions.$inferInsert): string {
+  return `${row.chatId}\u0000${row.listKey}`;
 }
 
 function telegramChatPositionRow(

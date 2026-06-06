@@ -1,4 +1,4 @@
-import type { EventBus } from '@agentg/framework';
+import { timeTelemetryOperation, type EventBus } from '@agentg/framework';
 import { asc } from 'drizzle-orm';
 import type { ChatList$Input } from 'tdlib-types';
 
@@ -14,8 +14,10 @@ import { priorities } from '../tdlib/priority.js';
 import type { LiveCoverageObserver } from '../history/liveCoverage.js';
 import type { StatusTracker } from '../status/tracker.js';
 import { createUpdateEvents } from './events.js';
+import { startIngestionQueueTelemetry } from './queueTelemetry.js';
 import type { IngestionResources } from './resources.js';
 import { persistLiveUpdate } from './registry.js';
+import { createUpdateQueue } from './updateQueue.js';
 
 type IngestionRuntime = {
   start(): Promise<() => Promise<undefined>>;
@@ -29,6 +31,7 @@ export type IngestionOptions = {
   liveCoverage: LiveCoverageObserver;
   status: StatusTracker;
   tdlib: Tdlib;
+  updateConcurrency: number;
 };
 
 const LIVE_COVERAGE_TICK_MS = 30_000;
@@ -44,6 +47,10 @@ type ChatListKind =
       kind: 'folder';
     };
 
+type RuntimeUpdate = {
+  readonly _: string;
+};
+
 export function useIngestion(options: IngestionOptions): IngestionRuntime {
   const resources: IngestionResources = {
     account: options.account.identity,
@@ -53,8 +60,17 @@ export function useIngestion(options: IngestionOptions): IngestionRuntime {
     liveCoverage: options.liveCoverage,
     status: options.status
   };
-  const unsubscribeUpdates = options.tdlib.onUpdate((update) => {
-    void persistLiveUpdate(update, resources).catch((error: unknown) => {
+  const updates = createUpdateQueue<RuntimeUpdate>({
+    concurrency: options.updateConcurrency,
+    handle: (update) =>
+      timeTelemetryOperation(
+        {
+          kind: 'ingestion.update',
+          name: update._
+        },
+        async () => persistLiveUpdate(update, resources)
+      ),
+    onError(error, update): void {
       console.error(
         JSON.stringify({
           error: error instanceof Error ? error.message : String(error),
@@ -62,13 +78,22 @@ export function useIngestion(options: IngestionOptions): IngestionRuntime {
           updateType: update._
         })
       );
-    });
+    }
   });
+  const unsubscribeUpdates = options.tdlib.onUpdate((update) => {
+    updates.enqueue(update);
+  });
+  let stopQueueTelemetry: (() => undefined) | undefined;
   let liveCoverageTick: ReturnType<typeof setInterval> | undefined;
   let statusHeartbeat: ReturnType<typeof setInterval> | undefined;
 
   return {
     async start() {
+      stopQueueTelemetry = startIngestionQueueTelemetry({
+        concurrency: options.updateConcurrency,
+        events: options.events,
+        snapshot: () => updates.snapshot()
+      });
       await persistAuthenticatedClient(options);
       options.status.markAuthenticated(true);
       options.status.markConnectionState('connectionStateReady');
@@ -100,6 +125,9 @@ export function useIngestion(options: IngestionOptions): IngestionRuntime {
       statusHeartbeat = undefined;
     }
     unsubscribeUpdates();
+    await updates.drain();
+    stopQueueTelemetry?.();
+    stopQueueTelemetry = undefined;
     await options.liveCoverage.markDisconnected();
     options.status.markDisconnected();
     options.account.clear();

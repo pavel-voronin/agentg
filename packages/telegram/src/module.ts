@@ -70,7 +70,8 @@ export const telegramModule = defineModule('telegram', {
         files,
         liveCoverage,
         status,
-        tdlib
+        tdlib,
+        updateConcurrency: config.ingestionUpdateConcurrency
       });
 
       startup(() => ingestion.start());
