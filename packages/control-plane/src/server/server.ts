@@ -5,6 +5,7 @@ import { extname, resolve, sep } from 'node:path';
 
 import {
   callProcedure,
+  timeTelemetryOperation,
   type EventBus,
   type EventSubscription,
   type RegistryClient
@@ -210,10 +211,18 @@ async function callProcedureByMethod(
   method: string,
   params: unknown
 ): Promise<unknown> {
-  const localProcedure = runtime.procedures[method];
-  return localProcedure === undefined
-    ? callModuleProcedure(runtime, method, params)
-    : localProcedure(params);
+  return timeTelemetryOperation(
+    {
+      kind: 'control-plane.rpc',
+      name: method
+    },
+    async () => {
+      const localProcedure = runtime.procedures[method];
+      return localProcedure === undefined
+        ? callModuleProcedure(runtime, method, params)
+        : localProcedure(params);
+    }
+  );
 }
 
 async function callModuleProcedure(

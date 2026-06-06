@@ -309,6 +309,7 @@ function isCurrentModuleWorkspace(workspace) {
     workspace === 'packages/framework' ||
     workspace === 'packages/registry' ||
     workspace === 'packages/gateway' ||
+    workspace === 'packages/telemetry' ||
     workspace === 'packages/control-plane' ||
     workspace === 'packages/telegram' ||
     workspace === 'packages/history-sync'

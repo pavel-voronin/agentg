@@ -8,6 +8,7 @@ const packageDirs = [
   'packages/framework',
   'packages/registry',
   'packages/gateway',
+  'packages/telemetry',
   'packages/control-plane',
   'packages/telegram',
   'packages/history-sync'

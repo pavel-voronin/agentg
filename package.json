@@ -7,6 +7,7 @@
     "packages/framework",
     "packages/registry",
     "packages/gateway",
+    "packages/telemetry",
     "packages/control-plane",
     "packages/telegram",
     "packages/tdlib-docs",
@@ -22,6 +23,7 @@
     "dev:control-plane": "npm --workspace @agentg/control-plane run dev",
     "dev:control-plane-server": "sh -c 'set -a; [ ! -f .env ] || . ./.env; set +a; DATABASE_URL=\"${DATABASE_URL:-postgres://agentg:agentg@127.0.0.1:5432/agentg}\" NATS_URL=\"${NATS_URL:-nats://127.0.0.1:4222}\" REGISTRY_URL=\"${REGISTRY_URL:-http://127.0.0.1:8701}\" CONTROL_PLANE_PORT=\"${CONTROL_PLANE_PORT:-8789}\" TDLIB_FILES_DIR=\"$PWD/td-data/files\" npm --workspace @agentg/control-plane run dev:server'",
     "dev:registry": "sh -c 'set -a; [ ! -f .env ] || . ./.env; set +a; NATS_URL=\"${NATS_URL:-nats://127.0.0.1:4222}\" PORT=\"${PORT:-8701}\" npm --workspace @agentg/registry run dev'",
+    "dev:telemetry": "sh -c 'set -a; [ ! -f .env ] || . ./.env; set +a; NATS_URL=\"${NATS_URL:-nats://127.0.0.1:4222}\" NATS_MONITORING_URL=\"${NATS_MONITORING_URL:-http://127.0.0.1:8222}\" REGISTRY_URL=\"${REGISTRY_URL:-http://127.0.0.1:8701}\" PORT=\"${PORT:-8705}\" npm --workspace @agentg/telemetry run dev'",
     "dev:gateway": "sh -c 'set -a; [ ! -f .env ] || . ./.env; set +a; NATS_URL=\"${NATS_URL:-nats://127.0.0.1:4222}\" REGISTRY_URL=\"${REGISTRY_URL:-http://127.0.0.1:8701}\" PORT=\"${PORT:-8703}\" GATEWAY_PORT=\"${GATEWAY_PORT:-8787}\" npm --workspace @agentg/gateway run dev'",
     "dev:history-sync": "sh -c 'set -a; [ ! -f .env ] || . ./.env; set +a; DATABASE_URL=\"${DATABASE_URL:-postgres://agentg:agentg@127.0.0.1:5432/agentg}\" NATS_URL=\"${NATS_URL:-nats://127.0.0.1:4222}\" REGISTRY_URL=\"${REGISTRY_URL:-http://127.0.0.1:8701}\" PORT=\"${PORT:-8704}\" npm --workspace @agentg/history-sync run dev'",
     "dev:claude": "npm --workspace @agentg/claude-plugin run start",
@@ -49,10 +51,11 @@
     "check:framework": "npm --workspace @agentg/framework run typecheck && npm --workspace @agentg/framework run test && eslint packages/framework && prettier --check packages/framework",
     "check:registry": "npm --workspace @agentg/registry run typecheck && npm --workspace @agentg/registry run test && eslint packages/registry && prettier --check packages/registry",
     "check:gateway": "npm --workspace @agentg/gateway run typecheck && npm --workspace @agentg/gateway run test && eslint packages/gateway && prettier --check packages/gateway",
+    "check:telemetry": "npm --workspace @agentg/telemetry run typecheck && npm --workspace @agentg/telemetry --if-present run test && eslint packages/telemetry && prettier --check packages/telemetry",
     "check:control-plane": "npm --workspace @agentg/control-plane run typecheck && npm --workspace @agentg/control-plane --if-present run test && eslint packages/control-plane && prettier --check packages/control-plane",
     "check:telegram": "npm --workspace @agentg/telegram run typecheck && npm --workspace @agentg/telegram --if-present run test && eslint packages/telegram && prettier --check packages/telegram",
     "check:history-sync": "npm --workspace @agentg/history-sync run typecheck && npm --workspace @agentg/history-sync --if-present run test && eslint packages/history-sync && prettier --check packages/history-sync",
-    "check:modules": "npm run module-boundary:audit && npm run check:framework && npm run check:registry && npm run check:gateway && npm run check:control-plane && npm run check:telegram && npm run check:history-sync",
+    "check:modules": "npm run module-boundary:audit && npm run check:framework && npm run check:registry && npm run check:gateway && npm run check:telemetry && npm run check:control-plane && npm run check:telegram && npm run check:history-sync",
     "check": "npm run typecheck && npm run lint && npm run source:audit && npm run format:check && npm run test"
   },
   "devDependencies": {

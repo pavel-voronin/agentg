@@ -3,10 +3,12 @@
 
 import { spawn } from 'node:child_process';
 import { createConnection } from 'node:net';
+import { resolve } from 'node:path';
 import { clearInterval, setInterval } from 'node:timers';
 import { setTimeout as delay } from 'node:timers/promises';
 
 const setupCommands = [['docker', ['compose', 'up', '-d', 'postgres', 'nats', '--quiet-pull']]];
+const storagePath = resolve('.tmp', 'telemetry', 'events.sqlite');
 
 const children = new Set();
 let shuttingDown = false;
@@ -21,6 +23,9 @@ try {
 
   startDevProcess('registry', 'npm', ['run', 'dev:registry']);
   await waitForTcp('registry RPC', '127.0.0.1', 8701);
+
+  startDevProcess('telemetry', 'npm', ['run', 'dev:telemetry']);
+  await waitForTcp('telemetry RPC', '127.0.0.1', 8705);
 
   startDevProcess('telegram', 'npm', ['run', 'dev:telegram']);
   await waitForTcp('telegram RPC', '127.0.0.1', 8702);
@@ -75,6 +80,7 @@ function run(command, args) {
 function startDevProcess(name, command, args) {
   const startedAt = Date.now();
   const child = spawn(command, args, {
+    env: devProcessEnv(name),
     stdio: 'inherit'
   });
   children.add(child);
@@ -93,6 +99,15 @@ function startDevProcess(name, command, args) {
   return {
     child,
     startedAt
+  };
+}
+
+function devProcessEnv(name) {
+  return {
+    ...process.env,
+    AGENTG_TELEMETRY: process.env.AGENTG_TELEMETRY ?? '1',
+    AGENTG_TELEMETRY_SQLITE_PATH: process.env.AGENTG_TELEMETRY_SQLITE_PATH ?? storagePath,
+    AGENTG_TELEMETRY_SOURCE: name
   };
 }
 

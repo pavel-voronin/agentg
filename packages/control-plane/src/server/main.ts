@@ -1,4 +1,9 @@
-import { callProcedure, createRegistryClient, nats } from '@agentg/framework';
+import {
+  callProcedure,
+  createRegistryClient,
+  nats,
+  startTelemetryPublisher
+} from '@agentg/framework';
 
 import { procedures as telegramProcedures } from '../../../telegram/control-plane/backend/procedures.js';
 import { createDatabase } from '../../../telegram/src/database/client.js';
@@ -10,6 +15,7 @@ const events = nats(config.natsUrl)();
 await events.start();
 const database = createDatabase(config.databaseUrl);
 await database.start();
+const stopTelemetry = startTelemetryPublisher(events);
 
 const registry = createRegistryClient({
   events,
@@ -43,12 +49,14 @@ try {
       staticDir: 'dist'
     },
     events,
-    procedures: telegramProcedures({
-      callTelegramProcedure,
-      database: database.db,
-      events,
-      filesDirectory: config.tdlibFilesDirectory
-    }),
+    procedures: {
+      ...telegramProcedures({
+        callTelegramProcedure,
+        database: database.db,
+        events,
+        filesDirectory: config.tdlibFilesDirectory
+      })
+    },
     registry
   });
 } catch (error) {
@@ -60,6 +68,7 @@ try {
   );
   process.exitCode = 1;
 } finally {
+  stopTelemetry();
   registry.close();
   await database.stop();
   await events.stop();
