@@ -2,26 +2,71 @@
 
 Local development uses separate workspace packages for the long-running
 Telegram ingestion process, History Sync, Control Plane, and the Agent Gateway,
-with Docker Compose providing Postgres and NATS.
+with Docker Compose providing Postgres, NATS, VictoriaMetrics, Jaeger, and
+Grafana.
 
 ## Commands
 
+Install Process Compose before running the local app stack:
+
 ```bash
-npm install
-npm run infra:up
-npm run db:migrate
-npm run dev:registry
-npm run dev:telegram
-npm run dev:history-sync
-npm run dev:gateway
-npm run dev:control-plane-server
-npm run dev:control-plane
+brew install f1bonacc1/tap/process-compose
 ```
 
-`npm run infra:up` starts Postgres and NATS.
+```bash
+npm install
+npm run dev
+```
+
+`npm run dev` starts the local app stack through Process Compose in detached
+mode. The Process Compose project is declared in `process-compose.yaml`, uses
+`.tmp/process-compose.sock` as its control socket, and writes service logs to
+`.tmp/process-compose/services.log`.
+
+Process Compose runs the app-side services:
+
+- `registry`
+- `telegram`
+- `history-sync`
+- `gateway`
+- `control-plane-server`
+- `control-plane`
+
+It also runs setup commands before the app services:
+
+- `infra-up`, which calls `npm run infra:up`
+- `db-migrate`, which calls `npm run db:migrate`
+
+`npm run dev` defaults `AGENTG_TELEMETRY` to `1`, so `npm run infra:up` starts
+Postgres, NATS, VictoriaMetrics, Jaeger, Grafana, and the NATS exporter through
+Docker Compose. With `AGENTG_TELEMETRY=0`, `npm run infra:up` starts only
+Postgres and NATS. These services stay Docker-owned. The observability services
+are development tools. Jaeger keeps traces in memory, VictoriaMetrics writes to
+`tmpfs`, and Grafana is rebuilt from provisioning files instead of a persistent
+volume.
 
 `npm run db:migrate` applies versioned Drizzle migrations owned by Telegram and
 History Sync.
+
+The Telemetry Control Plane page is owned by `@agentg/telemetry`, but its
+backend procedures run inside `control-plane-server`; there is no standalone
+Telemetry runtime service.
+
+Useful Process Compose commands:
+
+```bash
+npm run dev:status
+npm run dev:attach
+npm run dev:tui
+npm run dev:logs -- control-plane-server --tail 100
+npm run dev:restart -- telegram
+npm run dev:down
+```
+
+`npm run dev:tui` starts the same Process Compose project in the foreground TUI
+instead of detached mode. `npm run dev:attach` attaches the TUI to an already
+running detached project. `npm run dev:down` stops the Process Compose app
+services and leaves Docker-owned infrastructure running.
 
 `npm run dev:telegram` runs the `@agentg/telegram` ingestion package. It owns the
 TDLib session, receives live Telegram updates, writes Telegram-shaped records to
@@ -88,8 +133,7 @@ npm run compose:telegram
 ## Trusted Module Runtime Conventions
 
 Trusted modules run as ordinary internal services. The service name should equal
-the module slug, and the slug should prefix tables, extension names, NATS
-subjects, and logs.
+the module slug, and the slug should prefix tables, NATS subjects, and logs.
 
 Module runtime environment:
 
@@ -102,10 +146,6 @@ Module runtime environment:
 - `DATABASE_URL`: shared Postgres connection string
 - `NATS_URL`: shared NATS connection string
 - `REGISTRY_URL`: Registry URL for module manifest join
-
-Extension RPC names are namespaced by slug and are declared in the module
-manifest sent to Registry. Model extension getters target the model
-marker value, for example `telegram.chat`.
 
 Docker Compose includes a `module-smoke` profile with the `modulesmoke` service.
 It is a packaging smoke service for the module environment shape, not a product
@@ -126,7 +166,7 @@ RPC methods.
 Core services register with `required: true`: Telegram ingestion, History Sync,
 Gateway, and Control Plane. Disappearing required services trigger graceful
 shutdown in Registry clients. Disappearing optional services only
-removes their procedures and extensions from snapshots.
+removes their procedures from snapshots.
 
 ## Debugging `callId` Flows
 
@@ -167,6 +207,9 @@ Initial local stack includes:
 - Agent Gateway process when testing agent-facing APIs
 - Postgres
 - NATS
+- VictoriaMetrics
+- Jaeger
+- Grafana
 
 ## Phase 1 Manual Validation
 
@@ -175,14 +218,12 @@ persistence work end to end.
 
 Expected flow:
 
-1. Start Postgres and NATS with `npm run infra:up`.
-2. Apply migrations with `npm run db:migrate`.
-3. Start Telegram ingestion with `npm run dev:telegram`.
-4. Start History Sync with `npm run dev:history-sync`.
-5. Authenticate as the Telegram user if no session exists.
-6. Confirm that chats, messages, history sync targets, and coverage appear in Postgres.
-7. Send a text message to Saved Messages from the normal Telegram client.
-8. Query Postgres and verify that the same message was persisted with Telegram
+1. Start the local stack with `npm run dev`.
+2. Inspect readiness with `npm run dev:status`.
+3. Authenticate as the Telegram user if no session exists.
+4. Confirm that chats, messages, history sync targets, and coverage appear in Postgres.
+5. Send a text message to Saved Messages from the normal Telegram client.
+6. Query Postgres and verify that the same message was persisted with Telegram
    chat and message identifiers.
 
 The same check should also work for a newly received text message from another

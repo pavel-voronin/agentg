@@ -1,4 +1,13 @@
+x-agentg-telemetry-environment: &agentg-telemetry-environment
+  AGENTG_TELEMETRY: ${AGENTG_TELEMETRY:-0}
+  OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: http://victoria-metrics:8428/opentelemetry/v1/metrics
+  OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://jaeger:4318/v1/traces
+  GRAFANA_URL: http://127.0.0.1:3000
+  JAEGER_UI_URL: http://127.0.0.1:16686
+  VICTORIA_METRICS_URL: http://127.0.0.1:8428
+
 x-agentg-module-environment: &agentg-module-environment
+  <<: *agentg-telemetry-environment
   DATABASE_URL: postgres://agentg:agentg@postgres:5432/agentg
   MODULE_RPC_HOST: 0.0.0.0
   MODULE_RPC_PORT: 8080
@@ -14,6 +23,10 @@ x-agentg-module-service: &agentg-module-service
       condition: service_started
     postgres:
       condition: service_healthy
+    victoria-metrics:
+      condition: service_started
+    jaeger:
+      condition: service_started
   restart: 'no'
 
 services:
@@ -28,9 +41,14 @@ services:
         condition: service_started
       nats:
         condition: service_started
+      victoria-metrics:
+        condition: service_started
+      jaeger:
+        condition: service_started
       postgres:
         condition: service_healthy
     environment:
+      <<: *agentg-telemetry-environment
       DATABASE_URL: postgres://agentg:agentg@postgres:5432/agentg
       NATS_URL: nats://nats:4222
       REGISTRY_URL: http://registry:8080
@@ -75,6 +93,7 @@ services:
       nats:
         condition: service_started
     environment:
+      <<: *agentg-telemetry-environment
       NATS_URL: nats://nats:4222
       HOST: 0.0.0.0
       PORT: 8080
@@ -93,6 +112,7 @@ services:
       nats:
         condition: service_started
     environment:
+      <<: *agentg-telemetry-environment
       DATABASE_URL: postgres://agentg:agentg@postgres:5432/agentg
       CONTROL_PLANE_HOST: 0.0.0.0
       CONTROL_PLANE_PORT: ${CONTROL_PLANE_PORT:-8788}
@@ -120,6 +140,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
+      <<: *agentg-telemetry-environment
       DATABASE_URL: postgres://agentg:agentg@postgres:5432/agentg
       NATS_URL: nats://nats:4222
       REGISTRY_URL: http://registry:8080
@@ -141,6 +162,7 @@ services:
       nats:
         condition: service_started
     environment:
+      <<: *agentg-telemetry-environment
       NATS_URL: nats://nats:4222
       REGISTRY_URL: http://registry:8080
       HOST: 0.0.0.0
@@ -157,6 +179,77 @@ services:
     ports:
       - '4222:4222'
       - '8222:8222'
+
+  nats-exporter:
+    image: natsio/prometheus-nats-exporter:0.17.3
+    entrypoint: ['sh', '-c']
+    command:
+      - >
+        telemetry="$$(printf "%s" "$${AGENTG_TELEMETRY:-0}" | tr "[:upper:]" "[:lower:]")";
+        case "$$telemetry" in
+          ""|0|false|no|off)
+            echo "NATS metrics disabled";
+            while :; do sleep 3600; done
+            ;;
+          *)
+            exec /prometheus-nats-exporter -varz -connz_detailed -subz -healthz http://nats:8222
+            ;;
+        esac
+    environment:
+      AGENTG_TELEMETRY: ${AGENTG_TELEMETRY:-0}
+    depends_on:
+      nats:
+        condition: service_started
+    restart: 'no'
+
+  victoria-metrics:
+    image: victoriametrics/victoria-metrics:v1.144.0
+    command:
+      - '-opentelemetry.usePrometheusNaming'
+      - '-promscrape.config=/etc/victoria-metrics/scrapeConfig.yml'
+    tmpfs:
+      - /victoria-metrics-data
+    ports:
+      - '8428:8428'
+    volumes:
+      - ./observability/victoria-metrics/scrapeConfig.yml:/etc/victoria-metrics/scrapeConfig.yml:ro
+
+  jaeger:
+    image: cr.jaegertracing.io/jaegertracing/jaeger:2.19.0
+    command:
+      - '--set=extensions.jaeger_query.ui.config_file=/jaeger/uiConfig.json'
+    ports:
+      - '16686:16686'
+      - '4317:4317'
+      - '4318:4318'
+      - '5778:5778'
+      - '9411:9411'
+    volumes:
+      - ./observability/jaeger/uiConfig.json:/jaeger/uiConfig.json:ro
+
+  grafana:
+    image: grafana/grafana:13.0.2
+    depends_on:
+      jaeger:
+        condition: service_started
+      victoria-metrics:
+        condition: service_started
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: 'true'
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: 'true'
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: 'false'
+      GF_ANALYTICS_CHECK_FOR_UPDATES: 'false'
+      GF_ANALYTICS_REPORTING_ENABLED: 'false'
+      GF_PLUGINS_PREINSTALL_AUTO_UPDATE: 'false'
+      GF_PLUGINS_PREINSTALL_DISABLED: 'true'
+      GF_SECURITY_ALLOW_EMBEDDING: 'true'
+      GF_USERS_DEFAULT_THEME: light
+    ports:
+      - '3000:3000'
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
 
   postgres:
     image: postgres:18-alpine

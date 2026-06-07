@@ -1,0 +1,291 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [
+    {
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": true,
+      "title": "Jaeger",
+      "tooltip": "Open Jaeger UI",
+      "type": "link",
+      "url": "http://localhost:16686"
+    }
+  ],
+  "panels": [
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoria-metrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "links": [
+            {
+              "targetBlank": true,
+              "title": "Search operation in Jaeger",
+              "url": "http://localhost:16686/search?service=${__field.labels.source}&operation=${__field.labels.operation_kind}:${__field.labels.operation_name}&lookback=1h"
+            }
+          ],
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "legend": {
+          "calcs": ["lastNotNull"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "expr": "sum by (operation_kind, operation_name, source) (rate(agentg_operation_calls_total{operation_name=~\"$operation\", source=~\"$source\"}[5m]))",
+          "legendFormat": "{{source}} {{operation_kind}}:{{operation_name}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Operation Call Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoria-metrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "links": [
+            {
+              "targetBlank": true,
+              "title": "Search operation in Jaeger",
+              "url": "http://localhost:16686/search?service=${__field.labels.source}&operation=${__field.labels.operation_kind}:${__field.labels.operation_name}&lookback=1h"
+            }
+          ],
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "legend": {
+          "calcs": ["lastNotNull"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "expr": "histogram_quantile(0.95, sum by (operation_kind, operation_name, source, le) (rate(agentg_operation_duration_seconds_bucket{operation_name=~\"$operation\", source=~\"$source\"}[5m])))",
+          "legendFormat": "{{source}} {{operation_kind}}:{{operation_name}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Operation P95",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoria-metrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "links": [
+            {
+              "targetBlank": true,
+              "title": "Search operation in Jaeger",
+              "url": "http://localhost:16686/search?service=${__field.labels.source}&operation=${__field.labels.operation_kind}:${__field.labels.operation_name}&lookback=1h"
+            }
+          ],
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "id": 3,
+      "options": {
+        "legend": {
+          "calcs": ["lastNotNull"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "expr": "sum by (operation_kind, operation_name, source) (rate(agentg_operation_errors_total{operation_name=~\"$operation\", source=~\"$source\"}[5m]))",
+          "legendFormat": "{{source}} {{operation_kind}}:{{operation_name}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Operation Error Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "jaeger",
+        "uid": "jaeger"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "id": 4,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": ["sum"],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "jaeger",
+            "uid": "jaeger"
+          },
+          "limit": 20,
+          "queryType": "search",
+          "refId": "A",
+          "service": "$source"
+        }
+      ],
+      "title": "Recent Traces",
+      "type": "table"
+    }
+  ],
+  "refresh": "",
+  "schemaVersion": 42,
+  "tags": ["agentg", "observability"],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "allValue": ".*",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "victoria-metrics"
+        },
+        "definition": "label_values(agentg_operation_calls_total, operation_name)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Operation",
+        "multi": false,
+        "name": "operation",
+        "options": [],
+        "query": {
+          "query": "label_values(agentg_operation_calls_total, operation_name)",
+          "refId": "VictoriaMetricsVariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "control-plane-server",
+          "value": "control-plane-server"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "victoria-metrics"
+        },
+        "definition": "label_values(agentg_operation_calls_total, source)",
+        "hide": 0,
+        "includeAll": false,
+        "label": "Source",
+        "multi": false,
+        "name": "source",
+        "options": [],
+        "query": {
+          "query": "label_values(agentg_operation_calls_total, source)",
+          "refId": "VictoriaMetricsVariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-3d",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Operations",
+  "uid": "agentg-operations",
+  "version": 1,
+  "weekStart": ""
+}

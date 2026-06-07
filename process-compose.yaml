@@ -1,0 +1,165 @@
+version: '0.5'
+is_strict: true
+log_level: info
+log_location: .tmp/process-compose/services.log
+log_configuration:
+  fields_order: ['time', 'level', 'message']
+  disable_json: true
+  add_timestamp: true
+  no_color: true
+  flush_each_line: true
+ordered_shutdown: true
+
+environment:
+  - 'DATABASE_URL=${DATABASE_URL:-postgres://agentg:agentg@127.0.0.1:5432/agentg}'
+  - 'NATS_URL=${NATS_URL:-nats://127.0.0.1:4222}'
+  - 'REGISTRY_URL=${REGISTRY_URL:-http://127.0.0.1:8701}'
+  - 'AGENTG_TELEMETRY=${AGENTG_TELEMETRY:-1}'
+  - 'OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=${OTEL_EXPORTER_OTLP_METRICS_ENDPOINT:-http://127.0.0.1:8428/opentelemetry/v1/metrics}'
+  - 'OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=${OTEL_EXPORTER_OTLP_TRACES_ENDPOINT:-http://127.0.0.1:4318/v1/traces}'
+  - 'VICTORIA_METRICS_URL=${VICTORIA_METRICS_URL:-http://127.0.0.1:8428}'
+  - 'GRAFANA_URL=${GRAFANA_URL:-http://127.0.0.1:3000}'
+  - 'JAEGER_UI_URL=${JAEGER_UI_URL:-http://127.0.0.1:16686}'
+
+processes:
+  infra-up:
+    namespace: setup
+    description: Start Docker-backed development infrastructure.
+    command: npm run infra:up
+
+  db-migrate:
+    namespace: setup
+    description: Apply Telegram and History Sync Drizzle migrations.
+    command: npm run db:migrate
+    depends_on:
+      infra-up:
+        condition: process_completed_successfully
+
+  registry:
+    namespace: app
+    description: Registry topology and procedure discovery service.
+    command: npm run dev:registry
+    environment:
+      - 'OTEL_SERVICE_NAME=registry'
+    availability:
+      restart: always
+      backoff_seconds: 2
+    depends_on:
+      db-migrate:
+        condition: process_completed_successfully
+    readiness_probe:
+      exec:
+        command: nc -z 127.0.0.1 8701
+      period_seconds: 1
+      timeout_seconds: 1
+      failure_threshold: 120
+
+  telegram:
+    namespace: app
+    description: Telegram TDLib ingestion and Telegram-owned RPC service.
+    command: npm run dev:telegram
+    environment:
+      - 'OTEL_SERVICE_NAME=telegram'
+    availability:
+      restart: always
+      backoff_seconds: 2
+    depends_on:
+      registry:
+        condition: process_healthy
+    readiness_probe:
+      exec:
+        command: nc -z 127.0.0.1 8702
+      period_seconds: 1
+      timeout_seconds: 1
+      failure_threshold: 300
+
+  history-sync:
+    namespace: app
+    description: History Sync templates, targets, coverage, and RPC service.
+    command: npm run dev:history-sync
+    environment:
+      - 'OTEL_SERVICE_NAME=history-sync'
+    availability:
+      restart: always
+      backoff_seconds: 2
+    depends_on:
+      registry:
+        condition: process_healthy
+      telegram:
+        condition: process_healthy
+    readiness_probe:
+      exec:
+        command: nc -z 127.0.0.1 8704
+      period_seconds: 1
+      timeout_seconds: 1
+      failure_threshold: 120
+
+  gateway:
+    namespace: app
+    description: External agent WebSocket gateway.
+    command: npm run dev:gateway
+    environment:
+      - 'OTEL_SERVICE_NAME=gateway'
+    availability:
+      restart: always
+      backoff_seconds: 2
+    depends_on:
+      registry:
+        condition: process_healthy
+      telegram:
+        condition: process_healthy
+      history-sync:
+        condition: process_healthy
+    readiness_probe:
+      exec:
+        command: nc -z 127.0.0.1 8787
+      period_seconds: 1
+      timeout_seconds: 1
+      failure_threshold: 120
+
+  control-plane-server:
+    namespace: app
+    description: Browser-facing Control Plane server and event bridge.
+    command: npm run dev:control-plane-server
+    environment:
+      - 'OTEL_SERVICE_NAME=control-plane-server'
+    availability:
+      restart: always
+      backoff_seconds: 2
+    depends_on:
+      registry:
+        condition: process_healthy
+      telegram:
+        condition: process_healthy
+      history-sync:
+        condition: process_healthy
+      gateway:
+        condition: process_healthy
+    readiness_probe:
+      exec:
+        command: nc -z 127.0.0.1 8789
+      period_seconds: 1
+      timeout_seconds: 1
+      failure_threshold: 120
+
+  control-plane:
+    namespace: app
+    description: Vite Control Plane browser UI.
+    command: npm run dev:control-plane
+    environment:
+      - 'OTEL_SERVICE_NAME=control-plane'
+    availability:
+      restart: always
+      backoff_seconds: 2
+    depends_on:
+      control-plane-server:
+        condition: process_healthy
+    readiness_probe:
+      http_get:
+        host: 127.0.0.1
+        scheme: http
+        path: /
+        port: 8788
+      period_seconds: 1
+      timeout_seconds: 1
+      failure_threshold: 120

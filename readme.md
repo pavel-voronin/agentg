@@ -2,13 +2,14 @@
 
 AgenTG is a pre-alpha Telegram client runtime for a personal agent.
 
-It runs as a local developer stack: Telegram ingestion, Postgres, NATS, history
-sync, gateway, and the Control Plane UI.
+It runs as a local developer stack: Telegram ingestion, Postgres, NATS,
+VictoriaMetrics, Jaeger, Grafana, history sync, gateway, and the Control Plane UI.
 
 ## Requirements
 
 - Node.js and npm
 - Docker with Compose
+- Process Compose
 - Telegram API credentials:
   - `TELEGRAM_API_ID`
   - `TELEGRAM_API_HASH`
@@ -24,6 +25,7 @@ export TELEGRAM_API_HASH=your_api_hash
 
 ```sh
 npm install
+brew install f1bonacc1/tap/process-compose
 ```
 
 ## Authenticate TDLib
@@ -48,18 +50,41 @@ Start the full local stack:
 npm run dev
 ```
 
-This command starts Postgres and NATS through Docker Compose, runs database
-migrations, starts the Telegram runtime, history sync, gateway, Control Plane
-server, and the Vite Control Plane app.
+This command starts Postgres, NATS, VictoriaMetrics, Jaeger, and Grafana through
+Docker Compose, runs database migrations, and starts the Telegram runtime,
+history sync, gateway, Control Plane server, and the Vite Control Plane app
+through Process Compose in detached mode. The Control Plane server owns the
+Telemetry page backend procedures.
 
-When the command prints the Vite local URL, open:
+After `npm run dev:status` shows `control-plane` as healthy, open:
 
 [http://127.0.0.1:8788/](http://127.0.0.1:8788/)
 
-The Telegram RPC server listens on `127.0.0.1:18081`. The Control Plane server
+Development observability UIs:
+
+- Jaeger traces: [http://127.0.0.1:16686/](http://127.0.0.1:16686/)
+- Grafana operations dashboard:
+  [http://127.0.0.1:3000/d/agentg-operations/agentg-operations](http://127.0.0.1:3000/d/agentg-operations/agentg-operations)
+- Grafana TDLib updates dashboard:
+  [http://127.0.0.1:3000/d/agentg-tdlib-updates/agentg-tdlib-updates](http://127.0.0.1:3000/d/agentg-tdlib-updates/agentg-tdlib-updates)
+- VictoriaMetrics VMUI:
+  [http://127.0.0.1:8428/vmui/](http://127.0.0.1:8428/vmui/)
+
+The Telegram RPC server listens on `127.0.0.1:8702`. The Control Plane server
 listens on `127.0.0.1:8789`.
 
-Stop the stack with `Ctrl+C` in the terminal running `npm run dev`.
+Manage the detached Process Compose app stack with:
+
+```sh
+npm run dev:status
+npm run dev:attach
+npm run dev:logs -- control-plane-server --tail 100
+npm run dev:restart -- telegram
+npm run dev:down
+```
+
+`npm run dev:down` stops app processes and leaves Docker-owned infrastructure
+running.
 
 ## Run With Docker Compose
 
@@ -83,8 +108,15 @@ Build and start the product stack:
 docker compose --profile container-client --profile control-plane up --build
 ```
 
-This starts Postgres, NATS, Registry, Telegram ingestion, History Sync, Gateway,
-and Control Plane. Open:
+Docker Compose defaults `AGENTG_TELEMETRY` to `0`. To run the same stack with
+OpenTelemetry metrics, traces, and NATS exporter metrics enabled:
+
+```sh
+AGENTG_TELEMETRY=1 docker compose --profile container-client --profile control-plane up --build
+```
+
+This starts Postgres, NATS, VictoriaMetrics, Jaeger, Grafana, Registry, Telegram
+ingestion, History Sync, Gateway, and Control Plane. Open:
 
 [http://127.0.0.1:8788/](http://127.0.0.1:8788/)
 

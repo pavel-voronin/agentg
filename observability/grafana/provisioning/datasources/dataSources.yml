@@ -1,0 +1,36 @@
+apiVersion: 1
+
+datasources:
+  - name: VictoriaMetrics
+    type: prometheus
+    uid: victoria-metrics
+    access: proxy
+    url: http://victoria-metrics:8428
+    isDefault: true
+    jsonData:
+      exemplarTraceIdDestinations:
+        - datasourceUid: jaeger
+          name: traceID
+  - name: Jaeger
+    type: jaeger
+    uid: jaeger
+    access: proxy
+    url: http://jaeger:16686
+    jsonData:
+      nodeGraph:
+        enabled: true
+      traceIdTimeParams:
+        enabled: true
+      tracesToMetrics:
+        datasourceUid: victoria-metrics
+        spanStartTimeShift: '-2m'
+        spanEndTimeShift: '2m'
+        tags:
+          - key: operation_kind
+          - key: operation_name
+          - key: source
+        queries:
+          - name: Operation call rate
+            query: 'sum(rate(agentg_operation_calls_total{$$__tags}[5m]))'
+          - name: Operation p95
+            query: 'histogram_quantile(0.95, sum by (le) (rate(agentg_operation_duration_seconds_bucket{$$__tags}[5m])))'

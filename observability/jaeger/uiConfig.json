@@ -1,0 +1,26 @@
+{
+  "linkPatterns": [
+    {
+      "type": "tags",
+      "key": "operation_name",
+      "url": "http://localhost:3000/d/agentg-operations/agentg-operations?var-operation=#{operation_name}&from=#{trace.startTime | add -60000000 | epoch_micros_to_date_iso}&to=#{trace.endTime | add 60000000 | epoch_micros_to_date_iso}",
+      "text": "Open operation metrics in Grafana"
+    },
+    {
+      "type": "tags",
+      "key": "source",
+      "url": "http://localhost:3000/d/agentg-operations/agentg-operations?var-source=#{source}&from=#{trace.startTime | add -60000000 | epoch_micros_to_date_iso}&to=#{trace.endTime | add 60000000 | epoch_micros_to_date_iso}",
+      "text": "Open source metrics in Grafana"
+    },
+    {
+      "type": "traces",
+      "url": "http://localhost:3000/explore?left=%7B%22datasource%22:%22jaeger%22,%22queries%22:%5B%7B%22query%22:%22#{traceID}%22%7D%5D%7D",
+      "text": "Open trace in Grafana"
+    }
+  ],
+  "themes": {
+    "enabled": true
+  },
+  "traceIdDisplayLength": 16,
+  "topTagPrefixes": ["operation_", "source", "rpc.", "db.", "agentg.detail."]
+}

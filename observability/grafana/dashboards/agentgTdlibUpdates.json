@@ -1,0 +1,667 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [
+    {
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": false,
+      "keepTime": false,
+      "tags": [],
+      "targetBlank": true,
+      "title": "Jaeger",
+      "tooltip": "Open Jaeger UI",
+      "type": "link",
+      "url": "http://localhost:16686/search?service=telegram&operation=&start=${__from}000&end=${__to}000&limit=50"
+    }
+  ],
+  "panels": [
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoria-metrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "links": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "expr": "sum(sum by (operation_name) (increase(agentg_operation_calls_total{operation_kind=\"ingestion.update\", operation_name=~\"$update\"}[$__range])) or on(operation_name) (0 * max by (operation_name) (agentg_telegram_update_catalog_info{operation_name=~\"$update\"})))",
+          "refId": "A",
+          "instant": true,
+          "legendFormat": "calls"
+        }
+      ],
+      "title": "Total Calls",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoria-metrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 3,
+          "links": [
+            {
+              "targetBlank": false,
+              "title": "Filter table to this update",
+              "url": "/d/agentg-tdlib-updates/agentg-tdlib-updates?var-update=${__field.labels.operation_name}&from=${__from}&to=${__to}"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.5
+              },
+              {
+                "color": "red",
+                "value": 2.5
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 8,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "expr": "topk(1, (histogram_quantile(0.95, sum by (operation_name, le) (increase(agentg_operation_duration_seconds_bucket{operation_kind=\"ingestion.update\", operation_name=~\"$update\"}[$__range]))) and on(operation_name) (sum by (operation_name) (increase(agentg_operation_calls_total{operation_kind=\"ingestion.update\", operation_name=~\"$update\"}[$__range])) > 0)) or on(operation_name) (0 * max by (operation_name) (agentg_telegram_update_catalog_info{operation_name=~\"$update\"})))",
+          "refId": "A",
+          "instant": true,
+          "legendFormat": "{{operation_name}}"
+        }
+      ],
+      "title": "Worst P95",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoria-metrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 3,
+          "links": [
+            {
+              "targetBlank": false,
+              "title": "Filter table to this update",
+              "url": "/d/agentg-tdlib-updates/agentg-tdlib-updates?var-update=${__field.labels.operation_name}&from=${__from}&to=${__to}"
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.5
+              },
+              {
+                "color": "red",
+                "value": 2.5
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 8,
+        "x": 16,
+        "y": 0
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "expr": "topk(1, (histogram_quantile(0.99, sum by (operation_name, le) (increase(agentg_operation_duration_seconds_bucket{operation_kind=\"ingestion.update\", operation_name=~\"$update\"}[$__range]))) and on(operation_name) (sum by (operation_name) (increase(agentg_operation_calls_total{operation_kind=\"ingestion.update\", operation_name=~\"$update\"}[$__range])) > 0)) or on(operation_name) (0 * max by (operation_name) (agentg_telegram_update_catalog_info{operation_name=~\"$update\"})))",
+          "refId": "A",
+          "instant": true,
+          "legendFormat": "{{operation_name}}"
+        }
+      ],
+      "title": "Worst P99",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoria-metrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "links": [],
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Update"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 220
+              },
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "targetBlank": true,
+                    "title": "Open update traces in Jaeger",
+                    "url": "http://localhost:16686/search?service=telegram&operation=ingestion.update:${__value.text}&start=${__from}000&end=${__to}000&limit=50"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Calls"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Errors"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "red",
+                      "value": 1
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "P50"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "decimals",
+                "value": 3
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 0.5
+                    },
+                    {
+                      "color": "red",
+                      "value": 2.5
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "P95"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "decimals",
+                "value": 3
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 0.5
+                    },
+                    {
+                      "color": "red",
+                      "value": 2.5
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "P99"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "decimals",
+                "value": 3
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 0.5
+                    },
+                    {
+                      "color": "red",
+                      "value": 2.5
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Last Seen"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dateTimeFromNow"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 16,
+        "w": 24,
+        "x": 0,
+        "y": 4
+      },
+      "id": 5,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": ["sum"],
+          "show": false
+        },
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Calls"
+          }
+        ]
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "expr": "max by (operation_name) (agentg_telegram_update_catalog_info{operation_name=~\"$update\"})",
+          "refId": "A",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "catalog"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "expr": "sum by (operation_name) (increase(agentg_operation_calls_total{operation_kind=\"ingestion.update\", operation_name=~\"$update\"}[$__range])) or on(operation_name) (0 * max by (operation_name) (agentg_telegram_update_catalog_info{operation_name=~\"$update\"}))",
+          "refId": "B",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "calls"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "expr": "sum by (operation_name) (increase(agentg_operation_errors_total{operation_kind=\"ingestion.update\", operation_name=~\"$update\"}[$__range])) or on(operation_name) (0 * max by (operation_name) (agentg_telegram_update_catalog_info{operation_name=~\"$update\"}))",
+          "refId": "C",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "errors"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "expr": "(histogram_quantile(0.50, sum by (operation_name, le) (increase(agentg_operation_duration_seconds_bucket{operation_kind=\"ingestion.update\", operation_name=~\"$update\"}[$__range]))) and on(operation_name) (sum by (operation_name) (increase(agentg_operation_calls_total{operation_kind=\"ingestion.update\", operation_name=~\"$update\"}[$__range])) > 0)) or on(operation_name) (0 * max by (operation_name) (agentg_telegram_update_catalog_info{operation_name=~\"$update\"}))",
+          "refId": "E",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "p50"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "expr": "(histogram_quantile(0.95, sum by (operation_name, le) (increase(agentg_operation_duration_seconds_bucket{operation_kind=\"ingestion.update\", operation_name=~\"$update\"}[$__range]))) and on(operation_name) (sum by (operation_name) (increase(agentg_operation_calls_total{operation_kind=\"ingestion.update\", operation_name=~\"$update\"}[$__range])) > 0)) or on(operation_name) (0 * max by (operation_name) (agentg_telegram_update_catalog_info{operation_name=~\"$update\"}))",
+          "refId": "F",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "p95"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "expr": "(histogram_quantile(0.99, sum by (operation_name, le) (increase(agentg_operation_duration_seconds_bucket{operation_kind=\"ingestion.update\", operation_name=~\"$update\"}[$__range]))) and on(operation_name) (sum by (operation_name) (increase(agentg_operation_calls_total{operation_kind=\"ingestion.update\", operation_name=~\"$update\"}[$__range])) > 0)) or on(operation_name) (0 * max by (operation_name) (agentg_telegram_update_catalog_info{operation_name=~\"$update\"}))",
+          "refId": "G",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "p99"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "expr": "max by (operation_name) (agentg_telegram_update_last_seen_unix_ms{operation_name=~\"$update\"})",
+          "refId": "I",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "last-seen"
+        }
+      ],
+      "title": "Update Metrics",
+      "transformations": [
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "operation_name",
+            "mode": "outer"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Time 1": true,
+              "Time 2": true,
+              "Time 3": true,
+              "Time 4": true,
+              "Time 5": true,
+              "Time 6": true,
+              "Time 7": true,
+              "Value #A": true
+            },
+            "indexByName": {
+              "operation_name": 0,
+              "Value #B": 1,
+              "Value #C": 2,
+              "Value #E": 3,
+              "Value #F": 4,
+              "Value #G": 5,
+              "Value #I": 6
+            },
+            "renameByName": {
+              "operation_name": "Update",
+              "Value #B": "Calls",
+              "Value #C": "Errors",
+              "Value #E": "P50",
+              "Value #F": "P95",
+              "Value #G": "P99",
+              "Value #I": "Last Seen"
+            }
+          }
+        }
+      ],
+      "type": "table"
+    }
+  ],
+  "refresh": "",
+  "schemaVersion": 42,
+  "tags": ["agentg", "observability", "telegram"],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "allValue": ".*",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "victoria-metrics"
+        },
+        "definition": "label_values(agentg_telegram_update_catalog_info, operation_name)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Update",
+        "multi": false,
+        "name": "update",
+        "options": [],
+        "query": {
+          "query": "label_values(agentg_telegram_update_catalog_info, operation_name)",
+          "refId": "VictoriaMetricsVariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-3d",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "TDLib Updates",
+  "uid": "agentg-tdlib-updates",
+  "version": 5,
+  "weekStart": ""
+}
