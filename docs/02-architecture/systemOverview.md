@@ -59,23 +59,22 @@ targets, and sync cadence. Telegram ingestion owns TDLib, Telegram-shaped
 persistence, page continuity, and Telegram history coverage.
 Control Plane is a separate operator boundary: the browser UI calls Control
 Plane server, and Control Plane server resolves internal domain RPC through
-Service Directory before making module RPC calls. The browser UI is composed from
+Registry before making module RPC calls. The browser UI is composed from
 slots: Control Plane owns the shell, layout, browser WebSocket, and event fanout;
 domains provide the concrete Control Plane content components and own their view
 state. Control Plane SDK owns the mechanical slot runtime, host bridge, debug
 overlay, and shared UI primitives used by those content components. Gateway
 remains the external agent edge and also resolves its allowed internal RPC calls
-through Service Directory.
+through Registry.
 Default operator layout is derived from domain-declared Control Plane content
 placements. The shell does not hard-code domain content IDs into its own layout.
 Telegram ingestion, History Sync, and trusted modules run as independent
 services inside the same internal contour. They own their storage and module RPC
-surface, and join Service Directory with their procedures, events, and extension
-getter declarations. Gateway methods are managed directly in Gateway code.
-Callers that need extended views compose them outside the owning domain by
-reading the local Service Directory snapshot and calling the registered getter
-RPC methods. Operator UI composition uses domain-provided Control Plane slot
-content rather than shell-owned domain view models.
+surface, and join Registry with their procedure routing metadata. Gateway
+methods are managed directly in Gateway code. Product views that combine
+multiple owners are explicit RPC or Control Plane UI contracts owned by the
+appropriate boundary. Operator UI composition uses domain-provided Control Plane
+slot content rather than shell-owned domain view models.
 
 The preferred starting runtime is TypeScript/Node.js, provided TDLib can be integrated reliably through its JSON/C interface or a maintained wrapper. If Node.js integration becomes the risky part of the project, re-plan the sidecar runtime before implementation continues.
 

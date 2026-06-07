@@ -12,7 +12,6 @@ type StopProcess = () => MaybePromise<undefined>;
 type ProcessStartResult = undefined | StopProcess | { stop?: StopProcess | undefined };
 
 type ModuleSurface<TProcedures extends ProcedureMap = ProcedureMap> = {
-  readonly extensions?: readonly ExtensionInput[] | undefined;
   readonly procedures?: TProcedures | undefined;
   readonly required?: boolean | undefined;
 };
@@ -130,7 +129,6 @@ function createModuleApp<TConfig, TSurface extends ModuleSurface>(
   const resources = new Map<string, unknown>();
   const startupProcesses: ModuleProcess[] = [];
   const events = options.connect.events();
-  let extensions: readonly ExtensionInput[] = [];
   let required = false;
   let running = false;
   let runningBackgroundProcesses: RunningProcess[] = [];
@@ -195,9 +193,6 @@ function createModuleApp<TConfig, TSurface extends ModuleSurface>(
   const surface = setup(moduleSetup);
   const namedBackgroundProcesses = namedProcesses(backgroundProcesses);
   const namedStartupProcesses = namedProcesses(startupProcesses);
-  if (surface.extensions !== undefined) {
-    extensions = surface.extensions;
-  }
   if (surface.procedures !== undefined) {
     for (const [procedureName, procedure] of Object.entries(surface.procedures)) {
       procedures[procedureName] = procedure;
@@ -229,7 +224,6 @@ function createModuleApp<TConfig, TSurface extends ModuleSurface>(
         activeRegistryConnection = await options.connect.registry.connect({
           events,
           manifest: manifest(name, procedureServer.url, procedures, {
-            extensions,
             required
           })
         });
@@ -292,12 +286,10 @@ function manifest(
   rpcUrl: string,
   procedures: ProcedureMap,
   input: {
-    extensions: readonly ExtensionInput[];
     required: boolean;
   }
 ): ModuleManifest {
   return {
-    extensions: input.extensions,
     module: moduleName,
     procedures: Object.keys(procedures),
     required: input.required,

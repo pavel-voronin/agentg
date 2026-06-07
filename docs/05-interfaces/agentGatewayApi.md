@@ -8,7 +8,7 @@ Gateway RPC methods explicitly owned by this document and only the live events
 explicitly allowed here.
 
 Gateway does not expose History Sync RPC, capability registration, capability calls,
-extension composition, raw NATS subjects, database rows, or raw TDLib payloads.
+raw NATS subjects, database rows, or raw TDLib payloads.
 
 ## Runtime
 

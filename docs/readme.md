@@ -16,7 +16,7 @@ Do not pre-document higher-level assistant behavior. Add it only after the Teleg
 - [Privacy Principles](01-product/privacyPrinciples.md)
 - [System Overview](02-architecture/systemOverview.md)
 - [Component Boundaries](02-architecture/componentBoundaries.md)
-- [Module Runtime And Extensions](02-architecture/moduleRuntimeAndExtensions.md)
+- [Module Runtime](02-architecture/moduleRuntime.md)
 - [Data Flow](02-architecture/dataFlow.md)
 - [Trust Boundaries](02-architecture/trustBoundaries.md)
 - [Domain Map](03-domains/domainMap.md)

@@ -51,5 +51,5 @@
 - Module app creation requires explicit `connect.events`, `connect.rpc`, and
   `connect.registry` providers. Do not add hidden transport addresses.
 - Modules register in Registry through `connect.registry`.
-  Module packages must not call Registry `join` or `renew` themselves.
+  Module packages must not call Registry `join` themselves.
 - Do not add transport-specific code here unless the framework concept requires it.

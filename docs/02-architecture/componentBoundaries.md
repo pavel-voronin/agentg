@@ -100,8 +100,7 @@ Own:
 - Module-owned tables and Drizzle migrations.
 - Module-owned module RPC methods.
 - Module-owned NATS events with the slug prefix.
-- Service Directory join and lease renewal for procedures, events, and extension
-  getter declarations.
+- Registry join for procedure routing metadata.
 - Declaring whether the service is required for whole-runtime availability.
 
 Do not own:

@@ -95,16 +95,6 @@ For example, `history-sync.getChatHistorySyncState` publishes
 `history-sync.sync.requested` is a notification that a sync wake-up was accepted at
 the History Sync boundary. It is not consumed as a NATS command.
 
-Registry publishes:
-
-- `registry.changed`
-
-`registry.changed` carries `{ version }` and is an invalidation signal for local
-registry clients. Consumers recover the actual topology by calling registry
-`getSnapshot`; the event body is not the topology.
-If a refreshed snapshot has lost a previously seen `required: true` service, the
-client treats it as a fatal topology failure and starts graceful shutdown.
-
 ## Consumers
 
 History Sync subscribes to Telegram events:
@@ -140,8 +130,7 @@ After reconnecting, consumers must rebuild state through these surfaces:
   module RPC.
 - Telegram ingestion: TDLib session state and Telegram-shaped Postgres storage.
 - Modules: their owned tables plus domain module RPC reads.
-- Registry clients: their local snapshot plus registry `getSnapshot` after
-  `registry.changed`.
+- Registry clients: their local snapshot plus explicit registry `getSnapshot`.
 
 ## Internal RPC Ownership
 

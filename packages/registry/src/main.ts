@@ -4,7 +4,7 @@ import { readConfig } from './config.js';
 
 const config = readConfig(process.env);
 const app = registryModule({
-  config,
+  config: {},
   connect: {
     events: nats(config.natsUrl),
     rpc: httpRpc(

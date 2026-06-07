@@ -3,8 +3,8 @@
 ## Status
 
 Accepted for implementation. Updated by
-[ADR-0006](adr0006UseTrustedServiceModulesAndRpcExtensions.md) for
-domain-owned schema and migration placement.
+[ADR-0006](adr0006UseTrustedServiceModulesAndRpc.md) for domain-owned schema
+and migration placement.
 
 ## Context
 

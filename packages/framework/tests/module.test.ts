@@ -25,7 +25,7 @@ describe('defineModule', () => {
       host: string('HOST').optional(),
       natsUrl: string('NATS_URL'),
       port: number('PORT').default(8701),
-      ttlMs: number('REGISTRY_LEASE_TTL_MS').optional()
+      timeoutMs: number('REQUEST_TIMEOUT_MS').optional()
     });
 
     expect(
@@ -36,14 +36,14 @@ describe('defineModule', () => {
         },
         {
           port: 9000,
-          ttlMs: '1000'
+          timeoutMs: '1000'
         }
       )
     ).toEqual({
       host: undefined,
       natsUrl: 'nats://env:4222',
       port: 9000,
-      ttlMs: 1000
+      timeoutMs: 1000
     });
   });
 
@@ -603,9 +603,7 @@ describe('defineModule', () => {
 
   it('calls another module through a lazy registry-backed rpc client', async () => {
     const registryApp = registryModule({
-      config: {
-        ttlMs: 1000
-      },
+      config: {},
       connect: testConnect()
     });
     const registryServer = await startProcedureServer(registryApp.procedures, { port: 0 });
@@ -670,12 +668,10 @@ describe('defineModule', () => {
     }
   });
 
-  it('calls a module that joins the registry after the caller starts', async () => {
+  it('does not discover modules that join the registry after the caller starts', async () => {
     const events = testSharedEventBus();
     const registryApp = registryModule({
-      config: {
-        ttlMs: 1000
-      },
+      config: {},
       connect: testConnect({
         events
       })
@@ -732,13 +728,11 @@ describe('defineModule', () => {
 
       expect(telegramRecord).toBeDefined();
       await profile.start();
-      await expect
-        .poll(() =>
-          callProcedure(telegramRecord?.rpcUrl ?? '', 'describeUser', {
-            id: '42'
-          }).catch((error: unknown) => (error instanceof Error ? error.message : String(error)))
-        )
-        .toBe('telegram sees Pavel');
+      await expect(
+        callProcedure(telegramRecord?.rpcUrl ?? '', 'describeUser', {
+          id: '42'
+        })
+      ).rejects.toThrow('Module is not registered: profile');
     } finally {
       await profile.stop();
       await telegram.stop();

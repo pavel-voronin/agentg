@@ -8,14 +8,12 @@ describe('registry runner config', () => {
       readConfig({
         HOST: '127.0.0.1',
         NATS_URL: 'nats://127.0.0.1:4222',
-        PORT: '8701',
-        REGISTRY_LEASE_TTL_MS: '5000'
+        PORT: '8701'
       })
     ).toEqual({
       host: '127.0.0.1',
       natsUrl: 'nats://127.0.0.1:4222',
-      port: 8701,
-      ttlMs: 5000
+      port: 8701
     });
   });
 });

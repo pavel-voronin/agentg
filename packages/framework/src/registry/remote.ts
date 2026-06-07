@@ -1,14 +1,11 @@
 import { createRegistryClient, type RegistryClientConfig } from './client.js';
 import type { RegistryConnector } from './connector.js';
 
-export function registry(config: Omit<RegistryClientConfig, 'events'> | string): RegistryConnector {
+export function registry(config: RegistryClientConfig | string): RegistryConnector {
   const clientConfig = typeof config === 'string' ? { url: config } : config;
   return {
     async connect(options) {
-      const client = createRegistryClient({
-        ...clientConfig,
-        events: options.events
-      });
+      const client = createRegistryClient(clientConfig);
       await client.join(options.manifest);
       return {
         close() {

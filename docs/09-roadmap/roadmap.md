@@ -20,7 +20,7 @@ Current architecture is documented in:
 
 - [Component Boundaries](../02-architecture/componentBoundaries.md)
 - [Data Flow](../02-architecture/dataFlow.md)
-- [Module Runtime And Extensions](../02-architecture/moduleRuntimeAndExtensions.md)
+- [Module Runtime](../02-architecture/moduleRuntime.md)
 - [Event Plane](../05-interfaces/eventPlane.md)
 - [Local Development](../06-operations/localDev.md)
 
