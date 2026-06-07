@@ -18,7 +18,7 @@ auditNoModuleRpcClientFacades(tsFiles);
 auditModuleRpcFolders(tsFiles);
 auditNoContextProcedureApi(tsFiles);
 auditTablePrefixes();
-auditExtensionBoundaries(tsFiles);
+auditControlPlaneSdkHasNoDomainKnowledge(tsFiles);
 auditDockerfileWorkspacePackageCopies();
 auditDateContract(sourceFiles);
 auditTdlibContractGeneration(sourceFiles);
@@ -110,11 +110,15 @@ function isExternalNamingContractFile(rel) {
     'eslint.config.js',
     'package-lock.json',
     'package.json',
+    'process-compose.yaml',
     'tsconfig.json',
     'vite.config.ts'
   ]);
 
   if (fileName.startsWith('.') || externalFileNames.has(fileName)) {
+    return true;
+  }
+  if (rel === 'PLAN.md') {
     return true;
   }
   if (rel === 'packages/claude-plugin/bun.lock') {
@@ -247,30 +251,6 @@ function auditTablePrefixes() {
         failures.push(
           `table ${tableName} in ${toRel(schema.file)} must use prefix ${schema.prefix}`
         );
-      }
-    }
-  }
-}
-
-function auditExtensionBoundaries(files) {
-  auditNoModuleExtensionEndpoints(files);
-  auditControlPlaneSdkHasNoDomainKnowledge(files);
-}
-
-function auditNoModuleExtensionEndpoints(files) {
-  const domainRpcPrefixes = [];
-  const forbiddenTokens = ['registerExtension', 'listExtensions'];
-
-  for (const file of files) {
-    const rel = toRel(file);
-    if (!domainRpcPrefixes.some((prefix) => rel.startsWith(prefix))) {
-      continue;
-    }
-
-    const source = readFileSync(file, 'utf8');
-    for (const token of forbiddenTokens) {
-      if (source.includes(token)) {
-        failures.push(`domain RPC must not expose a local extension registry: ${rel} -> ${token}`);
       }
     }
   }
