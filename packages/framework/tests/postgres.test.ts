@@ -1,13 +1,29 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { drainTelemetryBatch } from '../src/telemetry/recorder.js';
-
 const mocks = vi.hoisted(() => ({
   poolInstances: [] as {
     end: () => Promise<void>;
     query: (first: unknown, ...rest: unknown[]) => unknown;
-  }[]
+  }[],
+  telemetrySpans: [] as unknown[]
 }));
+
+const telemetry = vi.hoisted(() => ({
+  startTelemetrySpan: vi.fn((input: unknown) => {
+    mocks.telemetrySpans.push(input);
+    return {
+      finish: vi.fn()
+    };
+  })
+}));
+
+vi.mock('../src/telemetry/index.js', async (importOriginal) => {
+  const module = await importOriginal<typeof import('../src/telemetry/index.js')>();
+  return {
+    ...module,
+    startTelemetrySpan: telemetry.startTelemetrySpan
+  };
+});
 
 vi.mock('drizzle-orm/node-postgres', () => ({
   drizzle: vi.fn(() => ({}))
@@ -36,28 +52,15 @@ vi.mock('pg', () => {
 });
 
 describe('postgres telemetry', () => {
-  const previousTelemetry = process.env.AGENTG_TELEMETRY;
-  const previousTelemetrySource = process.env.AGENTG_TELEMETRY_SOURCE;
-
   beforeEach(() => {
-    process.env.AGENTG_TELEMETRY = '1';
-    process.env.AGENTG_TELEMETRY_SOURCE = 'framework-test';
     mocks.poolInstances.length = 0;
-    drainTelemetryBatch(1000);
+    mocks.telemetrySpans.length = 0;
+    telemetry.startTelemetrySpan.mockClear();
   });
 
   afterEach(() => {
-    drainTelemetryBatch(1000);
-    if (previousTelemetry === undefined) {
-      delete process.env.AGENTG_TELEMETRY;
-    } else {
-      process.env.AGENTG_TELEMETRY = previousTelemetry;
-    }
-    if (previousTelemetrySource === undefined) {
-      delete process.env.AGENTG_TELEMETRY_SOURCE;
-    } else {
-      process.env.AGENTG_TELEMETRY_SOURCE = previousTelemetrySource;
-    }
+    mocks.telemetrySpans.length = 0;
+    telemetry.startTelemetrySpan.mockClear();
   });
 
   it('does not record SQL text in query telemetry detail', async () => {
@@ -70,21 +73,17 @@ describe('postgres telemetry', () => {
       text: "select * from users where token = 'super-secret-token' and email = $1"
     });
 
-    const batch = drainTelemetryBatch(10);
-
-    expect(batch?.records).toHaveLength(1);
-    expect(batch?.records[0]).toMatchObject({
+    expect(mocks.telemetrySpans).toHaveLength(1);
+    expect(mocks.telemetrySpans[0]).toMatchObject({
       detail: {
         classification: 'read',
         operation: 'select',
         relations: ['users']
       },
       kind: 'postgres.query',
-      name: 'select users',
-      ok: true,
-      source: 'framework-test'
+      name: 'select users'
     });
-    expect(batch?.records[0]?.detail).not.toHaveProperty('sql');
-    expect(JSON.stringify(batch)).not.toContain('super-secret-token');
+    expect(JSON.stringify(mocks.telemetrySpans)).not.toContain('sql');
+    expect(JSON.stringify(mocks.telemetrySpans)).not.toContain('super-secret-token');
   });
 });

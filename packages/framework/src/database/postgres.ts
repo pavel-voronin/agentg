@@ -88,6 +88,11 @@ function instrumentPool(pool: Pool): Pool {
       query === null
         ? null
         : startTelemetrySpan({
+            attributes: {
+              db_operation: query.operation,
+              db_system: 'postgres',
+              query_classification: query.classification
+            },
             detail: {
               classification: query.classification,
               operation: query.operation,

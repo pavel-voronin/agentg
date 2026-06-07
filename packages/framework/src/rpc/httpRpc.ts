@@ -1,5 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 
+import { context, propagation, type TextMapGetter } from '@opentelemetry/api';
+
 import { timeTelemetryOperation } from '../telemetry/index.js';
 import type { MaybePromise, ProcedureMap } from '../types.js';
 import type { ProcedureServer, ProcedureServerOptions, RpcFactory } from './rpc.js';
@@ -9,6 +11,14 @@ type ProcedureCallOptions = {
 };
 
 const MAX_REQUEST_BODY_BYTES = 1_000_000;
+const incomingHeadersGetter: TextMapGetter<IncomingMessage['headers']> = {
+  get(carrier, key) {
+    return firstString(carrier[key]);
+  },
+  keys(carrier) {
+    return Object.keys(carrier);
+  }
+};
 
 export function httpRpc(options: ProcedureServerOptions): RpcFactory {
   return {
@@ -23,7 +33,12 @@ export async function startProcedureServer(
   options: ProcedureServerOptions
 ): Promise<ProcedureServer> {
   const server = createServer((request, response) => {
-    void handleProcedureRequest(procedures, request, response);
+    const requestContext = propagation.extract(
+      context.active(),
+      request.headers,
+      incomingHeadersGetter
+    );
+    void context.with(requestContext, () => handleProcedureRequest(procedures, request, response));
   });
   const host = options.host ?? '127.0.0.1';
 
@@ -71,6 +86,10 @@ export async function callProcedure<T>(
   try {
     return await timeTelemetryOperation(
       {
+        attributes: {
+          rpc_side: 'client',
+          rpc_system: 'agentg'
+        },
         detail: {
           url
         },
@@ -78,14 +97,16 @@ export async function callProcedure<T>(
         name: procedure
       },
       async () => {
+        const headers = {
+          'content-type': 'application/json'
+        };
+        propagation.inject(context.active(), headers);
         const response = await fetch(procedureEndpoint(url), {
           body: JSON.stringify({
             input,
             procedure
           }),
-          headers: {
-            'content-type': 'application/json'
-          },
+          headers,
           method: 'POST',
           signal: controller.signal
         });
@@ -158,6 +179,10 @@ async function handleProcedureRequest(
 
     const result = await timeTelemetryOperation(
       {
+        attributes: {
+          rpc_side: 'server',
+          rpc_system: 'agentg'
+        },
         kind: 'rpc.server',
         name: envelope.procedure
       },
