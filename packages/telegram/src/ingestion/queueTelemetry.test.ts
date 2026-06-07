@@ -1,11 +1,24 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { INGESTION_QUEUE_EVENT_TYPE, startIngestionQueueTelemetry } from './queueTelemetry.js';
+import { startIngestionQueueTelemetry } from './queueTelemetry.js';
+
+const telemetry = vi.hoisted(() => ({
+  setTelemetryGauge: vi.fn()
+}));
+
+vi.mock('@agentg/framework', async (importOriginal) => {
+  const framework = await importOriginal<typeof import('@agentg/framework')>();
+  return {
+    ...framework,
+    setTelemetryGauge: telemetry.setTelemetryGauge
+  };
+});
 
 const originalTelemetry = process.env.AGENTG_TELEMETRY;
 
 describe('ingestion queue telemetry', () => {
   afterEach(() => {
+    telemetry.setTelemetryGauge.mockReset();
     if (originalTelemetry === undefined) {
       delete process.env.AGENTG_TELEMETRY;
       return;
@@ -13,16 +26,10 @@ describe('ingestion queue telemetry', () => {
     process.env.AGENTG_TELEMETRY = originalTelemetry;
   });
 
-  it('publishes queue snapshots when telemetry is enabled', () => {
+  it('records queue gauges when telemetry is enabled', () => {
     process.env.AGENTG_TELEMETRY = '1';
-    const published: unknown[] = [];
     const stop = startIngestionQueueTelemetry({
       concurrency: 4,
-      events: {
-        publish(type, data) {
-          published.push({ data, type });
-        }
-      },
       intervalMs: 60_000,
       snapshot() {
         return {
@@ -34,36 +41,20 @@ describe('ingestion queue telemetry', () => {
 
     stop();
 
-    expect(published).toEqual([
-      {
-        data: {
-          pendingUpdateCount: 3,
-          runningUpdateCount: 2,
-          updateConcurrency: 4
-        },
-        type: INGESTION_QUEUE_EVENT_TYPE
-      },
-      {
-        data: {
-          pendingUpdateCount: 3,
-          runningUpdateCount: 2,
-          updateConcurrency: 4
-        },
-        type: INGESTION_QUEUE_EVENT_TYPE
-      }
+    expect(telemetry.setTelemetryGauge.mock.calls).toEqual([
+      ['agentg.telegram.ingestion_queue.pending', 3],
+      ['agentg.telegram.ingestion_queue.running', 2],
+      ['agentg.telegram.ingestion_queue.concurrency', 4],
+      ['agentg.telegram.ingestion_queue.pending', 3],
+      ['agentg.telegram.ingestion_queue.running', 2],
+      ['agentg.telegram.ingestion_queue.concurrency', 4]
     ]);
   });
 
-  it('does not publish when telemetry is disabled', () => {
+  it('does not record gauges when telemetry is disabled', () => {
     process.env.AGENTG_TELEMETRY = '0';
-    const published: unknown[] = [];
     const stop = startIngestionQueueTelemetry({
       concurrency: 4,
-      events: {
-        publish(type, data) {
-          published.push({ data, type });
-        }
-      },
       snapshot() {
         return {
           pendingCount: 3,
@@ -74,6 +65,6 @@ describe('ingestion queue telemetry', () => {
 
     stop();
 
-    expect(published).toEqual([]);
+    expect(telemetry.setTelemetryGauge).not.toHaveBeenCalled();
   });
 });

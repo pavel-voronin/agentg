@@ -1,4 +1,4 @@
-import { telemetryEnabled, type EventBus } from '@agentg/framework';
+import { setTelemetryGauge, telemetryEnabled } from '@agentg/framework';
 
 type QueueSnapshot = {
   pendingCount: number;
@@ -7,13 +7,14 @@ type QueueSnapshot = {
 
 type QueueTelemetryOptions = {
   concurrency: number;
-  events: Pick<EventBus, 'publish'>;
   intervalMs?: number | undefined;
   snapshot(): QueueSnapshot;
 };
 
-const INGESTION_QUEUE_EVENT_TYPE = 'telegram.ingestion-queue';
 const DEFAULT_INTERVAL_MS = 1000;
+const METRIC_PENDING = 'agentg.telegram.ingestion_queue.pending';
+const METRIC_RUNNING = 'agentg.telegram.ingestion_queue.running';
+const METRIC_CONCURRENCY = 'agentg.telegram.ingestion_queue.concurrency';
 
 export function startIngestionQueueTelemetry(options: QueueTelemetryOptions): () => undefined {
   if (!telemetryEnabled()) {
@@ -22,11 +23,9 @@ export function startIngestionQueueTelemetry(options: QueueTelemetryOptions): ()
 
   const publish = (): void => {
     const snapshot = options.snapshot();
-    options.events.publish(INGESTION_QUEUE_EVENT_TYPE, {
-      pendingUpdateCount: snapshot.pendingCount,
-      runningUpdateCount: snapshot.runningCount,
-      updateConcurrency: options.concurrency
-    });
+    setTelemetryGauge(METRIC_PENDING, snapshot.pendingCount);
+    setTelemetryGauge(METRIC_RUNNING, snapshot.runningCount);
+    setTelemetryGauge(METRIC_CONCURRENCY, options.concurrency);
   };
 
   publish();
@@ -39,5 +38,3 @@ export function startIngestionQueueTelemetry(options: QueueTelemetryOptions): ()
     return undefined;
   };
 }
-
-export { INGESTION_QUEUE_EVENT_TYPE };

@@ -17,6 +17,7 @@ import { createUpdateEvents } from './events.js';
 import { startIngestionQueueTelemetry } from './queueTelemetry.js';
 import type { IngestionResources } from './resources.js';
 import { persistLiveUpdate } from './registry.js';
+import { recordHandledUpdateCatalog, recordUpdateSeen } from './updateCatalogTelemetry.js';
 import { createUpdateQueue } from './updateQueue.js';
 
 type IngestionRuntime = {
@@ -65,6 +66,9 @@ export function useIngestion(options: IngestionOptions): IngestionRuntime {
     handle: (update) =>
       timeTelemetryOperation(
         {
+          attributes: {
+            update_source: 'tdlib'
+          },
           kind: 'ingestion.update',
           name: update._
         },
@@ -81,6 +85,7 @@ export function useIngestion(options: IngestionOptions): IngestionRuntime {
     }
   });
   const unsubscribeUpdates = options.tdlib.onUpdate((update) => {
+    recordUpdateSeen(update._);
     updates.enqueue(update);
   });
   let stopQueueTelemetry: (() => undefined) | undefined;
@@ -91,9 +96,9 @@ export function useIngestion(options: IngestionOptions): IngestionRuntime {
     async start() {
       stopQueueTelemetry = startIngestionQueueTelemetry({
         concurrency: options.updateConcurrency,
-        events: options.events,
         snapshot: () => updates.snapshot()
       });
+      recordHandledUpdateCatalog();
       await persistAuthenticatedClient(options);
       options.status.markAuthenticated(true);
       options.status.markConnectionState('connectionStateReady');
