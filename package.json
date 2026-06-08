@@ -44,7 +44,7 @@
     "db:recreate": "node scripts/dbRecreate.mjs",
     "db:ps": "docker compose ps postgres",
     "db:logs": "docker compose logs --tail=50 postgres",
-    "infra:up": "sh -c 'set -a; [ ! -f .env ] || . ./.env; set +a; telemetry=\"$(printf \"%s\" \"${AGENTG_TELEMETRY:-0}\" | tr \"[:upper:]\" \"[:lower:]\")\"; case \"$telemetry\" in \"\"|0|false|no|off) docker compose --profile telemetry stop nats-exporter victoria-metrics jaeger grafana >/dev/null 2>&1 || true; docker compose --profile telemetry rm -f nats-exporter victoria-metrics jaeger grafana >/dev/null 2>&1 || true; docker compose up -d postgres nats --quiet-pull ;; *) docker compose --profile telemetry up -d postgres nats nats-exporter victoria-metrics jaeger grafana --quiet-pull ;; esac'",
+    "infra:up": "sh -c 'set -a; [ ! -f .env ] || . ./.env; set +a; telemetry=\"$(printf \"%s\" \"${AGENTG_TELEMETRY:-0}\" | tr \"[:upper:]\" \"[:lower:]\")\"; case \"$telemetry\" in \"\"|0|false|no|off) docker compose --profile telemetry stop nats-exporter postgres-exporter victoria-metrics jaeger grafana >/dev/null 2>&1 || true; docker compose --profile telemetry rm -f nats-exporter postgres-extensions postgres-exporter victoria-metrics jaeger grafana >/dev/null 2>&1 || true; docker compose up -d postgres nats --quiet-pull ;; *) docker compose --profile telemetry up -d postgres nats nats-exporter postgres-exporter victoria-metrics jaeger grafana --quiet-pull ;; esac'",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

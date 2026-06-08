@@ -22,7 +22,10 @@ type TabView = {
 
 const tabs: TabView[] = [
   { id: 'operations', label: 'Operations' },
+  { id: 'telegram', label: 'Telegram' },
+  { id: 'history-sync', label: 'History Sync' },
   { id: 'updates', label: 'Updates' },
+  { id: 'postgres', label: 'Postgres' },
   { id: 'nats', label: 'NATS' }
 ];
 
@@ -120,9 +123,38 @@ function errorMessage(value: unknown): string {
         :base-url="links.grafanaUi"
         dashboard-slug="agentg-operations"
         dashboard-uid="agentg-operations"
-        from="now-3d"
         kiosk
         title="Operations"
+      />
+      <div v-else class="telemetry-page__empty">No Grafana link</div>
+    </section>
+
+    <section v-if="activeTab === 'telegram'" class="telemetry-page__section">
+      <div class="telemetry-page__section-header">
+        <h3 class="telemetry-page__section-title">Telegram</h3>
+      </div>
+      <UiGrafanaDashboard
+        v-if="links"
+        :base-url="links.grafanaUi"
+        dashboard-slug="agentg-telegram"
+        dashboard-uid="agentg-telegram"
+        kiosk
+        title="Telegram"
+      />
+      <div v-else class="telemetry-page__empty">No Grafana link</div>
+    </section>
+
+    <section v-if="activeTab === 'history-sync'" class="telemetry-page__section">
+      <div class="telemetry-page__section-header">
+        <h3 class="telemetry-page__section-title">History Sync</h3>
+      </div>
+      <UiGrafanaDashboard
+        v-if="links"
+        :base-url="links.grafanaUi"
+        dashboard-slug="agentg-history-sync"
+        dashboard-uid="agentg-history-sync"
+        kiosk
+        title="History Sync"
       />
       <div v-else class="telemetry-page__empty">No Grafana link</div>
     </section>
@@ -136,7 +168,6 @@ function errorMessage(value: unknown): string {
         :base-url="links.grafanaUi"
         dashboard-slug="agentg-tdlib-updates"
         dashboard-uid="agentg-tdlib-updates"
-        from="now-3d"
         kiosk
         title="TDLib Updates"
       />
@@ -152,9 +183,23 @@ function errorMessage(value: unknown): string {
         :base-url="links.grafanaUi"
         dashboard-slug="agentg-nats"
         dashboard-uid="agentg-nats"
-        from="now-3d"
         kiosk
         title="NATS"
+      />
+      <div v-else class="telemetry-page__empty">No Grafana link</div>
+    </section>
+
+    <section v-if="activeTab === 'postgres'" class="telemetry-page__section">
+      <div class="telemetry-page__section-header">
+        <h3 class="telemetry-page__section-title">Postgres</h3>
+      </div>
+      <UiGrafanaDashboard
+        v-if="links"
+        :base-url="links.grafanaUi"
+        dashboard-slug="agentg-postgres"
+        dashboard-uid="agentg-postgres"
+        kiosk
+        title="Postgres"
       />
       <div v-else class="telemetry-page__empty">No Grafana link</div>
     </section>

@@ -1,7 +1,20 @@
-export type TelemetryTabId = 'nats' | 'operations' | 'updates';
+export type TelemetryTabId =
+  | 'history-sync'
+  | 'nats'
+  | 'operations'
+  | 'postgres'
+  | 'telegram'
+  | 'updates';
 
 const defaultTab: TelemetryTabId = 'operations';
-const tabs = new Set<TelemetryTabId>(['nats', 'operations', 'updates']);
+const tabs = new Set<TelemetryTabId>([
+  'history-sync',
+  'nats',
+  'operations',
+  'postgres',
+  'telegram',
+  'updates'
+]);
 
 export function telemetryTabFromSegment(segment: string | null): TelemetryTabId | null {
   if (segment === null) {

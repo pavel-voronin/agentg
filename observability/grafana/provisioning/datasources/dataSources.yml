@@ -26,11 +26,46 @@ datasources:
         spanStartTimeShift: '-2m'
         spanEndTimeShift: '2m'
         tags:
-          - key: operation_kind
-          - key: operation_name
-          - key: source
+          - key: service.name
+            value: service_name
+          - key: rpc.method
+            value: rpc_method
+          - key: rpc.service
+            value: rpc_service
+          - key: rpc.system.name
+            value: rpc_system_name
+          - key: db.system.name
+            value: db_system_name
+          - key: db.operation.name
+            value: db_operation_name
+          - key: db.query.summary
+            value: db_query_summary
+          - key: messaging.system
+            value: messaging_system
+          - key: messaging.destination.name
+            value: messaging_destination_name
+          - key: messaging.operation.type
+            value: messaging_operation_type
+          - key: telegram.update.type
+            value: telegram_update_type
+          - key: telegram.messages_page.stage
+            value: telegram_messages_page_stage
+          - key: telegram.message_view.stage
+            value: telegram_message_view_stage
+          - key: telegram.file.record.stage
+            value: telegram_file_record_stage
         queries:
-          - name: Operation call rate
-            query: 'sum(rate(agentg_operation_calls_total{$$__tags}[5m]))'
-          - name: Operation p95
-            query: 'histogram_quantile(0.95, sum by (le) (rate(agentg_operation_duration_seconds_bucket{$$__tags}[5m])))'
+          - name: RPC server rate
+            query: 'sum(rate(rpc_server_call_duration_seconds_count{$$__tags}[5m]))'
+          - name: RPC server p95
+            query: 'histogram_quantile(0.95, sum by (le) (rate(rpc_server_call_duration_seconds_bucket{$$__tags}[5m])))'
+          - name: RPC client rate
+            query: 'sum(rate(rpc_client_call_duration_seconds_count{$$__tags}[5m]))'
+          - name: RPC client p95
+            query: 'histogram_quantile(0.95, sum by (le) (rate(rpc_client_call_duration_seconds_bucket{$$__tags}[5m])))'
+          - name: DB p95
+            query: 'histogram_quantile(0.95, sum by (le) (rate(db_client_operation_duration_seconds_bucket{$$__tags}[5m])))'
+          - name: Telegram update p95
+            query: 'histogram_quantile(0.95, sum by (le) (rate(telegram_update_processing_duration_seconds_bucket{$$__tags}[5m])))'
+          - name: Telegram page stage p95
+            query: 'histogram_quantile(0.95, sum by (le) (rate(telegram_messages_page_stage_duration_seconds_bucket{$$__tags}[5m])))'

@@ -70,7 +70,7 @@
             "type": "prometheus",
             "uid": "victoria-metrics"
           },
-          "expr": "sum(sum by (operation_name) (increase(agentg_operation_calls_total{operation_kind=\"ingestion.update\", operation_name=~\"$update\"}[$__range])) or on(operation_name) (0 * max by (operation_name) (agentg_telegram_update_catalog_info{operation_name=~\"$update\"})))",
+          "expr": "sum(sum by (telegram_update_type) (increase(telegram_update_processing_duration_seconds_count{telegram_update_type=~\"$update\"}[$__range])) or on(telegram_update_type) (0 * max by (telegram_update_type) (telegram_update_catalog_info{telegram_update_type=~\"$update\"})))",
           "refId": "A",
           "instant": true,
           "legendFormat": "calls"
@@ -91,7 +91,7 @@
             {
               "targetBlank": false,
               "title": "Filter table to this update",
-              "url": "/d/agentg-tdlib-updates/agentg-tdlib-updates?var-update=${__field.labels.operation_name}&from=${__from}&to=${__to}"
+              "url": "/d/agentg-tdlib-updates/agentg-tdlib-updates?var-update=${__field.labels.telegram_update_type}&from=${__from}&to=${__to}"
             }
           ],
           "thresholds": {
@@ -142,10 +142,10 @@
             "type": "prometheus",
             "uid": "victoria-metrics"
           },
-          "expr": "topk(1, (histogram_quantile(0.95, sum by (operation_name, le) (increase(agentg_operation_duration_seconds_bucket{operation_kind=\"ingestion.update\", operation_name=~\"$update\"}[$__range]))) and on(operation_name) (sum by (operation_name) (increase(agentg_operation_calls_total{operation_kind=\"ingestion.update\", operation_name=~\"$update\"}[$__range])) > 0)) or on(operation_name) (0 * max by (operation_name) (agentg_telegram_update_catalog_info{operation_name=~\"$update\"})))",
+          "expr": "topk(1, (histogram_quantile(0.95, sum by (telegram_update_type, le) (increase(telegram_update_processing_duration_seconds_bucket{telegram_update_type=~\"$update\"}[$__range]))) and on(telegram_update_type) (sum by (telegram_update_type) (increase(telegram_update_processing_duration_seconds_count{telegram_update_type=~\"$update\"}[$__range])) > 0)) or on(telegram_update_type) (0 * max by (telegram_update_type) (telegram_update_catalog_info{telegram_update_type=~\"$update\"})))",
           "refId": "A",
           "instant": true,
-          "legendFormat": "{{operation_name}}"
+          "legendFormat": "{{telegram_update_type}}"
         }
       ],
       "title": "Worst P95",
@@ -163,7 +163,7 @@
             {
               "targetBlank": false,
               "title": "Filter table to this update",
-              "url": "/d/agentg-tdlib-updates/agentg-tdlib-updates?var-update=${__field.labels.operation_name}&from=${__from}&to=${__to}"
+              "url": "/d/agentg-tdlib-updates/agentg-tdlib-updates?var-update=${__field.labels.telegram_update_type}&from=${__from}&to=${__to}"
             }
           ],
           "thresholds": {
@@ -214,10 +214,10 @@
             "type": "prometheus",
             "uid": "victoria-metrics"
           },
-          "expr": "topk(1, (histogram_quantile(0.99, sum by (operation_name, le) (increase(agentg_operation_duration_seconds_bucket{operation_kind=\"ingestion.update\", operation_name=~\"$update\"}[$__range]))) and on(operation_name) (sum by (operation_name) (increase(agentg_operation_calls_total{operation_kind=\"ingestion.update\", operation_name=~\"$update\"}[$__range])) > 0)) or on(operation_name) (0 * max by (operation_name) (agentg_telegram_update_catalog_info{operation_name=~\"$update\"})))",
+          "expr": "topk(1, (histogram_quantile(0.99, sum by (telegram_update_type, le) (increase(telegram_update_processing_duration_seconds_bucket{telegram_update_type=~\"$update\"}[$__range]))) and on(telegram_update_type) (sum by (telegram_update_type) (increase(telegram_update_processing_duration_seconds_count{telegram_update_type=~\"$update\"}[$__range])) > 0)) or on(telegram_update_type) (0 * max by (telegram_update_type) (telegram_update_catalog_info{telegram_update_type=~\"$update\"})))",
           "refId": "A",
           "instant": true,
-          "legendFormat": "{{operation_name}}"
+          "legendFormat": "{{telegram_update_type}}"
         }
       ],
       "title": "Worst P99",
@@ -266,7 +266,7 @@
                   {
                     "targetBlank": true,
                     "title": "Open update traces in Jaeger",
-                    "url": "http://localhost:16686/search?service=telegram&operation=ingestion.update:${__value.text}&start=${__from}000&end=${__to}000&limit=50"
+                    "url": "http://localhost:16686/search?service=telegram&operation=${__value.text}&start=${__from}000&end=${__to}000&limit=50"
                   }
                 ]
               }
@@ -499,7 +499,7 @@
             "type": "prometheus",
             "uid": "victoria-metrics"
           },
-          "expr": "max by (operation_name) (agentg_telegram_update_catalog_info{operation_name=~\"$update\"})",
+          "expr": "max by (telegram_update_type) (telegram_update_catalog_info{telegram_update_type=~\"$update\"})",
           "refId": "A",
           "format": "table",
           "instant": true,
@@ -510,7 +510,7 @@
             "type": "prometheus",
             "uid": "victoria-metrics"
           },
-          "expr": "sum by (operation_name) (increase(agentg_operation_calls_total{operation_kind=\"ingestion.update\", operation_name=~\"$update\"}[$__range])) or on(operation_name) (0 * max by (operation_name) (agentg_telegram_update_catalog_info{operation_name=~\"$update\"}))",
+          "expr": "sum by (telegram_update_type) (increase(telegram_update_processing_duration_seconds_count{telegram_update_type=~\"$update\"}[$__range])) or on(telegram_update_type) (0 * max by (telegram_update_type) (telegram_update_catalog_info{telegram_update_type=~\"$update\"}))",
           "refId": "B",
           "format": "table",
           "instant": true,
@@ -521,7 +521,7 @@
             "type": "prometheus",
             "uid": "victoria-metrics"
           },
-          "expr": "sum by (operation_name) (increase(agentg_operation_errors_total{operation_kind=\"ingestion.update\", operation_name=~\"$update\"}[$__range])) or on(operation_name) (0 * max by (operation_name) (agentg_telegram_update_catalog_info{operation_name=~\"$update\"}))",
+          "expr": "sum by (telegram_update_type) (increase(telegram_update_processing_duration_seconds_count{error_type!=\"\", telegram_update_type=~\"$update\"}[$__range])) or on(telegram_update_type) (0 * max by (telegram_update_type) (telegram_update_catalog_info{telegram_update_type=~\"$update\"}))",
           "refId": "C",
           "format": "table",
           "instant": true,
@@ -532,7 +532,7 @@
             "type": "prometheus",
             "uid": "victoria-metrics"
           },
-          "expr": "(histogram_quantile(0.50, sum by (operation_name, le) (increase(agentg_operation_duration_seconds_bucket{operation_kind=\"ingestion.update\", operation_name=~\"$update\"}[$__range]))) and on(operation_name) (sum by (operation_name) (increase(agentg_operation_calls_total{operation_kind=\"ingestion.update\", operation_name=~\"$update\"}[$__range])) > 0)) or on(operation_name) (0 * max by (operation_name) (agentg_telegram_update_catalog_info{operation_name=~\"$update\"}))",
+          "expr": "(histogram_quantile(0.50, sum by (telegram_update_type, le) (increase(telegram_update_processing_duration_seconds_bucket{telegram_update_type=~\"$update\"}[$__range]))) and on(telegram_update_type) (sum by (telegram_update_type) (increase(telegram_update_processing_duration_seconds_count{telegram_update_type=~\"$update\"}[$__range])) > 0)) or on(telegram_update_type) (0 * max by (telegram_update_type) (telegram_update_catalog_info{telegram_update_type=~\"$update\"}))",
           "refId": "E",
           "format": "table",
           "instant": true,
@@ -543,7 +543,7 @@
             "type": "prometheus",
             "uid": "victoria-metrics"
           },
-          "expr": "(histogram_quantile(0.95, sum by (operation_name, le) (increase(agentg_operation_duration_seconds_bucket{operation_kind=\"ingestion.update\", operation_name=~\"$update\"}[$__range]))) and on(operation_name) (sum by (operation_name) (increase(agentg_operation_calls_total{operation_kind=\"ingestion.update\", operation_name=~\"$update\"}[$__range])) > 0)) or on(operation_name) (0 * max by (operation_name) (agentg_telegram_update_catalog_info{operation_name=~\"$update\"}))",
+          "expr": "(histogram_quantile(0.95, sum by (telegram_update_type, le) (increase(telegram_update_processing_duration_seconds_bucket{telegram_update_type=~\"$update\"}[$__range]))) and on(telegram_update_type) (sum by (telegram_update_type) (increase(telegram_update_processing_duration_seconds_count{telegram_update_type=~\"$update\"}[$__range])) > 0)) or on(telegram_update_type) (0 * max by (telegram_update_type) (telegram_update_catalog_info{telegram_update_type=~\"$update\"}))",
           "refId": "F",
           "format": "table",
           "instant": true,
@@ -554,7 +554,7 @@
             "type": "prometheus",
             "uid": "victoria-metrics"
           },
-          "expr": "(histogram_quantile(0.99, sum by (operation_name, le) (increase(agentg_operation_duration_seconds_bucket{operation_kind=\"ingestion.update\", operation_name=~\"$update\"}[$__range]))) and on(operation_name) (sum by (operation_name) (increase(agentg_operation_calls_total{operation_kind=\"ingestion.update\", operation_name=~\"$update\"}[$__range])) > 0)) or on(operation_name) (0 * max by (operation_name) (agentg_telegram_update_catalog_info{operation_name=~\"$update\"}))",
+          "expr": "(histogram_quantile(0.99, sum by (telegram_update_type, le) (increase(telegram_update_processing_duration_seconds_bucket{telegram_update_type=~\"$update\"}[$__range]))) and on(telegram_update_type) (sum by (telegram_update_type) (increase(telegram_update_processing_duration_seconds_count{telegram_update_type=~\"$update\"}[$__range])) > 0)) or on(telegram_update_type) (0 * max by (telegram_update_type) (telegram_update_catalog_info{telegram_update_type=~\"$update\"}))",
           "refId": "G",
           "format": "table",
           "instant": true,
@@ -565,7 +565,7 @@
             "type": "prometheus",
             "uid": "victoria-metrics"
           },
-          "expr": "max by (operation_name) (agentg_telegram_update_last_seen_unix_ms{operation_name=~\"$update\"})",
+          "expr": "max by (telegram_update_type) (telegram_update_last_seen_unix_seconds{telegram_update_type=~\"$update\"}) * 1000",
           "refId": "I",
           "format": "table",
           "instant": true,
@@ -577,7 +577,7 @@
         {
           "id": "joinByField",
           "options": {
-            "byField": "operation_name",
+            "byField": "telegram_update_type",
             "mode": "outer"
           }
         },
@@ -596,7 +596,7 @@
               "Value #A": true
             },
             "indexByName": {
-              "operation_name": 0,
+              "telegram_update_type": 0,
               "Value #B": 1,
               "Value #C": 2,
               "Value #E": 3,
@@ -605,7 +605,7 @@
               "Value #I": 6
             },
             "renameByName": {
-              "operation_name": "Update",
+              "telegram_update_type": "Update",
               "Value #B": "Calls",
               "Value #C": "Errors",
               "Value #E": "P50",
@@ -635,7 +635,7 @@
           "type": "prometheus",
           "uid": "victoria-metrics"
         },
-        "definition": "label_values(agentg_telegram_update_catalog_info, operation_name)",
+        "definition": "label_values(telegram_update_catalog_info, telegram_update_type)",
         "hide": 0,
         "includeAll": true,
         "label": "Update",
@@ -643,7 +643,7 @@
         "name": "update",
         "options": [],
         "query": {
-          "query": "label_values(agentg_telegram_update_catalog_info, operation_name)",
+          "query": "label_values(telegram_update_catalog_info, telegram_update_type)",
           "refId": "VictoriaMetricsVariableQuery"
         },
         "refresh": 1,
@@ -655,13 +655,13 @@
     ]
   },
   "time": {
-    "from": "now-3d",
+    "from": "now-15m",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "browser",
   "title": "TDLib Updates",
   "uid": "agentg-tdlib-updates",
-  "version": 5,
+  "version": 7,
   "weekStart": ""
 }

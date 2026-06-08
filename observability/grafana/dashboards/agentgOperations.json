@@ -31,8 +31,8 @@
           "links": [
             {
               "targetBlank": true,
-              "title": "Search operation in Jaeger",
-              "url": "http://localhost:16686/search?service=${__field.labels.source}&operation=${__field.labels.operation_kind}:${__field.labels.operation_name}&lookback=1h"
+              "title": "Search service in Jaeger",
+              "url": "http://localhost:16686/search?service=${__field.labels.service_name}&lookback=1h"
             }
           ],
           "unit": "ops"
@@ -64,12 +64,21 @@
             "type": "prometheus",
             "uid": "victoria-metrics"
           },
-          "expr": "sum by (operation_kind, operation_name, source) (rate(agentg_operation_calls_total{operation_name=~\"$operation\", source=~\"$source\"}[5m]))",
-          "legendFormat": "{{source}} {{operation_kind}}:{{operation_name}}",
-          "refId": "A"
+          "refId": "A",
+          "expr": "sum by (service_name, rpc_service, rpc_method) (rate(rpc_server_call_duration_seconds_count{service_name=~\"$service\", rpc_method=~\"$rpc_method\"}[5m]))",
+          "legendFormat": "server {{service_name}} {{rpc_method}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "refId": "B",
+          "expr": "sum by (service_name, rpc_service, rpc_method) (rate(rpc_client_call_duration_seconds_count{service_name=~\"$service\", rpc_method=~\"$rpc_method\"}[5m]))",
+          "legendFormat": "client {{service_name}} {{rpc_method}}"
         }
       ],
-      "title": "Operation Call Rate",
+      "title": "RPC Call Rate",
       "type": "timeseries"
     },
     {
@@ -82,8 +91,8 @@
           "links": [
             {
               "targetBlank": true,
-              "title": "Search operation in Jaeger",
-              "url": "http://localhost:16686/search?service=${__field.labels.source}&operation=${__field.labels.operation_kind}:${__field.labels.operation_name}&lookback=1h"
+              "title": "Search service in Jaeger",
+              "url": "http://localhost:16686/search?service=${__field.labels.service_name}&lookback=1h"
             }
           ],
           "unit": "s"
@@ -115,12 +124,21 @@
             "type": "prometheus",
             "uid": "victoria-metrics"
           },
-          "expr": "histogram_quantile(0.95, sum by (operation_kind, operation_name, source, le) (rate(agentg_operation_duration_seconds_bucket{operation_name=~\"$operation\", source=~\"$source\"}[5m])))",
-          "legendFormat": "{{source}} {{operation_kind}}:{{operation_name}}",
-          "refId": "A"
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (service_name, rpc_service, rpc_method, le) (rate(rpc_server_call_duration_seconds_bucket{service_name=~\"$service\", rpc_method=~\"$rpc_method\"}[5m])))",
+          "legendFormat": "server {{service_name}} {{rpc_method}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "refId": "B",
+          "expr": "histogram_quantile(0.95, sum by (service_name, rpc_service, rpc_method, le) (rate(rpc_client_call_duration_seconds_bucket{service_name=~\"$service\", rpc_method=~\"$rpc_method\"}[5m])))",
+          "legendFormat": "client {{service_name}} {{rpc_method}}"
         }
       ],
-      "title": "Operation P95",
+      "title": "RPC P95",
       "type": "timeseries"
     },
     {
@@ -133,11 +151,11 @@
           "links": [
             {
               "targetBlank": true,
-              "title": "Search operation in Jaeger",
-              "url": "http://localhost:16686/search?service=${__field.labels.source}&operation=${__field.labels.operation_kind}:${__field.labels.operation_name}&lookback=1h"
+              "title": "Search service in Jaeger",
+              "url": "http://localhost:16686/search?service=${__field.labels.service_name}&lookback=1h"
             }
           ],
-          "unit": "ops"
+          "unit": "s"
         },
         "overrides": []
       },
@@ -166,12 +184,99 @@
             "type": "prometheus",
             "uid": "victoria-metrics"
           },
-          "expr": "sum by (operation_kind, operation_name, source) (rate(agentg_operation_errors_total{operation_name=~\"$operation\", source=~\"$source\"}[5m]))",
-          "legendFormat": "{{source}} {{operation_kind}}:{{operation_name}}",
-          "refId": "A"
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (service_name, db_query_summary, le) (rate(db_client_operation_duration_seconds_bucket{service_name=~\"$service\", db_system_name=\"postgresql\"}[5m])))",
+          "legendFormat": "{{service_name}} {{db_query_summary}}"
         }
       ],
-      "title": "Operation Error Rate",
+      "title": "DB Query P95",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoria-metrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "links": [
+            {
+              "targetBlank": true,
+              "title": "Search service in Jaeger",
+              "url": "http://localhost:16686/search?service=${__field.labels.service_name}&lookback=1h"
+            }
+          ],
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "id": 4,
+      "options": {
+        "legend": {
+          "calcs": ["lastNotNull"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (service_name, telegram_update_type, le) (rate(telegram_update_processing_duration_seconds_bucket{service_name=~\"$service\", telegram_update_type=~\"$update\"}[5m])))",
+          "legendFormat": "update {{telegram_update_type}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "refId": "B",
+          "expr": "histogram_quantile(0.95, sum by (service_name, telegram_update_type, le) (rate(telegram_ingestion_queue_wait_duration_seconds_bucket{service_name=~\"$service\", telegram_update_type=~\"$update\"}[5m])))",
+          "legendFormat": "queue wait {{telegram_update_type}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "refId": "C",
+          "expr": "histogram_quantile(0.95, sum by (service_name, telegram_messages_page_stage, le) (rate(telegram_messages_page_stage_duration_seconds_bucket{service_name=~\"$service\"}[5m])))",
+          "legendFormat": "messages page {{telegram_messages_page_stage}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "refId": "D",
+          "expr": "histogram_quantile(0.95, sum by (service_name, telegram_message_view_stage, le) (rate(telegram_message_view_stage_duration_seconds_bucket{service_name=~\"$service\"}[5m])))",
+          "legendFormat": "message view {{telegram_message_view_stage}}"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "refId": "E",
+          "expr": "histogram_quantile(0.95, sum by (service_name, telegram_file_record_stage, le) (rate(telegram_file_record_stage_duration_seconds_bucket{service_name=~\"$service\"}[5m])))",
+          "legendFormat": "file record {{telegram_file_record_stage}}"
+        }
+      ],
+      "title": "Telegram Stage P95",
       "type": "timeseries"
     },
     {
@@ -185,11 +290,11 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 8
+        "w": 24,
+        "x": 0,
+        "y": 16
       },
-      "id": 4,
+      "id": 5,
       "options": {
         "cellHeight": "sm",
         "footer": {
@@ -209,7 +314,7 @@
           "limit": 20,
           "queryType": "search",
           "refId": "A",
-          "service": "$source"
+          "service": "$service"
         }
       ],
       "title": "Recent Traces",
@@ -223,24 +328,23 @@
     "list": [
       {
         "current": {
-          "selected": true,
-          "text": "All",
-          "value": "$__all"
+          "selected": false,
+          "text": "control-plane-server",
+          "value": "control-plane-server"
         },
-        "allValue": ".*",
         "datasource": {
           "type": "prometheus",
           "uid": "victoria-metrics"
         },
-        "definition": "label_values(agentg_operation_calls_total, operation_name)",
+        "definition": "label_values(rpc_server_call_duration_seconds_count, service_name)",
         "hide": 0,
-        "includeAll": true,
-        "label": "Operation",
+        "includeAll": false,
+        "label": "Service",
         "multi": false,
-        "name": "operation",
+        "name": "service",
         "options": [],
         "query": {
-          "query": "label_values(agentg_operation_calls_total, operation_name)",
+          "query": "label_values(rpc_server_call_duration_seconds_count, service_name)",
           "refId": "VictoriaMetricsVariableQuery"
         },
         "refresh": 1,
@@ -252,22 +356,51 @@
       {
         "current": {
           "selected": true,
-          "text": "control-plane-server",
-          "value": "control-plane-server"
+          "text": "All",
+          "value": "$__all"
         },
+        "allValue": ".*",
         "datasource": {
           "type": "prometheus",
           "uid": "victoria-metrics"
         },
-        "definition": "label_values(agentg_operation_calls_total, source)",
+        "definition": "label_values(rpc_server_call_duration_seconds_count, rpc_method)",
         "hide": 0,
-        "includeAll": false,
-        "label": "Source",
+        "includeAll": true,
+        "label": "RPC method",
         "multi": false,
-        "name": "source",
+        "name": "rpc_method",
         "options": [],
         "query": {
-          "query": "label_values(agentg_operation_calls_total, source)",
+          "query": "label_values(rpc_server_call_duration_seconds_count, rpc_method)",
+          "refId": "VictoriaMetricsVariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        },
+        "allValue": ".*",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "victoria-metrics"
+        },
+        "definition": "label_values(telegram_update_catalog_info, telegram_update_type)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "TDLib update",
+        "multi": false,
+        "name": "update",
+        "options": [],
+        "query": {
+          "query": "label_values(telegram_update_catalog_info, telegram_update_type)",
           "refId": "VictoriaMetricsVariableQuery"
         },
         "refresh": 1,
@@ -279,13 +412,13 @@
     ]
   },
   "time": {
-    "from": "now-3d",
+    "from": "now-15m",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "browser",
   "title": "Operations",
   "uid": "agentg-operations",
-  "version": 1,
+  "version": 2,
   "weekStart": ""
 }

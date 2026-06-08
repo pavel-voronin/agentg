@@ -202,6 +202,49 @@ services:
         condition: service_started
     restart: 'no'
 
+  postgres-extensions:
+    profiles:
+      - telemetry
+    image: postgres:18-alpine
+    command:
+      [
+        'psql',
+        'postgres://agentg:agentg@postgres:5432/agentg',
+        '-v',
+        'ON_ERROR_STOP=1',
+        '-c',
+        'CREATE EXTENSION IF NOT EXISTS pg_stat_statements'
+      ]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: 'no'
+
+  postgres-exporter:
+    profiles:
+      - telemetry
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.19.1
+    command:
+      - '--collector.database_wraparound'
+      - '--collector.long_running_transactions'
+      - '--no-collector.replication_slot'
+      - '--no-collector.roles'
+      - '--collector.postmaster'
+      - '--collector.stat_activity_autovacuum'
+      - '--collector.stat_checkpointer'
+      - '--no-collector.stat_progress_vacuum'
+      - '--collector.stat_statements'
+      - '--collector.stat_statements.limit=100'
+      - '--collector.statio_user_indexes'
+      - '--disable-settings-metrics'
+    environment:
+      DATA_SOURCE_NAME: postgresql://agentg:agentg@postgres:5432/agentg?sslmode=disable
+      PG_EXPORTER_COLLECTION_TIMEOUT: 10s
+    depends_on:
+      postgres-extensions:
+        condition: service_completed_successfully
+    restart: 'no'
+
   victoria-metrics:
     image: victoriametrics/victoria-metrics:v1.144.0
     command:

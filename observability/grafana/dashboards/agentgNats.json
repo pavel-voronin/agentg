@@ -3923,7 +3923,7 @@
     "list": []
   },
   "time": {
-    "from": "now-3d",
+    "from": "now-15m",
     "to": "now"
   },
   "timepicker": {},

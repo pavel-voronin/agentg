@@ -3,7 +3,7 @@
 Local development uses separate workspace packages for the long-running
 Telegram ingestion process, History Sync, Control Plane, and the Agent Gateway,
 with Docker Compose providing Postgres, NATS, VictoriaMetrics, Jaeger, and
-Grafana.
+Grafana plus NATS and Postgres exporters.
 
 ## Commands
 
@@ -38,8 +38,9 @@ It also runs setup commands before the app services:
 - `db-migrate`, which calls `npm run db:migrate`
 
 `npm run dev` defaults `AGENTG_TELEMETRY` to `1`, so `npm run infra:up` starts
-Postgres, NATS, VictoriaMetrics, Jaeger, Grafana, and the NATS exporter through
-Docker Compose. With `AGENTG_TELEMETRY=0`, `npm run infra:up` starts only
+Postgres, NATS, VictoriaMetrics, Jaeger, Grafana, the NATS exporter, and the
+Postgres exporter through Docker Compose. With `AGENTG_TELEMETRY=0`,
+`npm run infra:up` starts only
 Postgres and NATS. These services stay Docker-owned. The observability services
 are development tools. Jaeger keeps traces in memory, VictoriaMetrics writes to
 `tmpfs`, and Grafana is rebuilt from provisioning files instead of a persistent
@@ -210,6 +211,8 @@ Initial local stack includes:
 - VictoriaMetrics
 - Jaeger
 - Grafana
+- NATS exporter
+- Postgres exporter
 
 ## Phase 1 Manual Validation
 

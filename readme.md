@@ -3,7 +3,8 @@
 AgenTG is a pre-alpha Telegram client runtime for a personal agent.
 
 It runs as a local developer stack: Telegram ingestion, Postgres, NATS,
-VictoriaMetrics, Jaeger, Grafana, history sync, gateway, and the Control Plane UI.
+VictoriaMetrics, Jaeger, Grafana, NATS and Postgres exporters, history sync,
+gateway, and the Control Plane UI.
 
 ## Requirements
 
@@ -50,11 +51,11 @@ Start the full local stack:
 npm run dev
 ```
 
-This command starts Postgres, NATS, VictoriaMetrics, Jaeger, and Grafana through
-Docker Compose, runs database migrations, and starts the Telegram runtime,
-history sync, gateway, Control Plane server, and the Vite Control Plane app
-through Process Compose in detached mode. The Control Plane server owns the
-Telemetry page backend procedures.
+This command starts Postgres, NATS, VictoriaMetrics, Jaeger, Grafana, and the
+NATS and Postgres exporters through Docker Compose, runs database migrations, and
+starts the Telegram runtime, history sync, gateway, Control Plane server, and the
+Vite Control Plane app through Process Compose in detached mode. The Control
+Plane server owns the Telemetry page backend procedures.
 
 After `npm run dev:status` shows `control-plane` as healthy, open:
 
@@ -67,6 +68,8 @@ Development observability UIs:
   [http://127.0.0.1:3000/d/agentg-operations/agentg-operations](http://127.0.0.1:3000/d/agentg-operations/agentg-operations)
 - Grafana TDLib updates dashboard:
   [http://127.0.0.1:3000/d/agentg-tdlib-updates/agentg-tdlib-updates](http://127.0.0.1:3000/d/agentg-tdlib-updates/agentg-tdlib-updates)
+- Grafana Postgres dashboard:
+  [http://127.0.0.1:3000/d/agentg-postgres/agentg-postgres](http://127.0.0.1:3000/d/agentg-postgres/agentg-postgres)
 - VictoriaMetrics VMUI:
   [http://127.0.0.1:8428/vmui/](http://127.0.0.1:8428/vmui/)
 
@@ -109,14 +112,16 @@ docker compose --profile container-client --profile control-plane up --build
 ```
 
 Docker Compose defaults `AGENTG_TELEMETRY` to `0`. To run the same stack with
-OpenTelemetry metrics, traces, and NATS exporter metrics enabled:
+OpenTelemetry metrics, traces, NATS exporter metrics, and Postgres exporter
+metrics enabled:
 
 ```sh
-AGENTG_TELEMETRY=1 docker compose --profile container-client --profile control-plane up --build
+AGENTG_TELEMETRY=1 docker compose --profile telemetry --profile container-client --profile control-plane up --build
 ```
 
-This starts Postgres, NATS, VictoriaMetrics, Jaeger, Grafana, Registry, Telegram
-ingestion, History Sync, Gateway, and Control Plane. Open:
+This starts Postgres, NATS, VictoriaMetrics, Jaeger, Grafana, the NATS exporter,
+the Postgres exporter, Registry, Telegram ingestion, History Sync, Gateway, and
+Control Plane. Open:
 
 [http://127.0.0.1:8788/](http://127.0.0.1:8788/)
 
