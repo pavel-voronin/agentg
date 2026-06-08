@@ -13,6 +13,9 @@ export function registry(config: RegistryClientConfig | string): RegistryConnect
         },
         getSnapshot() {
           return client.getSnapshot();
+        },
+        refresh() {
+          return client.refresh();
         }
       };
     }

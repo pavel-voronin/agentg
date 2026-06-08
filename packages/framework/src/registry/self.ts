@@ -9,6 +9,9 @@ export function selfRegistry(): RegistryConnector {
         },
         getSnapshot() {
           throw new Error('Registry snapshot is not available from the self registry connector');
+        },
+        refresh() {
+          throw new Error('Registry snapshot is not available from the self registry connector');
         }
       });
     }

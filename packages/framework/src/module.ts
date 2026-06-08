@@ -411,17 +411,32 @@ function createRpcClient<TProcedures extends ProcedureMap>(
             throw new Error('Module RPC is not connected');
           }
 
-          const moduleRecord = moduleByName(registryConnection.getSnapshot(), moduleName);
-          if (moduleRecord === undefined) {
-            throw new Error(`Module is not registered: ${moduleName}`);
-          }
-          if (!moduleRecord.procedures.includes(property)) {
-            throw new Error(`Procedure is not registered by module ${moduleName}: ${property}`);
-          }
+          const moduleRecord = await resolveRpcModule(registryConnection, moduleName, property);
 
           return callProcedure(moduleRecord.rpcUrl, property, input);
         };
       }
     }
   ) as RpcClient<TProcedures>;
+}
+
+async function resolveRpcModule(
+  registryConnection: RegistryConnection,
+  moduleName: string,
+  procedureName: string
+) {
+  const cachedModule = moduleByName(registryConnection.getSnapshot(), moduleName);
+  if (cachedModule?.procedures.includes(procedureName) === true) {
+    return cachedModule;
+  }
+
+  const refreshedModule = moduleByName(await registryConnection.refresh(), moduleName);
+  if (refreshedModule === undefined) {
+    throw new Error(`Module is not registered: ${moduleName}`);
+  }
+  if (!refreshedModule.procedures.includes(procedureName)) {
+    throw new Error(`Procedure is not registered by module ${moduleName}: ${procedureName}`);
+  }
+
+  return refreshedModule;
 }

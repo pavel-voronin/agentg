@@ -4,6 +4,7 @@ import type { ModuleManifest, Snapshot } from './contracts.js';
 export type RegistryConnection = {
   close(): void;
   getSnapshot(): Snapshot;
+  refresh(): Promise<Snapshot>;
 };
 
 export type RegistryConnectOptions = {

@@ -406,6 +406,12 @@ describe('defineModule', () => {
                   modules: [],
                   version: 0
                 };
+              },
+              refresh() {
+                return Promise.resolve({
+                  modules: [],
+                  version: 0
+                });
               }
             });
           }
@@ -668,7 +674,7 @@ describe('defineModule', () => {
     }
   });
 
-  it('does not discover modules that join the registry after the caller starts', async () => {
+  it('refreshes lazy rpc discovery when a target module joins after the caller starts', async () => {
     const events = testSharedEventBus();
     const registryApp = registryModule({
       config: {},
@@ -727,12 +733,18 @@ describe('defineModule', () => {
       ).modules.find((moduleRecord) => moduleRecord.module === 'telegram');
 
       expect(telegramRecord).toBeDefined();
-      await profile.start();
       await expect(
         callProcedure(telegramRecord?.rpcUrl ?? '', 'describeUser', {
           id: '42'
         })
       ).rejects.toThrow('Module is not registered: profile');
+
+      await profile.start();
+      await expect(
+        callProcedure(telegramRecord?.rpcUrl ?? '', 'describeUser', {
+          id: '42'
+        })
+      ).resolves.toBe('telegram sees Pavel');
     } finally {
       await profile.stop();
       await telegram.stop();
@@ -883,6 +895,12 @@ function testConnectWithCalls(calls: string[]) {
               modules: [],
               version: 0
             };
+          },
+          refresh() {
+            return Promise.resolve({
+              modules: [],
+              version: 0
+            });
           }
         });
       }
