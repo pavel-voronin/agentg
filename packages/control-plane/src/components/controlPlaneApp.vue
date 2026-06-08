@@ -142,6 +142,12 @@ onBeforeUnmount(() => {
           </nav>
         </div>
         <div class="control-plane-app__toolbar">
+          <div class="control-plane-app__action-group">
+            <SlotOutlet
+              slot-id="control-plane.header.actions"
+              :tags="['control-plane.header.actions']"
+            />
+          </div>
           <div class="control-plane-app__status-group">
             <SlotOutlet
               slot-id="control-plane.header.status"
@@ -208,6 +214,10 @@ onBeforeUnmount(() => {
 
 .control-plane-app__toolbar {
   @apply flex flex-wrap items-center justify-end gap-3;
+}
+
+.control-plane-app__action-group {
+  @apply flex flex-wrap items-center justify-end gap-2;
 }
 
 .control-plane-app__status-group {

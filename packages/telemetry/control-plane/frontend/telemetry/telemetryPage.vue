@@ -1,15 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
-import {
-  slotRoute,
-  UiGrafanaDashboard,
-  useControlPlaneHost,
-  type SlotContext
-} from '@agentg/framework/cp';
-import SolarArrowRightUpBold from '~icons/solar/arrow-right-up-bold';
+import { computed, onMounted } from 'vue';
+import { slotRoute, UiGrafanaDashboard, type SlotContext } from '@agentg/framework/cp';
 
 import { telemetryRouteSegments, telemetryTabFromSegment, type TelemetryTabId } from './route.js';
-import { LINKS_METHOD, type LinkSet } from './contracts.js';
+import { useLinks } from './links.js';
 
 const props = defineProps<{
   slotContext?: SlotContext | undefined;
@@ -29,11 +23,9 @@ const tabs: TabView[] = [
   { id: 'nats', label: 'NATS' }
 ];
 
-const host = useControlPlaneHost();
 const route = computed(() => slotRoute(props.slotContext));
 const activeTab = computed(() => telemetryTabFromSegment(route.value.segment(0)));
-const links = ref<LinkSet | null>(null);
-const error = ref<string | null>(null);
+const { links, error, loadLinks } = useLinks();
 
 onMounted(() => {
   void loadLinks();
@@ -42,62 +34,10 @@ onMounted(() => {
 function selectTab(tabId: TelemetryTabId): void {
   route.value.replace(telemetryRouteSegments(tabId));
 }
-
-async function loadLinks(): Promise<void> {
-  error.value = null;
-  links.value = null;
-  try {
-    links.value = await host.rpc<LinkSet>(LINKS_METHOD);
-  } catch (loadError) {
-    error.value = errorMessage(loadError);
-  }
-}
-
-function errorMessage(value: unknown): string {
-  return value instanceof Error ? value.message : String(value);
-}
 </script>
 
 <template>
   <section class="telemetry-page">
-    <header class="telemetry-page__header">
-      <div class="telemetry-page__title-frame">
-        <h2 class="telemetry-page__title">Telemetry</h2>
-      </div>
-      <div class="telemetry-page__actions">
-        <a
-          v-if="links"
-          class="telemetry-page__link"
-          :href="links.metricsUi"
-          target="_blank"
-          rel="noreferrer"
-        >
-          <SolarArrowRightUpBold class="telemetry-page__link-icon" aria-hidden="true" />
-          <span class="telemetry-page__link-label">VictoriaMetrics</span>
-        </a>
-        <a
-          v-if="links"
-          class="telemetry-page__link"
-          :href="links.grafanaUi"
-          target="_blank"
-          rel="noreferrer"
-        >
-          <SolarArrowRightUpBold class="telemetry-page__link-icon" aria-hidden="true" />
-          <span class="telemetry-page__link-label">Grafana</span>
-        </a>
-        <a
-          v-if="links"
-          class="telemetry-page__link"
-          :href="links.jaegerUi"
-          target="_blank"
-          rel="noreferrer"
-        >
-          <SolarArrowRightUpBold class="telemetry-page__link-icon" aria-hidden="true" />
-          <span class="telemetry-page__link-label">Jaeger</span>
-        </a>
-      </div>
-    </header>
-
     <nav class="telemetry-page__tabs" aria-label="Telemetry sections">
       <button
         v-for="tab in tabs"
@@ -217,36 +157,8 @@ function errorMessage(value: unknown): string {
   @apply min-h-0 w-full flex-1 overflow-auto bg-white p-5 text-zinc-950;
 }
 
-.telemetry-page__header {
-  @apply flex items-start justify-between gap-4 border-b border-zinc-200 pb-4;
-}
-
-.telemetry-page__title-frame {
-  @apply min-w-0;
-}
-
-.telemetry-page__title {
-  @apply text-xl font-semibold tracking-normal;
-}
-
-.telemetry-page__actions {
-  @apply flex shrink-0 flex-wrap items-center justify-end gap-2;
-}
-
-.telemetry-page__link {
-  @apply inline-flex h-8 items-center gap-1 rounded border border-zinc-200 px-2 text-xs font-medium text-zinc-600 transition-colors hover:border-zinc-300 hover:text-zinc-950;
-}
-
-.telemetry-page__link-icon {
-  @apply size-4 shrink-0;
-}
-
-.telemetry-page__link-label {
-  @apply whitespace-nowrap;
-}
-
 .telemetry-page__tabs {
-  @apply mt-4 flex flex-wrap gap-2;
+  @apply flex flex-wrap gap-2;
 }
 
 .telemetry-page__tab {
