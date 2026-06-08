@@ -1,58 +1,42 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import SolarEraserBold from '~icons/solar/eraser-bold';
-import SolarFiltersBold from '~icons/solar/filters-bold';
 import SolarPauseBold from '~icons/solar/pause-bold';
 import SolarPlayBold from '~icons/solar/play-bold';
 import SolarSettingsBold from '~icons/solar/settings-bold';
 
-import type {
-  AppEventItem,
-  EventFiltersPanelView,
-  EventsPanelMode
-} from '../stores/controlPlaneTypes.js';
+import type { AppEventItem, EventsPanelMode } from '../stores/controlPlaneTypes.js';
 import { UiButton } from '@agentg/framework/cp';
-import EventFilters from './eventFilters.vue';
 import EventSettings from './eventSettings.vue';
 import EventsList from './eventsList.vue';
 
 const props = defineProps<{
   clearButtonId?: string;
-  eventFiltersId: string;
   eventListId: string;
   eventLimit: number;
   eventSettingsId: string;
   eventYamlListLimit: number;
   events: AppEventItem[];
-  filtersToggleId?: string;
   hasEvents: boolean;
   mode: EventsPanelMode;
   panelId: string;
   settingsToggleId?: string;
   streamPaused: boolean;
   streamToggleId?: string;
-  view: EventFiltersPanelView;
 }>();
 
 const emit = defineEmits<{
   clear: [];
-  clearType: [type: string];
-  closeFilters: [];
   closeSettings: [];
   eventLimitChange: [value: number];
   eventYamlListLimitChange: [value: number];
-  filtersToggle: [];
-  muteChange: [type: string, muted: boolean];
   settingsToggle: [];
   streamToggle: [];
-  typeChange: [type: string, enabled: boolean];
 }>();
 
 const eventsVisible = computed(() => props.mode === 'events');
-const filtersVisible = computed(() => props.mode === 'filters');
 const settingsVisible = computed(() => props.mode === 'settings');
-const sidePaneVisible = computed(() => filtersVisible.value || settingsVisible.value);
-const eventFilterToggleVariant = computed(() => (filtersVisible.value ? 'selected' : 'neutral'));
+const sidePaneVisible = computed(() => settingsVisible.value);
 const eventSettingsToggleVariant = computed(() => (settingsVisible.value ? 'selected' : 'neutral'));
 const eventStreamToggleLabel = computed(() =>
   props.streamPaused ? 'Resume event stream' : 'Pause event stream'
@@ -90,18 +74,6 @@ const eventStreamStateLabel = computed(() => (props.streamPaused ? 'Paused' : 'L
           <SolarPauseBold v-else class="events-panel__button-icon-large" aria-hidden="true" />
         </UiButton>
         <UiButton
-          :id="filtersToggleId"
-          class="events-panel__filters-button"
-          :variant="eventFilterToggleVariant"
-          @click="emit('filtersToggle')"
-        >
-          <SolarFiltersBold class="events-panel__button-icon" aria-hidden="true" />
-          <span>Filters</span>
-          <span class="events-panel__filters-count">
-            {{ view.enabledCount }}
-          </span>
-        </UiButton>
-        <UiButton
           :id="clearButtonId"
           aria-label="Clear events"
           size="icon-md"
@@ -124,22 +96,9 @@ const eventStreamStateLabel = computed(() => (props.streamPaused ? 'Paused' : 'L
     </div>
     <div class="events-panel__body" :data-side-pane="sidePaneVisible ? 'true' : undefined">
       <div v-show="eventsVisible || sidePaneVisible" class="events-panel__list-pane">
-        <EventsList
-          :id="eventListId"
-          :events="events"
-          :has-events="hasEvents"
-          @clear-type="(type) => emit('clearType', type)"
-          @mute-change="(type, muted) => emit('muteChange', type, muted)"
-        />
+        <EventsList :id="eventListId" :events="events" :has-events="hasEvents" />
       </div>
       <div v-if="sidePaneVisible" class="events-panel__side-pane">
-        <EventFilters
-          v-show="filtersVisible"
-          :id="eventFiltersId"
-          :view="view"
-          @close="emit('closeFilters')"
-          @type-change="(type, enabled) => emit('typeChange', type, enabled)"
-        />
         <EventSettings
           v-show="settingsVisible"
           :id="eventSettingsId"
@@ -194,18 +153,6 @@ const eventStreamStateLabel = computed(() => (props.streamPaused ? 'Paused' : 'L
 
 .events-panel__button-icon-large {
   @apply h-[18px] w-[18px] shrink-0 text-[#111827];
-}
-
-.events-panel__filters-button {
-  @apply gap-1.5 px-2.5;
-}
-
-.events-panel__button-icon {
-  @apply h-3.5 w-3.5;
-}
-
-.events-panel__filters-count {
-  @apply rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] leading-none text-zinc-500;
 }
 
 .events-panel__icon-button-icon {

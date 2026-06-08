@@ -18,14 +18,11 @@ import { eventListItems } from '../src/view-models/eventsPanelView.js';
 
 describe('event list view', () => {
   it('groups RPC lifecycle events by procedure target in chronological lifecycle order', () => {
-    const items = eventListItems(
-      [
-        rpcEvent('completed', '2026-05-05T00:00:02.000Z', { stage: 'completed' }),
-        event('alpha.status', '2026-05-05T00:00:01.500Z', { online: true }),
-        rpcEvent('started', '2026-05-05T00:00:01.000Z', { stage: 'started' })
-      ],
-      (type) => type === 'alpha.rpc.listItems.started'
-    );
+    const items = eventListItems([
+      rpcEvent('completed', '2026-05-05T00:00:02.000Z', { stage: 'completed' }),
+      event('alpha.status', '2026-05-05T00:00:01.500Z', { online: true }),
+      rpcEvent('started', '2026-05-05T00:00:01.000Z', { stage: 'started' })
+    ]);
 
     expect(items.map((item) => item.kind)).toEqual(['rpc', 'event']);
 
@@ -33,13 +30,8 @@ describe('event list view', () => {
     expect(rpcItem).toMatchObject({
       callId: 'call_1',
       kind: 'rpc',
-      muted: false,
       target: 'alpha.listItems'
     });
-    expect(rpcItem.lifecycleTypes).toEqual([
-      'alpha.rpc.listItems.started',
-      'alpha.rpc.listItems.completed'
-    ]);
     expect(rpcItem.lifecycles.map((lifecycle) => lifecycle.suffix)).toEqual([
       'started',
       'completed'
@@ -54,18 +46,14 @@ describe('event list view', () => {
     expect(linesText(rpcItem.lifecycles[1]?.body.yamlLines ?? [])).toBe(
       'callId: call_1\ntarget: alpha.listItems\nstage: completed'
     );
-    expect(rpcItem.lifecycles.map((lifecycle) => lifecycle.muted)).toEqual([true, false]);
   });
 
   it('keeps concurrent calls of the same RPC procedure as separate stream items', () => {
-    const items = eventListItems(
-      [
-        rpcEvent('completed', '2026-05-05T00:00:03.000Z', { stage: 'completed' }, 'call_2'),
-        rpcEvent('completed', '2026-05-05T00:00:02.000Z', { stage: 'completed' }, 'call_1'),
-        rpcEvent('started', '2026-05-05T00:00:01.000Z', { stage: 'started' }, 'call_1')
-      ],
-      () => false
-    );
+    const items = eventListItems([
+      rpcEvent('completed', '2026-05-05T00:00:03.000Z', { stage: 'completed' }, 'call_2'),
+      rpcEvent('completed', '2026-05-05T00:00:02.000Z', { stage: 'completed' }, 'call_1'),
+      rpcEvent('started', '2026-05-05T00:00:01.000Z', { stage: 'started' }, 'call_1')
+    ]);
 
     const rpcItems = items.filter((item): item is AppRpcEventItem => item.kind === 'rpc');
 
@@ -78,13 +66,10 @@ describe('event list view', () => {
   });
 
   it('renders only the latest RPC lifecycle body expanded by default', async () => {
-    const items = eventListItems(
-      [
-        rpcEvent('completed', '2026-05-05T00:00:02.000Z', { stage: 'completed' }),
-        rpcEvent('started', '2026-05-05T00:00:01.000Z', { stage: 'started' })
-      ],
-      () => false
-    );
+    const items = eventListItems([
+      rpcEvent('completed', '2026-05-05T00:00:02.000Z', { stage: 'completed' }),
+      rpcEvent('started', '2026-05-05T00:00:01.000Z', { stage: 'started' })
+    ]);
 
     const html = await renderEventsList(items);
 
@@ -103,20 +88,17 @@ describe('event list view', () => {
   });
 
   it('renders ModelRef values as YAML badges without changing RAW payload text', async () => {
-    const items = eventListItems(
-      [
-        event('beta.sync.requested', '2026-05-05T00:00:01.000Z', {
-          chat: {
-            _model: 'alpha.record',
-            id: 'chat-a',
-            title: 'Chat A',
-            type: 'private'
-          },
-          reason: 'manual'
-        })
-      ],
-      () => false
-    );
+    const items = eventListItems([
+      event('beta.sync.requested', '2026-05-05T00:00:01.000Z', {
+        chat: {
+          _model: 'alpha.record',
+          id: 'chat-a',
+          title: 'Chat A',
+          type: 'private'
+        },
+        reason: 'manual'
+      })
+    ]);
 
     const eventItem = items[0] as AppStandardEventItem;
     const firstLine = eventItem.body.yamlLines[0];
@@ -224,7 +206,6 @@ describe('event list view', () => {
           yamlListItemLimit: 4
         }
       ],
-      () => false,
       { yaml: { listItemLimit: 1 } }
     );
     const firstEvent = items[0] as AppStandardEventItem;
@@ -312,7 +293,7 @@ function event(type: string, occurredAt: string, data: unknown): ControlPlaneEve
 }
 
 function eventListItem(event: ControlPlaneEvent): AppStandardEventItem {
-  return eventListItems([event], () => false)[0] as AppStandardEventItem;
+  return eventListItems([event])[0] as AppStandardEventItem;
 }
 
 function renderEventsList(events: AppEventItem[]) {

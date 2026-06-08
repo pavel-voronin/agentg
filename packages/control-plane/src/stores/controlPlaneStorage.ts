@@ -1,5 +1,4 @@
 export const CONTROL_PLANE_STORAGE_KEYS = {
-  eventFilters: 'agentg.controlPlane.eventFilters',
   eventLimit: 'agentg.controlPlane.eventLimit',
   eventsPaused: 'agentg.controlPlane.eventsPaused',
   eventYamlListLimit: 'agentg.controlPlane.eventYamlListLimit',

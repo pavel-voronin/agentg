@@ -13,7 +13,6 @@ const props = defineProps<{
   body: AppEventBodyView;
   bordered?: boolean;
   mode: 'raw' | 'yaml';
-  muted: boolean;
 }>();
 
 const expandedRevealIds = shallowRef<ReadonlySet<string>>(new Set());
@@ -60,15 +59,9 @@ function visibleYamlLines(
     v-if="mode === 'raw'"
     class="event-body-block__raw"
     :data-bordered="bordered ? 'true' : undefined"
-    :data-muted="muted ? 'true' : undefined"
     >{{ body.raw }}</pre
   >
-  <div
-    v-else
-    class="event-body-block__yaml"
-    :data-bordered="bordered ? 'true' : undefined"
-    :data-muted="muted ? 'true' : undefined"
-  >
+  <div v-else class="event-body-block__yaml" :data-bordered="bordered ? 'true' : undefined">
     <div
       v-for="(line, lineIndex) in renderedYamlLines"
       :key="lineIndex"
@@ -78,7 +71,6 @@ function visibleYamlLines(
         v-if="line.kind === 'reveal'"
         type="button"
         class="event-body-block__reveal"
-        :data-muted="muted ? 'true' : undefined"
         :aria-label="`Show ${line.hiddenCount} more YAML list items`"
         @click="revealYamlLine(line)"
       >
@@ -122,11 +114,6 @@ function visibleYamlLines(
   @apply border-t px-2 py-1;
 }
 
-.event-body-block__raw[data-muted='true'],
-.event-body-block__yaml[data-muted='true'] {
-  @apply border-zinc-300 text-zinc-500;
-}
-
 .event-body-block__model-ref {
   @apply inline-flex max-w-full overflow-hidden rounded border bg-transparent p-0 align-baseline font-mono leading-tight focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1;
 }
@@ -141,9 +128,5 @@ function visibleYamlLines(
 
 .event-body-block__reveal {
   @apply inline-flex items-center rounded border border-zinc-200 bg-white px-1.5 py-0.5 font-mono text-[10px] font-semibold leading-tight text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1;
-}
-
-.event-body-block__reveal[data-muted='true'] {
-  @apply border-zinc-300 bg-zinc-100 text-zinc-500 hover:bg-zinc-200;
 }
 </style>

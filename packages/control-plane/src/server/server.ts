@@ -12,11 +12,6 @@ import {
 } from '@agentg/framework';
 import { WebSocket, WebSocketServer, type RawData } from 'ws';
 
-import {
-  CONTROL_PLANE_EVENT_CATALOG_PATH,
-  eventCatalogFromRegistrySnapshot
-} from '../control-plane/eventCatalog.js';
-
 // TODO(file-size): Split HTTP serving, WebSocket RPC, module-file proxy, and server lifecycle.
 export type ServerConfig = {
   host: string;
@@ -273,15 +268,6 @@ async function handleHttpRequest(
     await sendFile(response, request.method, runtime.vueRuntimeFilePath);
     return;
   }
-  if (path === CONTROL_PLANE_EVENT_CATALOG_PATH) {
-    await runtime.registry.refresh();
-    sendJsonHttp(
-      response,
-      request.method,
-      eventCatalogFromRegistrySnapshot(runtime.registry.getSnapshot())
-    );
-    return;
-  }
   if (path.startsWith(MODULE_FILES_PREFIX)) {
     await proxyModuleFile(runtime, path, request.method, response);
     return;
@@ -446,19 +432,6 @@ function resolveStaticPath(staticRoot: string, path: string): string | null {
   const requested = path === '/' ? '/index.html' : path;
   const resolved = resolve(staticRoot, `.${requested}`);
   return resolved === staticRoot || resolved.startsWith(`${staticRoot}${sep}`) ? resolved : null;
-}
-
-function sendJsonHttp(response: ServerResponse, method: string | undefined, body: unknown): void {
-  const payload = Buffer.from(JSON.stringify(body));
-  response.writeHead(200, {
-    'content-length': payload.byteLength,
-    'content-type': 'application/json; charset=utf-8'
-  });
-  if (method !== 'HEAD') {
-    response.end(payload);
-    return;
-  }
-  response.end();
 }
 
 function sendHttp(

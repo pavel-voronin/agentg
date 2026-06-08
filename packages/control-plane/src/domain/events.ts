@@ -4,48 +4,9 @@ import {
   MIN_EVENT_LIMIT,
   MIN_EVENT_YAML_LIST_LIMIT,
   rpcCallEventTarget,
-  rpcCallEventTypesForProcedure,
   type ControlPlaneEvent,
-  type EventCatalogState,
-  type EventFiltersState,
   type EventGroup
 } from '../stores/controlPlaneTypes.js';
-
-export type EventFilterSource = {
-  eventCatalog: EventCatalogState;
-  eventFilters: EventFiltersState;
-  events: ControlPlaneEvent[];
-};
-
-export function defaultEventFilters(): EventFiltersState {
-  return {
-    groups: {},
-    types: {}
-  };
-}
-
-export function enabledEventFiltersCountInState(state: EventFilterSource): number {
-  return filterableEventGroupsInState(state).reduce(
-    (count, group) =>
-      count +
-      eventTypesForGroupInState(state, group).filter((type) =>
-        isEventTypeEnabledInState(state, group, type)
-      ).length,
-    0
-  );
-}
-
-export function eventGroupFilterStateInState(
-  state: EventFilterSource,
-  group: EventGroup
-): { checked: boolean; indeterminate: boolean } {
-  const types = eventTypesForGroupInState(state, group);
-  const enabled = types.filter((type) => isEventTypeEnabledInState(state, group, type)).length;
-  return {
-    checked: types.length > 0 && enabled === types.length,
-    indeterminate: enabled > 0 && enabled < types.length
-  };
-}
 
 export function eventGroupForEvent(event: ControlPlaneEvent): EventGroup {
   return eventGroupForType(event.type ?? '');
@@ -56,66 +17,18 @@ export function eventGroupForType(type: string): EventGroup {
   if (rpcCallEventTarget(normalizedType) !== null) {
     return {
       color: '#6366f1',
-      eventTypes: [],
       id: 'rpc',
-      label: 'RPC calls',
-      match: (candidate) => rpcCallEventTarget(candidate) !== null
+      label: 'RPC calls'
     };
   }
 
   const domain = eventDomainFromType(normalizedType);
   const group = {
     color: colorForEventDomain(domain),
-    eventTypes: [],
     id: `events:${domain}`,
-    label: labelForEventDomain(domain),
-    match: (candidate: string) =>
-      rpcCallEventTarget(candidate.trim()) === null && eventDomainFromType(candidate) === domain
+    label: labelForEventDomain(domain)
   };
-  return domain === 'ui' || domain === 'other' ? { ...group, filterable: false } : group;
-}
-
-export function eventTypesForGroupInState(state: EventFilterSource, group: EventGroup): string[] {
-  const configured = eventCatalogTypesInState(state).filter((type) => group.match(type));
-  return [...new Set([...group.eventTypes, ...configured])].sort();
-}
-
-export function filterableEventGroupsInState(state: EventFilterSource): EventGroup[] {
-  const types = eventCatalogTypesInState(state);
-  const groups = new Map<string, EventGroup>();
-
-  for (const type of types) {
-    const group = eventGroupForType(type);
-    if (group.filterable !== false) {
-      groups.set(group.id, group);
-    }
-  }
-
-  return [...groups.values()].sort(compareEventGroups);
-}
-
-export function isEventEnabledInState(state: EventFilterSource, event: ControlPlaneEvent): boolean {
-  const type = event.type ?? '';
-  const group = eventGroupForType(type);
-  if (group.filterable === false) {
-    return true;
-  }
-  return isEventTypeEnabledInState(state, group, type);
-}
-
-export function isEventTypeEnabledInState(
-  state: EventFilterSource,
-  group: EventGroup,
-  type: string
-): boolean {
-  if (group.filterable === false) {
-    return true;
-  }
-  const stored = state.eventFilters.types[type];
-  if (typeof stored === 'boolean') {
-    return stored;
-  }
-  return state.eventFilters.groups[group.id] !== false;
+  return group;
 }
 
 export function normalizeEventLimit(value: number | string): number {
@@ -142,20 +55,6 @@ function eventDomainFromType(type: string): string {
   return domain;
 }
 
-function eventCatalogTypesInState(state: EventFilterSource): string[] {
-  return state.eventCatalog.services.flatMap((service) => [
-    ...service.events,
-    ...service.procedures.flatMap((procedure) =>
-      rpcCallEventTypesForProcedure(eventCatalogProcedureTarget(service.slug, procedure.name))
-    )
-  ]);
-}
-
-function eventCatalogProcedureTarget(serviceSlug: string, procedureName: string): string {
-  const name = procedureName.trim();
-  return name.startsWith(`${serviceSlug}.`) ? name : `${serviceSlug}.${name}`;
-}
-
 function labelForEventDomain(domain: string): string {
   return domain
     .split(/[-_]/)
@@ -180,14 +79,4 @@ function colorForEventDomain(domain: string): string {
     hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
   }
   return palette[hash % palette.length] ?? '#2563eb';
-}
-
-function compareEventGroups(left: EventGroup, right: EventGroup): number {
-  if (left.id === 'rpc') {
-    return -1;
-  }
-  if (right.id === 'rpc') {
-    return 1;
-  }
-  return left.label.localeCompare(right.label) || left.id.localeCompare(right.id);
 }

@@ -85,8 +85,6 @@ describe('Control Plane server boundary', () => {
     const registry = createFakeRegistry({
       modules: [
         {
-          expiresAt: '2026-05-04T00:01:00.000Z',
-          extensions: [],
           module: 'beta',
           procedures: ['getStatus'],
           registeredAt: '2026-05-04T00:00:00.000Z',
@@ -160,21 +158,11 @@ describe('Control Plane server boundary', () => {
     }
   });
 
-  it('serves runtime endpoints from registry snapshot metadata', async () => {
+  it('serves the Vue runtime endpoint', async () => {
     const events = createFakeEventBus();
     const registry = createFakeRegistry({
-      modules: [
-        {
-          expiresAt: '2026-05-04T00:01:00.000Z',
-          extensions: [],
-          module: 'alpha',
-          procedures: ['listItems'],
-          registeredAt: '2026-05-04T00:00:00.000Z',
-          required: false,
-          rpcUrl: 'http://127.0.0.1:1'
-        }
-      ],
-      version: 1
+      modules: [],
+      version: 0
     });
 
     const server = await startServer({
@@ -184,26 +172,6 @@ describe('Control Plane server boundary', () => {
     });
 
     try {
-      await expect(
-        fetch(`http://127.0.0.1:${String(server.port)}/control-plane/event-catalog`).then(
-          (response) => response.json()
-        )
-      ).resolves.toEqual({
-        services: [
-          {
-            events: [],
-            procedures: [
-              {
-                kind: 'procedure',
-                name: 'alpha.listItems'
-              }
-            ],
-            slug: 'alpha'
-          }
-        ],
-        version: 1
-      });
-
       const runtimeResponse = await fetch(
         `http://127.0.0.1:${String(server.port)}/control-plane/runtime/vue.js`
       );
@@ -267,8 +235,6 @@ describe('Control Plane server boundary', () => {
     const registry = createFakeRegistry({
       modules: [
         {
-          expiresAt: '2026-05-04T00:01:00.000Z',
-          extensions: [],
           module: 'alpha',
           procedures: ['cp.file'],
           registeredAt: '2026-05-04T00:00:00.000Z',
@@ -407,8 +373,11 @@ function matchesSubject(subject: string, type: string): boolean {
   return subject === type;
 }
 
-function createFakeRegistry(initialSnapshot: Snapshot): RegistryClient {
-  const snapshot = initialSnapshot;
+function createFakeRegistry(
+  initialSnapshot: Snapshot,
+  refreshedSnapshot: Snapshot = initialSnapshot
+): RegistryClient {
+  let snapshot = initialSnapshot;
   return {
     close(): void {
       return;
@@ -420,9 +389,7 @@ function createFakeRegistry(initialSnapshot: Snapshot): RegistryClient {
       return Promise.resolve(snapshot);
     },
     refresh(): Promise<Snapshot> {
-      return Promise.resolve(snapshot);
-    },
-    renew(): Promise<Snapshot> {
+      snapshot = refreshedSnapshot;
       return Promise.resolve(snapshot);
     }
   };

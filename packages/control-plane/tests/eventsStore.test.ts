@@ -68,54 +68,14 @@ describe('events store', () => {
     expect(storage.setItem).toHaveBeenCalledWith(CONTROL_PLANE_STORAGE_KEYS.eventsPaused, '0');
   });
 
-  it('mutes future events without removing existing events of that type', () => {
+  it('keeps all event types while stream is running', () => {
     const store = useEventsStore();
     const firstEvent = event('alpha.status');
-    const mutedEvent = event('alpha.status');
     const otherEvent = event('beta.sync.started');
-    const storage = localStorage as Storage & {
-      setItem: ReturnType<typeof vi.fn>;
-    };
 
     expect(store.pushEvent(firstEvent)).toBe(true);
-
-    store.setEventTypeMuted('alpha.status', true);
-
-    expect(store.isEventTypeMuted('alpha.status')).toBe(true);
-    expect(store.eventFilters.types['alpha.status']).toBe(false);
-    expect(storage.setItem).toHaveBeenCalled();
-    expect(store.events.map((item) => item.type)).toEqual(['alpha.status']);
-    expect(store.pushEvent(mutedEvent)).toBe(false);
     expect(store.pushEvent(otherEvent)).toBe(true);
     expect(store.events.map((item) => item.type)).toEqual(['beta.sync.started', 'alpha.status']);
-
-    store.setEventTypeMuted('alpha.status', false);
-
-    expect(store.isEventTypeMuted('alpha.status')).toBe(false);
-    expect(store.eventFilters.types['alpha.status']).toBe(true);
-    expect(store.pushEvent(mutedEvent)).toBe(true);
-    expect(store.events.map((item) => item.type)).toEqual([
-      'alpha.status',
-      'beta.sync.started',
-      'alpha.status'
-    ]);
-  });
-
-  it('clears muted event types only when explicitly requested', () => {
-    const store = useEventsStore();
-
-    store.setEvents([event('alpha.status'), event('beta.sync.started'), event('alpha.status')]);
-    store.setEventTypeMuted('alpha.status', true);
-
-    expect(store.events.map((item) => item.type)).toEqual([
-      'alpha.status',
-      'beta.sync.started',
-      'alpha.status'
-    ]);
-
-    store.clearEventsOfType('alpha.status');
-
-    expect(store.events.map((item) => item.type)).toEqual(['beta.sync.started']);
   });
 
   it('persists positive event limits without an upper cap and trims current events', () => {
@@ -182,32 +142,6 @@ describe('events store', () => {
       'beta.sync.started'
     ]);
     expect(store.events.map((item) => item.yamlListItemLimit)).toEqual([2, 5]);
-  });
-
-  it('stores the Registry event catalog used by filter view models', () => {
-    const store = useEventsStore();
-
-    store.setEventCatalog({
-      services: [
-        {
-          events: ['alpha.message.created'],
-          procedures: [{ kind: 'procedure', name: 'alpha.listItems' }],
-          slug: 'alpha'
-        }
-      ],
-      version: 7
-    });
-
-    expect(store.eventCatalog).toEqual({
-      services: [
-        {
-          events: ['alpha.message.created'],
-          procedures: [{ kind: 'procedure', name: 'alpha.listItems' }],
-          slug: 'alpha'
-        }
-      ],
-      version: 7
-    });
   });
 });
 

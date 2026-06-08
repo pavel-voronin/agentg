@@ -1,21 +1,12 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import SolarAltArrowRightBold from '~icons/solar/alt-arrow-right-bold';
-import SolarCloseCircleBold from '~icons/solar/close-circle-bold';
-import SolarVolumeCrossBold from '~icons/solar/volume-cross-bold';
-import SolarVolumeLoudBold from '~icons/solar/volume-loud-bold';
 
 import type { AppRpcEventItem, AppRpcLifecycleItem } from '../stores/controlPlaneTypes.js';
 import EventBodyBlock from './eventBodyBlock.vue';
 
 const props = defineProps<{
   event: AppRpcEventItem;
-}>();
-
-const emit = defineEmits<{
-  clearType: [type: string];
-  muteChange: [type: string, muted: boolean];
-  procedureMuteToggle: [event: AppRpcEventItem];
 }>();
 
 const expandedLifecycles = ref<Record<string, boolean>>({});
@@ -46,57 +37,18 @@ function toggleLifecycle(lifecycle: AppRpcLifecycleItem, index: number): void {
   };
 }
 
-function clearRpcTypes(): void {
-  for (const type of props.event.lifecycleTypes) {
-    emit('clearType', type);
-  }
-}
-
 function toggleBodyMode(): void {
   bodyMode.value = bodyMode.value === 'yaml' ? 'raw' : 'yaml';
 }
 </script>
 
 <template>
-  <div class="rpc-event-item" :data-muted="event.muted ? 'true' : undefined">
-    <div
-      class="rpc-event-item__stripe"
-      :data-muted="event.muted ? 'true' : undefined"
-      :style="{ background: event.color }"
-    ></div>
+  <div class="rpc-event-item">
+    <div class="rpc-event-item__stripe" :style="{ background: event.color }"></div>
     <div class="rpc-event-item__header">
       <div class="rpc-event-item__meta">
         <span class="rpc-event-item__kind-label"> RPC call </span>
-        <span class="rpc-event-item__target" :data-muted="event.muted ? 'true' : undefined">
-          {{ event.target }}
-        </span>
-        <button
-          v-if="event.filterable"
-          type="button"
-          :aria-pressed="event.muted"
-          :aria-label="event.muted ? `Unmute ${event.target}` : `Mute ${event.target}`"
-          :title="event.muted ? `Unmute ${event.target}` : `Mute ${event.target}`"
-          class="rpc-event-item__mute-button"
-          :data-muted="event.muted ? 'true' : undefined"
-          @click="emit('procedureMuteToggle', event)"
-        >
-          <SolarVolumeCrossBold
-            v-if="event.muted"
-            class="rpc-event-item__button-icon"
-            aria-hidden="true"
-          />
-          <SolarVolumeLoudBold v-else class="rpc-event-item__button-icon" aria-hidden="true" />
-        </button>
-        <button
-          v-if="event.muted"
-          type="button"
-          :aria-label="`Clear ${event.target}`"
-          :title="`Clear ${event.target}`"
-          class="rpc-event-item__clear-button"
-          @click="clearRpcTypes"
-        >
-          <SolarCloseCircleBold class="rpc-event-item__button-icon" aria-hidden="true" />
-        </button>
+        <span class="rpc-event-item__target">{{ event.target }}</span>
       </div>
       <button
         type="button"
@@ -113,7 +65,6 @@ function toggleBodyMode(): void {
         v-for="(lifecycle, lifecycleIndex) in event.lifecycles"
         :key="lifecycle.key"
         class="rpc-event-item__lifecycle"
-        :data-muted="lifecycle.muted ? 'true' : undefined"
       >
         <div class="rpc-event-item__lifecycle-header">
           <button
@@ -133,51 +84,14 @@ function toggleBodyMode(): void {
               aria-hidden="true"
             />
           </button>
-          <span
-            class="rpc-event-item__lifecycle-title"
-            :data-muted="lifecycle.muted ? 'true' : undefined"
-          >
-            {{ lifecycle.title }}
-          </span>
-          <span
-            class="rpc-event-item__lifecycle-time"
-            :data-muted="lifecycle.muted ? 'true' : undefined"
-          >
-            {{ lifecycle.occurredAt }}
-          </span>
-          <button
-            type="button"
-            :aria-pressed="lifecycle.muted"
-            :aria-label="lifecycle.muted ? `Unmute ${lifecycle.type}` : `Mute ${lifecycle.type}`"
-            :title="lifecycle.muted ? `Unmute ${lifecycle.type}` : `Mute ${lifecycle.type}`"
-            class="rpc-event-item__mute-button"
-            :data-muted="lifecycle.muted ? 'true' : undefined"
-            @click="emit('muteChange', lifecycle.type, !lifecycle.muted)"
-          >
-            <SolarVolumeCrossBold
-              v-if="lifecycle.muted"
-              class="rpc-event-item__button-icon"
-              aria-hidden="true"
-            />
-            <SolarVolumeLoudBold v-else class="rpc-event-item__button-icon" aria-hidden="true" />
-          </button>
-          <button
-            v-if="lifecycle.muted"
-            type="button"
-            :aria-label="`Clear ${lifecycle.type}`"
-            :title="`Clear ${lifecycle.type}`"
-            class="rpc-event-item__clear-button"
-            @click="emit('clearType', lifecycle.type)"
-          >
-            <SolarCloseCircleBold class="rpc-event-item__button-icon" aria-hidden="true" />
-          </button>
+          <span class="rpc-event-item__lifecycle-title">{{ lifecycle.title }}</span>
+          <span class="rpc-event-item__lifecycle-time">{{ lifecycle.occurredAt }}</span>
         </div>
         <EventBodyBlock
           v-if="isLifecycleExpanded(lifecycle, lifecycleIndex)"
           bordered
           :body="lifecycle.body"
           :mode="bodyMode"
-          :muted="lifecycle.muted"
         />
       </div>
     </div>
@@ -190,16 +104,8 @@ function toggleBodyMode(): void {
   @apply relative border-b border-zinc-200 bg-white py-2 pl-4 pr-3 font-mono text-xs leading-relaxed transition-colors;
 }
 
-.rpc-event-item[data-muted='true'] {
-  @apply bg-zinc-100 text-zinc-500;
-}
-
 .rpc-event-item__stripe {
   @apply absolute left-0 top-0 h-full w-1.5;
-}
-
-.rpc-event-item__stripe[data-muted='true'] {
-  @apply opacity-35;
 }
 
 .rpc-event-item__header {
@@ -218,26 +124,6 @@ function toggleBodyMode(): void {
   @apply min-w-0 truncate font-semibold text-zinc-900;
 }
 
-.rpc-event-item__target[data-muted='true'] {
-  @apply text-zinc-500;
-}
-
-.rpc-event-item__mute-button {
-  @apply inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-zinc-200 bg-white text-[10px] text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900;
-}
-
-.rpc-event-item__mute-button[data-muted='true'] {
-  @apply border-zinc-400 bg-zinc-200 text-zinc-600 hover:bg-zinc-300;
-}
-
-.rpc-event-item__clear-button {
-  @apply inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900;
-}
-
-.rpc-event-item__button-icon {
-  @apply h-3.5 w-3.5;
-}
-
 .rpc-event-item__body-mode-button {
   @apply inline-flex h-5 shrink-0 items-center rounded border border-zinc-200 bg-white px-1.5 font-mono text-[10px] font-semibold text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900;
 }
@@ -248,10 +134,6 @@ function toggleBodyMode(): void {
 
 .rpc-event-item__lifecycle {
   @apply rounded border border-zinc-200 bg-zinc-50 font-mono text-zinc-700 transition-colors;
-}
-
-.rpc-event-item__lifecycle[data-muted='true'] {
-  @apply border-zinc-300 bg-zinc-200/70 text-zinc-500;
 }
 
 .rpc-event-item__lifecycle-header {
@@ -274,15 +156,7 @@ function toggleBodyMode(): void {
   @apply font-semibold text-zinc-800;
 }
 
-.rpc-event-item__lifecycle-title[data-muted='true'] {
-  @apply text-zinc-500;
-}
-
 .rpc-event-item__lifecycle-time {
   @apply text-zinc-500;
-}
-
-.rpc-event-item__lifecycle-time[data-muted='true'] {
-  @apply text-zinc-400;
 }
 </style>
