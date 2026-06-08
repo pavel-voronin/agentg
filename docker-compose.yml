@@ -1,7 +1,7 @@
 x-agentg-telemetry-environment: &agentg-telemetry-environment
   AGENTG_TELEMETRY: ${AGENTG_TELEMETRY:-0}
-  OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: http://victoria-metrics:8428/opentelemetry/v1/metrics
-  OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://jaeger:4318/v1/traces
+  OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: http://otel-collector:4318/v1/metrics
+  OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
   GRAFANA_URL: http://127.0.0.1:3000
   JAEGER_UI_URL: http://127.0.0.1:16686
   VICTORIA_METRICS_URL: http://127.0.0.1:8428
@@ -23,10 +23,6 @@ x-agentg-module-service: &agentg-module-service
       condition: service_started
     postgres:
       condition: service_healthy
-    victoria-metrics:
-      condition: service_started
-    jaeger:
-      condition: service_started
   restart: 'no'
 
 services:
@@ -40,10 +36,6 @@ services:
       registry:
         condition: service_started
       nats:
-        condition: service_started
-      victoria-metrics:
-        condition: service_started
-      jaeger:
         condition: service_started
       postgres:
         condition: service_healthy
@@ -181,6 +173,8 @@ services:
       - '8222:8222'
 
   nats-exporter:
+    profiles:
+      - telemetry
     image: natsio/prometheus-nats-exporter:0.17.3
     entrypoint: ['sh', '-c']
     command:
@@ -245,7 +239,25 @@ services:
         condition: service_completed_successfully
     restart: 'no'
 
+  otel-collector:
+    profiles:
+      - telemetry
+    image: otel/opentelemetry-collector:0.153.0
+    command: ['--config=/etc/otel-collector/collectorConfig.yml']
+    depends_on:
+      victoria-metrics:
+        condition: service_started
+      jaeger:
+        condition: service_started
+    ports:
+      - '4317:4317'
+      - '4318:4318'
+    volumes:
+      - ./observability/otel-collector/collectorConfig.yml:/etc/otel-collector/collectorConfig.yml:ro
+
   victoria-metrics:
+    profiles:
+      - telemetry
     image: victoriametrics/victoria-metrics:v1.144.0
     command:
       - '-opentelemetry.usePrometheusNaming'
@@ -258,19 +270,21 @@ services:
       - ./observability/victoria-metrics/scrapeConfig.yml:/etc/victoria-metrics/scrapeConfig.yml:ro
 
   jaeger:
+    profiles:
+      - telemetry
     image: cr.jaegertracing.io/jaegertracing/jaeger:2.19.0
     command:
       - '--set=extensions.jaeger_query.ui.config_file=/jaeger/uiConfig.json'
     ports:
       - '16686:16686'
-      - '4317:4317'
-      - '4318:4318'
       - '5778:5778'
       - '9411:9411'
     volumes:
       - ./observability/jaeger/uiConfig.json:/jaeger/uiConfig.json:ro
 
   grafana:
+    profiles:
+      - telemetry
     image: grafana/grafana:13.0.2
     depends_on:
       jaeger:

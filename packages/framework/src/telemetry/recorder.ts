@@ -61,7 +61,7 @@ export type TelemetrySpan = {
 const DISABLED_VALUES = new Set(['0', 'false', 'no', 'off']);
 const DEFAULT_METRIC_EXPORT_INTERVAL_MS = 15_000;
 const DEFAULT_TRACES_ENDPOINT = 'http://127.0.0.1:4318/v1/traces';
-const DEFAULT_METRICS_ENDPOINT = 'http://127.0.0.1:8428/opentelemetry/v1/metrics';
+const DEFAULT_METRICS_ENDPOINT = 'http://127.0.0.1:4318/v1/metrics';
 const DURATION_BUCKETS_SECONDS = [
   0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5
 ];

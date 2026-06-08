@@ -3,8 +3,8 @@
 AgenTG is a pre-alpha Telegram client runtime for a personal agent.
 
 It runs as a local developer stack: Telegram ingestion, Postgres, NATS,
-VictoriaMetrics, Jaeger, Grafana, NATS and Postgres exporters, history sync,
-gateway, and the Control Plane UI.
+OpenTelemetry Collector, VictoriaMetrics, Jaeger, Grafana, NATS and Postgres
+exporters, history sync, gateway, and the Control Plane UI.
 
 ## Requirements
 
@@ -51,11 +51,12 @@ Start the full local stack:
 npm run dev
 ```
 
-This command starts Postgres, NATS, VictoriaMetrics, Jaeger, Grafana, and the
-NATS and Postgres exporters through Docker Compose, runs database migrations, and
-starts the Telegram runtime, history sync, gateway, Control Plane server, and the
-Vite Control Plane app through Process Compose in detached mode. The Control
-Plane server owns the Telemetry page backend procedures.
+This command starts Postgres, NATS, OpenTelemetry Collector, VictoriaMetrics,
+Jaeger, Grafana, and the NATS and Postgres exporters through Docker Compose,
+runs database migrations, and starts the Telegram runtime, history sync,
+gateway, Control Plane server, and the Vite Control Plane app through Process
+Compose in detached mode. The Control Plane server owns the Telemetry page
+backend procedures.
 
 After `npm run dev:status` shows `control-plane` as healthy, open:
 
@@ -119,9 +120,9 @@ metrics enabled:
 AGENTG_TELEMETRY=1 docker compose --profile telemetry --profile container-client --profile control-plane up --build
 ```
 
-This starts Postgres, NATS, VictoriaMetrics, Jaeger, Grafana, the NATS exporter,
-the Postgres exporter, Registry, Telegram ingestion, History Sync, Gateway, and
-Control Plane. Open:
+This starts Postgres, NATS, OpenTelemetry Collector, VictoriaMetrics, Jaeger,
+Grafana, the NATS exporter, the Postgres exporter, Registry, Telegram
+ingestion, History Sync, Gateway, and Control Plane. Open:
 
 [http://127.0.0.1:8788/](http://127.0.0.1:8788/)
 

@@ -1,18 +1,21 @@
 # Observability
 
 AgentG emits OpenTelemetry traces and metrics when `AGENTG_TELEMETRY` is enabled.
-The local development observability stack uses VictoriaMetrics for metrics,
-Jaeger all-in-one in-memory for traces, prometheus-nats-exporter for NATS server
-metrics, postgres_exporter for Postgres server metrics, and Grafana for
-dashboards and trace correlation links. This stack is development-only and
-intentionally ephemeral: Jaeger uses its default transient in-memory storage,
-VictoriaMetrics is mounted on `tmpfs` in Docker Compose, and Grafana is
-provisioned from repository files instead of a persistent volume.
+The local development observability stack uses OpenTelemetry Collector as the
+OTLP ingress, VictoriaMetrics for metrics, Jaeger all-in-one in-memory for
+traces, prometheus-nats-exporter for NATS server metrics, postgres_exporter for
+Postgres server metrics, and Grafana for dashboards and trace correlation links.
+This stack is development-only and intentionally ephemeral: Jaeger uses its
+default transient in-memory storage, VictoriaMetrics is mounted on `tmpfs` in
+Docker Compose, and Grafana is provisioned from repository files instead of a
+persistent volume.
 
 ## Local Backends
 
 With `AGENTG_TELEMETRY=1`, `npm run infra:up` starts:
 
+- OpenTelemetry Collector OTLP HTTP on `http://127.0.0.1:4318`
+- OpenTelemetry Collector OTLP gRPC on `127.0.0.1:4317`
 - VictoriaMetrics on `http://127.0.0.1:8428`
 - prometheus-nats-exporter for NATS server metrics
 - postgres_exporter for Postgres server metrics
@@ -20,14 +23,19 @@ With `AGENTG_TELEMETRY=1`, `npm run infra:up` starts:
 - Grafana on `http://127.0.0.1:3000`
 
 With `AGENTG_TELEMETRY=0`, `npm run infra:up` starts only Postgres and NATS, and
-NATS and Postgres server metrics are not scraped.
+OpenTelemetry Collector, VictoriaMetrics, Jaeger, Grafana, NATS exporter, and
+Postgres exporter are not started.
 
 Runtime defaults:
 
 - metrics OTLP HTTP endpoint:
-  `http://127.0.0.1:8428/opentelemetry/v1/metrics`
+  `http://127.0.0.1:4318/v1/metrics`
 - traces OTLP HTTP endpoint:
   `http://127.0.0.1:4318/v1/traces`
+
+The Collector forwards metrics to
+`http://victoria-metrics:8428/opentelemetry/v1/metrics` and traces to
+`http://jaeger:4318/v1/traces`.
 
 `npm run dev` starts local module processes through Process Compose. The
 `process-compose.yaml` environment defaults `AGENTG_TELEMETRY` to enabled and
