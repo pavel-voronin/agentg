@@ -4,6 +4,25 @@ Trusted modules are independent internal services that run inside the AgenTG
 runtime contour. A module owns its storage, module RPC surface, and events.
 Core domains own their own models, procedures, storage, and fact events.
 
+## Target Runtime Stack
+
+The recommended long-term runtime stack is a Rust core runtime with Tokio and
+WebAssembly plugins.
+
+The Rust core owns the supervisor tree, module lifecycle, typed local ports,
+scheduling, bounded queues, durable event journal, configuration, health, and
+shutdown. Tokio provides the multi-threaded async runtime for I/O, timers, and
+work scheduling across CPU cores.
+
+Hot-path core domains can be compiled into the binary. Extension modules should
+use WebAssembly components with explicit host capabilities, not native dynamic
+libraries. Plugin contracts should be described through typed component
+interfaces so module boundaries remain explicit and portable.
+
+Bounded queues are the runtime backpressure mechanism. Events that must survive
+process crashes or restarts must be written to a durable inbox, journal, or
+outbox before they enter an in-memory queue.
+
 ## Runtime Contract
 
 Every module has:
