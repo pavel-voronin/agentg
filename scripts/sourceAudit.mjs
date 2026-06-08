@@ -23,6 +23,7 @@ auditDockerfileWorkspacePackageCopies();
 auditDateContract(sourceFiles);
 auditTdlibContractGeneration(sourceFiles);
 auditScopedVueComponentStyles(vueFiles, sourceFiles);
+auditTelemetryDashboardCoverage();
 
 if (failures.length > 0) {
   for (const failure of failures) {
@@ -633,6 +634,257 @@ function auditScopedVueComponentStyles(vueFiles, sourceFiles) {
       }
     }
   }
+}
+
+function auditTelemetryDashboardCoverage() {
+  const metricRecords = collectTelemetryMetricRecords();
+  const dashboardText = collectDashboardText();
+  const exceptions = telemetryDashboardMetricExceptions();
+  const missing = [];
+
+  for (const [family, records] of metricRecords) {
+    if (exceptions.has(family)) {
+      continue;
+    }
+    if (!metricFamilyCoveredByDashboards(family, dashboardText)) {
+      missing.push({ family, records });
+    }
+  }
+
+  for (const { family, records } of missing) {
+    const locations = records
+      .map((record) => `${record.rel}:${String(record.line)} (${record.metricName})`)
+      .join(', ');
+    failures.push(
+      `telemetry metric is missing from Grafana dashboards: ${family} <- ${locations}. Add this metric to the owning Grafana dashboard in observability/grafana/dashboards/*.json, or add a documented exception to observability/grafana/dashboardMetricExceptions.json. Docs: docs/06-operations/observability.md#adding-signals`
+    );
+  }
+}
+
+function collectTelemetryMetricRecords() {
+  const records = new Map();
+  for (const file of telemetrySourceFiles()) {
+    const rel = toRel(file);
+    const source = readFileSync(file, 'utf8');
+    const localConstants = metricConstants(source);
+    const constants = new Map([...semanticMetricConstants(), ...localConstants]);
+
+    for (const expression of metricNameExpressions(source)) {
+      const metricName = resolveMetricName(expression.value, constants);
+      if (metricName === null) {
+        failures.push(
+          `telemetry metric name must be a string literal or METRIC_* constant: ${rel}:${String(expression.line)}`
+        );
+        continue;
+      }
+
+      const family = prometheusMetricFamily(metricName);
+      const recordsForFamily = records.get(family) ?? [];
+      recordsForFamily.push({
+        line: expression.line,
+        metricName,
+        rel
+      });
+      records.set(family, recordsForFamily);
+    }
+  }
+  return records;
+}
+
+function telemetrySourceFiles() {
+  const packagesRoot = join(root, 'packages');
+  if (!existsSync(packagesRoot)) {
+    return [];
+  }
+  return listFilesForTelemetry(packagesRoot).filter(
+    (file) =>
+      file.endsWith('.ts') &&
+      !file.endsWith('.test.ts') &&
+      !toRel(file).includes('/tests/') &&
+      !toRel(file).includes('/drizzle/') &&
+      !toRel(file).includes('/data/')
+  );
+}
+
+function listFilesForTelemetry(directory) {
+  const entries = readdirSync(directory, { withFileTypes: true });
+  const files = [];
+
+  for (const entry of entries) {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) {
+      if (telemetryAuditIgnoredDirectory(path)) {
+        continue;
+      }
+      files.push(...listFilesForTelemetry(path));
+      continue;
+    }
+    if (entry.isFile()) {
+      files.push(path);
+    }
+  }
+
+  return files;
+}
+
+function telemetryAuditIgnoredDirectory(directory) {
+  const rel = toRel(directory);
+  return (
+    rel.endsWith('/node_modules') ||
+    rel.endsWith('/dist') ||
+    rel.endsWith('/dist-control-plane') ||
+    rel.endsWith('/dist-server') ||
+    rel.endsWith('/output') ||
+    rel.endsWith('/.tmp') ||
+    rel.endsWith('/.git')
+  );
+}
+
+function metricConstants(source) {
+  const constants = new Map();
+  for (const match of source.matchAll(/\bconst\s+(METRIC_[A-Z0-9_]+)\s*=\s*(['"])([^'"]+)\2/g)) {
+    const [, name, , value] = match;
+    constants.set(name, value);
+  }
+  return constants;
+}
+
+function semanticMetricConstants() {
+  return new Map([
+    ['METRIC_DB_CLIENT_OPERATION_DURATION', 'db.client.operation.duration'],
+    ['METRIC_MESSAGING_CLIENT_OPERATION_DURATION', 'messaging.client.operation.duration'],
+    ['METRIC_MESSAGING_PROCESS_DURATION', 'messaging.process.duration'],
+    ['METRIC_RPC_CLIENT_CALL_DURATION', 'rpc.client.call.duration'],
+    ['METRIC_RPC_SERVER_CALL_DURATION', 'rpc.server.call.duration']
+  ]);
+}
+
+function metricNameExpressions(source) {
+  return [
+    ...callMetricNameExpressions(source, 'incrementTelemetryCounter'),
+    ...callMetricNameExpressions(source, 'recordTelemetryHistogram'),
+    ...callMetricNameExpressions(source, 'setTelemetryGauge'),
+    ...durationMetricNameExpressions(source)
+  ].sort((left, right) => left.index - right.index);
+}
+
+function callMetricNameExpressions(source, functionName) {
+  return [...source.matchAll(new RegExp(`\\b${functionName}\\s*\\(\\s*([^,\\n)]+)`, 'g'))]
+    .filter(
+      (match) =>
+        !source.slice(Math.max(0, (match.index ?? 0) - 20), match.index).endsWith('function ')
+    )
+    .map((match) => ({
+      index: match.index ?? 0,
+      line: lineNumberAt(source, match.index ?? 0),
+      value: match[1].trim()
+    }));
+}
+
+function durationMetricNameExpressions(source) {
+  const expressions = [];
+  for (const match of source.matchAll(/\bmetric\s*:\s*\{/g)) {
+    const block = objectBlockAt(source, (match.index ?? 0) + match[0].length - 1);
+    if (block === null) {
+      continue;
+    }
+    const nameMatch = /\bname\s*:\s*([^,\n}]+)/.exec(block.body);
+    if (nameMatch === null) {
+      continue;
+    }
+    expressions.push({
+      index: match.index ?? 0,
+      line: lineNumberAt(source, (match.index ?? 0) + nameMatch.index),
+      value: nameMatch[1].trim()
+    });
+  }
+  return expressions;
+}
+
+function objectBlockAt(source, openBraceIndex) {
+  let depth = 0;
+  for (let index = openBraceIndex; index < source.length; index += 1) {
+    const char = source[index];
+    if (char === '{') {
+      depth += 1;
+    } else if (char === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        return {
+          body: source.slice(openBraceIndex + 1, index),
+          end: index
+        };
+      }
+    }
+  }
+  return null;
+}
+
+function resolveMetricName(expression, constants) {
+  const literal = /^(['"])([^'"]+)\1$/.exec(expression);
+  if (literal !== null) {
+    return literal[2];
+  }
+  return constants.get(expression) ?? null;
+}
+
+function prometheusMetricFamily(metricName) {
+  const normalized = metricName.replaceAll('.', '_');
+  return metricName.endsWith('.duration') ? `${normalized}_seconds` : normalized;
+}
+
+function collectDashboardText() {
+  const dashboardRoot = join(root, 'observability/grafana/dashboards');
+  if (!existsSync(dashboardRoot)) {
+    return '';
+  }
+  return readdirSync(dashboardRoot)
+    .filter((fileName) => fileName.endsWith('.json'))
+    .sort()
+    .map((fileName) => readFileSync(join(dashboardRoot, fileName), 'utf8'))
+    .join('\n');
+}
+
+function telemetryDashboardMetricExceptions() {
+  const exceptionsPath = join(root, 'observability/grafana/dashboardMetricExceptions.json');
+  if (!existsSync(exceptionsPath)) {
+    return new Map();
+  }
+
+  const parsed = JSON.parse(readFileSync(exceptionsPath, 'utf8'));
+  if (!Array.isArray(parsed)) {
+    failures.push('telemetry dashboard metric exceptions must be an array');
+    return new Map();
+  }
+
+  const exceptions = new Map();
+  for (const item of parsed) {
+    if (
+      typeof item !== 'object' ||
+      item === null ||
+      typeof item.metric !== 'string' ||
+      item.metric.trim().length === 0 ||
+      typeof item.reason !== 'string' ||
+      item.reason.trim().length === 0
+    ) {
+      failures.push('telemetry dashboard metric exceptions require metric and reason strings');
+      continue;
+    }
+    exceptions.set(prometheusMetricFamily(item.metric), item.reason);
+  }
+  return exceptions;
+}
+
+function metricFamilyCoveredByDashboards(family, dashboardText) {
+  return metricFamilyVariants(family).some((variant) => dashboardText.includes(variant));
+}
+
+function metricFamilyVariants(family) {
+  return [family, `${family}_bucket`, `${family}_count`, `${family}_sum`];
+}
+
+function lineNumberAt(source, index) {
+  return source.slice(0, index).split('\n').length;
 }
 
 function auditStyleBlockContainsOnlyApply(rel, source, match) {
