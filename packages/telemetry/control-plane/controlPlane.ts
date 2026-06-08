@@ -6,7 +6,7 @@ const contents = [
     load: () => import('./frontend/telemetry/telemetryPage.vue'),
     metadata: {
       page: {
-        icon: 'telemetry',
+        icon: 'solar:chart-square-bold',
         label: 'Telemetry',
         order: 20,
         routeSegment: 'telemetry'

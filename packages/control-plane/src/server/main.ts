@@ -2,41 +2,23 @@ import {
   callProcedure,
   createRegistryClient,
   nats,
-  startTelemetryPublisher
+  startTelemetryRuntime
 } from '@agentg/framework';
 
 import { procedures as telegramProcedures } from '../../../telegram/control-plane/backend/procedures.js';
 import { createDatabase } from '../../../telegram/src/database/client.js';
+import { procedures as telemetryProcedures } from '../../../telemetry/control-plane/backend/procedures.js';
 import { readConfig } from './config.js';
 import { runServer } from './server.js';
 
 const config = readConfig(process.env);
+const stopTelemetry = startTelemetryRuntime('control-plane');
 const events = nats(config.natsUrl)();
 await events.start();
 const database = createDatabase(config.databaseUrl);
 await database.start();
-const stopTelemetry = startTelemetryPublisher(events);
 
 const registry = createRegistryClient({
-  events,
-  onRefreshFailure(error) {
-    console.warn(
-      JSON.stringify({
-        error: error.message,
-        event: 'control_plane.registry_refresh_failed'
-      })
-    );
-  },
-  onTopologyFailure(error) {
-    console.error(
-      JSON.stringify({
-        error: error.message,
-        event: 'control_plane.registry_topology_failed'
-      })
-    );
-    process.exitCode = 1;
-    process.kill(process.pid, 'SIGTERM');
-  },
   url: config.registryUrl
 });
 
@@ -55,6 +37,11 @@ try {
         database: database.db,
         events,
         filesDirectory: config.tdlibFilesDirectory
+      }),
+      ...telemetryProcedures({
+        grafanaUrl: config.grafanaUrl,
+        jaegerUiUrl: config.jaegerUiUrl,
+        victoriaMetricsUrl: config.victoriaMetricsUrl
       })
     },
     registry
@@ -68,7 +55,7 @@ try {
   );
   process.exitCode = 1;
 } finally {
-  stopTelemetry();
+  await stopTelemetry();
   registry.close();
   await database.stop();
   await events.stop();

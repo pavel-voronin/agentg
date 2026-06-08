@@ -1,144 +1,57 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import {
-  SlotOutlet,
   slotRoute,
+  UiGrafanaDashboard,
   useControlPlaneHost,
-  useSlotRuntime,
-  type ControlPlaneHostEvent,
   type SlotContext
 } from '@agentg/framework/cp';
-import SolarSettingsBold from '~icons/solar/settings-bold';
+import SolarArrowRightUpBold from '~icons/solar/arrow-right-up-bold';
 
-import DatabaseTab from './database/databaseTab.vue';
-import ErrorsTab from './errors/errorsTab.vue';
-import NatsTelemetryPage from './nats/natsTab.vue';
-import OverviewPanel from './overview/overviewTab.vue';
-import RpcTab from './rpc/rpcTab.vue';
-import SlowestTab from './slowest/slowestTab.vue';
-import SourceIndicators from './status/sourceIndicators.vue';
-import TelemetrySettings from './settings/settingsPanel.vue';
-import TelemetryTabNav from './navigation/tabNav.vue';
-import UpdateTab from './update/updateTab.vue';
-import { NATS_REPORT_EVENT_TYPE, REPORT_EVENT_TYPE, TAB_SLOT_ID } from './contracts.js';
-import { useTelemetryMetricSections } from './report/metricSections.js';
-import { useNatsTelemetryReport } from './nats/useNatsReport.js';
-import { useTelemetryReport } from './report/useReport.js';
-import { useTelemetryStatusSources } from './status/useStatusSources.js';
-import { useTelemetryTabs } from './navigation/tabs.js';
+import { telemetryRouteSegments, telemetryTabFromSegment, type TelemetryTabId } from './route.js';
+import { LINKS_METHOD, type LinkSet } from './contracts.js';
 
 const props = defineProps<{
   slotContext?: SlotContext | undefined;
 }>();
 
+type TabView = {
+  id: TelemetryTabId;
+  label: string;
+};
+
+const tabs: TabView[] = [
+  { id: 'operations', label: 'Operations' },
+  { id: 'updates', label: 'Updates' },
+  { id: 'nats', label: 'NATS' }
+];
+
 const host = useControlPlaneHost();
-const slotRuntime = useSlotRuntime();
-const settingsOpen = ref(false);
 const route = computed(() => slotRoute(props.slotContext));
-const {
-  activeExternalTab,
-  activeExternalTabSlotTag,
-  activeMetricPanel,
-  activeTab,
-  activeTabRoute,
-  externalTabs,
-  reportTabs,
-  selectMetricPanel,
-  selectTab
-} = useTelemetryTabs({ route, slotRuntime });
-const {
-  markEventSourceAccepted,
-  markSourceAccepted,
-  markSourceError,
-  sourceIndicators,
-  statusSources
-} = useTelemetryStatusSources(externalTabs);
-const {
-  acceptReport,
-  applyReportWindow,
-  cancelReset,
-  changeMetricSort,
-  error,
-  loadReport,
-  loading,
-  recordLimitInput,
-  reportSorts,
-  requestMode,
-  requestReset,
-  resetConfirmOpen,
-  resetReport,
-  useLiveReport,
-  view
-} = useTelemetryReport(host, { markSourceAccepted, markSourceError });
-const { acceptNatsReport, ensureNatsReport, natsError, natsLoading, natsReport } =
-  useNatsTelemetryReport(host, { markSourceAccepted, markSourceError });
-const { activeMetricSection, activeSlowestRows, activeSlowestTitle } = useTelemetryMetricSections({
-  activeTab,
-  view
-});
-let unsubscribeEvents: (() => void) | null = null;
+const activeTab = computed(() => telemetryTabFromSegment(route.value.segment(0)));
+const links = ref<LinkSet | null>(null);
+const error = ref<string | null>(null);
 
 onMounted(() => {
-  unsubscribeEvents = host.subscribeEvents(receiveEvent);
-  void loadReport();
+  void loadLinks();
 });
 
-onBeforeUnmount(() => {
-  unsubscribeEvents?.();
-  unsubscribeEvents = null;
-});
+function selectTab(tabId: TelemetryTabId): void {
+  route.value.replace(telemetryRouteSegments(tabId));
+}
 
-watch(
-  activeTab,
-  (tabId) => {
-    if (tabId === 'nats') {
-      void ensureNatsReport();
-    }
-  },
-  { immediate: true }
-);
-
-function receiveEvent(event: ControlPlaneHostEvent): void {
-  const source = statusSources.value.find((candidate) => candidate.eventType === event.type);
-  if (event.type === REPORT_EVENT_TYPE) {
-    markEventSourceAccepted(source);
-    if (requestMode.value !== 'live') {
-      return;
-    }
-    try {
-      acceptReport(event.data);
-    } catch (reportError) {
-      const message = errorMessage(reportError);
-      error.value = message;
-      markSourceError('telemetry.report', message);
-    }
-    return;
-  }
-  if (event.type === NATS_REPORT_EVENT_TYPE) {
-    markEventSourceAccepted(source);
-    try {
-      acceptNatsReport(event.data);
-    } catch (reportError) {
-      const message = errorMessage(reportError);
-      natsError.value = message;
-      markSourceError('telemetry.nats', message);
-    }
-    return;
-  }
-  if (source !== undefined) {
-    markEventSourceAccepted(source);
+async function loadLinks(): Promise<void> {
+  error.value = null;
+  links.value = null;
+  try {
+    links.value = await host.rpc<LinkSet>(LINKS_METHOD);
+  } catch (loadError) {
+    error.value = errorMessage(loadError);
   }
 }
 
-function toggleSettings(): void {
-  settingsOpen.value = !settingsOpen.value;
-  if (!settingsOpen.value) {
-    resetConfirmOpen.value = false;
-  }
-}
-
-function errorMessage(errorValue: unknown): string {
-  return errorValue instanceof Error ? errorValue.message : String(errorValue);
+function errorMessage(value: unknown): string {
+  return value instanceof Error ? value.message : String(value);
 }
 </script>
 
@@ -148,115 +61,107 @@ function errorMessage(errorValue: unknown): string {
       <div class="telemetry-page__title-frame">
         <h2 class="telemetry-page__title">Telemetry</h2>
       </div>
-      <div class="telemetry-page__header-actions">
-        <SourceIndicators :sources="sourceIndicators" />
-        <button
-          type="button"
-          class="telemetry-page__action"
-          :aria-expanded="settingsOpen"
-          title="Telemetry settings"
-          @click="toggleSettings"
+      <div class="telemetry-page__actions">
+        <a
+          v-if="links"
+          class="telemetry-page__link"
+          :href="links.metricsUi"
+          target="_blank"
+          rel="noreferrer"
         >
-          <SolarSettingsBold class="telemetry-page__action-icon" aria-hidden="true" />
-          <span class="telemetry-page__action-label">Settings</span>
-        </button>
+          <SolarArrowRightUpBold class="telemetry-page__link-icon" aria-hidden="true" />
+          <span class="telemetry-page__link-label">VictoriaMetrics</span>
+        </a>
+        <a
+          v-if="links"
+          class="telemetry-page__link"
+          :href="links.grafanaUi"
+          target="_blank"
+          rel="noreferrer"
+        >
+          <SolarArrowRightUpBold class="telemetry-page__link-icon" aria-hidden="true" />
+          <span class="telemetry-page__link-label">Grafana</span>
+        </a>
+        <a
+          v-if="links"
+          class="telemetry-page__link"
+          :href="links.jaegerUi"
+          target="_blank"
+          rel="noreferrer"
+        >
+          <SolarArrowRightUpBold class="telemetry-page__link-icon" aria-hidden="true" />
+          <span class="telemetry-page__link-label">Jaeger</span>
+        </a>
       </div>
     </header>
 
+    <nav class="telemetry-page__tabs" aria-label="Telemetry sections">
+      <button
+        v-for="tab in tabs"
+        :key="tab.id"
+        type="button"
+        class="telemetry-page__tab"
+        :data-active="activeTab === tab.id"
+        :aria-current="activeTab === tab.id ? 'page' : undefined"
+        @click="selectTab(tab.id)"
+      >
+        {{ tab.label }}
+      </button>
+    </nav>
+
     <div v-if="error" class="telemetry-page__error">{{ error }}</div>
 
-    <TelemetrySettings
-      v-if="settingsOpen"
-      v-model:record-limit-input="recordLimitInput"
-      :loading="loading"
-      :max-report-record-limit="view.maxReportRecordLimit"
-      :request-mode="requestMode"
-      :reset-confirm-open="resetConfirmOpen"
-      :storage-footprint="view.storageFootprint"
-      @apply="applyReportWindow"
-      @cancel-reset="cancelReset"
-      @confirm-reset="resetReport"
-      @live="useLiveReport"
-      @request-reset="requestReset"
-    />
+    <section v-if="activeTab === 'operations'" class="telemetry-page__section">
+      <div class="telemetry-page__section-header">
+        <h3 class="telemetry-page__section-title">Operations</h3>
+      </div>
+      <UiGrafanaDashboard
+        v-if="links"
+        :base-url="links.grafanaUi"
+        dashboard-slug="agentg-operations"
+        dashboard-uid="agentg-operations"
+        from="now-3d"
+        kiosk
+        title="Operations"
+      />
+      <div v-else class="telemetry-page__empty">No Grafana link</div>
+    </section>
 
-    <TelemetryTabNav
-      :active-id="activeTab"
-      navigation-label="Telemetry report sections"
-      :tabs="reportTabs"
-      variant="main"
-      @select="selectTab"
-    />
+    <section v-if="activeTab === 'updates'" class="telemetry-page__section">
+      <div class="telemetry-page__section-header">
+        <h3 class="telemetry-page__section-title">TDLib Updates</h3>
+      </div>
+      <UiGrafanaDashboard
+        v-if="links"
+        :base-url="links.grafanaUi"
+        dashboard-slug="agentg-tdlib-updates"
+        dashboard-uid="agentg-tdlib-updates"
+        from="now-3d"
+        kiosk
+        title="TDLib Updates"
+      />
+      <div v-else class="telemetry-page__empty">No Grafana link</div>
+    </section>
 
-    <OverviewPanel v-if="activeTab === 'overview'" :view="view" />
+    <section v-if="activeTab === 'nats'" class="telemetry-page__section">
+      <div class="telemetry-page__section-header">
+        <h3 class="telemetry-page__section-title">NATS</h3>
+      </div>
+      <UiGrafanaDashboard
+        v-if="links"
+        :base-url="links.grafanaUi"
+        dashboard-slug="agentg-nats"
+        dashboard-uid="agentg-nats"
+        from="now-3d"
+        kiosk
+        title="NATS"
+      />
+      <div v-else class="telemetry-page__empty">No Grafana link</div>
+    </section>
 
-    <NatsTelemetryPage
-      v-if="activeTab === 'nats'"
-      :error="natsError"
-      :loading="natsLoading"
-      :report="natsReport"
-    />
-    <SlotOutlet
-      v-if="activeExternalTabSlotTag.length > 0"
-      :context="activeTabRoute.context"
-      :slot-id="TAB_SLOT_ID"
-      :tags="[activeExternalTabSlotTag]"
-    />
-
-    <UpdateTab
-      v-if="activeTab === 'update' && activeMetricSection"
-      :active-panel="activeMetricPanel"
-      :dropped-records="view.droppedRecords"
-      :ignored-records="view.ignoredRecords"
-      :sample-rows="activeSlowestRows"
-      :sample-title="activeSlowestTitle"
-      :section="activeMetricSection"
-      :sort="reportSorts[activeMetricSection.id]"
-      @change-sort="changeMetricSort"
-      @select-panel="selectMetricPanel"
-    />
-
-    <DatabaseTab
-      v-if="activeTab === 'database' && activeMetricSection"
-      :active-panel="activeMetricPanel"
-      :dropped-records="view.droppedRecords"
-      :ignored-records="view.ignoredRecords"
-      :sample-rows="activeSlowestRows"
-      :sample-title="activeSlowestTitle"
-      :section="activeMetricSection"
-      :sort="reportSorts[activeMetricSection.id]"
-      @change-sort="changeMetricSort"
-      @select-panel="selectMetricPanel"
-    />
-
-    <RpcTab
-      v-if="activeTab === 'rpc' && activeMetricSection"
-      :active-panel="activeMetricPanel"
-      :dropped-records="view.droppedRecords"
-      :ignored-records="view.ignoredRecords"
-      :sample-rows="activeSlowestRows"
-      :sample-title="activeSlowestTitle"
-      :section="activeMetricSection"
-      :sort="reportSorts[activeMetricSection.id]"
-      @change-sort="changeMetricSort"
-      @select-panel="selectMetricPanel"
-    />
-
-    <ErrorsTab
-      v-if="activeTab === 'errors'"
-      :dropped-records="view.droppedRecords"
-      :ignored-records="view.ignoredRecords"
-      :rows="activeSlowestRows"
-      :title="activeSlowestTitle"
-    />
-
-    <SlowestTab
-      v-if="activeTab === 'slowest'"
-      :dropped-records="view.droppedRecords"
-      :ignored-records="view.ignoredRecords"
-      :rows="activeSlowestRows"
-      :title="activeSlowestTitle"
-    />
+    <section v-if="activeTab === null" class="telemetry-page__section">
+      <div class="telemetry-page__empty">Unknown telemetry section</div>
+    </section>
   </section>
 </template>
 
@@ -264,7 +169,7 @@ function errorMessage(errorValue: unknown): string {
 @reference "tailwindcss";
 
 .telemetry-page {
-  @apply min-h-0 w-full flex-1 overflow-auto bg-white p-5;
+  @apply min-h-0 w-full flex-1 overflow-auto bg-white p-5 text-zinc-950;
 }
 
 .telemetry-page__header {
@@ -279,23 +184,51 @@ function errorMessage(errorValue: unknown): string {
   @apply text-xl font-semibold tracking-normal;
 }
 
-.telemetry-page__header-actions {
-  @apply flex shrink-0 items-center gap-2;
+.telemetry-page__actions {
+  @apply flex shrink-0 flex-wrap items-center justify-end gap-2;
 }
 
-.telemetry-page__action {
-  @apply inline-flex h-8 items-center gap-1 rounded border border-zinc-200 px-2 text-xs font-medium text-zinc-600 transition-colors hover:border-zinc-300 hover:text-zinc-950 disabled:cursor-wait disabled:opacity-60;
+.telemetry-page__link {
+  @apply inline-flex h-8 items-center gap-1 rounded border border-zinc-200 px-2 text-xs font-medium text-zinc-600 transition-colors hover:border-zinc-300 hover:text-zinc-950;
 }
 
-.telemetry-page__action-icon {
+.telemetry-page__link-icon {
   @apply size-4 shrink-0;
 }
 
-.telemetry-page__action-label {
+.telemetry-page__link-label {
   @apply whitespace-nowrap;
+}
+
+.telemetry-page__tabs {
+  @apply mt-4 flex flex-wrap gap-2;
+}
+
+.telemetry-page__tab {
+  @apply rounded border border-zinc-200 px-3 py-1.5 text-sm font-medium text-zinc-600 transition-colors hover:border-zinc-300 hover:text-zinc-950;
+}
+
+.telemetry-page__tab[data-active='true'] {
+  @apply border-zinc-950 bg-zinc-950 text-white;
 }
 
 .telemetry-page__error {
   @apply mt-4 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700;
+}
+
+.telemetry-page__section {
+  @apply mt-4 min-w-0;
+}
+
+.telemetry-page__section-header {
+  @apply mt-4 flex items-center justify-between gap-3 border-b border-zinc-200 pb-2;
+}
+
+.telemetry-page__section-title {
+  @apply text-sm font-semibold tracking-normal;
+}
+
+.telemetry-page__empty {
+  @apply mt-3 rounded border border-dashed border-zinc-200 p-4 text-sm text-zinc-500;
 }
 </style>

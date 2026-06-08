@@ -4,5 +4,5 @@
     "lib": ["ES2024", "DOM"],
     "rootDir": "../.."
   },
-  "include": ["control-plane", "src", "tests"]
+  "include": ["control-plane", "tests"]
 }
