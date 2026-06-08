@@ -358,6 +358,7 @@ function eventEnvelope(type: string, data: unknown): EventEnvelope {
     at: '2026-05-05T00:00:00.000Z',
     data,
     id: `event:${type}`,
+    trace: {},
     type
   };
 }

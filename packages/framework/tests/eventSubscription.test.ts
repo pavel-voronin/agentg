@@ -73,6 +73,9 @@ function envelope(type: string): string {
   return JSON.stringify({
     at: '2026-06-03T00:00:00.000Z',
     id: `evt:${type}`,
+    trace: {
+      traceparent: '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01'
+    },
     type
   });
 }

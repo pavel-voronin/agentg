@@ -810,6 +810,7 @@ function testSharedEventBus(): EventBusFactory {
         at: new Date().toISOString(),
         data,
         id: String(eventId),
+        trace: {},
         type
       };
 

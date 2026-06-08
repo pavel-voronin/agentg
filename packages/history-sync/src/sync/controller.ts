@@ -1,4 +1,4 @@
-import type { EventBus } from '@agentg/framework';
+import { timeTelemetrySpan, type EventBus, type TelemetryAttributes } from '@agentg/framework';
 
 import { runHistorySync, type SyncOptions } from './executor.js';
 import type { Database } from '../database/client.js';
@@ -11,6 +11,7 @@ export type Controller = {
 };
 
 const RETRY_DELAY_MS = 5000;
+const METRIC_CONTROLLER_PASS_DURATION = 'history_sync.controller.pass.duration';
 
 export function createController(
   database: Database,
@@ -44,10 +45,12 @@ export function createController(
         events.publish('history-sync.sync.accepted', {
           reason: currentReason
         });
-        await runHistorySync(database, telegram, events, {
-          ...options,
-          discoverChats: currentReason === 'startup'
-        });
+        await timeControllerPass(currentReason, () =>
+          runHistorySync(database, telegram, events, {
+            ...options,
+            discoverChats: currentReason === 'startup'
+          })
+        );
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         console.error(
@@ -96,4 +99,28 @@ export function createController(
       await currentTask;
     }
   };
+}
+
+function timeControllerPass(reason: string, operation: () => Promise<void>): Promise<void> {
+  const attributes = {
+    'history_sync.controller.reason': reasonCategory(reason)
+  };
+  return timeTelemetrySpan(
+    {
+      attributes,
+      metric: {
+        attributes,
+        name: METRIC_CONTROLLER_PASS_DURATION
+      },
+      name: 'history_sync.controller.pass'
+    },
+    operation
+  );
+}
+
+function reasonCategory(reason: string): TelemetryAttributes[string] {
+  if (reason.startsWith('manual:')) {
+    return 'manual';
+  }
+  return reason;
 }

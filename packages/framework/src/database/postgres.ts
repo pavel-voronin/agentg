@@ -1,6 +1,15 @@
 import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { Pool, type PoolConfig } from 'pg';
+import { SpanKind } from '@opentelemetry/api';
+import {
+  ATTR_DB_COLLECTION_NAME,
+  ATTR_DB_OPERATION_NAME,
+  ATTR_DB_QUERY_SUMMARY,
+  ATTR_DB_SYSTEM_NAME,
+  DB_SYSTEM_NAME_VALUE_POSTGRESQL,
+  METRIC_DB_CLIENT_OPERATION_DURATION
+} from '@opentelemetry/semantic-conventions';
 
 import { startTelemetrySpan } from '../telemetry/index.js';
 
@@ -88,17 +97,12 @@ function instrumentPool(pool: Pool): Pool {
       query === null
         ? null
         : startTelemetrySpan({
-            attributes: {
-              db_operation: query.operation,
-              db_system: 'postgres',
-              query_classification: query.classification
+            attributes: queryAttributes(query),
+            kind: SpanKind.CLIENT,
+            metric: {
+              attributes: queryMetricAttributes(query),
+              name: METRIC_DB_CLIENT_OPERATION_DURATION
             },
-            detail: {
-              classification: query.classification,
-              operation: query.operation,
-              relations: query.relations
-            },
-            kind: 'postgres.query',
             name: query.name
           });
 
@@ -137,14 +141,26 @@ function instrumentPool(pool: Pool): Pool {
   return pool;
 }
 
+function queryAttributes(query: QueryTelemetry) {
+  return {
+    ...queryMetricAttributes(query),
+    ...(query.relations.length === 1 ? { [ATTR_DB_COLLECTION_NAME]: query.relations[0] } : {})
+  };
+}
+
+function queryMetricAttributes(query: QueryTelemetry) {
+  return {
+    [ATTR_DB_OPERATION_NAME]: query.operation,
+    [ATTR_DB_QUERY_SUMMARY]: query.name,
+    [ATTR_DB_SYSTEM_NAME]: DB_SYSTEM_NAME_VALUE_POSTGRESQL
+  };
+}
+
 type QueryTelemetry = {
-  classification: QueryClassification;
   name: string;
   operation: string;
   relations: string[];
 };
-
-type QueryClassification = 'maintenance' | 'read' | 'schema' | 'transaction' | 'unknown' | 'write';
 
 function queryTelemetry(query: unknown): QueryTelemetry | null {
   const sql = querySql(query);
@@ -155,7 +171,6 @@ function queryTelemetry(query: unknown): QueryTelemetry | null {
   const operation = queryOperation(sql);
   const relations = queryRelations(sql);
   return {
-    classification: queryClassification(operation),
     name: relations.length === 0 ? operation : `${operation} ${relations.join(',')}`,
     operation,
     relations
@@ -188,25 +203,6 @@ function queryRelations(sql: string): string[] {
     }
   }
   return [...relations].sort();
-}
-
-function queryClassification(operation: string): QueryClassification {
-  if (['select', 'show', 'explain', 'describe'].includes(operation)) {
-    return 'read';
-  }
-  if (['insert', 'update', 'delete', 'merge', 'truncate', 'copy'].includes(operation)) {
-    return 'write';
-  }
-  if (['create', 'alter', 'drop', 'comment', 'grant', 'revoke'].includes(operation)) {
-    return 'schema';
-  }
-  if (['begin', 'commit', 'rollback', 'savepoint', 'release'].includes(operation)) {
-    return 'transaction';
-  }
-  if (['analyze', 'vacuum', 'checkpoint', 'listen', 'notify', 'set', 'reset'].includes(operation)) {
-    return 'maintenance';
-  }
-  return 'unknown';
 }
 
 function isPromiseLike(value: unknown): value is Promise<unknown> {

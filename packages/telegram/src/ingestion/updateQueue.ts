@@ -1,6 +1,9 @@
+import { performance } from 'node:perf_hooks';
+
 type QueueOptions<Item> = {
   concurrency: number;
   handle(item: Item): Promise<void>;
+  onStart?(item: Item, waitSeconds: number): void;
   onError(error: unknown, item: Item): void;
 };
 
@@ -17,9 +20,14 @@ type Queue<Item> = {
 
 type DrainResolver = () => void;
 
+type PendingItem<Item> = {
+  enqueuedAtMs: number;
+  item: Item;
+};
+
 export function createUpdateQueue<Item>(options: QueueOptions<Item>): Queue<Item> {
   const concurrency = positiveInteger(options.concurrency, 'update queue concurrency');
-  const pending: Item[] = [];
+  const pending: PendingItem<Item>[] = [];
   const drainResolvers: DrainResolver[] = [];
   let runningCount = 0;
 
@@ -34,7 +42,10 @@ export function createUpdateQueue<Item>(options: QueueOptions<Item>): Queue<Item
       });
     },
     enqueue(item): void {
-      pending.push(item);
+      pending.push({
+        enqueuedAtMs: performance.now(),
+        item
+      });
       startQueuedItems();
     },
     snapshot(): QueueSnapshot {
@@ -47,11 +58,14 @@ export function createUpdateQueue<Item>(options: QueueOptions<Item>): Queue<Item
 
   function startQueuedItems(): void {
     while (runningCount < concurrency && pending.length > 0) {
-      const item = pending.shift();
-      if (item === undefined) {
+      const pendingItem = pending.shift();
+      if (pendingItem === undefined) {
         return;
       }
 
+      const waitSeconds = Math.max(0, performance.now() - pendingItem.enqueuedAtMs) / 1000;
+      const item = pendingItem.item;
+      options.onStart?.(item, waitSeconds);
       runningCount += 1;
       void options
         .handle(item)

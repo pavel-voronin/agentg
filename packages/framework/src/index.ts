@@ -39,6 +39,6 @@ export {
   setTelemetryGauge,
   startTelemetryRuntime,
   telemetryEnabled,
-  timeTelemetryOperation
+  timeTelemetrySpan
 } from './telemetry/index.js';
 export type { TelemetryAttributes, TelemetryAttributeValue } from './telemetry/index.js';

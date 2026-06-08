@@ -5,11 +5,19 @@ import { extname, resolve, sep } from 'node:path';
 
 import {
   callProcedure,
-  timeTelemetryOperation,
+  timeTelemetrySpan,
   type EventBus,
   type EventSubscription,
   type RegistryClient
 } from '@agentg/framework';
+import { SpanKind } from '@opentelemetry/api';
+import {
+  ATTR_RPC_METHOD,
+  ATTR_RPC_SERVICE,
+  ATTR_RPC_SYSTEM_NAME,
+  METRIC_RPC_SERVER_CALL_DURATION,
+  RPC_SYSTEM_NAME_VALUE_JSONRPC
+} from '@opentelemetry/semantic-conventions/incubating';
 import { WebSocket, WebSocketServer, type RawData } from 'ws';
 
 // TODO(file-size): Split HTTP serving, WebSocket RPC, module-file proxy, and server lifecycle.
@@ -206,9 +214,19 @@ async function callProcedureByMethod(
   method: string,
   params: unknown
 ): Promise<unknown> {
-  return timeTelemetryOperation(
+  const attributes = {
+    [ATTR_RPC_METHOD]: method,
+    [ATTR_RPC_SERVICE]: 'control-plane',
+    [ATTR_RPC_SYSTEM_NAME]: RPC_SYSTEM_NAME_VALUE_JSONRPC
+  };
+  return timeTelemetrySpan(
     {
-      kind: 'control-plane.rpc',
+      attributes,
+      kind: SpanKind.SERVER,
+      metric: {
+        attributes,
+        name: METRIC_RPC_SERVER_CALL_DURATION
+      },
       name: method
     },
     async () => {

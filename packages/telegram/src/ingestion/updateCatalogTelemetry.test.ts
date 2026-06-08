@@ -37,13 +37,11 @@ describe('update catalog telemetry', () => {
     for (const [index, updateType] of handledUpdateTypes.entries()) {
       expect(telemetry.setTelemetryGauge).toHaveBeenNthCalledWith(
         index + 1,
-        'agentg.telegram.update_catalog.info',
+        'telegram.update.catalog.info',
         1,
         {
           handler_status: 'registered',
-          operation_kind: 'ingestion.update',
-          operation_name: updateType,
-          update_type: updateType
+          'telegram.update.type': updateType
         }
       );
     }
@@ -64,12 +62,10 @@ describe('update catalog telemetry', () => {
     recordUpdateSeen('updateNewMessage');
 
     expect(telemetry.setTelemetryGauge).toHaveBeenCalledWith(
-      'agentg.telegram.update_last_seen.unix_ms',
-      1_780_816_800_000,
+      'telegram.update.last_seen.unix_seconds',
+      1_780_816_800,
       {
-        operation_kind: 'ingestion.update',
-        operation_name: 'updateNewMessage',
-        update_type: 'updateNewMessage'
+        'telegram.update.type': 'updateNewMessage'
       }
     );
     now.mockRestore();

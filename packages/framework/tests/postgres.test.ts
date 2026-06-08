@@ -1,4 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { SpanKind } from '@opentelemetry/api';
+import {
+  ATTR_DB_COLLECTION_NAME,
+  ATTR_DB_OPERATION_NAME,
+  ATTR_DB_QUERY_SUMMARY,
+  ATTR_DB_SYSTEM_NAME,
+  DB_SYSTEM_NAME_VALUE_POSTGRESQL,
+  METRIC_DB_CLIENT_OPERATION_DURATION
+} from '@opentelemetry/semantic-conventions';
 
 const mocks = vi.hoisted(() => ({
   poolInstances: [] as {
@@ -75,15 +84,25 @@ describe('postgres telemetry', () => {
 
     expect(mocks.telemetrySpans).toHaveLength(1);
     expect(mocks.telemetrySpans[0]).toMatchObject({
-      detail: {
-        classification: 'read',
-        operation: 'select',
-        relations: ['users']
+      attributes: {
+        [ATTR_DB_COLLECTION_NAME]: 'users',
+        [ATTR_DB_OPERATION_NAME]: 'select',
+        [ATTR_DB_QUERY_SUMMARY]: 'select users',
+        [ATTR_DB_SYSTEM_NAME]: DB_SYSTEM_NAME_VALUE_POSTGRESQL
       },
-      kind: 'postgres.query',
+      kind: SpanKind.CLIENT,
+      metric: {
+        attributes: {
+          [ATTR_DB_OPERATION_NAME]: 'select',
+          [ATTR_DB_QUERY_SUMMARY]: 'select users',
+          [ATTR_DB_SYSTEM_NAME]: DB_SYSTEM_NAME_VALUE_POSTGRESQL
+        },
+        name: METRIC_DB_CLIENT_OPERATION_DURATION
+      },
       name: 'select users'
     });
-    expect(JSON.stringify(mocks.telemetrySpans)).not.toContain('sql');
+    expect(JSON.stringify(mocks.telemetrySpans)).not.toContain('where token');
+    expect(JSON.stringify(mocks.telemetrySpans)).not.toContain('email = $1');
     expect(JSON.stringify(mocks.telemetrySpans)).not.toContain('super-secret-token');
   });
 });

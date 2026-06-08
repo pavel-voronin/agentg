@@ -1,4 +1,10 @@
-import type { EventBus } from '@agentg/framework';
+import {
+  incrementTelemetryCounter,
+  setTelemetryGauge,
+  timeTelemetrySpan,
+  type EventBus,
+  type TelemetryAttributes
+} from '@agentg/framework';
 
 import type { Database } from '../database/client.js';
 import type {
@@ -34,6 +40,20 @@ type SyncResult = {
   storedMessages: number;
 };
 
+const METRIC_SYNC_STAGE_DURATION = 'history_sync.sync.stage.duration';
+const METRIC_SYNC_LAST_COMPLETED_SECONDS = 'history_sync.sync.last_completed.unix_seconds';
+const METRIC_SYNC_LAST_CHATS = 'history_sync.sync.last_chats';
+const METRIC_SYNC_LAST_TARGETS = 'history_sync.sync.last_targets';
+const METRIC_SYNC_LAST_PAGES = 'history_sync.sync.last_pages';
+const METRIC_SYNC_LAST_FETCHED_MESSAGES = 'history_sync.sync.last_fetched_messages';
+const METRIC_SYNC_LAST_STORED_MESSAGES = 'history_sync.sync.last_stored_messages';
+const METRIC_SYNC_LAST_COVERED_INTERVALS = 'history_sync.sync.last_covered_intervals';
+const METRIC_SYNC_LAST_REMAINING_INTERVALS = 'history_sync.sync.last_remaining_intervals';
+const METRIC_SYNC_PAGES = 'history_sync.sync.pages';
+const METRIC_SYNC_FETCHED_MESSAGES = 'history_sync.sync.messages.fetched';
+const METRIC_SYNC_STORED_MESSAGES = 'history_sync.sync.messages.stored';
+const METRIC_SYNC_COVERED_INTERVALS = 'history_sync.sync.covered_intervals';
+
 export async function runHistorySync(
   database: Database,
   telegram: TelegramHistoryClient,
@@ -46,19 +66,31 @@ export async function runHistorySync(
     now: syncNow.toISOString()
   });
 
-  const chats = await telegram.listChats({
-    discover: safeOptions.discoverChats === true,
-    loadBatchSize: safeOptions.chatLoadBatchSize
-  });
-  const targets = await materializeHistorySyncTargets(database, chats, events);
-  const result = await requestCoverageForTargets(
-    database,
-    telegram,
-    events,
-    targets,
-    syncNow,
-    safeOptions
+  const chats = await timeSyncStage(
+    'list_chats',
+    {
+      'history_sync.chat.load_batch_size': safeOptions.chatLoadBatchSize,
+      'history_sync.discovery.enabled': safeOptions.discoverChats === true
+    },
+    () =>
+      telegram.listChats({
+        discover: safeOptions.discoverChats === true,
+        loadBatchSize: safeOptions.chatLoadBatchSize
+      })
   );
+  const targets = await timeSyncStage('materialize_targets', {}, () =>
+    materializeHistorySyncTargets(database, chats, events)
+  );
+  const result = await timeSyncStage(
+    'request_coverage',
+    {
+      'history_sync.chat.count': chats.length,
+      'history_sync.sync.window_days': safeOptions.windowDays,
+      'history_sync.target.count': targets.length
+    },
+    () => requestCoverageForTargets(database, telegram, events, targets, syncNow, safeOptions)
+  );
+  recordSyncResult(syncNow, chats.length, targets.length, result);
 
   events.publish('history-sync.sync.completed', {
     chats: chats.length,
@@ -146,7 +178,9 @@ async function requestCoverageForTargets(
     });
 
     for (const interval of intervals.slice(0, 1)) {
-      const sync = await requestTelegramCoverage(telegram, chatId, interval, options);
+      const sync = await timeSyncStage('request_interval', {}, () =>
+        requestTelegramCoverage(telegram, chatId, interval, options)
+      );
       result.coveredIntervals += sync.coveredIntervals.length;
       result.fetchedMessages += sync.fetchedMessages;
       result.pages += sync.pages;
@@ -155,7 +189,18 @@ async function requestCoverageForTargets(
       result.storedMessages += sync.storedMessages;
     }
 
-    await deleteCompletedOneShotTargets(database, telegram, events, targets, chatId, now);
+    const oneShotTargets = targets.filter(
+      (target) => target.chatId === chatId && isOneShotHistorySyncTarget(target)
+    );
+    if (oneShotTargets.length > 0) {
+      await timeSyncStage(
+        'cleanup_one_shot_targets',
+        {
+          'history_sync.target.count': oneShotTargets.length
+        },
+        () => deleteCompletedOneShotTargets(database, telegram, events, oneShotTargets, chatId, now)
+      );
+    }
   }
 
   return result;
@@ -181,15 +226,11 @@ async function deleteCompletedOneShotTargets(
   database: Database,
   telegram: TelegramHistoryClient,
   events: EventBus,
-  targets: HistorySyncTarget[],
+  oneShotTargets: HistorySyncTarget[],
   chatId: string,
   now: Date
 ): Promise<void> {
-  for (const target of targets.filter((candidate) => candidate.chatId === chatId)) {
-    if (!isOneShotHistorySyncTarget(target)) {
-      continue;
-    }
-
+  for (const target of oneShotTargets) {
     const projected = projectSyncIntervalsForChat({
       chatId,
       literals: {
@@ -230,4 +271,48 @@ function normalizeSyncOptions(options: SyncOptions): SyncOptions {
     requestDelayMs: Math.max(0, options.requestDelayMs),
     windowDays: Math.max(1, options.windowDays)
   };
+}
+
+function timeSyncStage<T>(
+  stage: string,
+  attributes: TelemetryAttributes,
+  operation: () => Promise<T>
+): Promise<T> {
+  const stageAttributes = {
+    ...attributes,
+    'history_sync.sync.stage': stage
+  };
+  return timeTelemetrySpan(
+    {
+      attributes: stageAttributes,
+      metric: {
+        attributes: {
+          'history_sync.sync.stage': stage
+        },
+        name: METRIC_SYNC_STAGE_DURATION
+      },
+      name: `history_sync.sync.${stage}`
+    },
+    operation
+  );
+}
+
+function recordSyncResult(
+  completedAt: Date,
+  chats: number,
+  targets: number,
+  result: SyncResult
+): void {
+  setTelemetryGauge(METRIC_SYNC_LAST_COMPLETED_SECONDS, completedAt.getTime() / 1000);
+  setTelemetryGauge(METRIC_SYNC_LAST_CHATS, chats);
+  setTelemetryGauge(METRIC_SYNC_LAST_TARGETS, targets);
+  setTelemetryGauge(METRIC_SYNC_LAST_PAGES, result.pages);
+  setTelemetryGauge(METRIC_SYNC_LAST_FETCHED_MESSAGES, result.fetchedMessages);
+  setTelemetryGauge(METRIC_SYNC_LAST_STORED_MESSAGES, result.storedMessages);
+  setTelemetryGauge(METRIC_SYNC_LAST_COVERED_INTERVALS, result.coveredIntervals);
+  setTelemetryGauge(METRIC_SYNC_LAST_REMAINING_INTERVALS, result.remainingIntervals);
+  incrementTelemetryCounter(METRIC_SYNC_PAGES, result.pages);
+  incrementTelemetryCounter(METRIC_SYNC_FETCHED_MESSAGES, result.fetchedMessages);
+  incrementTelemetryCounter(METRIC_SYNC_STORED_MESSAGES, result.storedMessages);
+  incrementTelemetryCounter(METRIC_SYNC_COVERED_INTERVALS, result.coveredIntervals);
 }

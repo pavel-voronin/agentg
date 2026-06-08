@@ -316,6 +316,7 @@ function createEvent(type: string): EventEnvelope {
     at: '2026-05-05T00:00:00.000Z',
     data: {},
     id: `evt_${randomUUID()}`,
+    trace: {},
     type
   };
 }

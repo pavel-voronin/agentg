@@ -1,4 +1,4 @@
-import type { JsonValue } from '@agentg/framework';
+import { timeTelemetrySpan, type JsonValue } from '@agentg/framework';
 import { inArray, sql } from 'drizzle-orm';
 
 import type { Database } from '../database/client.js';
@@ -10,6 +10,8 @@ import type { FileRef, MessageReaction, MessageTextEntity, ReadMessage } from '.
 import { toNullableIsoString, type DateLike } from './date.js';
 import { asPlainRecord, parseNonNegativeBigInt, stringifyTelegramId } from './chat.js';
 import { extractFormattedTextLinkEntities, formattedTextValue } from './messageText.js';
+
+const METRIC_MESSAGE_VIEW_STAGE_DURATION = 'telegram.message_view.stage.duration';
 
 export type MessageStorageRow = {
   contentType: string;
@@ -170,20 +172,45 @@ export async function toReadMessages(
   database: Database,
   messages: MessageStorageRow[]
 ): Promise<ReadMessage[]> {
-  const senderInfoByKey = await readSenderDisplayInfo(database, messages);
-  const filesByOwner = await readFileRefsForOwners(database, messageFileOwners(messages));
+  const senderInfoByKey = await timeMessageViewStage('sender_lookup', () =>
+    readSenderDisplayInfo(database, messages)
+  );
+  const filesByOwner = await timeMessageViewStage('file_hydration', () =>
+    readFileRefsForOwners(database, messageFileOwners(messages))
+  );
 
-  return messages.map((message) => {
-    const messageOwner = telegramMessageFileOwner(message);
-    const readMessage = toReadMessage(message, filesByOwner.get(ownerKey(messageOwner)) ?? []);
-    const senderKey = senderDisplayKey(message.senderType, message.senderId);
-    return {
-      ...readMessage,
-      senderDisplayName:
-        senderKey === null ? null : (senderInfoByKey.get(senderKey)?.displayName ?? null),
-      serviceAction: null
-    };
-  });
+  return timeMessageViewStage('assemble', () =>
+    Promise.resolve(
+      messages.map((message) => {
+        const messageOwner = telegramMessageFileOwner(message);
+        const readMessage = toReadMessage(message, filesByOwner.get(ownerKey(messageOwner)) ?? []);
+        const senderKey = senderDisplayKey(message.senderType, message.senderId);
+        return {
+          ...readMessage,
+          senderDisplayName:
+            senderKey === null ? null : (senderInfoByKey.get(senderKey)?.displayName ?? null),
+          serviceAction: null
+        };
+      })
+    )
+  );
+}
+
+function timeMessageViewStage<T>(stage: string, operation: () => Promise<T>): Promise<T> {
+  const attributes = {
+    'telegram.message_view.stage': stage
+  };
+  return timeTelemetrySpan(
+    {
+      attributes,
+      metric: {
+        attributes,
+        name: METRIC_MESSAGE_VIEW_STAGE_DURATION
+      },
+      name: `telegram.message_view.${stage}`
+    },
+    operation
+  );
 }
 
 function messageReplyExpression() {

@@ -1,8 +1,18 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 
-import { context, propagation, type TextMapGetter } from '@opentelemetry/api';
+import { context, propagation, SpanKind, type TextMapGetter } from '@opentelemetry/api';
+import {
+  ATTR_SERVER_ADDRESS,
+  ATTR_SERVER_PORT,
+  ATTR_RPC_METHOD,
+  ATTR_RPC_SERVICE,
+  ATTR_RPC_SYSTEM_NAME,
+  METRIC_RPC_CLIENT_CALL_DURATION,
+  METRIC_RPC_SERVER_CALL_DURATION,
+  RPC_SYSTEM_NAME_VALUE_JSONRPC
+} from '@opentelemetry/semantic-conventions/incubating';
 
-import { timeTelemetryOperation } from '../telemetry/index.js';
+import { timeTelemetrySpan, type TelemetryAttributes } from '../telemetry/index.js';
 import type { MaybePromise, ProcedureMap } from '../types.js';
 import type { ProcedureServer, ProcedureServerOptions, RpcFactory } from './rpc.js';
 
@@ -73,6 +83,13 @@ export async function callProcedure<T>(
   options: ProcedureCallOptions = {}
 ): Promise<T> {
   const controller = new AbortController();
+  const endpoint = new URL(procedureEndpoint(url));
+  const attributes = rpcAttributes(procedure);
+  const spanAttributes = {
+    ...attributes,
+    [ATTR_SERVER_ADDRESS]: endpoint.hostname,
+    ...(endpoint.port.length === 0 ? {} : { [ATTR_SERVER_PORT]: Number(endpoint.port) })
+  };
   const timeout =
     options.timeoutMs === undefined
       ? undefined
@@ -84,16 +101,14 @@ export async function callProcedure<T>(
   timeout?.unref();
 
   try {
-    return await timeTelemetryOperation(
+    return await timeTelemetrySpan(
       {
-        attributes: {
-          rpc_side: 'client',
-          rpc_system: 'agentg'
+        attributes: spanAttributes,
+        kind: SpanKind.CLIENT,
+        metric: {
+          attributes,
+          name: METRIC_RPC_CLIENT_CALL_DURATION
         },
-        detail: {
-          url
-        },
-        kind: 'rpc.client',
         name: procedure
       },
       async () => {
@@ -101,7 +116,7 @@ export async function callProcedure<T>(
           'content-type': 'application/json'
         };
         propagation.inject(context.active(), headers);
-        const response = await fetch(procedureEndpoint(url), {
+        const response = await fetch(endpoint, {
           body: JSON.stringify({
             input,
             procedure
@@ -177,13 +192,15 @@ async function handleProcedureRequest(
       return;
     }
 
-    const result = await timeTelemetryOperation(
+    const attributes = rpcAttributes(envelope.procedure);
+    const result = await timeTelemetrySpan(
       {
-        attributes: {
-          rpc_side: 'server',
-          rpc_system: 'agentg'
+        attributes,
+        kind: SpanKind.SERVER,
+        metric: {
+          attributes,
+          name: METRIC_RPC_SERVER_CALL_DURATION
         },
-        kind: 'rpc.server',
         name: envelope.procedure
       },
       () =>
@@ -229,6 +246,14 @@ function requireProcedureEnvelope(value: unknown): { input: unknown; procedure: 
   return {
     input: 'input' in value ? value.input : undefined,
     procedure: value.procedure
+  };
+}
+
+function rpcAttributes(method: string): TelemetryAttributes {
+  return {
+    [ATTR_RPC_METHOD]: method,
+    [ATTR_RPC_SERVICE]: 'agentg.procedure',
+    [ATTR_RPC_SYSTEM_NAME]: RPC_SYSTEM_NAME_VALUE_JSONRPC
   };
 }
 

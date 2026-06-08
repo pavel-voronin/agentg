@@ -2,6 +2,7 @@ export type EventEnvelope = {
   id: string;
   type: string;
   at: string;
+  trace: Record<string, string>;
   data?: unknown;
 };
 

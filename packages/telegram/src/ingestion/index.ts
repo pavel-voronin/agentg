@@ -1,4 +1,4 @@
-import { timeTelemetryOperation, type EventBus } from '@agentg/framework';
+import { recordTelemetryHistogram, timeTelemetrySpan, type EventBus } from '@agentg/framework';
 import { asc } from 'drizzle-orm';
 import type { ChatList$Input } from 'tdlib-types';
 
@@ -38,6 +38,8 @@ export type IngestionOptions = {
 const LIVE_COVERAGE_TICK_MS = 30_000;
 const STATUS_HEARTBEAT_MS = 5000;
 const INITIAL_CHAT_SYNC_LIMIT = 100;
+const METRIC_UPDATE_PROCESSING_DURATION = 'telegram.update.processing.duration';
+const METRIC_UPDATE_QUEUE_WAIT_DURATION = 'telegram.ingestion.queue.wait.duration';
 
 type ChatListKind =
   | {
@@ -64,16 +66,34 @@ export function useIngestion(options: IngestionOptions): IngestionRuntime {
   const updates = createUpdateQueue<RuntimeUpdate>({
     concurrency: options.updateConcurrency,
     handle: (update) =>
-      timeTelemetryOperation(
+      timeTelemetrySpan(
         {
           attributes: {
-            update_source: 'tdlib'
+            'telegram.update.source': 'tdlib',
+            'telegram.update.type': update._
           },
-          kind: 'ingestion.update',
+          metric: {
+            attributes: {
+              'telegram.update.source': 'tdlib',
+              'telegram.update.type': update._
+            },
+            name: METRIC_UPDATE_PROCESSING_DURATION
+          },
           name: update._
         },
         async () => persistLiveUpdate(update, resources)
       ),
+    onStart(update, waitSeconds): void {
+      recordTelemetryHistogram(
+        METRIC_UPDATE_QUEUE_WAIT_DURATION,
+        waitSeconds,
+        {
+          'telegram.update.source': 'tdlib',
+          'telegram.update.type': update._
+        },
+        { unit: 's' }
+      );
+    },
     onError(error, update): void {
       console.error(
         JSON.stringify({

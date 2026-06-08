@@ -12,9 +12,9 @@ type QueueTelemetryOptions = {
 };
 
 const DEFAULT_INTERVAL_MS = 1000;
-const METRIC_PENDING = 'agentg.telegram.ingestion_queue.pending';
-const METRIC_RUNNING = 'agentg.telegram.ingestion_queue.running';
-const METRIC_CONCURRENCY = 'agentg.telegram.ingestion_queue.concurrency';
+const METRIC_PENDING = 'telegram.ingestion.queue.pending';
+const METRIC_RUNNING = 'telegram.ingestion.queue.running';
+const METRIC_CONCURRENCY = 'telegram.ingestion.queue.concurrency';
 
 export function startIngestionQueueTelemetry(options: QueueTelemetryOptions): () => undefined {
   if (!telemetryEnabled()) {

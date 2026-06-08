@@ -1,4 +1,4 @@
-import { parseLimit, type EventBus } from '@agentg/framework';
+import { parseLimit, timeTelemetrySpan, type EventBus } from '@agentg/framework';
 import { and, asc, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
@@ -46,6 +46,7 @@ import {
 
 const MESSAGE_PAGE_LIMIT = 100;
 const MESSAGE_PAGE_MAX_LIMIT = 100;
+const METRIC_MESSAGES_PAGE_STAGE_DURATION = 'telegram.messages_page.stage.duration';
 
 type ChatDirectoryInput = z.infer<typeof chatDirectoryInputSchema>;
 type ChatDirectoryOutput = z.infer<typeof chatDirectoryOutputSchema>;
@@ -191,33 +192,57 @@ async function runMessagesPage(
 ): Promise<MessagesPageOutput> {
   const limit = parseLimit(input.limit, MESSAGE_PAGE_LIMIT, MESSAGE_PAGE_MAX_LIMIT);
   const cursorMessageId = parseOptionalMessageId(input.beforeMessageId);
-  const pageEndAt =
+  const pageEndAt = await timeMessagesPageStage('cursor', async () =>
     cursorMessageId === undefined
       ? ceilToHistorySecond(new Date())
       : ((await readMessagePageEndAt(input.chatId, input.beforeMessageId, resources)) ??
-        ceilToHistorySecond(new Date()));
-  const fetchResult = await resources.callTelegramProcedure<FetchPageResult>('fetchPage', {
-    chatId: input.chatId,
-    ...(cursorMessageId === undefined ? {} : { cursorMessageId }),
-    endAt: pageEndAt.toISOString(),
-    limit,
-    startAt: HISTORY_PAST_BOUNDARY.toISOString()
-  });
-  const messages = await readPersistedMessagesPage(
-    {
-      beforeMessageId: input.beforeMessageId,
+        ceilToHistorySecond(new Date()))
+  );
+  const fetchResult = await timeMessagesPageStage('fetch', () =>
+    resources.callTelegramProcedure<FetchPageResult>('fetchPage', {
       chatId: input.chatId,
-      limit
-    },
-    resources
+      ...(cursorMessageId === undefined ? {} : { cursorMessageId }),
+      endAt: pageEndAt.toISOString(),
+      limit,
+      startAt: HISTORY_PAST_BOUNDARY.toISOString()
+    })
+  );
+  const messages = await timeMessagesPageStage('read', () =>
+    readPersistedMessagesPage(
+      {
+        beforeMessageId: input.beforeMessageId,
+        chatId: input.chatId,
+        limit
+      },
+      resources
+    )
   );
 
   const reachedByFetch = fetchResult.kind === 'page' ? fetchResult.reachedBeginning : true;
 
-  return {
-    messages,
-    reachedStart: reachedByFetch || messages.length < limit
+  return timeMessagesPageStage('assemble', () =>
+    Promise.resolve({
+      messages,
+      reachedStart: reachedByFetch || messages.length < limit
+    })
+  );
+}
+
+function timeMessagesPageStage<T>(stage: string, operation: () => Promise<T>): Promise<T> {
+  const attributes = {
+    'telegram.messages_page.stage': stage
   };
+  return timeTelemetrySpan(
+    {
+      attributes,
+      metric: {
+        attributes,
+        name: METRIC_MESSAGES_PAGE_STAGE_DURATION
+      },
+      name: `telegram.messages_page.${stage}`
+    },
+    operation
+  );
 }
 
 async function readMessagePageEndAt(

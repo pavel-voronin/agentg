@@ -6,5 +6,5 @@ export {
   startTelemetryRuntime,
   startTelemetrySpan,
   telemetryEnabled,
-  timeTelemetryOperation
+  timeTelemetrySpan
 } from './recorder.js';

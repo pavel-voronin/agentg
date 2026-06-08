@@ -45,7 +45,9 @@ function parseEventEnvelope(payload: string): EventEnvelope | undefined {
       !('type' in parsed) ||
       typeof parsed.type !== 'string' ||
       !('at' in parsed) ||
-      typeof parsed.at !== 'string'
+      typeof parsed.at !== 'string' ||
+      !('trace' in parsed) ||
+      !isTraceCarrier(parsed.trace)
     ) {
       return undefined;
     }
@@ -54,11 +56,19 @@ function parseEventEnvelope(payload: string): EventEnvelope | undefined {
       at: parsed.at,
       ...('data' in parsed ? { data: parsed.data } : {}),
       id: parsed.id,
+      trace: parsed.trace,
       type: parsed.type
     };
   } catch {
     return undefined;
   }
+}
+
+function isTraceCarrier(value: unknown): value is Record<string, string> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false;
+  }
+  return Object.values(value).every((item) => typeof item === 'string');
 }
 
 function logSubscriptionError(event: string, subject: string, error: unknown): void {

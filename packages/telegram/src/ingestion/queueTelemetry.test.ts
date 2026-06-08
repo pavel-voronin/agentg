@@ -42,12 +42,12 @@ describe('ingestion queue telemetry', () => {
     stop();
 
     expect(telemetry.setTelemetryGauge.mock.calls).toEqual([
-      ['agentg.telegram.ingestion_queue.pending', 3],
-      ['agentg.telegram.ingestion_queue.running', 2],
-      ['agentg.telegram.ingestion_queue.concurrency', 4],
-      ['agentg.telegram.ingestion_queue.pending', 3],
-      ['agentg.telegram.ingestion_queue.running', 2],
-      ['agentg.telegram.ingestion_queue.concurrency', 4]
+      ['telegram.ingestion.queue.pending', 3],
+      ['telegram.ingestion.queue.running', 2],
+      ['telegram.ingestion.queue.concurrency', 4],
+      ['telegram.ingestion.queue.pending', 3],
+      ['telegram.ingestion.queue.running', 2],
+      ['telegram.ingestion.queue.concurrency', 4]
     ]);
   });
 

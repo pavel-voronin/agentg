@@ -1,7 +1,9 @@
+import { hostname } from 'node:os';
 import { performance } from 'node:perf_hooks';
 
 import {
   metrics,
+  SpanKind,
   SpanStatusCode,
   trace,
   type Attributes,
@@ -19,32 +21,38 @@ import {
   AggregationType,
   InstrumentType,
   MeterProvider,
-  PeriodicExportingMetricReader
+  PeriodicExportingMetricReader,
+  type ViewOptions
 } from '@opentelemetry/sdk-metrics';
 import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-base';
 import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
-import { ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions';
+import { ATTR_ERROR_TYPE, ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions';
+import { ATTR_HOST_NAME } from '@opentelemetry/semantic-conventions/incubating';
 
-import type { TelemetryAttributes, TelemetryAttributeValue } from './contracts.js';
+import type { TelemetryAttributes } from './contracts.js';
 
 type TelemetryRuntime = {
   meterProvider: MeterProvider;
-  source: string;
   tracerProvider: NodeTracerProvider;
+};
+
+export type TelemetryDurationMetric = {
+  attributes?: TelemetryAttributes | undefined;
+  description?: string | undefined;
+  name: string;
+  unit?: string | undefined;
 };
 
 export type TelemetrySpanInput = {
   attributes?: TelemetryAttributes | undefined;
-  detail?: Record<string, unknown> | undefined;
-  kind: string;
+  kind?: SpanKind | undefined;
+  metric?: TelemetryDurationMetric | undefined;
   name: string;
-  source?: string | undefined;
 };
 
 export type TelemetrySpan = {
   finish(result: {
     attributes?: TelemetryAttributes | undefined;
-    detail?: Record<string, unknown> | undefined;
     error?: unknown;
     ok: boolean;
   }): void;
@@ -52,10 +60,9 @@ export type TelemetrySpan = {
 
 const DISABLED_VALUES = new Set(['0', 'false', 'no', 'off']);
 const DEFAULT_METRIC_EXPORT_INTERVAL_MS = 15_000;
-const DEFAULT_SERVICE_NAME = 'agentg';
 const DEFAULT_TRACES_ENDPOINT = 'http://127.0.0.1:4318/v1/traces';
 const DEFAULT_METRICS_ENDPOINT = 'http://127.0.0.1:8428/opentelemetry/v1/metrics';
-const OPERATION_DURATION_BUCKETS_SECONDS = [
+const DURATION_BUCKETS_SECONDS = [
   0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5
 ];
 
@@ -64,9 +71,6 @@ const gauges = new Map<string, ObservableGauge>();
 const gaugeValues = new Map<string, Map<string, GaugeValue>>();
 const histograms = new Map<string, Histogram>();
 let runtime: TelemetryRuntime | null = null;
-let operationDuration: Histogram | null = null;
-let operationCalls: Counter | null = null;
-let operationErrors: Counter | null = null;
 
 type GaugeValue = {
   attributes: TelemetryAttributes;
@@ -88,6 +92,7 @@ export function startTelemetryRuntime(serviceName: string): () => Promise<undefi
 
   const configuredName = configuredServiceName(serviceName);
   const resource = resourceFromAttributes({
+    [ATTR_HOST_NAME]: hostname(),
     [ATTR_SERVICE_NAME]: configuredName
   });
   const tracerProvider = new NodeTracerProvider({
@@ -110,18 +115,7 @@ export function startTelemetryRuntime(serviceName: string): () => Promise<undefi
       })
     ],
     resource,
-    views: [
-      {
-        aggregation: {
-          options: {
-            boundaries: OPERATION_DURATION_BUCKETS_SECONDS
-          },
-          type: AggregationType.EXPLICIT_BUCKET_HISTOGRAM
-        },
-        instrumentName: 'agentg.operation.duration',
-        instrumentType: InstrumentType.HISTOGRAM
-      }
-    ]
+    views: [durationView('*')]
   });
 
   tracerProvider.register();
@@ -129,7 +123,6 @@ export function startTelemetryRuntime(serviceName: string): () => Promise<undefi
   resetMetricInstruments();
   runtime = {
     meterProvider,
-    source: configuredName,
     tracerProvider
   };
 
@@ -151,10 +144,7 @@ export function startTelemetrySpan(input: TelemetrySpanInput): TelemetrySpan | n
   }
 
   const startedAt = performance.now();
-  const attributes = operationAttributes(input, input.attributes ?? {});
-  const span = activeTracer().startSpan(spanName(input), {
-    attributes: spanAttributes(input, attributes)
-  });
+  const span = activeTracer().startSpan(spanName(input), spanOptions(input));
   let finished = false;
 
   return {
@@ -164,13 +154,8 @@ export function startTelemetrySpan(input: TelemetrySpanInput): TelemetrySpan | n
       }
       finished = true;
       const durationSeconds = secondsSince(startedAt);
-      const resultAttributes = operationAttributes(input, {
-        ...(input.attributes ?? {}),
-        ...(result.attributes ?? {})
-      });
-      if (result.detail !== undefined) {
-        span.setAttributes(detailAttributes(result.detail));
-      }
+      const resultAttributes = spanResultAttributes(result);
+      span.setAttributes(resultAttributes);
       if (result.error !== undefined) {
         span.recordException(errorObject(result.error));
       }
@@ -180,12 +165,12 @@ export function startTelemetrySpan(input: TelemetrySpanInput): TelemetrySpan | n
           : { code: SpanStatusCode.ERROR, message: errorMessage(result.error) }
       );
       span.end();
-      recordOperationMetrics(durationSeconds, result.ok, resultAttributes);
+      recordDurationMetric(input.metric, durationSeconds, result);
     }
   };
 }
 
-export async function timeTelemetryOperation<T>(
+export async function timeTelemetrySpan<T>(
   input: TelemetrySpanInput,
   operation: () => Promise<T>
 ): Promise<T> {
@@ -194,21 +179,21 @@ export async function timeTelemetryOperation<T>(
   }
 
   const startedAt = performance.now();
-  const attributes = operationAttributes(input, input.attributes ?? {});
-  return activeTracer().startActiveSpan(
+  const result = await activeTracer().startActiveSpan(
     spanName(input),
-    { attributes: spanAttributes(input, attributes) },
-    async (span) => {
+    spanOptions(input),
+    async (span): Promise<T> => {
       try {
-        const result = await operation();
-        finishSpan(span, startedAt, true, attributes);
-        return result;
+        const value = await operation();
+        finishSpan(input.metric, span, startedAt, true);
+        return value;
       } catch (error) {
-        finishSpan(span, startedAt, false, attributes, error);
+        finishSpan(input.metric, span, startedAt, false, error);
         throw error;
       }
     }
   );
+  return result;
 }
 
 export function incrementTelemetryCounter(
@@ -230,14 +215,18 @@ export function incrementTelemetryCounter(
 export function recordTelemetryHistogram(
   name: string,
   value: number,
-  attributes: TelemetryAttributes = {}
+  attributes: TelemetryAttributes = {},
+  options: { description?: string | undefined; unit?: string | undefined } = {}
 ): void {
   if (!telemetryEnabled() || !Number.isFinite(value) || value < 0) {
     return;
   }
   let histogram = histograms.get(name);
   if (histogram === undefined) {
-    histogram = activeMeter().createHistogram(name);
+    histogram = activeMeter().createHistogram(name, {
+      ...(options.description === undefined ? {} : { description: options.description }),
+      ...(options.unit === undefined ? {} : { unit: options.unit })
+    });
     histograms.set(name, histogram);
   }
   histogram.record(value, attributes);
@@ -276,45 +265,26 @@ function resetMetricInstruments(): void {
   counters.clear();
   gauges.clear();
   histograms.clear();
-  operationCalls = null;
-  operationDuration = null;
-  operationErrors = null;
-}
-
-function recordOperationMetrics(
-  durationSeconds: number,
-  ok: boolean,
-  attributes: TelemetryAttributes
-): void {
-  const duration = operationDurationInstrument();
-  const calls = operationCallsInstrument();
-  const errors = operationErrorsInstrument();
-  duration.record(durationSeconds, attributes);
-  calls.add(1, {
-    ...attributes,
-    status: ok ? 'ok' : 'error'
-  });
-  if (!ok) {
-    errors.add(1, attributes);
-  }
 }
 
 function finishSpan(
+  metric: TelemetryDurationMetric | undefined,
   span: Span,
   startedAt: number,
   ok: boolean,
-  attributes: TelemetryAttributes,
   error?: unknown
 ): void {
   const durationSeconds = secondsSince(startedAt);
+  const result = { error, ok };
   if (error !== undefined) {
     span.recordException(errorObject(error));
   }
+  span.setAttributes(spanResultAttributes(result));
   span.setStatus(
     ok ? { code: SpanStatusCode.OK } : { code: SpanStatusCode.ERROR, message: errorMessage(error) }
   );
   span.end();
-  recordOperationMetrics(durationSeconds, ok, attributes);
+  recordDurationMetric(metric, durationSeconds, result);
 }
 
 function activeMeter(): Meter {
@@ -325,73 +295,74 @@ function activeTracer(): Tracer {
   return trace.getTracer('agentg.telemetry');
 }
 
-function operationDurationInstrument(): Histogram {
-  operationDuration ??= activeMeter().createHistogram('agentg.operation.duration', {
-    description: 'AgentG operation duration',
-    unit: 's'
-  });
-  return operationDuration;
-}
-
-function operationCallsInstrument(): Counter {
-  operationCalls ??= activeMeter().createCounter('agentg.operation.calls', {
-    description: 'AgentG operation calls',
-    unit: '1'
-  });
-  return operationCalls;
-}
-
-function operationErrorsInstrument(): Counter {
-  operationErrors ??= activeMeter().createCounter('agentg.operation.errors', {
-    description: 'AgentG operation errors',
-    unit: '1'
-  });
-  return operationErrors;
-}
-
-function operationAttributes(
-  input: TelemetrySpanInput,
-  extraAttributes: TelemetryAttributes
-): TelemetryAttributes {
+function durationView(instrumentName: string): ViewOptions {
   return {
-    operation_kind: input.kind,
-    operation_name: input.name,
-    source: input.source ?? telemetrySource(),
-    ...extraAttributes
+    aggregation: {
+      options: {
+        boundaries: DURATION_BUCKETS_SECONDS
+      },
+      type: AggregationType.EXPLICIT_BUCKET_HISTOGRAM
+    },
+    instrumentName,
+    instrumentType: InstrumentType.HISTOGRAM
   };
 }
 
-function spanAttributes(input: TelemetrySpanInput, attributes: TelemetryAttributes): Attributes {
+function spanOptions(input: TelemetrySpanInput) {
   return {
-    ...attributes,
-    ...(input.detail === undefined ? {} : detailAttributes(input.detail))
+    ...(input.attributes === undefined ? {} : { attributes: input.attributes }),
+    ...(input.kind === undefined ? {} : { kind: input.kind })
   };
 }
 
-function detailAttributes(detail: Record<string, unknown>): Attributes {
-  const attributes: Attributes = {};
-  for (const [key, value] of Object.entries(detail)) {
-    const attribute = attributeValue(value);
-    if (attribute !== null) {
-      attributes[`agentg.detail.${key}`] = attribute;
-    }
+function recordDurationMetric(
+  metric: TelemetryDurationMetric | undefined,
+  durationSeconds: number,
+  result: { error?: unknown; ok: boolean }
+): void {
+  if (metric === undefined) {
+    return;
   }
-  return attributes;
+  const attributes = {
+    ...(metric.attributes ?? {}),
+    ...resultMetricAttributes(result)
+  };
+  durationMetricInstrument(metric).record(durationSeconds, attributes);
 }
 
-function attributeValue(value: unknown): TelemetryAttributeValue | string[] | null {
-  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-    return value;
+function durationMetricInstrument(metric: TelemetryDurationMetric): Histogram {
+  let histogram = histograms.get(metric.name);
+  if (histogram === undefined) {
+    histogram = activeMeter().createHistogram(metric.name, {
+      ...(metric.description === undefined ? {} : { description: metric.description }),
+      unit: metric.unit ?? 's'
+    });
+    histograms.set(metric.name, histogram);
   }
-  if (!Array.isArray(value)) {
-    return null;
+  return histogram;
+}
+
+function spanResultAttributes(result: {
+  attributes?: TelemetryAttributes | undefined;
+  error?: unknown;
+}): Attributes {
+  return {
+    ...(result.attributes ?? {}),
+    ...(result.error === undefined ? {} : { [ATTR_ERROR_TYPE]: errorType(result.error) })
+  };
+}
+
+function resultMetricAttributes(result: { error?: unknown; ok: boolean }): TelemetryAttributes {
+  if (result.ok) {
+    return {};
   }
-  const values = value.filter((item): item is string => typeof item === 'string');
-  return values.length === value.length ? values : null;
+  return {
+    [ATTR_ERROR_TYPE]: errorType(result.error)
+  };
 }
 
 function spanName(input: TelemetrySpanInput): string {
-  return `${input.kind}:${input.name}`;
+  return input.name;
 }
 
 function secondsSince(startedAtMs: number): number {
@@ -404,10 +375,6 @@ function attributesKey(attributes: TelemetryAttributes): string {
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([key, value]) => [key, String(value)])
   );
-}
-
-function telemetrySource(): string {
-  return runtime?.source ?? configuredServiceName(DEFAULT_SERVICE_NAME);
 }
 
 function configuredServiceName(fallback: string): string {
@@ -437,6 +404,13 @@ function telemetryEndpoint(envName: string, fallback: string): string {
 
 function errorObject(error: unknown): Error {
   return error instanceof Error ? error : new Error(errorMessage(error));
+}
+
+function errorType(error: unknown): string {
+  if (error instanceof Error && error.name.length > 0) {
+    return error.name;
+  }
+  return typeof error;
 }
 
 function errorMessage(error: unknown): string {

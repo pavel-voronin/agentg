@@ -1,7 +1,24 @@
 import { randomUUID } from 'node:crypto';
 
+import { context, propagation, SpanKind } from '@opentelemetry/api';
+import {
+  ATTR_MESSAGING_DESTINATION_NAME,
+  ATTR_MESSAGING_DESTINATION_SUBSCRIPTION_NAME,
+  ATTR_MESSAGING_MESSAGE_ID,
+  ATTR_MESSAGING_OPERATION_TYPE,
+  ATTR_MESSAGING_SYSTEM,
+  MESSAGING_OPERATION_TYPE_VALUE_PROCESS,
+  MESSAGING_OPERATION_TYPE_VALUE_SEND,
+  METRIC_MESSAGING_CLIENT_OPERATION_DURATION,
+  METRIC_MESSAGING_PROCESS_DURATION
+} from '@opentelemetry/semantic-conventions/incubating';
 import { connect, StringCodec, type ConnectionOptions, type NatsConnection } from 'nats';
 
+import {
+  startTelemetrySpan,
+  timeTelemetrySpan,
+  type TelemetryAttributes
+} from '../telemetry/index.js';
 import type { EventBus, EventBusFactory, EventEnvelope, EventSubscription } from './eventBus.js';
 import { consumeEventMessages } from './subscription.js';
 
@@ -90,7 +107,27 @@ function createStartedEventBus(
 ): StartedEventBus {
   return {
     publish(type, data) {
-      connection.publish(type, codec.encode(JSON.stringify(createEventEnvelope(type, data))));
+      const envelope = createEventEnvelope(type, data);
+      const attributes = publishAttributes(type);
+      const span = startTelemetrySpan({
+        attributes: {
+          ...attributes,
+          [ATTR_MESSAGING_MESSAGE_ID]: envelope.id
+        },
+        kind: SpanKind.PRODUCER,
+        metric: {
+          attributes,
+          name: METRIC_MESSAGING_CLIENT_OPERATION_DURATION
+        },
+        name: `${type} publish`
+      });
+      try {
+        connection.publish(type, codec.encode(JSON.stringify(envelope)));
+        span?.finish({ ok: true });
+      } catch (error) {
+        span?.finish({ error, ok: false });
+        throw error;
+      }
     },
     async stop() {
       await closeEventConnection(connection);
@@ -100,7 +137,7 @@ function createStartedEventBus(
       void consumeEventMessages({
         closed: () => connection.isClosed(),
         decode: (data) => codec.decode(data),
-        handler,
+        handler: (event) => handleEvent(subject, event, handler),
         source: subscription
       });
 
@@ -118,7 +155,57 @@ function createEventEnvelope(type: string, data: unknown): EventEnvelope {
     at: new Date().toISOString(),
     ...(data === undefined ? {} : { data }),
     id: `evt_${randomUUID()}`,
+    trace: traceCarrier(),
     type
+  };
+}
+
+function traceCarrier(): Record<string, string> {
+  const carrier: Record<string, string> = {};
+  propagation.inject(context.active(), carrier);
+  return carrier;
+}
+
+function handleEvent(
+  subject: string,
+  event: EventEnvelope,
+  handler: (event: EventEnvelope) => void | Promise<void>
+): Promise<void> {
+  const activeContext = propagation.extract(context.active(), event.trace);
+  const attributes = processAttributes(subject, event.type);
+  return context.with(activeContext, () =>
+    timeTelemetrySpan(
+      {
+        attributes: {
+          ...attributes,
+          [ATTR_MESSAGING_MESSAGE_ID]: event.id
+        },
+        kind: SpanKind.CONSUMER,
+        metric: {
+          attributes,
+          name: METRIC_MESSAGING_PROCESS_DURATION
+        },
+        name: `${event.type} process`
+      },
+      () => Promise.resolve(handler(event))
+    )
+  );
+}
+
+function publishAttributes(type: string): TelemetryAttributes {
+  return {
+    [ATTR_MESSAGING_DESTINATION_NAME]: type,
+    [ATTR_MESSAGING_OPERATION_TYPE]: MESSAGING_OPERATION_TYPE_VALUE_SEND,
+    [ATTR_MESSAGING_SYSTEM]: 'nats'
+  };
+}
+
+function processAttributes(subject: string, type: string): TelemetryAttributes {
+  return {
+    [ATTR_MESSAGING_DESTINATION_NAME]: type,
+    [ATTR_MESSAGING_DESTINATION_SUBSCRIPTION_NAME]: subject,
+    [ATTR_MESSAGING_OPERATION_TYPE]: MESSAGING_OPERATION_TYPE_VALUE_PROCESS,
+    [ATTR_MESSAGING_SYSTEM]: 'nats'
   };
 }
 

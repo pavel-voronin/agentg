@@ -1,5 +1,6 @@
 import { and, eq, notInArray, sql } from 'drizzle-orm';
 import type { file } from 'tdlib-types';
+import { timeTelemetrySpan } from '@agentg/framework';
 
 import type { Database } from '../database/client.js';
 import {
@@ -35,6 +36,8 @@ import type { FileAssetStatus, FileSubsystemOptions } from './runtime.js';
 import type { ExtractedFileSlot, FileOwnerKey } from './types.js';
 
 // TODO(file-size): Split slot ownership, asset persistence, queue enqueue, and snapshots.
+const METRIC_FILE_RECORD_STAGE_DURATION = 'telegram.file.record.stage.duration';
+
 type FileSlotScope = {
   slotKeyPrefix: string;
 };
@@ -68,29 +71,74 @@ export async function recordFileSlotUpdate(
   let queueChanged = false;
 
   if (updateOptions.pruneStaleActiveNotificationSlots === true) {
-    await deleteStaleActiveNotificationFileSlots(options.database, owners);
+    await timeFileRecordStage('prune_stale_slots', cause, 'telegram.active_notification', () =>
+      deleteStaleActiveNotificationFileSlots(options.database, owners)
+    );
   }
 
   for (const owner of owners) {
     const ownerSlots = slots.filter(
       (slot) => slot.owner._model === owner.ownerModel && slot.owner.id === owner.ownerId
     );
-    const result =
+    const result = await timeFileRecordStage('replace_slots', cause, owner.ownerModel, () =>
       scope === undefined
-        ? await replaceOwnerFileSlots(options.database, owner, ownerSlots, cause)
-        : await replaceOwnerFileSlotsInScope(options.database, owner, ownerSlots, cause, scope);
+        ? replaceOwnerFileSlots(options.database, owner, ownerSlots, cause)
+        : replaceOwnerFileSlotsInScope(options.database, owner, ownerSlots, cause, scope)
+    );
     if (result.ownerChanged) {
       changedOwners.set(ownerKey(owner), owner);
     }
     queueChanged ||= result.queueChanged;
   }
 
-  for (const owner of changedOwners.values()) {
-    publishFileOwnerUpdated(options, owner);
+  await timeFileRecordStage(
+    'publish_changes',
+    cause,
+    ownerModelLabel(changedOwners.values()),
+    async () => {
+      for (const owner of changedOwners.values()) {
+        publishFileOwnerUpdated(options, owner);
+      }
+      if (queueChanged || changedOwners.size > 0) {
+        await publishFileQueueUpdated(options);
+      }
+    }
+  );
+}
+
+function timeFileRecordStage<T>(
+  stage: string,
+  cause: MediaDownloadPolicyCause,
+  ownerModel: string,
+  operation: () => Promise<T>
+): Promise<T> {
+  const attributes = {
+    'telegram.file.owner_model': ownerModel,
+    'telegram.file.record.cause': cause,
+    'telegram.file.record.stage': stage
+  };
+  return timeTelemetrySpan(
+    {
+      attributes,
+      metric: {
+        attributes,
+        name: METRIC_FILE_RECORD_STAGE_DURATION
+      },
+      name: `telegram.file.record.${stage}`
+    },
+    operation
+  );
+}
+
+function ownerModelLabel(owners: Iterable<FileOwnerKey>): string {
+  const models = [...new Set([...owners].map((owner) => owner.ownerModel))];
+  if (models.length === 0) {
+    return 'none';
   }
-  if (queueChanged || changedOwners.size > 0) {
-    await publishFileQueueUpdated(options);
+  if (models.length === 1) {
+    return models[0] ?? 'none';
   }
+  return 'multiple';
 }
 
 function updateFileOwners(update: FileSlotUpdate): FileOwnerKey[] {
