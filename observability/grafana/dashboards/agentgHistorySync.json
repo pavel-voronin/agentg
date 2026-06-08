@@ -180,7 +180,7 @@
             "type": "prometheus",
             "uid": "victoria-metrics"
           },
-          "expr": "sum(rate(history_sync_sync_pages_total[$__rate_interval]))",
+          "expr": "sum(rate(history_sync_sync_pages_total[$__rate_interval])) or vector(0)",
           "legendFormat": "pages",
           "refId": "A"
         },
@@ -189,7 +189,7 @@
             "type": "prometheus",
             "uid": "victoria-metrics"
           },
-          "expr": "sum(rate(history_sync_sync_messages_fetched_total[$__rate_interval]))",
+          "expr": "sum(rate(history_sync_sync_messages_fetched_total[$__rate_interval])) or vector(0)",
           "legendFormat": "fetched messages",
           "refId": "B"
         },
@@ -198,7 +198,7 @@
             "type": "prometheus",
             "uid": "victoria-metrics"
           },
-          "expr": "sum(rate(history_sync_sync_messages_stored_total[$__rate_interval]))",
+          "expr": "sum(rate(history_sync_sync_messages_stored_total[$__rate_interval])) or vector(0)",
           "legendFormat": "stored messages",
           "refId": "C"
         },
@@ -207,7 +207,7 @@
             "type": "prometheus",
             "uid": "victoria-metrics"
           },
-          "expr": "sum(rate(history_sync_sync_covered_intervals_total[$__rate_interval]))",
+          "expr": "sum(rate(history_sync_sync_covered_intervals_total[$__rate_interval])) or vector(0)",
           "legendFormat": "covered intervals",
           "refId": "D"
         }
