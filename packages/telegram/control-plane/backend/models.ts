@@ -85,26 +85,6 @@ export const chatDirectoryOutputSchema = z.object({
   types: z.array(chatTypeCountSchema)
 });
 
-export const fileQueueStatsSchema = z.object({
-  downloadingCount: nonNegativeIntegerSchema,
-  failedCount: nonNegativeIntegerSchema,
-  knownCount: nonNegativeIntegerSchema,
-  knownDownloadedBytes: nonNegativeIntegerSchema,
-  knownRemainingBytes: nonNegativeIntegerSchema,
-  knownTotalBytes: nonNegativeIntegerSchema,
-  queuedCount: nonNegativeIntegerSchema,
-  readyCount: nonNegativeIntegerSchema,
-  remainingCount: nonNegativeIntegerSchema,
-  totalCount: nonNegativeIntegerSchema,
-  unknownRemainingCount: nonNegativeIntegerSchema
-});
-
-export const fileQueueStatsInputSchema = z.object({}).default({});
-
-export const fileQueueStatsOutputSchema = z.object({
-  stats: fileQueueStatsSchema
-});
-
 export const fileContentInputSchema = z.object({
   path: nonEmptyStringSchema
 });

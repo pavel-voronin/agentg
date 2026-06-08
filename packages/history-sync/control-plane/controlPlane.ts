@@ -2,11 +2,6 @@ import type { ContentDefinition } from '@agentg/framework/cp';
 
 const contents = [
   {
-    contentId: 'history-sync.dashboard.coverage-updates',
-    load: () => import('./frontend/dashboardTileContent.vue'),
-    tags: ['control-plane.dashboard.tile']
-  },
-  {
     contentId: 'history-sync.client',
     load: () => import('./frontend/clientContent.vue'),
     metadata: {

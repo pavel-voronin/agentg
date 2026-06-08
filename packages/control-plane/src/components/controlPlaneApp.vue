@@ -1,9 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, watch, type Component } from 'vue';
-import SolarBillListBold from '~icons/solar/bill-list-bold';
-import SolarChartSquareBold from '~icons/solar/chart-square-bold';
-import SolarChatSquareCodeBold from '~icons/solar/chat-square-code-bold';
-import SolarHome2Bold from '~icons/solar/home-2-bold';
+import { computed, onBeforeUnmount, onMounted, watch } from 'vue';
 import SolarWidget2Bold from '~icons/solar/widget-2-bold';
 
 import { provideControlPlaneHost } from '@agentg/framework/cp';
@@ -18,9 +14,10 @@ import { UiButton } from '@agentg/framework/cp';
 import { useControlPlaneRuntime } from '../runtime/useControlPlaneRuntime.js';
 import { useAppShellStore } from '../stores/appShell.js';
 import { DEFAULT_PAGE_SEGMENT, pathForRoute, routeFromPathname } from '../stores/shellRoute.js';
-import { shellPageContributions, type ShellPageIcon } from '../view-models/pageContributions.js';
+import { shellPageContributions } from '../view-models/pageContributions.js';
 import { controlPlaneContentCatalog } from '../composition/contentProviders.js';
 import { controlPlaneSlotLayout } from '../composition/slots/manifest.js';
+import IconifyIcon from './iconifyIcon.vue';
 
 const appShellStore = useAppShellStore();
 const host = useControlPlaneRuntime();
@@ -53,14 +50,6 @@ const pageContext = computed(() => ({
   routeSegments: appShellStore.route.segments,
   setRouteSegments: setPageRouteSegments
 }));
-
-const pageIconComponents = {
-  client: SolarChatSquareCodeBold,
-  events: SolarBillListBold,
-  home: SolarHome2Bold,
-  page: SolarWidget2Bold,
-  telemetry: SolarChartSquareBold
-} satisfies Record<ShellPageIcon, Component>;
 
 type BrowserGlobal = {
   addEventListener: (type: 'popstate', listener: () => void) => void;
@@ -95,10 +84,6 @@ function browserGlobal(): BrowserGlobal {
 function syncRouteFromBrowser(): void {
   const route = routeFromPathname(browserGlobal().location.pathname, defaultPageSegment.value);
   appShellStore.setRoute(route);
-}
-
-function pageIconComponent(icon: ShellPageIcon): Component {
-  return pageIconComponents[icon];
 }
 
 function syncBrowserRoute(path: string, replace: boolean): void {
@@ -151,11 +136,7 @@ onBeforeUnmount(() => {
               "
               @click="showPage(page.routeSegment)"
             >
-              <component
-                :is="pageIconComponent(page.icon)"
-                class="control-plane-app__page-icon"
-                aria-hidden="true"
-              />
+              <IconifyIcon :icon="page.icon" />
               <span>{{ page.label }}</span>
             </UiButton>
           </nav>
@@ -243,10 +224,6 @@ onBeforeUnmount(() => {
 
 .control-plane-app__page-button {
   @apply gap-1.5 px-2.5 text-xs;
-}
-
-.control-plane-app__page-icon {
-  @apply h-3.5 w-3.5;
 }
 
 .control-plane-app__slot-debug-button {

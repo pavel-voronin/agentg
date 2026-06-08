@@ -13,23 +13,10 @@ export const controlPlaneContentProvider = {
       metadata: {
         page: {
           default: true,
-          icon: 'home',
+          icon: 'solar:home-2-bold',
           label: 'Home',
           order: 0,
           routeSegment: 'home'
-        }
-      },
-      tags: ['control-plane.page']
-    },
-    {
-      contentId: 'client.page',
-      load: () => import('./client/clientPageContent.vue'),
-      metadata: {
-        page: {
-          icon: 'client',
-          label: 'Client',
-          order: 5,
-          routeSegment: 'client'
         }
       },
       tags: ['control-plane.page']
@@ -39,7 +26,7 @@ export const controlPlaneContentProvider = {
       load: () => import('../events/eventStreamContent.vue'),
       metadata: {
         page: {
-          icon: 'events',
+          icon: 'solar:bill-list-bold',
           label: 'Events',
           order: 10,
           routeSegment: 'events'

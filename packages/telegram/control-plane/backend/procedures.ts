@@ -11,7 +11,7 @@ import {
   telegramFileSlots,
   telegramMessages
 } from '../../src/database/schema.js';
-import { readFileQueueStats, readFileRef } from '../../src/files/read.js';
+import { readFileRef } from '../../src/files/read.js';
 import { readStaticFileContent } from '../../src/files/staticFile.js';
 import type { FileOwner } from '../../src/files/types.js';
 import {
@@ -35,8 +35,6 @@ import {
   chatDirectoryOutputSchema,
   fileContentInputSchema,
   fileContentOutputSchema,
-  fileQueueStatsInputSchema,
-  fileQueueStatsOutputSchema,
   fileRequestInputSchema,
   fileRequestOutputSchema,
   messageLookupInputSchema,
@@ -52,7 +50,6 @@ const MESSAGE_PAGE_MAX_LIMIT = 100;
 type ChatDirectoryInput = z.infer<typeof chatDirectoryInputSchema>;
 type ChatDirectoryOutput = z.infer<typeof chatDirectoryOutputSchema>;
 type FileContentOutput = z.infer<typeof fileContentOutputSchema>;
-type FileQueueStatsOutput = z.infer<typeof fileQueueStatsOutputSchema>;
 type FileRequestInput = z.infer<typeof fileRequestInputSchema>;
 type FileRequestOutput = z.infer<typeof fileRequestOutputSchema>;
 type MessageLookupInput = z.infer<typeof messageLookupInputSchema>;
@@ -99,12 +96,6 @@ export function procedures(resources: Resources) {
         throw new Error('File not found');
       }
       return fileContentOutputSchema.parse(file);
-    },
-    'telegram.cp.fileQueueStats': async (input: unknown): Promise<FileQueueStatsOutput> => {
-      fileQueueStatsInputSchema.parse(input);
-      return fileQueueStatsOutputSchema.parse({
-        stats: await readFileQueueStats(resources.database)
-      });
     },
     'telegram.cp.message': async (input: unknown): Promise<MessageLookupOutput> => {
       const output = await runMessage(messageLookupInputSchema.parse(input), resources);
@@ -313,10 +304,6 @@ async function requestFile(
       ownerId: input.owner.id,
       ownerModel: input.owner._model
     });
-    resources.events.publish(
-      'telegram.files.queueChanged',
-      await readFileQueueStats(resources.database)
-    );
   }
 
   return {

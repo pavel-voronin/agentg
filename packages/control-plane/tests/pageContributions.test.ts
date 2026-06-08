@@ -15,7 +15,7 @@ describe('shell page contributions', () => {
           load,
           metadata: {
             page: {
-              icon: 'telemetry',
+              icon: 'solar:chart-square-bold',
               label: 'Beta',
               order: 20,
               routeSegment: 'beta'
@@ -28,7 +28,7 @@ describe('shell page contributions', () => {
           load,
           metadata: {
             page: {
-              icon: 'events',
+              icon: 'solar:bill-list-bold',
               label: 'Alpha',
               order: 10,
               routeSegment: 'alpha'
@@ -40,7 +40,7 @@ describe('shell page contributions', () => {
     ).toEqual([
       {
         contentId: 'alpha.page',
-        icon: 'events',
+        icon: 'solar:bill-list-bold',
         isDefault: false,
         label: 'Alpha',
         order: 10,
@@ -48,7 +48,7 @@ describe('shell page contributions', () => {
       },
       {
         contentId: 'beta.page',
-        icon: 'telemetry',
+        icon: 'solar:chart-square-bold',
         isDefault: false,
         label: 'Beta',
         order: 20,
@@ -81,7 +81,7 @@ describe('shell page contributions', () => {
     ).toEqual([
       {
         contentId: 'alpha.page',
-        icon: 'page',
+        icon: 'solar:widget-2-bold',
         isDefault: false,
         label: 'Alpha',
         order: 100,
@@ -89,7 +89,7 @@ describe('shell page contributions', () => {
       },
       {
         contentId: 'client.page',
-        icon: 'client',
+        icon: 'solar:widget-2-bold',
         isDefault: false,
         label: 'Client',
         order: 100,
@@ -117,7 +117,7 @@ describe('shell page contributions', () => {
     ).toEqual([
       {
         contentId: 'alpha.page',
-        icon: 'page',
+        icon: 'solar:widget-2-bold',
         isDefault: false,
         label: 'Alpha',
         order: 100,
@@ -157,7 +157,7 @@ describe('shell page contributions', () => {
     ).toEqual([
       {
         contentId: 'default.page',
-        icon: 'page',
+        icon: 'solar:widget-2-bold',
         isDefault: true,
         label: 'Default',
         order: 100,
@@ -165,7 +165,7 @@ describe('shell page contributions', () => {
       },
       {
         contentId: 'invalid.page',
-        icon: 'page',
+        icon: 'solar:widget-2-bold',
         isDefault: false,
         label: 'Invalid',
         order: 100,
@@ -174,27 +174,19 @@ describe('shell page contributions', () => {
     ]);
   });
 
-  it('exposes built-in pages as routed top-level page contributions', () => {
+  it('exposes built-in root pages as routed top-level page contributions', () => {
     expect(shellPageContributions(controlPlaneContentProvider.contents)).toEqual([
       {
         contentId: 'home.page',
-        icon: 'home',
+        icon: 'solar:home-2-bold',
         isDefault: true,
         label: 'Home',
         order: 0,
         routeSegment: 'home'
       },
       {
-        contentId: 'client.page',
-        icon: 'client',
-        isDefault: false,
-        label: 'Client',
-        order: 5,
-        routeSegment: 'client'
-      },
-      {
         contentId: 'events.stream.page',
-        icon: 'events',
+        icon: 'solar:bill-list-bold',
         isDefault: false,
         label: 'Events',
         order: 10,
@@ -203,7 +195,6 @@ describe('shell page contributions', () => {
     ]);
     expect(controlPlaneContentProvider.contents.map((content) => content.tags)).toEqual([
       ['control-plane.header.status'],
-      ['control-plane.page'],
       ['control-plane.page'],
       ['control-plane.page']
     ]);

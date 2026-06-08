@@ -2,16 +2,16 @@ import type { ContentDefinition } from '@agentg/framework/cp';
 
 export type ShellPageContributionView = {
   contentId: string;
-  icon: ShellPageIcon;
+  icon: string;
   isDefault: boolean;
   label: string;
   order: number;
   routeSegment: string;
 };
 
-export type ShellPageIcon = 'client' | 'events' | 'home' | 'page' | 'telemetry';
-
-const PAGE_ICONS = new Set<ShellPageIcon>(['client', 'events', 'home', 'page', 'telemetry']);
+const DEFAULT_PAGE_ICON = 'solar:widget-2-bold';
+const ICONIFY_NAME =
+  /^(?:@[a-z0-9]+(?:-[a-z0-9]+)*:)?[a-z0-9]+(?:-[a-z0-9]+)*:[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 export function shellPageContributions(
   contents: readonly ContentDefinition[]
@@ -38,7 +38,7 @@ function shellPageContribution(content: ContentDefinition): ShellPageContributio
 
   return {
     contentId: content.contentId,
-    icon: pageIcon(page.icon, routeSegment),
+    icon: pageIcon(page.icon),
     isDefault: page.default === true,
     label: nonEmptyString(page.label) ?? labelFromRouteSegment(routeSegment),
     order: finiteNumber(page.order) ?? 100,
@@ -68,15 +68,12 @@ function routeSegmentString(value: unknown): string | null {
   return segment;
 }
 
-function pageIcon(value: unknown, routeSegment: string): ShellPageIcon {
+function pageIcon(value: unknown): string {
   const icon = nonEmptyString(value);
-  if (icon !== null && PAGE_ICONS.has(icon as ShellPageIcon)) {
-    return icon as ShellPageIcon;
+  if (icon !== null && ICONIFY_NAME.test(icon)) {
+    return icon;
   }
-  if (PAGE_ICONS.has(routeSegment as ShellPageIcon)) {
-    return routeSegment as ShellPageIcon;
-  }
-  return 'page';
+  return DEFAULT_PAGE_ICON;
 }
 
 function nonEmptyString(value: unknown): string | null {
