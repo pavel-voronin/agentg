@@ -55,9 +55,6 @@ function selectTab(tabId: TelemetryTabId): void {
     <div v-if="error" class="telemetry-page__error">{{ error }}</div>
 
     <section v-if="activeTab === 'operations'" class="telemetry-page__section">
-      <div class="telemetry-page__section-header">
-        <h3 class="telemetry-page__section-title">Operations</h3>
-      </div>
       <UiGrafanaDashboard
         v-if="links"
         :base-url="links.grafanaUi"
@@ -70,9 +67,6 @@ function selectTab(tabId: TelemetryTabId): void {
     </section>
 
     <section v-if="activeTab === 'telegram'" class="telemetry-page__section">
-      <div class="telemetry-page__section-header">
-        <h3 class="telemetry-page__section-title">Telegram</h3>
-      </div>
       <UiGrafanaDashboard
         v-if="links"
         :base-url="links.grafanaUi"
@@ -85,9 +79,6 @@ function selectTab(tabId: TelemetryTabId): void {
     </section>
 
     <section v-if="activeTab === 'history-sync'" class="telemetry-page__section">
-      <div class="telemetry-page__section-header">
-        <h3 class="telemetry-page__section-title">History Sync</h3>
-      </div>
       <UiGrafanaDashboard
         v-if="links"
         :base-url="links.grafanaUi"
@@ -100,9 +91,6 @@ function selectTab(tabId: TelemetryTabId): void {
     </section>
 
     <section v-if="activeTab === 'updates'" class="telemetry-page__section">
-      <div class="telemetry-page__section-header">
-        <h3 class="telemetry-page__section-title">TDLib Updates</h3>
-      </div>
       <UiGrafanaDashboard
         v-if="links"
         :base-url="links.grafanaUi"
@@ -115,9 +103,6 @@ function selectTab(tabId: TelemetryTabId): void {
     </section>
 
     <section v-if="activeTab === 'nats'" class="telemetry-page__section">
-      <div class="telemetry-page__section-header">
-        <h3 class="telemetry-page__section-title">NATS</h3>
-      </div>
       <UiGrafanaDashboard
         v-if="links"
         :base-url="links.grafanaUi"
@@ -130,9 +115,6 @@ function selectTab(tabId: TelemetryTabId): void {
     </section>
 
     <section v-if="activeTab === 'postgres'" class="telemetry-page__section">
-      <div class="telemetry-page__section-header">
-        <h3 class="telemetry-page__section-title">Postgres</h3>
-      </div>
       <UiGrafanaDashboard
         v-if="links"
         :base-url="links.grafanaUi"
@@ -175,14 +157,6 @@ function selectTab(tabId: TelemetryTabId): void {
 
 .telemetry-page__section {
   @apply mt-4 min-w-0;
-}
-
-.telemetry-page__section-header {
-  @apply mt-4 flex items-center justify-between gap-3 border-b border-zinc-200 pb-2;
-}
-
-.telemetry-page__section-title {
-  @apply text-sm font-semibold tracking-normal;
 }
 
 .telemetry-page__empty {
