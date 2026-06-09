@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import {
   bigserial,
   bigint as pgBigint,
@@ -124,7 +125,12 @@ export const telegramFileDownloadJobs = pgTable(
       foreignColumns: [telegramFileAssets.assetKey],
       name: 'telegram_file_download_jobs_asset_key_fk'
     }).onDelete('cascade'),
-    index('telegram_file_download_jobs_status_idx').on(table.status, table.updatedAt)
+    index('telegram_file_download_jobs_queued_idx')
+      .on(sql`${table.priority} desc`, table.updatedAt)
+      .where(sql`${table.status} = 'queued'`),
+    index('telegram_file_download_jobs_downloading_stale_idx')
+      .on(sql`coalesce(${table.claimedAt}, ${table.updatedAt})`)
+      .where(sql`${table.status} = 'downloading'`)
   ]
 );
 

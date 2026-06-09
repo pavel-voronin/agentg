@@ -1,25 +1,44 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { SQL } from 'drizzle-orm';
+import { PgDialect } from 'drizzle-orm/pg-core';
 
 const logs = vi.hoisted(() => [] as Record<string, unknown>[]);
+const telemetry = vi.hoisted(() => ({
+  incrementTelemetryCounter: vi.fn(),
+  setTelemetryGauge: vi.fn()
+}));
 
 vi.mock('@agentg/framework', () => ({
   createLogger: () => ({
+    info() {
+      return undefined;
+    },
     warn(entry: Record<string, unknown>) {
       logs.push(entry);
     }
   }),
+  incrementTelemetryCounter: telemetry.incrementTelemetryCounter,
   logError: (error: unknown) => ({
     'error.type': error instanceof Error ? error.name : typeof error,
     error
-  })
+  }),
+  setTelemetryGauge: telemetry.setTelemetryGauge,
+  timeTelemetrySpan: (_options: unknown, operation: () => Promise<unknown>) => operation()
 }));
 
-import { fileDownloadRequest, logTdlibCleanupError } from '../src/files/queue.js';
-import type { FileDownloadRow } from '../src/files/runtime.js';
+import {
+  fileDownloadRequest,
+  logTdlibCleanupError,
+  processQueuedFileBatch
+} from '../src/files/queue.js';
+import type { Database } from '../src/database/client.js';
+import type { FileDownloadRow, FileSubsystemOptions } from '../src/files/runtime.js';
 
 describe('Telegram file download worker', () => {
   afterEach(() => {
     logs.length = 0;
+    telemetry.incrementTelemetryCounter.mockReset();
+    telemetry.setTelemetryGauge.mockReset();
     vi.restoreAllMocks();
   });
 
@@ -89,6 +108,119 @@ describe('Telegram file download worker', () => {
       })
     ]);
   });
+
+  it('defers file downloads when the shared TDLib scheduler is busy', async () => {
+    const captured: { staleOrderBy?: SQL } = {};
+    const tdlib = {
+      addFileToDownloads: vi.fn(),
+      downloadFile: vi.fn(),
+      getFile: vi.fn(),
+      getQueueStats() {
+        return {
+          highestPendingPriority: null,
+          pendingCount: 0,
+          runningCount: 4
+        };
+      }
+    };
+    const database = pressureDatabase(captured, {
+      downloading: false,
+      queued: true
+    });
+
+    const result = await processQueuedFileBatch(
+      workerOptions({
+        database,
+        tdlib
+      }),
+      {
+        maxConcurrentDownloads: 1,
+        maxFilesPerTick: 1
+      }
+    );
+
+    expect(result).toEqual({
+      delayedCount: 1,
+      failedCount: 0,
+      immediateCount: 0,
+      processedCount: 0,
+      readyCount: 0,
+      watchdogCount: 0
+    });
+    expect(tdlib.getFile).not.toHaveBeenCalled();
+    expect(tdlib.downloadFile).not.toHaveBeenCalled();
+    expect(tdlib.addFileToDownloads).not.toHaveBeenCalled();
+    expect(telemetry.incrementTelemetryCounter).not.toHaveBeenCalled();
+    expect(captured.staleOrderBy).toBeDefined();
+  });
+
+  it('keeps downloading-only work on the stale watchdog under scheduler pressure', async () => {
+    const tdlib = {
+      addFileToDownloads: vi.fn(),
+      downloadFile: vi.fn(),
+      getFile: vi.fn(),
+      getQueueStats() {
+        return {
+          highestPendingPriority: null,
+          pendingCount: 0,
+          runningCount: 4
+        };
+      }
+    };
+
+    const result = await processQueuedFileBatch(
+      workerOptions({
+        database: pressureDatabase(
+          {},
+          {
+            downloading: true,
+            queued: false
+          }
+        ),
+        tdlib
+      }),
+      {
+        maxConcurrentDownloads: 1,
+        maxFilesPerTick: 1
+      }
+    );
+
+    expect(result).toEqual({
+      delayedCount: 0,
+      failedCount: 0,
+      immediateCount: 0,
+      processedCount: 0,
+      readyCount: 0,
+      watchdogCount: 1
+    });
+    expect(tdlib.getFile).not.toHaveBeenCalled();
+    expect(tdlib.downloadFile).not.toHaveBeenCalled();
+    expect(tdlib.addFileToDownloads).not.toHaveBeenCalled();
+  });
+
+  it('orders stale download scans by the stale index expression', async () => {
+    const captured: { orderBy?: SQL } = {};
+    const result = await processQueuedFileBatch(
+      workerOptions({
+        database: staleOrderDatabase(captured),
+        tdlib: idleTdlib()
+      }),
+      {
+        maxConcurrentDownloads: 1,
+        maxFilesPerTick: 1
+      }
+    );
+
+    expect(result.processedCount).toBe(0);
+    const orderBy = captured.orderBy;
+    if (orderBy === undefined) {
+      throw new Error('Stale order expression was not captured');
+    }
+    const query = new PgDialect().sqlToQuery(orderBy);
+    expect(query.sql).toContain(
+      'coalesce("telegram_file_download_jobs"."claimed_at", "telegram_file_download_jobs"."updated_at")'
+    );
+  });
 });
 
 function downloadRow(): FileDownloadRow {
@@ -103,4 +235,137 @@ function downloadRow(): FileDownloadRow {
       kind: 'file'
     }
   };
+}
+
+function workerOptions(input: { database: Database; tdlib: unknown }): FileSubsystemOptions {
+  return {
+    database: input.database,
+    events: {
+      publish() {
+        return undefined;
+      },
+      start() {
+        return Promise.resolve();
+      },
+      stop() {
+        return Promise.resolve();
+      },
+      subscribe() {
+        return {
+          unsubscribe() {
+            return undefined;
+          }
+        };
+      }
+    },
+    filesDirectory: '/tmp/agentg-test-files',
+    tdlib: input.tdlib
+  } as unknown as FileSubsystemOptions;
+}
+
+function idleTdlib() {
+  return {
+    getQueueStats() {
+      return {
+        highestPendingPriority: null,
+        pendingCount: 0,
+        runningCount: 0
+      };
+    }
+  };
+}
+
+function pressureDatabase(
+  captured: { staleOrderBy?: SQL },
+  rows: { downloading: boolean; queued: boolean }
+): Database {
+  let selectCount = 0;
+  return {
+    select() {
+      selectCount += 1;
+      if (selectCount === 1) {
+        return {
+          from() {
+            return {
+              where() {
+                return {
+                  orderBy(orderBy: SQL) {
+                    captured.staleOrderBy = orderBy;
+                    return {
+                      limit() {
+                        return Promise.resolve([]);
+                      }
+                    };
+                  }
+                };
+              }
+            };
+          }
+        };
+      }
+      const hasRow = selectCount === 2 ? rows.queued : rows.downloading;
+      return {
+        from() {
+          return {
+            where() {
+              return {
+                limit() {
+                  return Promise.resolve(hasRow ? [{ assetKey: 'asset-a' }] : []);
+                }
+              };
+            }
+          };
+        }
+      };
+    }
+  } as unknown as Database;
+}
+
+function staleOrderDatabase(captured: { orderBy?: SQL }): Database {
+  let selectCount = 0;
+  return {
+    select() {
+      selectCount += 1;
+      if (selectCount === 1) {
+        return {
+          from() {
+            return {
+              where() {
+                return {
+                  orderBy(orderBy: SQL) {
+                    captured.orderBy = orderBy;
+                    return {
+                      limit() {
+                        return Promise.resolve([]);
+                      }
+                    };
+                  }
+                };
+              }
+            };
+          }
+        };
+      }
+      return {
+        from() {
+          return {
+            where() {
+              return {
+                orderBy() {
+                  return {
+                    limit() {
+                      return Promise.resolve([]);
+                    }
+                  };
+                },
+                limit() {
+                  return Promise.resolve([]);
+                }
+              };
+            }
+          };
+        }
+      };
+    }
+  } as unknown as Database;
 }

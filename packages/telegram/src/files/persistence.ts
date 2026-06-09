@@ -32,7 +32,11 @@ import { extractFileSlots, type FileSlotUpdate } from './extractor.js';
 import { publishFileOwnerUpdated, publishFileQueueUpdated } from './events.js';
 import { ownerKey } from './read.js';
 import { decideFilePolicy, type MediaDownloadPolicyCause } from './policy.js';
-import type { FileAssetStatus, FileSubsystemOptions } from './runtime.js';
+import {
+  completedFileAssetFromTdlibFile,
+  type FileAssetStatus,
+  type FileSubsystemOptions
+} from './runtime.js';
 import type { ExtractedFileSlot, FileOwnerKey } from './types.js';
 
 // TODO(file-size): Split slot ownership, asset persistence, queue enqueue, and snapshots.
@@ -64,7 +68,7 @@ export async function recordFileSlotUpdate(
   cause: MediaDownloadPolicyCause,
   scope?: FileSlotScope,
   updateOptions: FileSlotUpdateOptions = {}
-): Promise<void> {
+): Promise<boolean> {
   const slots = extractFileSlots(update);
   const owners = updateFileOwners(update);
   const changedOwners = new Map<string, FileOwnerKey>();
@@ -99,11 +103,12 @@ export async function recordFileSlotUpdate(
       for (const owner of changedOwners.values()) {
         publishFileOwnerUpdated(options, owner);
       }
-      if (queueChanged || changedOwners.size > 0) {
+      if (queueChanged) {
         await publishFileQueueUpdated(options);
       }
     }
   );
+  return queueChanged;
 }
 
 function timeFileRecordStage<T>(
@@ -534,6 +539,7 @@ async function upsertExtractedSlot(
         updatedAt: sql`now()`,
         width: slot.width
       },
+      setWhere: sql`${telegramFileSlots.assetKey} is distinct from ${assetKey} or ${telegramFileSlots.byteSize} is distinct from ${slot.byteSize} or ${telegramFileSlots.durationSeconds} is distinct from ${slot.durationSeconds} or ${telegramFileSlots.fileName} is distinct from ${slot.fileName} or ${telegramFileSlots.height} is distinct from ${slot.height} or ${telegramFileSlots.mediaKind} is distinct from ${slot.mediaKind} or ${telegramFileSlots.mimeType} is distinct from ${slot.mimeType} or ${telegramFileSlots.renderKind} is distinct from ${slot.renderKind} or ${telegramFileSlots.tdlibFileId} is distinct from ${slot.tdlibFileId} or ${telegramFileSlots.width} is distinct from ${slot.width}`,
       target: [telegramFileSlots.ownerModel, telegramFileSlots.ownerId, telegramFileSlots.slotKey]
     })
     .returning({
@@ -547,14 +553,16 @@ async function upsertExtractedSlot(
 }
 
 async function upsertTdlibFile(database: Database, file: file): Promise<void> {
+  const row = tdlibFileRow(file);
   await database
     .insert(telegramTdlibFiles)
-    .values(tdlibFileRow(file))
+    .values(row)
     .onConflictDoUpdate({
       set: {
-        ...tdlibFileRow(file),
+        ...row,
         updatedAt: sql`now()`
       },
+      setWhere: tdlibFileChangedCondition(row),
       target: telegramTdlibFiles.tdlibFileId
     });
 }
@@ -585,6 +593,8 @@ async function upsertFileAsset(
   slot: ExtractedFileSlot,
   assetKey: string
 ): Promise<{ assetKey: string; status: FileAssetStatus }> {
+  const byteSizeMissingCondition =
+    slot.byteSize === null ? sql`false` : sql`${telegramFileAssets.byteSize} is null`;
   const [asset] = await database
     .insert(telegramFileAssets)
     .values({
@@ -599,6 +609,7 @@ async function upsertFileAsset(
         latestTdlibFileId: slot.tdlibFileId,
         updatedAt: sql`now()`
       },
+      setWhere: sql`${byteSizeMissingCondition} or ${telegramFileAssets.latestTdlibFileId} is distinct from ${slot.tdlibFileId}`,
       target: telegramFileAssets.assetKey
     })
     .returning({
@@ -606,13 +617,27 @@ async function upsertFileAsset(
       status: telegramFileAssets.status
     });
 
-  if (asset === undefined) {
-    throw new Error(`Telegram file asset was not upserted: ${assetKey}`);
+  if (asset !== undefined) {
+    return {
+      assetKey: asset.assetKey,
+      status: assertAssetStatus(asset.status)
+    };
   }
 
+  const [existing] = await database
+    .select({
+      assetKey: telegramFileAssets.assetKey,
+      status: telegramFileAssets.status
+    })
+    .from(telegramFileAssets)
+    .where(eq(telegramFileAssets.assetKey, assetKey))
+    .limit(1);
+  if (existing === undefined) {
+    throw new Error(`Telegram file asset was not upserted: ${assetKey}`);
+  }
   return {
-    assetKey: asset.assetKey,
-    status: assertAssetStatus(asset.status)
+    assetKey: existing.assetKey,
+    status: assertAssetStatus(existing.status)
   };
 }
 
@@ -621,7 +646,7 @@ export async function enqueueFileAssetDownload(
   assetKey: string,
   priority: number
 ): Promise<boolean> {
-  await database
+  const changed = await database
     .insert(telegramFileDownloadJobs)
     .values({
       assetKey,
@@ -630,20 +655,28 @@ export async function enqueueFileAssetDownload(
     })
     .onConflictDoUpdate({
       set: {
-        claimedAt: sql`case when ${telegramFileDownloadJobs.status} in (${'queued'}, ${'downloading'}) then ${telegramFileDownloadJobs.claimedAt} else null end`,
-        lastError: sql`case when ${telegramFileDownloadJobs.status} in (${'queued'}, ${'downloading'}) then ${telegramFileDownloadJobs.lastError} else null end`,
+        claimedAt: sql`case when ${telegramFileDownloadJobs.status} = ${'downloading'} then ${telegramFileDownloadJobs.claimedAt} else null end`,
+        lastError: null,
         priority: sql`greatest(${telegramFileDownloadJobs.priority}, ${priority})`,
-        status: sql`case when ${telegramFileDownloadJobs.status} in (${'queued'}, ${'downloading'}) then ${telegramFileDownloadJobs.status} else ${'queued'} end`,
+        status: sql`case when ${telegramFileDownloadJobs.status} = ${'downloading'} then ${'downloading'} else ${'queued'} end`,
         updatedAt: sql`now()`
       },
+      setWhere: sql`${telegramFileDownloadJobs.priority} < ${priority}`,
       target: telegramFileDownloadJobs.assetKey
+    })
+    .returning({
+      assetKey: telegramFileDownloadJobs.assetKey
     });
-  return true;
+  return changed.length > 0;
 }
 
 export async function handleFileSnapshot(database: Database, file: file): Promise<string[]> {
   await upsertTdlibFile(database, file);
   const assetKey = fileAssetKey(file);
+  const snapshotSignal =
+    completedFileAssetFromTdlibFile(file) === null
+      ? sql`${telegramFileAssets.downloadedByteSize} is distinct from ${file.local.downloaded_size}`
+      : sql`true`;
   const updated = await database
     .update(telegramFileAssets)
     .set({
@@ -654,7 +687,8 @@ export async function handleFileSnapshot(database: Database, file: file): Promis
       and(
         eq(telegramFileAssets.assetKey, assetKey),
         eq(telegramFileAssets.latestTdlibFileId, file.id),
-        sql`${telegramFileAssets.status} <> 'ready'`
+        sql`${telegramFileAssets.status} <> 'ready'`,
+        snapshotSignal
       )
     )
     .returning({
@@ -662,6 +696,10 @@ export async function handleFileSnapshot(database: Database, file: file): Promis
     });
 
   return updated.map((asset) => asset.assetKey);
+}
+
+function tdlibFileChangedCondition(row: typeof telegramTdlibFiles.$inferInsert) {
+  return sql`${telegramTdlibFiles.expectedSize} is distinct from ${row.expectedSize} or ${telegramTdlibFiles.localCanBeDeleted} is distinct from ${row.localCanBeDeleted} or ${telegramTdlibFiles.localCanBeDownloaded} is distinct from ${row.localCanBeDownloaded} or ${telegramTdlibFiles.localDownloadOffset} is distinct from ${row.localDownloadOffset} or ${telegramTdlibFiles.localDownloadedPrefixSize} is distinct from ${row.localDownloadedPrefixSize} or ${telegramTdlibFiles.localDownloadedSize} is distinct from ${row.localDownloadedSize} or ${telegramTdlibFiles.localIsDownloadingActive} is distinct from ${row.localIsDownloadingActive} or ${telegramTdlibFiles.localIsDownloadingCompleted} is distinct from ${row.localIsDownloadingCompleted} or ${telegramTdlibFiles.localPath} is distinct from ${row.localPath} or ${telegramTdlibFiles.remoteId} is distinct from ${row.remoteId} or ${telegramTdlibFiles.remoteIsUploadingActive} is distinct from ${row.remoteIsUploadingActive} or ${telegramTdlibFiles.remoteIsUploadingCompleted} is distinct from ${row.remoteIsUploadingCompleted} or ${telegramTdlibFiles.remoteUniqueId} is distinct from ${row.remoteUniqueId} or ${telegramTdlibFiles.remoteUploadedSize} is distinct from ${row.remoteUploadedSize} or ${telegramTdlibFiles.size} is distinct from ${row.size}`;
 }
 
 export function fileAssetKey(file: file): string {

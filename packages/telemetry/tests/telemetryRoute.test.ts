@@ -14,6 +14,7 @@ describe('telemetry route', () => {
   it('maps known tab segments to tab ids', () => {
     expect(telemetryTabFromSegment('operations')).toBe('operations');
     expect(telemetryTabFromSegment('telegram')).toBe('telegram');
+    expect(telemetryTabFromSegment('files')).toBe('files');
     expect(telemetryTabFromSegment('history-sync')).toBe('history-sync');
     expect(telemetryTabFromSegment('updates')).toBe('updates');
     expect(telemetryTabFromSegment('postgres')).toBe('postgres');
@@ -29,6 +30,7 @@ describe('telemetry route', () => {
 
   it('uses the tab id as the non-root route segment', () => {
     expect(telemetryRouteSegments('telegram')).toEqual(['telegram']);
+    expect(telemetryRouteSegments('files')).toEqual(['files']);
     expect(telemetryRouteSegments('history-sync')).toEqual(['history-sync']);
     expect(telemetryRouteSegments('updates')).toEqual(['updates']);
     expect(telemetryRouteSegments('postgres')).toEqual(['postgres']);

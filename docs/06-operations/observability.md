@@ -66,7 +66,11 @@ Metrics:
 - TDLib update last-seen gauge in Unix seconds
 - Telegram ingestion queue pending/running/concurrency gauges
 - Telegram ingestion queue wait duration histogram
-- Telegram messages-page, message-view, and file-record stage duration histograms
+- Telegram messages-page and message-view stage duration histograms
+- Telegram file-record stage duration histogram
+- Telegram file queue asset/job/byte gauges
+- Telegram file worker wake and job outcome counters
+- Telegram file worker stage duration histogram
 - prometheus-nats-exporter metrics scraped by VictoriaMetrics from NATS
   monitoring endpoints
 - postgres_exporter metrics scraped by VictoriaMetrics from Postgres statistics
@@ -132,10 +136,10 @@ The telemetry page is a thin read and navigation surface:
 
 - `telemetry.links` is a Control Plane backend procedure that reads backend UI
   links for embedded dashboards and debug tools.
-- The Operations, Telegram, History Sync, TDLib Updates, Postgres, and NATS tabs embed
-  provisioned Grafana dashboards. Dashboard UIDs and slugs are fixed in the
-  Control Plane component; backend-provided links cover only external
-  observability tool base URLs.
+- The Operations, Telegram, Files, History Sync, TDLib Updates,
+  Postgres, and NATS tabs embed provisioned Grafana dashboards. Dashboard UIDs
+  and slugs are fixed in the Control Plane component; backend-provided links
+  cover only external observability tool base URLs.
 - The NATS dashboard is backed by prometheus-nats-exporter metrics.
 - The Postgres dashboard is backed by postgres_exporter metrics and app-level
   `db.client.operation.duration` metrics.
@@ -164,11 +168,24 @@ from Grafana data sources. Jaeger UI is configured with outbound links back to
 Grafana for RPC methods and TDLib update types.
 
 The provisioned `Telegram` dashboard groups module telemetry by internal
-subsystem: ingestion, read path, storage, files, and events. It reads Telegram
-queue gauges, queue wait latency, update processing latency, update catalog and
-last-seen timestamps, Control Plane Telegram RPC latency, messages-page and
-message-view stage latency, app DB client operation latency, file-record stage
-latency, and app-level NATS send/process latency for Telegram event subjects.
+subsystem: ingestion, read path, storage, and events. It reads Telegram queue
+gauges, queue wait latency, update processing latency, update catalog and
+last-seen timestamps, non-file Control Plane Telegram RPC latency, messages-page
+and message-view stage latency, non-file app DB client operation latency, and
+non-file app-level NATS send/process latency for Telegram event subjects.
+
+The provisioned `Files` dashboard is the operator x-ray for Telegram
+file handling. It reads file queue asset, job, and byte gauges, unknown-size
+backlog, worker wake reasons, worker job outcomes, worker stage latency and
+rate, file-record stage latency and rate, file-facing Control Plane RPC latency
+and rate, file-table DB latency and rate, `telegram.files.*` event send/process
+telemetry, and recent Jaeger traces for file worker passes. The top row is made
+of red-flag indicators rather than raw graphs: queued backlog, failed assets,
+backlog without worker ticks, failure rate, file-download defer retry rate, and
+stale recovery rate. Top-row rate panels use file queue gauges as the liveness
+anchor, so no matching failure/defer/stale events render as zero only when file
+queue telemetry itself is present; missing file telemetry remains visible as
+`No telemetry`.
 
 The provisioned `History Sync` dashboard groups module telemetry by controller,
 sync stages, workload, and downstream boundaries. It reads controller pass

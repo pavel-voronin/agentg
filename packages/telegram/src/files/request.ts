@@ -17,6 +17,8 @@ import { readFileRef } from './read.js';
 import type { FileRequestResult, FileSubsystemOptions } from './runtime.js';
 import type { FileOwner } from './types.js';
 
+type RequestFileSlotOptions = Pick<FileSubsystemOptions, 'database' | 'events'>;
+
 type RequestFileSlotRow = {
   assetKey: string;
   assetStatus: string;
@@ -26,7 +28,7 @@ type RequestFileSlotRow = {
 };
 
 export async function requestFileSlot(
-  options: FileSubsystemOptions,
+  options: RequestFileSlotOptions,
   input: { owner: FileOwner; slotKey: string }
 ): Promise<FileRequestResult> {
   const row = await readRequestFileSlotRow(options.database, input.owner, input.slotKey);

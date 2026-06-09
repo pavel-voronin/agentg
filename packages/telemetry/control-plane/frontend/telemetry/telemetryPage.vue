@@ -17,6 +17,7 @@ type TabView = {
 const tabs: TabView[] = [
   { id: 'operations', label: 'Operations' },
   { id: 'telegram', label: 'Telegram' },
+  { id: 'files', label: 'Files' },
   { id: 'history-sync', label: 'History Sync' },
   { id: 'updates', label: 'Updates' },
   { id: 'postgres', label: 'Postgres' },
@@ -74,6 +75,18 @@ function selectTab(tabId: TelemetryTabId): void {
         dashboard-uid="agentg-telegram"
         kiosk
         title="Telegram"
+      />
+      <div v-else class="telemetry-page__empty">No Grafana link</div>
+    </section>
+
+    <section v-if="activeTab === 'files'" class="telemetry-page__section">
+      <UiGrafanaDashboard
+        v-if="links"
+        :base-url="links.grafanaUi"
+        dashboard-slug="agentg-files"
+        dashboard-uid="agentg-files"
+        kiosk
+        title="Files"
       />
       <div v-else class="telemetry-page__empty">No Grafana link</div>
     </section>

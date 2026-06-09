@@ -381,7 +381,7 @@
             "uid": "victoria-metrics"
           },
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (rpc_method, le) (rate(rpc_server_call_duration_seconds_bucket{service_name=\"control-plane-server\", rpc_method=~\"telegram[.]cp[.].*\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (rpc_method, le) (rate(rpc_server_call_duration_seconds_bucket{service_name=\"control-plane-server\", rpc_method=~\"telegram[.]cp[.](chatDirectory|message|messagesPage)\"}[$__rate_interval])))",
           "legendFormat": "{{rpc_method}}"
         },
         {
@@ -394,8 +394,9 @@
           "legendFormat": "client {{rpc_method}}"
         }
       ],
-      "title": "Control Plane Telegram RPC P95",
-      "type": "timeseries"
+      "title": "Control Plane Non-File RPC P95",
+      "type": "timeseries",
+      "description": "P95 for Telegram Control Plane procedures that are not file-serving or manual file-download requests. File RPCs live on the Files dashboard."
     },
     {
       "datasource": {
@@ -592,12 +593,13 @@
             "uid": "victoria-metrics"
           },
           "refId": "A",
-          "expr": "sum by (service_name, db_query_summary) (rate(db_client_operation_duration_seconds_count{service_name=~\"telegram|control-plane-server\", db_system_name=\"postgresql\"}[$__rate_interval]))",
+          "expr": "sum by (service_name, db_query_summary) (rate(db_client_operation_duration_seconds_count{service_name=~\"telegram|control-plane-server\", db_system_name=\"postgresql\", db_query_summary!~\".*telegram_file_.*|.*telegram_tdlib_files.*\"}[$__rate_interval]))",
           "legendFormat": "{{service_name}} {{db_query_summary}}"
         }
       ],
-      "title": "DB Query Rate",
-      "type": "timeseries"
+      "title": "Non-File DB Query Rate",
+      "type": "timeseries",
+      "description": "Non-File DB Query Rate for Telegram and Control Plane Postgres calls excluding file queue, file asset, file slot, and TDLib file tables. File-table pressure lives on the Files dashboard."
     },
     {
       "datasource": {
@@ -636,12 +638,13 @@
             "uid": "victoria-metrics"
           },
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (service_name, db_query_summary, le) (rate(db_client_operation_duration_seconds_bucket{service_name=~\"telegram|control-plane-server\", db_system_name=\"postgresql\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (service_name, db_query_summary, le) (rate(db_client_operation_duration_seconds_bucket{service_name=~\"telegram|control-plane-server\", db_system_name=\"postgresql\", db_query_summary!~\".*telegram_file_.*|.*telegram_tdlib_files.*\"}[$__rate_interval])))",
           "legendFormat": "{{service_name}} {{db_query_summary}}"
         }
       ],
-      "title": "DB Query P95",
-      "type": "timeseries"
+      "title": "Non-File DB Query P95",
+      "type": "timeseries",
+      "description": "Non-File DB Query P95 for Telegram and Control Plane Postgres calls excluding file queue, file asset, file slot, and TDLib file tables. File-table pressure lives on the Files dashboard."
     },
     {
       "collapsed": false,
@@ -654,111 +657,6 @@
         "w": 24,
         "x": 0,
         "y": 52
-      },
-      "id": 15,
-      "panels": [],
-      "title": "Files",
-      "type": "row"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "victoria-metrics"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "ops"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 53
-      },
-      "id": 16,
-      "options": {
-        "legend": {
-          "calcs": ["lastNotNull"],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "victoria-metrics"
-          },
-          "refId": "A",
-          "expr": "sum by (telegram_file_record_stage, telegram_file_record_cause, telegram_file_owner_model) (rate(telegram_file_record_stage_duration_seconds_count[$__rate_interval]))",
-          "legendFormat": "{{telegram_file_record_stage}} {{telegram_file_record_cause}} {{telegram_file_owner_model}}"
-        }
-      ],
-      "title": "File Record Stage Rate",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "victoria-metrics"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 53
-      },
-      "id": 17,
-      "options": {
-        "legend": {
-          "calcs": ["lastNotNull"],
-          "displayMode": "table",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "victoria-metrics"
-          },
-          "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (telegram_file_record_stage, telegram_file_record_cause, telegram_file_owner_model, le) (rate(telegram_file_record_stage_duration_seconds_bucket[$__rate_interval])))",
-          "legendFormat": "{{telegram_file_record_stage}} {{telegram_file_record_cause}} {{telegram_file_owner_model}}"
-        }
-      ],
-      "title": "File Record Stage P95",
-      "type": "timeseries"
-    },
-    {
-      "collapsed": false,
-      "datasource": {
-        "type": "prometheus",
-        "uid": "victoria-metrics"
-      },
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 61
       },
       "id": 18,
       "panels": [],
@@ -780,7 +678,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 62
+        "y": 53
       },
       "id": 19,
       "options": {
@@ -802,12 +700,13 @@
             "uid": "victoria-metrics"
           },
           "refId": "A",
-          "expr": "sum by (service_name, messaging_destination_name) (rate(messaging_client_operation_duration_seconds_count{messaging_system=\"nats\", messaging_destination_name=~\"telegram[.].*\"}[$__rate_interval]))",
+          "expr": "sum by (service_name, messaging_destination_name) (rate(messaging_client_operation_duration_seconds_count{messaging_system=\"nats\", messaging_destination_name=~\"telegram[.].*\", messaging_destination_name!~\"telegram[.]files[.].*\"}[$__rate_interval]))",
           "legendFormat": "{{service_name}} {{messaging_destination_name}}"
         }
       ],
-      "title": "NATS App Event Send Rate",
-      "type": "timeseries"
+      "title": "NATS Non-File Event Send Rate",
+      "type": "timeseries",
+      "description": "NATS publish rate for Telegram event subjects excluding telegram.files.*. File event rate lives on the Files dashboard."
     },
     {
       "datasource": {
@@ -824,7 +723,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 62
+        "y": 53
       },
       "id": 20,
       "options": {
@@ -846,12 +745,13 @@
             "uid": "victoria-metrics"
           },
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (service_name, messaging_destination_name, le) (rate(messaging_client_operation_duration_seconds_bucket{messaging_system=\"nats\", messaging_destination_name=~\"telegram[.].*\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (service_name, messaging_destination_name, le) (rate(messaging_client_operation_duration_seconds_bucket{messaging_system=\"nats\", messaging_destination_name=~\"telegram[.].*\", messaging_destination_name!~\"telegram[.]files[.].*\"}[$__rate_interval])))",
           "legendFormat": "{{service_name}} {{messaging_destination_name}}"
         }
       ],
-      "title": "NATS App Event Send P95",
-      "type": "timeseries"
+      "title": "NATS Non-File Event Send P95",
+      "type": "timeseries",
+      "description": "NATS publish p95 for Telegram event subjects excluding telegram.files.*. File event latency lives on the Files dashboard."
     },
     {
       "datasource": {
@@ -868,7 +768,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 70
+        "y": 61
       },
       "id": 21,
       "options": {
@@ -890,12 +790,13 @@
             "uid": "victoria-metrics"
           },
           "refId": "A",
-          "expr": "sum by (service_name, messaging_destination_name, messaging_destination_subscription_name) (rate(messaging_process_duration_seconds_count{messaging_system=\"nats\", messaging_destination_name=~\"telegram[.].*\"}[$__rate_interval]))",
+          "expr": "sum by (service_name, messaging_destination_name, messaging_destination_subscription_name) (rate(messaging_process_duration_seconds_count{messaging_system=\"nats\", messaging_destination_name=~\"telegram[.].*\", messaging_destination_name!~\"telegram[.]files[.].*\"}[$__rate_interval]))",
           "legendFormat": "{{service_name}} {{messaging_destination_name}} {{messaging_destination_subscription_name}}"
         }
       ],
-      "title": "NATS App Event Process Rate",
-      "type": "timeseries"
+      "title": "NATS Non-File Event Process Rate",
+      "type": "timeseries",
+      "description": "NATS consumer rate for Telegram event subjects excluding telegram.files.*. File event consumption lives on the Files dashboard."
     },
     {
       "datasource": {
@@ -912,7 +813,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 70
+        "y": 61
       },
       "id": 22,
       "options": {
@@ -934,12 +835,13 @@
             "uid": "victoria-metrics"
           },
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (service_name, messaging_destination_name, messaging_destination_subscription_name, le) (rate(messaging_process_duration_seconds_bucket{messaging_system=\"nats\", messaging_destination_name=~\"telegram[.].*\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (service_name, messaging_destination_name, messaging_destination_subscription_name, le) (rate(messaging_process_duration_seconds_bucket{messaging_system=\"nats\", messaging_destination_name=~\"telegram[.].*\", messaging_destination_name!~\"telegram[.]files[.].*\"}[$__rate_interval])))",
           "legendFormat": "{{service_name}} {{messaging_destination_name}} {{messaging_destination_subscription_name}}"
         }
       ],
-      "title": "NATS App Event Process P95",
-      "type": "timeseries"
+      "title": "NATS Non-File Event Process P95",
+      "type": "timeseries",
+      "description": "NATS consumer p95 for Telegram event subjects excluding telegram.files.*. File event consumption latency lives on the Files dashboard."
     },
     {
       "datasource": {
@@ -954,7 +856,7 @@
         "h": 8,
         "w": 24,
         "x": 0,
-        "y": 78
+        "y": 69
       },
       "id": 23,
       "options": {

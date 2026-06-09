@@ -71,7 +71,9 @@ CREATE INDEX "telegram_tdlib_files_remote_unique_id_idx" ON "telegram_tdlib_file
 --> statement-breakpoint
 CREATE INDEX "telegram_tdlib_files_local_completed_idx" ON "telegram_tdlib_files" ("local_is_downloading_completed");
 --> statement-breakpoint
-CREATE INDEX "telegram_file_download_jobs_status_idx" ON "telegram_file_download_jobs" ("status", "updated_at");
+CREATE INDEX "telegram_file_download_jobs_queued_idx" ON "telegram_file_download_jobs" ("priority" desc, "updated_at") WHERE "status" = 'queued';
+--> statement-breakpoint
+CREATE INDEX "telegram_file_download_jobs_downloading_stale_idx" ON "telegram_file_download_jobs" (coalesce("claimed_at", "updated_at")) WHERE "status" = 'downloading';
 --> statement-breakpoint
 CREATE INDEX "telegram_file_slots_asset_idx" ON "telegram_file_slots" ("asset_key");
 --> statement-breakpoint

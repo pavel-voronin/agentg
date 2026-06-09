@@ -9,7 +9,36 @@ import { handleFileSnapshot, recordFileSlotUpdate } from '../src/files/persisten
 import type { FileSubsystemOptions } from '../src/files/runtime.js';
 
 describe('Telegram file persistence', () => {
-  it('matches completed file snapshots by asset key and TDLib file id', async () => {
+  it('matches progress file snapshots by asset key, TDLib file id, and byte progress', async () => {
+    const captured: { snapshotCondition?: SQL } = {};
+    const database = snapshotDatabase((condition) => {
+      captured.snapshotCondition = condition;
+    });
+
+    await handleFileSnapshot(
+      database,
+      tdlibFile({
+        completed: false,
+        downloadedSize: 50,
+        id: 10,
+        uniqueId: 'asset-b'
+      })
+    );
+
+    const snapshotCondition = captured.snapshotCondition;
+    if (snapshotCondition === undefined) {
+      throw new Error('Snapshot condition was not captured');
+    }
+    const query = new PgDialect().sqlToQuery(snapshotCondition);
+    expect(query.sql).toContain('"telegram_file_assets"."asset_key" = $1');
+    expect(query.sql).toContain('"telegram_file_assets"."latest_tdlib_file_id" = $2');
+    expect(query.sql).toContain(
+      '"telegram_file_assets"."downloaded_byte_size" is distinct from $3'
+    );
+    expect(query.params).toEqual(['telegram:asset-b', 10, 50]);
+  });
+
+  it('keeps completed file snapshots eligible when byte progress did not change', async () => {
     const captured: { snapshotCondition?: SQL } = {};
     const database = snapshotDatabase((condition) => {
       captured.snapshotCondition = condition;
@@ -24,6 +53,7 @@ describe('Telegram file persistence', () => {
     const query = new PgDialect().sqlToQuery(snapshotCondition);
     expect(query.sql).toContain('"telegram_file_assets"."asset_key" = $1');
     expect(query.sql).toContain('"telegram_file_assets"."latest_tdlib_file_id" = $2');
+    expect(query.sql).not.toContain('"telegram_file_assets"."downloaded_byte_size" is distinct');
     expect(query.params).toEqual(['telegram:asset-b', 10]);
   });
 
@@ -143,7 +173,14 @@ function fileSlotUpdateOptions(
   } as unknown as FileSubsystemOptions;
 }
 
-function tdlibFile(input: { id: number; uniqueId: string }): file {
+function tdlibFile(input: {
+  completed?: boolean;
+  downloadedSize?: number;
+  id: number;
+  uniqueId: string;
+}): file {
+  const completed = input.completed ?? true;
+  const downloadedSize = input.downloadedSize ?? 100;
   return {
     _: 'file',
     expected_size: 100,
@@ -153,11 +190,11 @@ function tdlibFile(input: { id: number; uniqueId: string }): file {
       can_be_deleted: true,
       can_be_downloaded: true,
       download_offset: 0,
-      downloaded_prefix_size: 100,
-      downloaded_size: 100,
+      downloaded_prefix_size: downloadedSize,
+      downloaded_size: downloadedSize,
       is_downloading_active: false,
-      is_downloading_completed: true,
-      path: '/tmp/asset'
+      is_downloading_completed: completed,
+      path: completed ? '/tmp/asset' : ''
     },
     remote: {
       _: 'remoteFile',

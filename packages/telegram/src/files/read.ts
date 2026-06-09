@@ -112,35 +112,44 @@ export async function readFileOwnersForAssets(
 }
 
 export async function readFileQueueStats(database: Database): Promise<FileQueueStats> {
-  const [row] = await database
+  const [assetRow] = await database
     .select({
-      downloadingCount: sql<number>`(select count(*) from ${telegramFileDownloadJobs} where ${telegramFileDownloadJobs.status} = ${'downloading'})::int`,
       failedCount: sql<number>`count(*) filter (where ${telegramFileAssets.status} = ${'failed'})::int`,
       knownCount: sql<number>`count(*) filter (where ${telegramFileAssets.status} = ${'known'})::int`,
-      knownDownloadedBytes: sql<number>`coalesce(sum(coalesce(${telegramFileAssets.downloadedByteSize}, 0)) filter (where exists (select 1 from ${telegramFileDownloadJobs} where ${telegramFileDownloadJobs.assetKey} = ${telegramFileAssets.assetKey} and ${telegramFileDownloadJobs.status} in (${'queued'}, ${'downloading'})) and ${telegramFileAssets.byteSize} is not null), 0)::float8`,
-      knownRemainingBytes: sql<number>`coalesce(sum(greatest(coalesce(${telegramFileAssets.byteSize}, 0) - coalesce(${telegramFileAssets.downloadedByteSize}, 0), 0)) filter (where exists (select 1 from ${telegramFileDownloadJobs} where ${telegramFileDownloadJobs.assetKey} = ${telegramFileAssets.assetKey} and ${telegramFileDownloadJobs.status} in (${'queued'}, ${'downloading'})) and ${telegramFileAssets.byteSize} is not null), 0)::float8`,
-      knownTotalBytes: sql<number>`coalesce(sum(${telegramFileAssets.byteSize}) filter (where exists (select 1 from ${telegramFileDownloadJobs} where ${telegramFileDownloadJobs.assetKey} = ${telegramFileAssets.assetKey} and ${telegramFileDownloadJobs.status} in (${'queued'}, ${'downloading'})) and ${telegramFileAssets.byteSize} is not null), 0)::float8`,
-      queuedCount: sql<number>`(select count(*) from ${telegramFileDownloadJobs} where ${telegramFileDownloadJobs.status} = ${'queued'})::int`,
       readyCount: sql<number>`count(*) filter (where ${telegramFileAssets.status} = ${'ready'})::int`,
-      totalCount: sql<number>`count(*)::int`,
-      unknownRemainingCount: sql<number>`count(*) filter (where exists (select 1 from ${telegramFileDownloadJobs} where ${telegramFileDownloadJobs.assetKey} = ${telegramFileAssets.assetKey} and ${telegramFileDownloadJobs.status} in (${'queued'}, ${'downloading'})) and ${telegramFileAssets.byteSize} is null)::int`
+      totalCount: sql<number>`count(*)::int`
     })
     .from(telegramFileAssets);
-  const queuedCount = aggregateNumber(row?.queuedCount);
-  const downloadingCount = aggregateNumber(row?.downloadingCount);
+  const [jobRow] = await database
+    .select({
+      downloadingCount: sql<number>`count(*) filter (where ${telegramFileDownloadJobs.status} = ${'downloading'})::int`,
+      knownDownloadedBytes: sql<number>`coalesce(sum(coalesce(${telegramFileAssets.downloadedByteSize}, 0)) filter (where ${telegramFileAssets.byteSize} is not null), 0)::float8`,
+      knownRemainingBytes: sql<number>`coalesce(sum(greatest(coalesce(${telegramFileAssets.byteSize}, 0) - coalesce(${telegramFileAssets.downloadedByteSize}, 0), 0)) filter (where ${telegramFileAssets.byteSize} is not null), 0)::float8`,
+      knownTotalBytes: sql<number>`coalesce(sum(${telegramFileAssets.byteSize}) filter (where ${telegramFileAssets.byteSize} is not null), 0)::float8`,
+      queuedCount: sql<number>`count(*) filter (where ${telegramFileDownloadJobs.status} = ${'queued'})::int`,
+      unknownRemainingCount: sql<number>`count(*) filter (where ${telegramFileAssets.byteSize} is null)::int`
+    })
+    .from(telegramFileDownloadJobs)
+    .innerJoin(
+      telegramFileAssets,
+      eq(telegramFileAssets.assetKey, telegramFileDownloadJobs.assetKey)
+    )
+    .where(inArray(telegramFileDownloadJobs.status, ['queued', 'downloading']));
+  const queuedCount = aggregateNumber(jobRow?.queuedCount);
+  const downloadingCount = aggregateNumber(jobRow?.downloadingCount);
 
   return {
     downloadingCount,
-    failedCount: aggregateNumber(row?.failedCount),
-    knownCount: aggregateNumber(row?.knownCount),
-    knownDownloadedBytes: aggregateNumber(row?.knownDownloadedBytes),
-    knownRemainingBytes: aggregateNumber(row?.knownRemainingBytes),
-    knownTotalBytes: aggregateNumber(row?.knownTotalBytes),
+    failedCount: aggregateNumber(assetRow?.failedCount),
+    knownCount: aggregateNumber(assetRow?.knownCount),
+    knownDownloadedBytes: aggregateNumber(jobRow?.knownDownloadedBytes),
+    knownRemainingBytes: aggregateNumber(jobRow?.knownRemainingBytes),
+    knownTotalBytes: aggregateNumber(jobRow?.knownTotalBytes),
     queuedCount,
-    readyCount: aggregateNumber(row?.readyCount),
+    readyCount: aggregateNumber(assetRow?.readyCount),
     remainingCount: queuedCount + downloadingCount,
-    totalCount: aggregateNumber(row?.totalCount),
-    unknownRemainingCount: aggregateNumber(row?.unknownRemainingCount)
+    totalCount: aggregateNumber(assetRow?.totalCount),
+    unknownRemainingCount: aggregateNumber(jobRow?.unknownRemainingCount)
   };
 }
 

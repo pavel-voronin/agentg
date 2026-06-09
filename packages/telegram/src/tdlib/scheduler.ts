@@ -100,7 +100,7 @@ export function createScheduler(client: Invoker, options: SchedulerOptions = {})
   };
 }
 
-export function isUnderNavigationPressure(client: Invoker): boolean {
+export function shouldDeferBackgroundTdlibWork(client: Invoker): boolean {
   const stats = client.getQueueStats?.();
   return (
     stats !== undefined &&

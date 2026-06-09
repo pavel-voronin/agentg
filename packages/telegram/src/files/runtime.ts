@@ -12,10 +12,11 @@ export type FileSubsystemOptions = {
   database: Database;
   events: EventBus;
   failureBackoffMs?: number;
+  fileDownloadDeferMs?: number;
   filesDirectory: string;
-  intervalMs?: number;
   maxConcurrentDownloads?: number;
   maxFilesPerTick?: number;
+  staleCheckMs?: number;
   tdlib: Tdlib;
 };
 
@@ -51,9 +52,12 @@ export type FileDownloadResult = {
 };
 
 export type FileDownloadBatchResult = {
+  delayedCount: number;
   failedCount: number;
+  immediateCount: number;
   processedCount: number;
   readyCount: number;
+  watchdogCount: number;
 };
 
 export type NotificationGroup = UpdateByType<'updateActiveNotifications'>['groups'][number];
@@ -90,13 +94,14 @@ export type StoredCanonicalFile = {
 
 export type FileAssetStatus = 'failed' | 'known' | 'ready';
 
-export const DEFAULT_WORKER_INTERVAL_MS = 1000;
 export const DEFAULT_WORKER_FAILURE_BACKOFF_MS = 5000;
+export const DEFAULT_WORKER_FILE_DOWNLOAD_DEFER_MS = 1000;
 export const DEFAULT_WORKER_MAX_CONCURRENT_DOWNLOADS = 2;
 export const DEFAULT_WORKER_MAX_FILES_PER_TICK = 4;
+export const DEFAULT_WORKER_STALE_CHECK_MS = 5 * 60 * 1000;
 export const CANONICAL_FILES_DIR = 'agentg-media';
 
-export function isUnderNavigationPressure(tdlib: Tdlib): boolean {
+export function shouldDeferFileDownloads(tdlib: Tdlib): boolean {
   const stats = tdlib.getQueueStats();
   return stats.runningCount >= 4 || (stats.highestPendingPriority ?? 0) >= priorities.maximum;
 }
@@ -115,9 +120,12 @@ export function completedFileAssetFromTdlibFile(
 
 export function emptyBatchResult(): FileDownloadBatchResult {
   return {
+    delayedCount: 0,
     failedCount: 0,
+    immediateCount: 0,
     processedCount: 0,
-    readyCount: 0
+    readyCount: 0,
+    watchdogCount: 0
   };
 }
 

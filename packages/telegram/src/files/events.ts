@@ -1,9 +1,12 @@
 import { readFileOwnersForAssets, readFileQueueStats } from './read.js';
 import type { FileSubsystemOptions } from './runtime.js';
+import { recordQueueStatsTelemetry } from './telemetry.js';
 import type { FileOwnerKey } from './types.js';
 
+type FileEventOptions = Pick<FileSubsystemOptions, 'database' | 'events'>;
+
 export async function publishAssetOwnersAndQueue(
-  options: FileSubsystemOptions,
+  options: FileEventOptions,
   assetKeys: string[]
 ): Promise<void> {
   const uniqueAssetKeys = [...new Set(assetKeys)];
@@ -18,7 +21,7 @@ export async function publishAssetOwnersAndQueue(
   await publishFileQueueUpdated(options);
 }
 
-export function publishFileOwnerUpdated(options: FileSubsystemOptions, owner: FileOwnerKey): void {
+export function publishFileOwnerUpdated(options: FileEventOptions, owner: FileOwnerKey): void {
   // TODO(file-event-consumers): this neutral event replaced old direct projection updates for
   // active notifications, chat directory entries, default backgrounds, emoji chat themes, and
   // read-message cards. Add consumers that rebuild those projections from
@@ -27,8 +30,8 @@ export function publishFileOwnerUpdated(options: FileSubsystemOptions, owner: Fi
   options.events.publish('telegram.files.ownerChanged', owner);
 }
 
-export async function publishFileQueueUpdated(options: FileSubsystemOptions): Promise<void> {
-  // TODO(file-event-consumers): this neutral event replaced the old typed file-queue projection
-  // event. File queue consumers must subscribe to this and re-read queue stats.
-  options.events.publish('telegram.files.queueChanged', await readFileQueueStats(options.database));
+export async function publishFileQueueUpdated(options: FileEventOptions): Promise<void> {
+  const stats = await readFileQueueStats(options.database);
+  recordQueueStatsTelemetry(stats);
+  options.events.publish('telegram.files.queueChanged', stats);
 }

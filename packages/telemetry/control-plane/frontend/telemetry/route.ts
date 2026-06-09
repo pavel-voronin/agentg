@@ -1,4 +1,5 @@
 export type TelemetryTabId =
+  | 'files'
   | 'history-sync'
   | 'nats'
   | 'operations'
@@ -8,6 +9,7 @@ export type TelemetryTabId =
 
 const defaultTab: TelemetryTabId = 'operations';
 const tabs = new Set<TelemetryTabId>([
+  'files',
   'history-sync',
   'nats',
   'operations',

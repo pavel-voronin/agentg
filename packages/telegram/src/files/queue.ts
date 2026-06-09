@@ -33,9 +33,10 @@ import {
   DEFAULT_WORKER_MAX_FILES_PER_TICK,
   completedFileAssetFromTdlibFile,
   emptyBatchResult,
-  isUnderNavigationPressure,
-  positiveInteger
+  positiveInteger,
+  shouldDeferFileDownloads
 } from './runtime.js';
+import { recordWorkerBatchResult, recordWorkerJobs, timeWorkerStage } from './telemetry.js';
 
 // TODO(file-size): Split worker loop, TDLib dispatch, canonical storage, and cleanup helpers.
 const DOWNLOAD_CLAIM_TIMEOUT_MS = 5 * 60 * 1000;
@@ -53,40 +54,72 @@ export async function processQueuedFileBatch(
     limits.maxFilesPerTick,
     DEFAULT_WORKER_MAX_FILES_PER_TICK
   );
-  const reconciled = await reconcileStaleFileDownloads(options, maxFilesPerTick);
   const maxConcurrentDownloads = positiveInteger(
     limits.maxConcurrentDownloads,
     DEFAULT_WORKER_MAX_CONCURRENT_DOWNLOADS
   );
 
-  for (let index = 0; index < maxFilesPerTick; index += 1) {
-    if (isUnderNavigationPressure(options.tdlib)) {
-      break;
+  const reconciled = await timeWorkerStage('reconcile_stale', () =>
+    reconcileStaleFileDownloads(options, maxFilesPerTick)
+  );
+  recordWorkerBatchResult('stale', reconciled);
+
+  if (shouldDeferFileDownloads(options.tdlib)) {
+    const delayedCount = await hasQueuedFileDownloads(options.database);
+    if (delayedCount > 0) {
+      return {
+        ...reconciled,
+        delayedCount: reconciled.delayedCount + delayedCount
+      };
     }
-    const row = await claimNextQueuedFileDownload(options.database);
-    if (row === null) {
-      break;
-    }
-    rows.push(row);
+  } else {
+    await timeWorkerStage('claim_batch', async () => {
+      for (let index = 0; index < maxFilesPerTick; index += 1) {
+        const row = await claimNextQueuedFileDownload(options.database);
+        if (row === null) {
+          break;
+        }
+        rows.push(row);
+      }
+    });
+    recordWorkerJobs('batch', 'claimed', rows.length);
   }
 
   if (rows.length === 0) {
-    return reconciled;
+    return {
+      ...reconciled,
+      watchdogCount:
+        reconciled.watchdogCount + (await hasDownloadingFileDownloads(options.database))
+    };
   }
 
-  await publishFileQueueUpdated(options);
+  await timeWorkerStage('publish_changes', () => publishFileQueueUpdated(options));
   const results: FileDownloadResult[] = [];
   for (let index = 0; index < rows.length; index += maxConcurrentDownloads) {
     const batch = rows.slice(index, index + maxConcurrentDownloads);
     results.push(...(await Promise.all(batch.map((row) => processClaimedFile(options, row)))));
   }
 
-  await publishAssetOwnersAndQueue(options, [...new Set(results.map((result) => result.assetKey))]);
+  await timeWorkerStage('publish_changes', () =>
+    publishAssetOwnersAndQueue(options, [...new Set(results.map((result) => result.assetKey))])
+  );
 
+  const batchResult = {
+    delayedCount: 0,
+    failedCount: results.filter((result) => result.failed).length,
+    immediateCount: rows.length === maxFilesPerTick ? 1 : 0,
+    processedCount: results.length,
+    readyCount: results.filter((result) => result.ready).length,
+    watchdogCount: results.filter((result) => !result.failed && !result.ready).length
+  };
+  recordWorkerBatchResult('batch', batchResult);
   return {
-    failedCount: reconciled.failedCount + results.filter((result) => result.failed).length,
-    processedCount: reconciled.processedCount + results.length,
-    readyCount: reconciled.readyCount + results.filter((result) => result.ready).length
+    delayedCount: reconciled.delayedCount + batchResult.delayedCount,
+    failedCount: reconciled.failedCount + batchResult.failedCount,
+    immediateCount: reconciled.immediateCount + batchResult.immediateCount,
+    processedCount: reconciled.processedCount + batchResult.processedCount,
+    readyCount: reconciled.readyCount + batchResult.readyCount,
+    watchdogCount: reconciled.watchdogCount + batchResult.watchdogCount
   };
 }
 
@@ -131,13 +164,17 @@ async function processClaimedFile(
   row: FileDownloadRow
 ): Promise<FileDownloadResult> {
   try {
-    const file = await dispatchTdlibFileDownload(options, row);
+    const file = await timeWorkerStage('dispatch_tdlib', () =>
+      dispatchTdlibFileDownload(options, row)
+    );
     const completedFile = completedFileAssetFromTdlibFile(file);
     if (completedFile !== null) {
-      await canonicalizeCompletedFile(options, {
-        ...completedFile,
-        assetKey: row.assetKey
-      });
+      await timeWorkerStage('canonicalize_completed', () =>
+        canonicalizeCompletedFile(options, {
+          ...completedFile,
+          assetKey: row.assetKey
+        })
+      );
       return {
         assetKey: row.assetKey,
         failed: false,
@@ -152,6 +189,7 @@ async function processClaimedFile(
     };
   } catch (error) {
     await markFileDownloadFailed(options.database, row.assetKey, error);
+    logFileDownloadFailed('batch', row, error);
     return {
       assetKey: row.assetKey,
       failed: true,
@@ -174,11 +212,29 @@ async function reconcileStaleFileDownloads(
   for (const row of rows) {
     results.push(await reconcileStaleFileDownload(options, row));
   }
-  await publishAssetOwnersAndQueue(options, [...new Set(results.map((result) => result.assetKey))]);
+  await timeWorkerStage('publish_changes', () =>
+    publishAssetOwnersAndQueue(options, [...new Set(results.map((result) => result.assetKey))])
+  );
+  const failedCount = results.filter((result) => result.failed).length;
+  const readyCount = results.filter((result) => result.ready).length;
+  const downloadingCount = results.filter((result) => !result.failed && !result.ready).length;
+  logger.info(
+    {
+      downloadingCount,
+      event: 'telegram.file_worker_stale_reconciled',
+      failedCount,
+      readyCount,
+      staleCount: results.length
+    },
+    'telegram file worker reconciled stale downloads'
+  );
   return {
-    failedCount: results.filter((result) => result.failed).length,
+    delayedCount: 0,
+    failedCount,
+    immediateCount: 0,
     processedCount: results.length,
-    readyCount: results.filter((result) => result.ready).length
+    readyCount,
+    watchdogCount: downloadingCount
   };
 }
 
@@ -193,7 +249,9 @@ async function readStaleFileDownloadRows(
     })
     .from(telegramFileDownloadJobs)
     .where(staleDownloadCondition(staleBefore))
-    .orderBy(telegramFileDownloadJobs.updatedAt)
+    .orderBy(
+      sql`coalesce(${telegramFileDownloadJobs.claimedAt}, ${telegramFileDownloadJobs.updatedAt})`
+    )
     .limit(limit);
 
   const rows = await Promise.all(jobs.map((job) => readFileDownloadRow(database, job.assetKey)));
@@ -205,20 +263,22 @@ async function reconcileStaleFileDownload(
   row: FileDownloadRow
 ): Promise<FileDownloadResult> {
   try {
-    const file = await getTdlibFile(options, row);
+    const file = await timeWorkerStage('inspect_tdlib', () => getTdlibFile(options, row));
     const completedFile = completedFileAssetFromTdlibFile(file);
     if (completedFile !== null) {
-      await canonicalizeCompletedFile(options, {
-        ...completedFile,
-        assetKey: row.assetKey
-      });
+      await timeWorkerStage('canonicalize_completed', () =>
+        canonicalizeCompletedFile(options, {
+          ...completedFile,
+          assetKey: row.assetKey
+        })
+      );
       return {
         assetKey: row.assetKey,
         failed: false,
         ready: true
       };
     }
-    await dispatchTdlibFileDownload(options, row);
+    await timeWorkerStage('dispatch_tdlib', () => dispatchTdlibFileDownload(options, row));
     await markFileDownloadDispatched(options.database, row.assetKey);
     return {
       assetKey: row.assetKey,
@@ -227,6 +287,7 @@ async function reconcileStaleFileDownload(
     };
   } catch (error) {
     await markFileDownloadFailed(options.database, row.assetKey, error);
+    logFileDownloadFailed('stale', row, error);
     return {
       assetKey: row.assetKey,
       failed: true,
@@ -341,17 +402,23 @@ export async function processCompletedFileBatch(
   let readyCount = 0;
   for (const file of files) {
     try {
-      await canonicalizeCompletedFile(options, file);
+      await timeWorkerStage('canonicalize_completed', () =>
+        canonicalizeCompletedFile(options, file)
+      );
       readyCount += 1;
-    } catch {
+    } catch (error) {
+      logFileDownloadFailed('completed', file, error);
       failedCount += 1;
     }
   }
 
   return {
+    delayedCount: 0,
     failedCount,
+    immediateCount: completedFiles.size > 0 ? 1 : 0,
     processedCount: files.length,
-    readyCount
+    readyCount,
+    watchdogCount: 0
   };
 }
 
@@ -438,13 +505,7 @@ async function markFileDownloadReady(
     .where(eq(telegramFileAssets.assetKey, assetKey));
 
   await database
-    .update(telegramFileDownloadJobs)
-    .set({
-      claimedAt: null,
-      lastError: null,
-      status: 'completed',
-      updatedAt: sql`now()`
-    })
+    .delete(telegramFileDownloadJobs)
     .where(eq(telegramFileDownloadJobs.assetKey, assetKey));
 }
 
@@ -483,19 +544,8 @@ async function markFileDownloadFailed(
     );
 
   await database
-    .update(telegramFileDownloadJobs)
-    .set({
-      claimedAt: null,
-      lastError: message,
-      status: 'failed',
-      updatedAt: sql`now()`
-    })
-    .where(
-      and(
-        eq(telegramFileDownloadJobs.assetKey, assetKey),
-        sql`${telegramFileDownloadJobs.status} <> 'completed'`
-      )
-    );
+    .delete(telegramFileDownloadJobs)
+    .where(eq(telegramFileDownloadJobs.assetKey, assetKey));
 }
 
 async function storeCanonicalFile(
@@ -595,6 +645,24 @@ function staleDownloadCondition(staleBefore: Date) {
   );
 }
 
+async function hasQueuedFileDownloads(database: Database): Promise<number> {
+  const [row] = await database
+    .select({ assetKey: telegramFileDownloadJobs.assetKey })
+    .from(telegramFileDownloadJobs)
+    .where(eq(telegramFileDownloadJobs.status, 'queued'))
+    .limit(1);
+  return row === undefined ? 0 : 1;
+}
+
+async function hasDownloadingFileDownloads(database: Database): Promise<number> {
+  const [row] = await database
+    .select({ assetKey: telegramFileDownloadJobs.assetKey })
+    .from(telegramFileDownloadJobs)
+    .where(eq(telegramFileDownloadJobs.status, 'downloading'))
+    .limit(1);
+  return row === undefined ? 0 : 1;
+}
+
 function fileExtension(row: FileDownloadRow, localPath: string): string {
   const fromFileName = row.fileName === null ? '' : extname(row.fileName);
   if (safeExtension(fromFileName)) {
@@ -666,6 +734,23 @@ export function logTdlibCleanupError(assetKey: string, error: unknown): void {
       ...logError(error)
     },
     'telegram file download cleanup failed'
+  );
+}
+
+function logFileDownloadFailed(
+  source: 'batch' | 'completed' | 'stale',
+  row: { assetKey: string; transport?: FileDownloadTransport },
+  error: unknown
+): void {
+  logger.warn(
+    {
+      assetKey: row.assetKey,
+      event: 'telegram.file_download_failed',
+      source,
+      transport: row.transport?.kind ?? 'unknown',
+      ...logError(error)
+    },
+    'telegram file download failed'
   );
 }
 

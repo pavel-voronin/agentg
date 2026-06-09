@@ -1,0 +1,1479 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [
+    {
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": true,
+      "title": "Jaeger File Worker",
+      "tooltip": "Open Jaeger UI for file worker traces",
+      "type": "link",
+      "url": "http://localhost:16686/search?service=telegram&operation=telegram.file.worker.tick&lookback=1h&limit=50"
+    }
+  ],
+  "panels": [
+    {
+      "collapsed": true,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoria-metrics"
+      },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "panels": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 3,
+            "w": 24,
+            "x": 0,
+            "y": 1
+          },
+          "id": 2,
+          "options": {
+            "content": "This dashboard is the x-ray for Telegram file handling. Read it top to bottom: first check the red-flag indicators, then inspect backlog and bytes, then worker flow, latency, discovery, dependencies, and traces. Empty latency graphs mean no matching file activity in the selected window; top stat panels keep missing file telemetry visible as No telemetry. Each file-related metric family has exactly one owner section here and a plain-language entry in Metric Meanings.",
+            "mode": "markdown"
+          },
+          "pluginVersion": "12.3.0",
+          "title": "Operator Contract",
+          "type": "text"
+        }
+      ],
+      "title": "How To Read",
+      "type": "row"
+    },
+    {
+      "collapsed": false,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoria-metrics"
+      },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 1
+      },
+      "id": 3,
+      "panels": [],
+      "title": "Current State And Red Flags",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoria-metrics"
+      },
+      "description": "Current number of file download jobs waiting in Postgres. Short spikes are normal after new file discovery; sustained growth means the worker or TDLib cannot keep up.",
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "mappings": [],
+          "noValue": "No telemetry",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 100
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 0,
+        "y": 2
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "expr": "sum(telegram_file_queue_jobs{telegram_file_job_status=\"queued\"})",
+          "instant": true,
+          "legendFormat": "queued",
+          "refId": "A"
+        }
+      ],
+      "title": "Queued Jobs",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoria-metrics"
+      },
+      "description": "Current number of durable file assets in failed state. This should stay at zero in a healthy run; non-zero means files need retry or root-cause inspection.",
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "mappings": [],
+          "noValue": "No telemetry",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 4,
+        "y": 2
+      },
+      "id": 5,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "expr": "sum(telegram_file_queue_assets{telegram_file_asset_status=\"failed\"})",
+          "instant": true,
+          "legendFormat": "failed",
+          "refId": "A"
+        }
+      ],
+      "title": "Failed Assets",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoria-metrics"
+      },
+      "description": "Queued jobs multiplied by a no-worker-tick condition for the selected rate window. Any non-zero value means work exists but the worker did not run.",
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "mappings": [],
+          "noValue": "No telemetry",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 8,
+        "y": 2
+      },
+      "id": 6,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "expr": "sum(telegram_file_queue_jobs{telegram_file_job_status=\"queued\"}) * on() ((sum(rate(telegram_file_worker_stage_duration_seconds_count{telegram_file_worker_stage=\"tick\"}[$__rate_interval])) or (0 * sum(telegram_file_queue_jobs))) == bool 0)",
+          "instant": true,
+          "legendFormat": "queued with no ticks",
+          "refId": "A"
+        }
+      ],
+      "title": "Backlog Without Ticks",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoria-metrics"
+      },
+      "description": "Rate of worker job outcomes marked failed. This is a direct signal that downloads or canonicalization are failing.",
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 3,
+          "mappings": [],
+          "noValue": "No telemetry",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 0.001
+              }
+            ]
+          },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 12,
+        "y": 2
+      },
+      "id": 7,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "expr": "sum(rate(telegram_file_worker_jobs_total{telegram_file_worker_job_outcome=\"failed\"}[$__rate_interval])) or (0 * sum(telegram_file_queue_jobs))",
+          "instant": true,
+          "legendFormat": "failed/s",
+          "refId": "A"
+        }
+      ],
+      "title": "Failure Rate",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoria-metrics"
+      },
+      "description": "Rate of worker retries scheduled because file downloads were deferred while the shared TDLib scheduler was busy. Non-zero explains why queued downloads are waiting without counting deferred jobs as processed jobs.",
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 3,
+          "mappings": [],
+          "noValue": "No telemetry",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.001
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 16,
+        "y": 2
+      },
+      "id": 8,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "expr": "sum(rate(telegram_file_worker_wake_total{telegram_file_worker_wake_reason=\"file_download_defer\"}[$__rate_interval])) or (0 * sum(telegram_file_queue_jobs))",
+          "instant": true,
+          "legendFormat": "defer/s",
+          "refId": "A"
+        }
+      ],
+      "title": "Download Defer Rate",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoria-metrics"
+      },
+      "description": "Rate of stale downloading jobs reconciled by the watchdog. Non-zero means TDLib completion/update events did not finish the job on the first path.",
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 3,
+          "mappings": [],
+          "noValue": "No telemetry",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.001
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 20,
+        "y": 2
+      },
+      "id": 9,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "expr": "sum(rate(telegram_file_worker_jobs_total{telegram_file_worker_job_source=\"stale\"}[$__rate_interval])) or (0 * sum(telegram_file_queue_jobs))",
+          "instant": true,
+          "legendFormat": "stale/s",
+          "refId": "A"
+        }
+      ],
+      "title": "Stale Recovery Rate",
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoria-metrics"
+      },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 7
+      },
+      "id": 11,
+      "panels": [],
+      "title": "Backlog And Bytes",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoria-metrics"
+      },
+      "description": "telegram.file.queue.assets. Durable asset counts by state: known waits for work, ready is canonicalized and usable, failed needs attention.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "id": 12,
+      "options": {
+        "legend": {
+          "calcs": ["lastNotNull"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "refId": "A",
+          "expr": "telegram_file_queue_assets",
+          "legendFormat": "{{telegram_file_asset_status}}"
+        }
+      ],
+      "title": "Asset State",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoria-metrics"
+      },
+      "description": "telegram.file.queue.jobs. Active queue table rows by state: queued waits to be claimed, downloading has been handed to TDLib and waits for completion.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "id": 13,
+      "options": {
+        "legend": {
+          "calcs": ["lastNotNull"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "refId": "A",
+          "expr": "telegram_file_queue_jobs",
+          "legendFormat": "{{telegram_file_job_status}}"
+        }
+      ],
+      "title": "Download Jobs",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoria-metrics"
+      },
+      "description": "telegram.file.queue.bytes. Byte backlog for active queued/downloading jobs where total size is known: downloaded, remaining, and total.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "id": 14,
+      "options": {
+        "legend": {
+          "calcs": ["lastNotNull"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "refId": "A",
+          "expr": "telegram_file_queue_bytes",
+          "legendFormat": "{{telegram_file_queue_bytes_kind}}"
+        }
+      ],
+      "title": "Known Bytes",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoria-metrics"
+      },
+      "description": "telegram.file.queue.unknown_remaining. Active queued/downloading jobs where Telegram has not provided a byte size; bytes panels cannot account for these.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "id": 15,
+      "options": {
+        "legend": {
+          "calcs": ["lastNotNull"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "refId": "A",
+          "expr": "telegram_file_queue_unknown_remaining",
+          "legendFormat": "unknown remaining"
+        }
+      ],
+      "title": "Unknown-Size Remaining Files",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoria-metrics"
+      },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 24
+      },
+      "id": 16,
+      "panels": [],
+      "title": "Worker Flow",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoria-metrics"
+      },
+      "description": "telegram.file.worker.wake. Why the worker was scheduled: startup, enqueue events, updateFile completion, immediate continuation, file-download defer retry, stale watchdog, or error backoff.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 25
+      },
+      "id": 17,
+      "options": {
+        "legend": {
+          "calcs": ["lastNotNull"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "refId": "A",
+          "expr": "sum by (telegram_file_worker_wake_reason) (rate(telegram_file_worker_wake_total[$__rate_interval]))",
+          "legendFormat": "{{telegram_file_worker_wake_reason}}"
+        }
+      ],
+      "title": "Wake Reasons",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoria-metrics"
+      },
+      "description": "telegram.file.worker.jobs. Worker throughput by source and outcome after the worker touched real jobs. File-download defers are wake reasons, not job outcomes.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 25
+      },
+      "id": 18,
+      "options": {
+        "legend": {
+          "calcs": ["lastNotNull"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "refId": "A",
+          "expr": "sum by (telegram_file_worker_job_source, telegram_file_worker_job_outcome) (rate(telegram_file_worker_jobs_total[$__rate_interval]))",
+          "legendFormat": "{{telegram_file_worker_job_source}} {{telegram_file_worker_job_outcome}}"
+        }
+      ],
+      "title": "Job Outcomes By Source",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoria-metrics"
+      },
+      "description": "telegram.file.worker.stage.duration count. How often each worker stage runs: tick, stale reconcile, claim, TDLib dispatch/inspect, canonicalization, and publish changes.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 33
+      },
+      "id": 19,
+      "options": {
+        "legend": {
+          "calcs": ["lastNotNull"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "refId": "A",
+          "expr": "sum by (telegram_file_worker_stage) (rate(telegram_file_worker_stage_duration_seconds_count[$__rate_interval]))",
+          "legendFormat": "{{telegram_file_worker_stage}}"
+        }
+      ],
+      "title": "Worker Stage Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoria-metrics"
+      },
+      "description": "telegram.file.worker.stage.duration p95. Where time is spent inside the worker. High dispatch/inspect points to TDLib; high canonicalize points to filesystem/hash/storage; high publish points to state event fanout.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 33
+      },
+      "id": 20,
+      "options": {
+        "legend": {
+          "calcs": ["lastNotNull"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (telegram_file_worker_stage, le) (rate(telegram_file_worker_stage_duration_seconds_bucket[$__rate_interval])))",
+          "legendFormat": "{{telegram_file_worker_stage}}"
+        }
+      ],
+      "title": "Worker Stage P95",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoria-metrics"
+      },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 41
+      },
+      "id": 21,
+      "panels": [],
+      "title": "File Discovery And Record Path",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoria-metrics"
+      },
+      "description": "telegram.file.record.stage.duration count. How often file references are discovered, slots are replaced, stale slots are pruned, and owner/queue changes are published.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 42
+      },
+      "id": 22,
+      "options": {
+        "legend": {
+          "calcs": ["lastNotNull"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "refId": "A",
+          "expr": "sum by (telegram_file_record_stage, telegram_file_record_cause, telegram_file_owner_model) (rate(telegram_file_record_stage_duration_seconds_count[$__rate_interval]))",
+          "legendFormat": "{{telegram_file_record_stage}} {{telegram_file_record_cause}} {{telegram_file_owner_model}}"
+        }
+      ],
+      "title": "File Record Stage Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoria-metrics"
+      },
+      "description": "telegram.file.record.stage.duration p95. Latency of file discovery/materialization before download work exists. High replace_slots means DB/write pressure in file slot persistence.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 42
+      },
+      "id": 23,
+      "options": {
+        "legend": {
+          "calcs": ["lastNotNull"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (telegram_file_record_stage, telegram_file_record_cause, telegram_file_owner_model, le) (rate(telegram_file_record_stage_duration_seconds_bucket[$__rate_interval])))",
+          "legendFormat": "{{telegram_file_record_stage}} {{telegram_file_record_cause}} {{telegram_file_owner_model}}"
+        }
+      ],
+      "title": "File Record Stage P95",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoria-metrics"
+      },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 50
+      },
+      "id": 24,
+      "panels": [],
+      "title": "Boundaries And Storage",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoria-metrics"
+      },
+      "description": "RPC server count for file-facing Control Plane procedures. requestFile is manual download intent; file serves a ready canonical file.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 51
+      },
+      "id": 25,
+      "options": {
+        "legend": {
+          "calcs": ["lastNotNull"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "refId": "A",
+          "expr": "sum by (rpc_method) (rate(rpc_server_call_duration_seconds_count{service_name=\"control-plane-server\", rpc_method=~\"telegram[.]cp[.](file|requestFile)\"}[$__rate_interval]))",
+          "legendFormat": "{{rpc_method}}"
+        }
+      ],
+      "title": "Control Plane File RPC Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoria-metrics"
+      },
+      "description": "RPC server p95 for file-facing procedures. High requestFile latency points to policy/DB enqueue; high file latency points to static file serving.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 51
+      },
+      "id": 26,
+      "options": {
+        "legend": {
+          "calcs": ["lastNotNull"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (rpc_method, le) (rate(rpc_server_call_duration_seconds_bucket{service_name=\"control-plane-server\", rpc_method=~\"telegram[.]cp[.](file|requestFile)\"}[$__rate_interval])))",
+          "legendFormat": "{{rpc_method}}"
+        }
+      ],
+      "title": "Control Plane File RPC P95",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoria-metrics"
+      },
+      "description": "App DB operation rate for queries touching file subsystem tables. This is the DB x-ray for file queue and asset/slot storage load.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 59
+      },
+      "id": 27,
+      "options": {
+        "legend": {
+          "calcs": ["lastNotNull"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "refId": "A",
+          "expr": "sum by (service_name, db_query_summary) (rate(db_client_operation_duration_seconds_count{service_name=~\"telegram|control-plane-server\", db_system_name=\"postgresql\", db_query_summary=~\".*telegram_file_.*|.*telegram_tdlib_files.*\"}[$__rate_interval]))",
+          "legendFormat": "{{service_name}} {{db_query_summary}}"
+        }
+      ],
+      "title": "File DB Query Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoria-metrics"
+      },
+      "description": "App DB p95 for file subsystem tables. Use this with File DB Query Rate to confirm whether file queue changes are causing DB pressure.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 59
+      },
+      "id": 28,
+      "options": {
+        "legend": {
+          "calcs": ["lastNotNull"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (service_name, db_query_summary, le) (rate(db_client_operation_duration_seconds_bucket{service_name=~\"telegram|control-plane-server\", db_system_name=\"postgresql\", db_query_summary=~\".*telegram_file_.*|.*telegram_tdlib_files.*\"}[$__rate_interval])))",
+          "legendFormat": "{{service_name}} {{db_query_summary}}"
+        }
+      ],
+      "title": "File DB Query P95",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoria-metrics"
+      },
+      "description": "Rate of telegram.files.* NATS publishes. queueChanged wakes the file worker and mounted UI state; ownerChanged tells views that file references changed.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 67
+      },
+      "id": 29,
+      "options": {
+        "legend": {
+          "calcs": ["lastNotNull"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "refId": "A",
+          "expr": "sum by (service_name, messaging_destination_name) (rate(messaging_client_operation_duration_seconds_count{messaging_system=\"nats\", messaging_destination_name=~\"telegram[.]files[.].*\"}[$__rate_interval]))",
+          "legendFormat": "{{service_name}} {{messaging_destination_name}}"
+        }
+      ],
+      "title": "File Events Send Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoria-metrics"
+      },
+      "description": "P95 latency for publishing telegram.files.* events. High values mean file state publication itself is slow before subscribers can react.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 67
+      },
+      "id": 36,
+      "options": {
+        "legend": {
+          "calcs": ["lastNotNull"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "editorMode": "code",
+          "expr": "histogram_quantile(0.95, sum by (service_name, messaging_destination_name, le) (rate(messaging_client_operation_duration_seconds_bucket{messaging_system=\"nats\", messaging_destination_name=~\"telegram[.]files[.].*\"}[$__rate_interval])))",
+          "legendFormat": "{{service_name}} {{messaging_destination_name}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "File Events Send P95",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoria-metrics"
+      },
+      "description": "Rate of telegram.files.* event handling by subscribers. Use it with send rate to see whether subscribers are actually consuming file state changes.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 75
+      },
+      "id": 37,
+      "options": {
+        "legend": {
+          "calcs": ["lastNotNull"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "editorMode": "code",
+          "expr": "sum by (service_name, messaging_destination_name, messaging_destination_subscription_name) (rate(messaging_process_duration_seconds_count{messaging_system=\"nats\", messaging_destination_name=~\"telegram[.]files[.].*\"}[$__rate_interval]))",
+          "legendFormat": "{{service_name}} {{messaging_destination_name}} {{messaging_destination_subscription_name}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "File Events Process Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoria-metrics"
+      },
+      "description": "P95 latency for processing telegram.files.* events. High values mean file queue/owner changes are published but subscribers are slow to apply them.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 75
+      },
+      "id": 30,
+      "options": {
+        "legend": {
+          "calcs": ["lastNotNull"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (service_name, messaging_destination_name, messaging_destination_subscription_name, le) (rate(messaging_process_duration_seconds_bucket{messaging_system=\"nats\", messaging_destination_name=~\"telegram[.]files[.].*\"}[$__rate_interval])))",
+          "legendFormat": "{{service_name}} {{messaging_destination_name}} {{messaging_destination_subscription_name}}"
+        }
+      ],
+      "title": "File Events Process P95",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": true,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoria-metrics"
+      },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 83
+      },
+      "id": 31,
+      "panels": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 10,
+            "w": 24,
+            "x": 0,
+            "y": 84
+          },
+          "id": 33,
+          "options": {
+            "content": "| Metric family | Where it lives | What it answers | Bad sign |\n|---|---|---|---|\n| `telegram.file.queue.assets` | Current State, Backlog And Bytes | How many durable file assets are known, ready, or failed. | `failed > 0` or `known` grows while jobs do not move. |\n| `telegram.file.queue.jobs` | Current State, Backlog And Bytes | How many download jobs are queued or already handed to TDLib. | `queued` grows or `downloading` stays high without ready/failed outcomes. |\n| `telegram.file.queue.bytes` | Backlog And Bytes | Known downloaded, remaining, and total bytes for active jobs. | Remaining bytes grows while worker job rate is flat. |\n| `telegram.file.queue.unknown_remaining` | Backlog And Bytes | Active jobs whose size is unknown, so byte panels undercount backlog. | High value means the byte x-ray is incomplete. |\n| `telegram.file.worker.wake` | Worker Flow | Why the worker was scheduled. | `file_download_defer` or `failure_backoff` dominates. |\n| `telegram.file.worker.jobs` | Current State, Worker Flow | What happened to jobs after the worker touched them. | `failed` or `stale` dominates `ready`. |\n| `telegram.file.worker.stage.duration` | Current State, Worker Flow | How often each worker stage runs and where worker time is spent. | High `dispatch_tdlib`, `canonicalize_completed`, or `publish_changes`. |\n| `telegram.file.record.stage.duration` | File Discovery And Record Path | Time spent discovering, materializing, pruning, and publishing file slots before downloads exist. | High `replace_slots` or `publish_changes`. |\n| `rpc.server.call.duration` filtered to file procedures | Boundaries And Storage | File-facing Control Plane request rate and latency. | High `requestFile` points to enqueue/policy/DB; high `file` points to serving ready files. |\n| `db.client.operation.duration` filtered to file tables | Boundaries And Storage | DB load and latency from file queue, asset, slot, and TDLib file tables. | High rate with high p95 means file storage is the DB pressure source. |\n| `messaging.client.operation.duration` filtered to `telegram.files.*` | Boundaries And Storage | Rate and latency of publishing file queue/owner state changes. | High p95 means state changes are slow before subscribers see them. |\n| `messaging.process.duration` filtered to `telegram.files.*` | Boundaries And Storage | Rate and latency of subscribers applying file queue/owner events. | Send rate without process rate, or high process p95. |",
+            "mode": "markdown"
+          },
+          "pluginVersion": "12.3.0",
+          "title": "Metric Meanings",
+          "type": "text"
+        }
+      ],
+      "title": "Metric Dictionary",
+      "type": "row"
+    },
+    {
+      "collapsed": false,
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoria-metrics"
+      },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 84
+      },
+      "id": 34,
+      "panels": [],
+      "title": "Trace Drilldown",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "jaeger",
+        "uid": "jaeger"
+      },
+      "description": "Recent Jaeger traces for telegram.file.worker.tick. Open a trace when stage p95 or failure indicators point to a specific worker pass.",
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 85
+      },
+      "id": 35,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": ["sum"],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "jaeger",
+            "uid": "jaeger"
+          },
+          "limit": 20,
+          "operation": "telegram.file.worker.tick",
+          "queryType": "search",
+          "refId": "A",
+          "service": "telegram"
+        }
+      ],
+      "title": "Recent File Worker Traces",
+      "type": "table"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 41,
+  "tags": ["agentg", "observability", "telegram", "files"],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Files",
+  "uid": "agentg-files",
+  "version": 1
+}

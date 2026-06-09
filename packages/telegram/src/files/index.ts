@@ -16,11 +16,11 @@ import { readFileQueueStats } from './read.js';
 import { requestFileSlot } from './request.js';
 import {
   DEFAULT_WORKER_FAILURE_BACKOFF_MS,
-  DEFAULT_WORKER_INTERVAL_MS,
+  DEFAULT_WORKER_FILE_DOWNLOAD_DEFER_MS,
   DEFAULT_WORKER_MAX_CONCURRENT_DOWNLOADS,
   DEFAULT_WORKER_MAX_FILES_PER_TICK,
+  DEFAULT_WORKER_STALE_CHECK_MS,
   completedFileAssetFromTdlibFile,
-  isUnderNavigationPressure,
   positiveInteger,
   type ActiveFileGeneration,
   type ChatBackground,
@@ -42,6 +42,13 @@ import {
   type UserFullInfo
 } from './runtime.js';
 import { logWorkerError, processCompletedFileBatch, processQueuedFileBatch } from './queue.js';
+import {
+  recordQueueStatsTelemetry,
+  recordWorkerBatchResult,
+  recordWorkerWake,
+  timeWorkerStage,
+  type WorkerWakeReason
+} from './telemetry.js';
 import type { FileOwner } from './types.js';
 
 const logger = createLogger('telegram');
@@ -122,8 +129,8 @@ type FileSubsystemRuntime = {
 export function useFiles(options: FileSubsystemOptions): FileSubsystemRuntime {
   const completedFiles = new Map<string, CompletedFileAsset>();
   const activeFileGenerations = new Map<string, ActiveFileGeneration>();
-  const intervalMs = options.intervalMs ?? DEFAULT_WORKER_INTERVAL_MS;
   const failureBackoffMs = options.failureBackoffMs ?? DEFAULT_WORKER_FAILURE_BACKOFF_MS;
+  const fileDownloadDeferMs = options.fileDownloadDeferMs ?? DEFAULT_WORKER_FILE_DOWNLOAD_DEFER_MS;
   const maxConcurrentDownloads = positiveInteger(
     options.maxConcurrentDownloads,
     DEFAULT_WORKER_MAX_CONCURRENT_DOWNLOADS
@@ -132,12 +139,15 @@ export function useFiles(options: FileSubsystemOptions): FileSubsystemRuntime {
     options.maxFilesPerTick,
     DEFAULT_WORKER_MAX_FILES_PER_TICK
   );
+  const staleCheckMs = positiveInteger(options.staleCheckMs, DEFAULT_WORKER_STALE_CHECK_MS);
   let closed = false;
   let pending = false;
   let running = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let timerDueAtMs: number | undefined;
+  let queueSubscription: { unsubscribe(): void } | undefined;
 
-  const schedule = (delayMs = intervalMs): void => {
+  const schedule = (reason: WorkerWakeReason, delayMs = 0): void => {
     if (closed) {
       return;
     }
@@ -145,13 +155,23 @@ export function useFiles(options: FileSubsystemOptions): FileSubsystemRuntime {
       pending = true;
       return;
     }
+    const normalizedDelayMs = Math.max(0, delayMs);
+    const dueAtMs = Date.now() + normalizedDelayMs;
     if (timer !== undefined) {
-      return;
+      if (timerDueAtMs !== undefined && timerDueAtMs <= dueAtMs) {
+        return;
+      }
+      clearTimeout(timer);
+      timer = undefined;
+      timerDueAtMs = undefined;
     }
+    recordWorkerWake(reason);
+    timerDueAtMs = dueAtMs;
     timer = setTimeout(() => {
       timer = undefined;
+      timerDueAtMs = undefined;
       runTick();
-    }, delayMs);
+    }, normalizedDelayMs);
     timer.unref();
   };
 
@@ -174,10 +194,23 @@ export function useFiles(options: FileSubsystemOptions): FileSubsystemRuntime {
     }
     if (pending) {
       pending = false;
-      schedule(0);
+      schedule('batch_continuation', 0);
       return;
     }
-    schedule(result.failedCount > 0 && result.readyCount === 0 ? failureBackoffMs : intervalMs);
+    if (result.immediateCount > 0) {
+      schedule(
+        'batch_continuation',
+        result.failedCount > 0 && result.readyCount === 0 ? failureBackoffMs : 0
+      );
+      return;
+    }
+    if (result.delayedCount > 0) {
+      schedule('file_download_defer', fileDownloadDeferMs);
+      return;
+    }
+    if (result.watchdogCount > 0) {
+      schedule('stale_watchdog', staleCheckMs);
+    }
   };
 
   const handleTickError = (error: unknown): void => {
@@ -188,27 +221,33 @@ export function useFiles(options: FileSubsystemOptions): FileSubsystemRuntime {
     }
     if (pending) {
       pending = false;
-      schedule(0);
+      schedule('batch_continuation', 0);
       return;
     }
-    schedule(failureBackoffMs);
+    schedule('failure_backoff', failureBackoffMs);
   };
 
-  const tick = async (): Promise<FileDownloadBatchResult> => {
-    const canonicalized = await processCompletedFileBatch(options, completedFiles, maxFilesPerTick);
-    if (isUnderNavigationPressure(options.tdlib)) {
-      return canonicalized;
-    }
-    const queued = await processQueuedFileBatch(options, {
-      maxConcurrentDownloads,
-      maxFilesPerTick
+  const tick = (): Promise<FileDownloadBatchResult> =>
+    timeWorkerStage('tick', async () => {
+      const canonicalized = await processCompletedFileBatch(
+        options,
+        completedFiles,
+        maxFilesPerTick
+      );
+      recordWorkerBatchResult('completed', canonicalized);
+      const queued = await processQueuedFileBatch(options, {
+        maxConcurrentDownloads,
+        maxFilesPerTick
+      });
+      return {
+        delayedCount: canonicalized.delayedCount + queued.delayedCount,
+        failedCount: canonicalized.failedCount + queued.failedCount,
+        immediateCount: canonicalized.immediateCount + queued.immediateCount,
+        processedCount: canonicalized.processedCount + queued.processedCount,
+        readyCount: canonicalized.readyCount + queued.readyCount,
+        watchdogCount: canonicalized.watchdogCount + queued.watchdogCount
+      };
     });
-    return {
-      failedCount: canonicalized.failedCount + queued.failedCount,
-      processedCount: canonicalized.processedCount + queued.processedCount,
-      readyCount: canonicalized.readyCount + queued.readyCount
-    };
-  };
 
   function close(): undefined {
     closed = true;
@@ -222,12 +261,24 @@ export function useFiles(options: FileSubsystemOptions): FileSubsystemRuntime {
       clearTimeout(timer);
       timer = undefined;
     }
+    timerDueAtMs = undefined;
+    queueSubscription?.unsubscribe();
+    queueSubscription = undefined;
     return undefined;
+  }
+
+  async function recordFileSlotsAndWake(operation: Promise<boolean>): Promise<void> {
+    if (await operation) {
+      schedule('slot_enqueue', 0);
+    }
   }
 
   const files: FileSubsystem = {
     getQueueStats() {
-      return readFileQueueStats(options.database);
+      return readFileQueueStats(options.database).then((stats) => {
+        recordQueueStatsTelemetry(stats);
+        return stats;
+      });
     },
     async handleUpdateFile(update): Promise<void> {
       const changedAssets = await handleFileSnapshot(options.database, update.file);
@@ -240,7 +291,7 @@ export function useFiles(options: FileSubsystemOptions): FileSubsystemRuntime {
           });
         }
         if (changedAssets.length > 0) {
-          schedule(0);
+          schedule('update_file_completed', 0);
         }
       }
       await publishAssetOwnersAndQueue(options, changedAssets);
@@ -286,235 +337,287 @@ export function useFiles(options: FileSubsystemOptions): FileSubsystemRuntime {
       await rm(active.destinationPath, { force: true });
     },
     async recordChatFiles(chat, cause): Promise<void> {
-      await recordFileSlotUpdate(
-        options,
-        {
-          chat: {
-            chat: tdJsonObject(chat),
-            id: String(chat.id)
-          }
-        },
-        cause
+      await recordFileSlotsAndWake(
+        recordFileSlotUpdate(
+          options,
+          {
+            chat: {
+              chat: tdJsonObject(chat),
+              id: String(chat.id)
+            }
+          },
+          cause
+        )
       );
     },
     async recordChatBackgroundFiles(chatId, background, cause): Promise<void> {
-      await recordFileSlotUpdate(
-        options,
-        {
-          chatBackground: {
-            background: tdJsonObject(background),
-            chatId
+      await recordFileSlotsAndWake(
+        recordFileSlotUpdate(
+          options,
+          {
+            chatBackground: {
+              background: tdJsonObject(background),
+              chatId
+            }
+          },
+          cause,
+          {
+            slotKeyPrefix: 'background.'
           }
-        },
-        cause,
-        {
-          slotKeyPrefix: 'background.'
-        }
+        )
       );
     },
     async recordChatPhotoFiles(chatId, photo, cause): Promise<void> {
-      await recordFileSlotUpdate(
-        options,
-        {
-          chatPhoto: {
-            chatId,
-            photo: photo === null ? null : tdJsonObject(photo)
+      await recordFileSlotsAndWake(
+        recordFileSlotUpdate(
+          options,
+          {
+            chatPhoto: {
+              chatId,
+              photo: photo === null ? null : tdJsonObject(photo)
+            }
+          },
+          cause,
+          {
+            slotKeyPrefix: 'avatar.'
           }
-        },
-        cause,
-        {
-          slotKeyPrefix: 'avatar.'
-        }
+        )
       );
     },
     async recordChatThemeFiles(chatId, theme, cause): Promise<void> {
-      await recordFileSlotUpdate(
-        options,
-        {
-          chatTheme: {
-            chatId,
-            theme: theme === null ? null : tdJsonObject(theme)
+      await recordFileSlotsAndWake(
+        recordFileSlotUpdate(
+          options,
+          {
+            chatTheme: {
+              chatId,
+              theme: theme === null ? null : tdJsonObject(theme)
+            }
+          },
+          cause,
+          {
+            slotKeyPrefix: 'theme.'
           }
-        },
-        cause,
-        {
-          slotKeyPrefix: 'theme.'
-        }
+        )
       );
     },
     async recordDefaultBackgroundFiles(key, background, cause): Promise<void> {
-      await recordFileSlotUpdate(
-        options,
-        {
-          defaultBackground: {
-            background: background === null ? null : tdJsonObject(background),
-            key
+      await recordFileSlotsAndWake(
+        recordFileSlotUpdate(
+          options,
+          {
+            defaultBackground: {
+              background: background === null ? null : tdJsonObject(background),
+              key
+            }
+          },
+          cause,
+          {
+            slotKeyPrefix: 'background.'
           }
-        },
-        cause,
-        {
-          slotKeyPrefix: 'background.'
-        }
+        )
       );
     },
     async recordEmojiChatThemeFiles(themes, cause): Promise<void> {
-      await recordFileSlotUpdate(
-        options,
-        {
-          emojiChatThemes: {
-            themes: themes.map(tdJsonObject)
-          }
-        },
-        cause
+      await recordFileSlotsAndWake(
+        recordFileSlotUpdate(
+          options,
+          {
+            emojiChatThemes: {
+              themes: themes.map(tdJsonObject)
+            }
+          },
+          cause
+        )
       );
     },
     async recordMessageContentFiles(update, cause): Promise<void> {
-      await recordFileSlotUpdate(
-        options,
-        {
-          contentUpdate: {
-            chatId: String(update.chat_id),
-            content: tdJsonObject(update.new_content),
-            messageId: String(update.message_id)
-          }
-        },
-        cause
+      await recordFileSlotsAndWake(
+        recordFileSlotUpdate(
+          options,
+          {
+            contentUpdate: {
+              chatId: String(update.chat_id),
+              content: tdJsonObject(update.new_content),
+              messageId: String(update.message_id)
+            }
+          },
+          cause
+        )
       );
     },
     async recordMessageFiles(message, cause): Promise<void> {
-      await recordFileSlotUpdate(
-        options,
-        {
-          message: {
-            chatId: String(message.chat_id),
-            content: tdJsonObject(message.content),
-            messageId: String(message.id)
-          }
-        },
-        cause
+      await recordFileSlotsAndWake(
+        recordFileSlotUpdate(
+          options,
+          {
+            message: {
+              chatId: String(message.chat_id),
+              content: tdJsonObject(message.content),
+              messageId: String(message.id)
+            }
+          },
+          cause
+        )
       );
     },
     async recordNotificationGroupFiles(groups, cause): Promise<void> {
-      await recordFileSlotUpdate(
-        options,
-        {
-          notificationGroups: {
-            groups: groups.map(tdJsonObject)
-          }
-        },
-        cause
+      await recordFileSlotsAndWake(
+        recordFileSlotUpdate(
+          options,
+          {
+            notificationGroups: {
+              groups: groups.map(tdJsonObject)
+            }
+          },
+          cause
+        )
       );
     },
     async recordActiveNotificationSnapshotFiles(groups, cause): Promise<void> {
-      await recordFileSlotUpdate(
-        options,
-        {
-          notificationGroups: {
-            groups: groups.map(tdJsonObject)
+      await recordFileSlotsAndWake(
+        recordFileSlotUpdate(
+          options,
+          {
+            notificationGroups: {
+              groups: groups.map(tdJsonObject)
+            }
+          },
+          cause,
+          undefined,
+          {
+            pruneStaleActiveNotificationSlots: true
           }
-        },
-        cause,
-        undefined,
-        {
-          pruneStaleActiveNotificationSlots: true
-        }
+        )
       );
     },
     async recordNotificationFiles(groupId, notification, cause): Promise<void> {
-      await recordFileSlotUpdate(
-        options,
-        {
-          notificationGroups: {
-            groups: [
-              {
-                id: groupId,
-                notifications: [tdJsonObject(notification)]
-              }
-            ]
-          }
-        },
-        cause
+      await recordFileSlotsAndWake(
+        recordFileSlotUpdate(
+          options,
+          {
+            notificationGroups: {
+              groups: [
+                {
+                  id: groupId,
+                  notifications: [tdJsonObject(notification)]
+                }
+              ]
+            }
+          },
+          cause
+        )
       );
     },
     async recordQuickReplyMessageFiles(message, cause): Promise<void> {
-      await recordFileSlotUpdate(
-        options,
-        {
-          quickReplyMessage: {
-            content: tdJsonObject(message.content),
-            messageId: String(message.id)
-          }
-        },
-        cause
+      await recordFileSlotsAndWake(
+        recordFileSlotUpdate(
+          options,
+          {
+            quickReplyMessage: {
+              content: tdJsonObject(message.content),
+              messageId: String(message.id)
+            }
+          },
+          cause
+        )
       );
     },
     async recordStickerSetFiles(stickerSet, cause): Promise<void> {
-      await recordFileSlotUpdate(
-        options,
-        {
-          stickerSet: {
-            id: stickerSet.id,
-            stickerSet: tdJsonObject(stickerSet)
-          }
-        },
-        cause
+      await recordFileSlotsAndWake(
+        recordFileSlotUpdate(
+          options,
+          {
+            stickerSet: {
+              id: stickerSet.id,
+              stickerSet: tdJsonObject(stickerSet)
+            }
+          },
+          cause
+        )
       );
     },
     async recordStoryFiles(story, cause): Promise<void> {
-      await recordFileSlotUpdate(
-        options,
-        {
-          story: {
-            posterChatId: String(story.poster_chat_id),
-            story: tdJsonObject(story),
-            storyId: story.id
-          }
-        },
-        cause
+      await recordFileSlotsAndWake(
+        recordFileSlotUpdate(
+          options,
+          {
+            story: {
+              posterChatId: String(story.poster_chat_id),
+              story: tdJsonObject(story),
+              storyId: story.id
+            }
+          },
+          cause
+        )
       );
     },
     async recordTrendingStickerSetFiles(stickerSets, cause): Promise<void> {
-      await recordFileSlotUpdate(
-        options,
-        {
-          stickerSetInfos: {
-            sets: stickerSets.sets.map(tdJsonObject)
+      await recordFileSlotsAndWake(
+        recordFileSlotUpdate(
+          options,
+          {
+            stickerSetInfos: {
+              sets: stickerSets.sets.map(tdJsonObject)
+            }
+          },
+          cause,
+          {
+            slotKeyPrefix: 'trending.'
           }
-        },
-        cause,
-        {
-          slotKeyPrefix: 'trending.'
-        }
+        )
       );
     },
     async recordUserFullInfoFiles(userId, info, cause): Promise<void> {
-      await recordFileSlotUpdate(
-        options,
-        {
-          userFullInfo: {
-            info: tdJsonObject(info),
-            userId
+      await recordFileSlotsAndWake(
+        recordFileSlotUpdate(
+          options,
+          {
+            userFullInfo: {
+              info: tdJsonObject(info),
+              userId
+            }
+          },
+          cause,
+          {
+            slotKeyPrefix: 'full_info.'
           }
-        },
-        cause,
-        {
-          slotKeyPrefix: 'full_info.'
-        }
+        )
       );
     },
     async deleteStoryFileSlots(input): Promise<void> {
       await deleteStorySlots(options.database, input);
     },
     async requestFile(input): Promise<FileRequestResult> {
-      return requestFileSlot(options, input);
+      const result = await requestFileSlot(options, input);
+      if (result.decision.action === 'enqueue') {
+        schedule('manual_enqueue', 0);
+      }
+      return result;
     }
   };
 
   return {
     files,
     start(): Promise<() => undefined> {
-      runTick();
+      queueSubscription = options.events.subscribe('telegram.files.queueChanged', (event) => {
+        if (queueStatsHasQueuedFiles(event.data)) {
+          schedule('queue_event', 0);
+        }
+      });
+      void readFileQueueStats(options.database).then(recordQueueStatsTelemetry, logWorkerError);
+      schedule('startup', 0);
       return Promise.resolve(close);
     }
   };
+}
+
+function queueStatsHasQueuedFiles(value: unknown): boolean {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'queuedCount' in value &&
+    typeof value.queuedCount === 'number' &&
+    value.queuedCount > 0
+  );
 }
