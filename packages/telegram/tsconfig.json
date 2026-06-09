@@ -1,4 +1,4 @@
 {
   "extends": "../../tsconfig.json",
-  "include": ["control-plane", "src", "tests"]
+  "include": ["dashboard", "src", "tests"]
 }

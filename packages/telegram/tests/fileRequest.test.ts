@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Database } from '../src/database/client.js';
 import { chatRef } from '../src/model/refs.js';
-import { procedures } from '../control-plane/backend/procedures.js';
+import { procedures } from '../dashboard/backend/procedures.js';
 import { requestFileSlot } from '../src/files/request.js';
 import type { FileSubsystemOptions } from '../src/files/runtime.js';
 
@@ -28,7 +28,7 @@ describe('Telegram file request', () => {
     });
   });
 
-  it('uses the same domain request path from the Control Plane procedure', async () => {
+  it('uses the same domain request path from the Dashboard procedure', async () => {
     const events: { data?: unknown; type: string }[] = [];
     const rpc = procedures({
       callTelegramProcedure() {
@@ -39,7 +39,7 @@ describe('Telegram file request', () => {
       filesDirectory: '/tmp/agentg-test-files'
     });
 
-    const result = await rpc['telegram.cp.requestFile']({
+    const result = await rpc['telegram.dashboard.requestFile']({
       owner: chatRef('chat-1'),
       slotKey: 'photo.main'
     });

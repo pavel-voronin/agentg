@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   telemetryRouteSegments,
   telemetryTabFromSegment
-} from '../control-plane/frontend/telemetry/route.js';
+} from '../dashboard/frontend/telemetry/route.js';
 
 describe('telemetry route', () => {
   it('uses operations for the empty telemetry route', () => {

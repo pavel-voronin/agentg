@@ -4,7 +4,7 @@ AgenTG is a pre-alpha Telegram client runtime for a personal agent.
 
 It runs as a local developer stack: Telegram ingestion, Postgres, NATS,
 OpenTelemetry Collector, VictoriaMetrics, Jaeger, Grafana, NATS and Postgres
-exporters, history sync, gateway, and the Control Plane UI.
+exporters, history sync, gateway, and the Dashboard UI.
 
 ## Requirements
 
@@ -54,11 +54,11 @@ npm run dev
 This command starts Postgres, NATS, OpenTelemetry Collector, VictoriaMetrics,
 Jaeger, Grafana, and the NATS and Postgres exporters through Docker Compose,
 runs database migrations, and starts the Telegram runtime, history sync,
-gateway, Control Plane server, and the Vite Control Plane app through Process
-Compose in detached mode. The Control Plane server owns the Telemetry page
+gateway, Dashboard server, and the Vite Dashboard app through Process
+Compose in detached mode. The Dashboard server owns the Telemetry page
 backend procedures.
 
-After `npm run dev:status` shows `control-plane` as healthy, open:
+After `npm run dev:status` shows `dashboard` as healthy, open:
 
 [http://127.0.0.1:8788/](http://127.0.0.1:8788/)
 
@@ -74,7 +74,7 @@ Development observability UIs:
 - VictoriaMetrics VMUI:
   [http://127.0.0.1:8428/vmui/](http://127.0.0.1:8428/vmui/)
 
-The Telegram RPC server listens on `127.0.0.1:8702`. The Control Plane server
+The Telegram RPC server listens on `127.0.0.1:8702`. The Dashboard server
 listens on `127.0.0.1:8789`.
 
 Manage the detached Process Compose app stack with:
@@ -82,7 +82,7 @@ Manage the detached Process Compose app stack with:
 ```sh
 npm run dev:status
 npm run dev:attach
-npm run dev:logs -- control-plane-server --tail 100
+npm run dev:logs -- dashboard-server --tail 100
 npm run dev:restart -- telegram
 npm run dev:down
 ```
@@ -109,7 +109,7 @@ TELEGRAM_API_HASH=your_api_hash
 Build and start the product stack:
 
 ```sh
-docker compose --profile container-client --profile control-plane up --build
+docker compose --profile container-client --profile dashboard up --build
 ```
 
 Docker Compose defaults `AGENTG_TELEMETRY` to `0`. To run the same stack with
@@ -117,12 +117,12 @@ OpenTelemetry metrics, traces, NATS exporter metrics, and Postgres exporter
 metrics enabled:
 
 ```sh
-AGENTG_TELEMETRY=1 docker compose --profile telemetry --profile container-client --profile control-plane up --build
+AGENTG_TELEMETRY=1 docker compose --profile telemetry --profile container-client --profile dashboard up --build
 ```
 
 This starts Postgres, NATS, OpenTelemetry Collector, VictoriaMetrics, Jaeger,
 Grafana, the NATS exporter, the Postgres exporter, Registry, Telegram
-ingestion, History Sync, Gateway, and Control Plane. Open:
+ingestion, History Sync, Gateway, and Dashboard. Open:
 
 [http://127.0.0.1:8788/](http://127.0.0.1:8788/)
 
@@ -130,7 +130,7 @@ Gateway listens on `127.0.0.1:8787`. Stop the stack with `Ctrl+C`, or from
 another terminal:
 
 ```sh
-docker compose --profile container-client --profile control-plane down
+docker compose --profile container-client --profile dashboard down
 ```
 
 ## Useful Commands

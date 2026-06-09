@@ -12605,7 +12605,7 @@
       "handlerPlan": {
         "maturity": 1,
         "status": "draft",
-        "summary": "Replace the full chat-folder info snapshot and publish the folder list for Control Plane.",
+        "summary": "Replace the full chat-folder info snapshot and publish the folder list for Dashboard.",
         "steps": [
           {
             "id": "replace-folder-info-rows",
@@ -13757,7 +13757,7 @@
             "op": "runEffect",
             "effect": "tdlibStatus.publishConnectionState",
             "effectKind": "other",
-            "description": "Update transient in-memory TDLib connectivity state and publish the control-plane telegram.status snapshot. Do not store this state in the database.",
+            "description": "Update transient in-memory TDLib connectivity state and publish the dashboard telegram.status snapshot. Do not store this state in the database.",
             "sourceFields": ["Update.updateConnectionState.state"]
           },
           {
@@ -16245,7 +16245,7 @@
             "id": "publish-chat-join-request-created",
             "op": "publishEvent",
             "event": "telegram.chat_join_request.created",
-            "description": "Publish a live join-request event after storage, carrying chat_id, request, user_chat_id, and nullable invite_link so bot and Control Plane consumers can react without deriving aggregate pending-request counts.",
+            "description": "Publish a live join-request event after storage, carrying chat_id, request, user_chat_id, and nullable invite_link so bot and Dashboard consumers can react without deriving aggregate pending-request counts.",
             "sourceFields": [
               "Update.updateNewChatJoinRequest.chat_id",
               "Update.updateNewChatJoinRequest.request",
@@ -16971,7 +16971,7 @@
             "id": "publish-pending-text-message-updated",
             "op": "publishEvent",
             "event": "telegram.pending_text_message.updated",
-            "description": "Publish the transient pending text message for Control Plane rendering. Include chat_id, forum_topic_id where 0 means no forum topic, draft_id, text.text, and text.entities; consumers replace any visible pending message with the same draft_id in the same message thread.",
+            "description": "Publish the transient pending text message for Dashboard rendering. Include chat_id, forum_topic_id where 0 means no forum topic, draft_id, text.text, and text.entities; consumers replace any visible pending message with the same draft_id in the same message thread.",
             "sourceFields": [
               "Update.updatePendingTextMessage.chat_id",
               "Update.updatePendingTextMessage.forum_topic_id",

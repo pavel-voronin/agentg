@@ -118,12 +118,12 @@ processes:
       timeout_seconds: 1
       failure_threshold: 120
 
-  control-plane-server:
+  dashboard-server:
     namespace: app
-    description: Browser-facing Control Plane server and event bridge.
-    command: npm run dev:control-plane-server
+    description: Browser-facing Dashboard server and event bridge.
+    command: npm run dev:dashboard-server
     environment:
-      - 'OTEL_SERVICE_NAME=control-plane-server'
+      - 'OTEL_SERVICE_NAME=dashboard-server'
     availability:
       restart: always
       backoff_seconds: 2
@@ -143,17 +143,17 @@ processes:
       timeout_seconds: 1
       failure_threshold: 120
 
-  control-plane:
+  dashboard:
     namespace: app
-    description: Vite Control Plane browser UI.
-    command: npm run dev:control-plane
+    description: Vite Dashboard browser UI.
+    command: npm run dev:dashboard
     environment:
-      - 'OTEL_SERVICE_NAME=control-plane'
+      - 'OTEL_SERVICE_NAME=dashboard'
     availability:
       restart: always
       backoff_seconds: 2
     depends_on:
-      control-plane-server:
+      dashboard-server:
         condition: process_healthy
     readiness_probe:
       http_get:

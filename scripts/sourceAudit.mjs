@@ -18,7 +18,7 @@ auditNoModuleRpcClientFacades(tsFiles);
 auditModuleRpcFolders(tsFiles);
 auditNoContextProcedureApi(tsFiles);
 auditTablePrefixes();
-auditControlPlaneSdkHasNoDomainKnowledge(tsFiles);
+auditDashboardSdkHasNoDomainKnowledge(tsFiles);
 auditDockerfileWorkspacePackageCopies();
 auditDateContract(sourceFiles);
 auditTdlibContractGeneration(sourceFiles);
@@ -291,24 +291,24 @@ function isCurrentModuleWorkspace(workspace) {
     workspace === 'packages/registry' ||
     workspace === 'packages/gateway' ||
     workspace === 'packages/telemetry' ||
-    workspace === 'packages/control-plane' ||
+    workspace === 'packages/dashboard' ||
     workspace === 'packages/telegram' ||
     workspace === 'packages/history-sync'
   );
 }
 
-function auditControlPlaneSdkHasNoDomainKnowledge(files) {
-  const forbiddenTokens = ['telegram.', 'history-sync.', 'controlPlane.', '@agentg/telegram'];
+function auditDashboardSdkHasNoDomainKnowledge(files) {
+  const forbiddenTokens = ['telegram.', 'history-sync.', 'dashboard.', '@agentg/telegram'];
 
   for (const file of files) {
     const rel = toRel(file);
-    if (!rel.startsWith('packages/control-plane-sdk/src/')) {
+    if (!rel.startsWith('packages/dashboard-sdk/src/')) {
       continue;
     }
     const source = readFileSync(file, 'utf8');
     for (const token of forbiddenTokens) {
       if (source.includes(token)) {
-        failures.push(`Control Plane SDK must stay mechanical: ${rel} -> ${token}`);
+        failures.push(`Dashboard SDK must stay mechanical: ${rel} -> ${token}`);
       }
     }
   }
@@ -316,7 +316,7 @@ function auditControlPlaneSdkHasNoDomainKnowledge(files) {
 
 function auditDateContract(files) {
   auditTelegramDateStorageContract();
-  auditControlPlaneEventDateContract(files);
+  auditDashboardEventDateContract(files);
 }
 
 function auditTelegramDateStorageContract() {
@@ -348,14 +348,14 @@ function auditTelegramDateStorageContract() {
   }
 }
 
-function auditControlPlaneEventDateContract(files) {
+function auditDashboardEventDateContract(files) {
   for (const file of files) {
     const rel = toRel(file);
     if (
-      !rel.startsWith('packages/control-plane/src/') &&
-      !rel.startsWith('packages/control-plane-sdk/src/') &&
-      !rel.startsWith('packages/history-sync/control-plane/') &&
-      !rel.startsWith('packages/telegram/control-plane/')
+      !rel.startsWith('packages/dashboard/src/') &&
+      !rel.startsWith('packages/dashboard-sdk/src/') &&
+      !rel.startsWith('packages/history-sync/dashboard/') &&
+      !rel.startsWith('packages/telegram/dashboard/')
     ) {
       continue;
     }
@@ -364,7 +364,7 @@ function auditControlPlaneEventDateContract(files) {
     }
     const source = readFileSync(file, 'utf8');
     if (/occurredAt\??:\s*Date\s*\|\s*string/.test(source)) {
-      failures.push(`Control Plane browser event state must use ISO strings: ${rel}`);
+      failures.push(`Dashboard browser event state must use ISO strings: ${rel}`);
     }
   }
 }
@@ -577,10 +577,10 @@ function execErrorText(error) {
 
 function auditScopedVueComponentStyles(vueFiles, sourceFiles) {
   const auditedPrefixes = [
-    'packages/control-plane/src/',
-    'packages/control-plane-sdk/src/',
-    'packages/history-sync/control-plane/',
-    'packages/telegram/control-plane/'
+    'packages/dashboard/src/',
+    'packages/dashboard-sdk/src/',
+    'packages/history-sync/dashboard/',
+    'packages/telegram/dashboard/'
   ];
 
   for (const file of sourceFiles) {
@@ -591,13 +591,13 @@ function auditScopedVueComponentStyles(vueFiles, sourceFiles) {
     if (!/\.(css|ts|vue)$/.test(rel)) {
       continue;
     }
-    if (rel === 'packages/control-plane/src/main.ts') {
+    if (rel === 'packages/dashboard/src/main.ts') {
       continue;
     }
 
     const source = readFileSync(file, 'utf8');
     if (/import\s+['"][^'"]+\.css['"]/.test(source)) {
-      failures.push(`control-plane composition must not import global CSS: ${rel}`);
+      failures.push(`dashboard composition must not import global CSS: ${rel}`);
     }
   }
 
@@ -732,7 +732,7 @@ function telemetryAuditIgnoredDirectory(directory) {
   return (
     rel.endsWith('/node_modules') ||
     rel.endsWith('/dist') ||
-    rel.endsWith('/dist-control-plane') ||
+    rel.endsWith('/dist-dashboard') ||
     rel.endsWith('/dist-server') ||
     rel.endsWith('/output') ||
     rel.endsWith('/.tmp') ||
@@ -939,13 +939,13 @@ function ignoredDirectory(directory) {
     rel === '.codegraph' ||
     rel === '.tmp' ||
     rel === 'dist' ||
-    rel === 'dist-control-plane' ||
+    rel === 'dist-dashboard' ||
     rel === 'dist-server' ||
     rel === 'output' ||
     rel === 'packages/framework' ||
     rel === 'packages/registry' ||
     rel === 'packages/gateway' ||
-    rel === 'packages/control-plane' ||
+    rel === 'packages/dashboard' ||
     rel === 'packages/telegram' ||
     rel === 'packages/history-sync' ||
     rel === 'td-data' ||
@@ -954,13 +954,13 @@ function ignoredDirectory(directory) {
     rel.endsWith('/.codegraph') ||
     rel.endsWith('/.tmp') ||
     rel.endsWith('/dist') ||
-    rel.endsWith('/dist-control-plane') ||
+    rel.endsWith('/dist-dashboard') ||
     rel.endsWith('/dist-server') ||
     rel.endsWith('/output') ||
     rel.endsWith('/packages/framework') ||
     rel.endsWith('/packages/registry') ||
     rel.endsWith('/packages/gateway') ||
-    rel.endsWith('/packages/control-plane') ||
+    rel.endsWith('/packages/dashboard') ||
     rel.endsWith('/packages/telegram') ||
     rel.endsWith('/packages/history-sync') ||
     rel.endsWith('/td-data') ||
@@ -977,13 +977,13 @@ function ignored(file) {
     rel.includes('/.codegraph/') ||
     rel.includes('/.tmp/') ||
     rel.includes('/dist/') ||
-    rel.includes('/dist-control-plane/') ||
+    rel.includes('/dist-dashboard/') ||
     rel.includes('/dist-server/') ||
     rel.includes('/output/') ||
     rel.includes('/packages/framework/') ||
     rel.includes('/packages/registry/') ||
     rel.includes('/packages/gateway/') ||
-    rel.includes('/packages/control-plane/') ||
+    rel.includes('/packages/dashboard/') ||
     rel.includes('/packages/telegram/') ||
     rel.includes('/packages/history-sync/') ||
     rel.includes('/td-data/') ||
@@ -992,13 +992,13 @@ function ignored(file) {
     rel.startsWith('.codegraph/') ||
     rel.startsWith('.tmp/') ||
     rel.startsWith('dist/') ||
-    rel.startsWith('dist-control-plane/') ||
+    rel.startsWith('dist-dashboard/') ||
     rel.startsWith('dist-server/') ||
     rel.startsWith('output/') ||
     rel.startsWith('packages/framework/') ||
     rel.startsWith('packages/registry/') ||
     rel.startsWith('packages/gateway/') ||
-    rel.startsWith('packages/control-plane/') ||
+    rel.startsWith('packages/dashboard/') ||
     rel.startsWith('packages/telegram/') ||
     rel.startsWith('packages/history-sync/') ||
     rel.startsWith('td-data/')

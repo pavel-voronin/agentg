@@ -4,7 +4,7 @@ COPY package.json package-lock.json* ./
 COPY packages/framework/package.json packages/framework/package.json
 COPY packages/registry/package.json packages/registry/package.json
 COPY packages/gateway/package.json packages/gateway/package.json
-COPY packages/control-plane/package.json packages/control-plane/package.json
+COPY packages/dashboard/package.json packages/dashboard/package.json
 COPY packages/claude-plugin/package.json packages/claude-plugin/package.json
 COPY packages/telegram/package.json packages/telegram/package.json
 COPY packages/history-sync/package.json packages/history-sync/package.json
@@ -23,7 +23,7 @@ COPY package.json package-lock.json* ./
 COPY packages/framework/package.json packages/framework/package.json
 COPY packages/registry/package.json packages/registry/package.json
 COPY packages/gateway/package.json packages/gateway/package.json
-COPY packages/control-plane/package.json packages/control-plane/package.json
+COPY packages/dashboard/package.json packages/dashboard/package.json
 COPY packages/claude-plugin/package.json packages/claude-plugin/package.json
 COPY packages/telegram/package.json packages/telegram/package.json
 COPY packages/history-sync/package.json packages/history-sync/package.json

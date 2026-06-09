@@ -6,7 +6,7 @@
   when presenting the change.
 - Use conventional commits.
 - Use only these commit scopes: `project`, `infra`, `telegram`, `history-sync`,
-  `gateway`, `control-plane`, `extensions`, `storage`, `rpc`, and
+  `gateway`, `dashboard`, `extensions`, `storage`, `rpc`, and
   `events`.
 - Project-owned directories must use kebab-case. Project-owned file names must
   use camelCase stems; `.test`, `.config`, and `.d` are allowed only as
@@ -40,7 +40,7 @@
   results in compatibility envelopes or preserve old response shapes.
 - For current module work, use `npm run check:modules` as the scoped
   verification command. Use `npm run check:framework`,
-  `npm run check:registry`, `npm run check:control-plane`, or
+  `npm run check:registry`, `npm run check:dashboard`, or
   `npm run check:telegram` when only one of those packages changed. Keep
   `npm run check` as the full repository gate before final integration.
 - Vue component styling must be scoped to the component. Every Vue component
@@ -51,21 +51,21 @@
   Tailwind utility lists, unscoped component styles, ordinary CSS declarations,
   and domain-level global CSS imports are forbidden.
 
-## Control Plane Procedure Calls
+## Dashboard Procedure Calls
 
-- Control Plane must not call procedures after initialization unless there is
+- Dashboard must not call procedures after initialization unless there is
   clear user intent. User intent includes direct UI actions such as clicking a
   button, changing an input, selecting an item, or an explicit user instruction
   that requires a procedure call.
 - Timers, polling loops, broad event triggers, lifecycle hooks, and background
-  refreshes must not call domain procedures from Control Plane or from
-  Control Plane components provided by domains.
-- Control Plane UI must stay live from incoming events. Domains are responsible
-  for publishing every significant state change needed by Control Plane, and
-  Control Plane components must subscribe to those events and update local UI
+  refreshes must not call domain procedures from Dashboard or from
+  Dashboard components provided by domains.
+- Dashboard UI must stay live from incoming events. Domains are responsible
+  for publishing every significant state change needed by Dashboard, and
+  Dashboard components must subscribe to those events and update local UI
   state from them.
-- This rule applies at every Control Plane layer: the Control Plane shell,
-  shared Control Plane SDK components, and all domain-provided Control Plane
+- This rule applies at every Dashboard layer: the Dashboard shell,
+  shared Dashboard SDK components, and all domain-provided Dashboard
   content.
 - Initialization calls are allowed only for the data required to mount or
   hydrate the initial view. Do not expand initialization into a recurring or
@@ -78,7 +78,7 @@
   boundaries. Do not show rejected boundary-violating options for context.
 - A domain must not reference another domain's content IDs, procedures, events,
   view state, labels, tab names, layout positions, or implementation details.
-- Cross-domain UI composition is allowed only through neutral Control Plane SDK
+- Cross-domain UI composition is allowed only through neutral Dashboard SDK
   or extension contracts. Domains may publish contributions; other domains may
   render only generic contributions without knowing the contributing domain.
 - Existing domain coupling must not be extended. If a requested change touches

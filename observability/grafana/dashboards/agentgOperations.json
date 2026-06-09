@@ -329,8 +329,8 @@
       {
         "current": {
           "selected": false,
-          "text": "control-plane-server",
-          "value": "control-plane-server"
+          "text": "dashboard-server",
+          "value": "dashboard-server"
         },
         "datasource": {
           "type": "prometheus",

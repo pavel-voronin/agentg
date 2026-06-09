@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { slotRoute } from '../src/cp/slotRoute.js';
+import { slotRoute } from '../src/dashboard/slotRoute.js';
 
 describe('slot route', () => {
   it('reads route segments from slot context', () => {

@@ -4,7 +4,7 @@
 import { spawnSync } from 'node:child_process';
 
 const includeTelegram = process.env.COMPOSE_SMOKE_TELEGRAM === '1';
-const profiles = ['control-plane'];
+const profiles = ['dashboard'];
 if (includeTelegram) {
   profiles.push('container-client');
 }
@@ -14,7 +14,7 @@ const services = [
   'postgres',
   'nats',
   'registry',
-  'control-plane',
+  'dashboard',
   ...(includeTelegram ? ['telegram'] : [])
 ];
 
@@ -32,7 +32,7 @@ try {
     'run',
     '--rm',
     '--no-deps',
-    'control-plane',
+    'dashboard',
     'node',
     '--input-type=module',
     '--eval',
@@ -125,7 +125,7 @@ const expectedModules = [
 ];
 const registry = await waitForModuleRegistrations(expectedModules);
 
-const controlPlaneResponse = await fetchUntilReady('http://control-plane:8788/', 'control-plane', [200]);
+const dashboardResponse = await fetchUntilReady('http://dashboard:8788/', 'dashboard', [200]);
 
 if (${JSON.stringify(checkTelegram)}) {
   await fetchUntilReady('http://telegram:8080/', 'telegram RPC', [404], 30);
@@ -133,9 +133,9 @@ if (${JSON.stringify(checkTelegram)}) {
 
 console.log(JSON.stringify({
   event: 'compose.smoke.ok',
-  controlPlane: {
-    contentType: controlPlaneResponse.headers.get('content-type'),
-    status: controlPlaneResponse.status
+  dashboard: {
+    contentType: dashboardResponse.headers.get('content-type'),
+    status: dashboardResponse.status
   },
   registry
 }, null, 2));

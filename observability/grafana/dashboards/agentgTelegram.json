@@ -381,7 +381,7 @@
             "uid": "victoria-metrics"
           },
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (rpc_method, le) (rate(rpc_server_call_duration_seconds_bucket{service_name=\"control-plane-server\", rpc_method=~\"telegram[.]cp[.](chatDirectory|message|messagesPage)\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (rpc_method, le) (rate(rpc_server_call_duration_seconds_bucket{service_name=\"dashboard-server\", rpc_method=~\"telegram[.]cp[.](chatDirectory|message|messagesPage)\"}[$__rate_interval])))",
           "legendFormat": "{{rpc_method}}"
         },
         {
@@ -390,13 +390,13 @@
             "uid": "victoria-metrics"
           },
           "refId": "B",
-          "expr": "histogram_quantile(0.95, sum by (rpc_method, le) (rate(rpc_client_call_duration_seconds_bucket{service_name=\"control-plane-server\", rpc_method=~\"fetchPage|listChats|getChat|searchMessages|listRecentMessages|countMessagesInIntervals|getHistoryCoverage|getChatHistoryFacts|ensureHistoryCoverage\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (rpc_method, le) (rate(rpc_client_call_duration_seconds_bucket{service_name=\"dashboard-server\", rpc_method=~\"fetchPage|listChats|getChat|searchMessages|listRecentMessages|countMessagesInIntervals|getHistoryCoverage|getChatHistoryFacts|ensureHistoryCoverage\"}[$__rate_interval])))",
           "legendFormat": "client {{rpc_method}}"
         }
       ],
-      "title": "Control Plane Non-File RPC P95",
+      "title": "Dashboard Non-File RPC P95",
       "type": "timeseries",
-      "description": "P95 for Telegram Control Plane procedures that are not file-serving or manual file-download requests. File RPCs live on the Files dashboard."
+      "description": "P95 for Telegram Dashboard procedures that are not file-serving or manual file-download requests. File RPCs live on the Files dashboard."
     },
     {
       "datasource": {
@@ -593,13 +593,13 @@
             "uid": "victoria-metrics"
           },
           "refId": "A",
-          "expr": "sum by (service_name, db_query_summary) (rate(db_client_operation_duration_seconds_count{service_name=~\"telegram|control-plane-server\", db_system_name=\"postgresql\", db_query_summary!~\".*telegram_file_.*|.*telegram_tdlib_files.*\"}[$__rate_interval]))",
+          "expr": "sum by (service_name, db_query_summary) (rate(db_client_operation_duration_seconds_count{service_name=~\"telegram|dashboard-server\", db_system_name=\"postgresql\", db_query_summary!~\".*telegram_file_.*|.*telegram_tdlib_files.*\"}[$__rate_interval]))",
           "legendFormat": "{{service_name}} {{db_query_summary}}"
         }
       ],
       "title": "Non-File DB Query Rate",
       "type": "timeseries",
-      "description": "Non-File DB Query Rate for Telegram and Control Plane Postgres calls excluding file queue, file asset, file slot, and TDLib file tables. File-table pressure lives on the Files dashboard."
+      "description": "Non-File DB Query Rate for Telegram and Dashboard Postgres calls excluding file queue, file asset, file slot, and TDLib file tables. File-table pressure lives on the Files dashboard."
     },
     {
       "datasource": {
@@ -638,13 +638,13 @@
             "uid": "victoria-metrics"
           },
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (service_name, db_query_summary, le) (rate(db_client_operation_duration_seconds_bucket{service_name=~\"telegram|control-plane-server\", db_system_name=\"postgresql\", db_query_summary!~\".*telegram_file_.*|.*telegram_tdlib_files.*\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (service_name, db_query_summary, le) (rate(db_client_operation_duration_seconds_bucket{service_name=~\"telegram|dashboard-server\", db_system_name=\"postgresql\", db_query_summary!~\".*telegram_file_.*|.*telegram_tdlib_files.*\"}[$__rate_interval])))",
           "legendFormat": "{{service_name}} {{db_query_summary}}"
         }
       ],
       "title": "Non-File DB Query P95",
       "type": "timeseries",
-      "description": "Non-File DB Query P95 for Telegram and Control Plane Postgres calls excluding file queue, file asset, file slot, and TDLib file tables. File-table pressure lives on the Files dashboard."
+      "description": "Non-File DB Query P95 for Telegram and Dashboard Postgres calls excluding file queue, file asset, file slot, and TDLib file tables. File-table pressure lives on the Files dashboard."
     },
     {
       "collapsed": false,

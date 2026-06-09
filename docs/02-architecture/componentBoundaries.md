@@ -47,7 +47,7 @@ Does not own:
 - Telegram history coverage tables or TDLib page cursors.
 - Parsing Telegram storage payloads for History Sync read behavior.
 
-## Control Plane
+## Dashboard
 
 Owns:
 
@@ -59,21 +59,21 @@ Owns:
 Does not own:
 
 - Agent-facing API compatibility.
-- Domain Control Plane content components, view models, or UI state.
+- Domain Dashboard content components, view models, or UI state.
 - History Sync target writes or Telegram history coverage writes.
 - Telegram login, sessions, TDLib state, or Telegram-shaped persistence.
 
-## Control Plane SDK
+## Dashboard SDK
 
 Owns:
 
 - Mechanical slot contracts, resolution, runtime state, and debug inspection.
-- Browser host bridge for Control Plane content components.
+- Browser host bridge for Dashboard content components.
 - Shared UI primitives with no domain behavior.
 
 Does not own:
 
-- Control Plane shell layout.
+- Dashboard shell layout.
 - Domain content components, view models, or UI state.
 - Domain RPC methods, procedure routing, or service topology.
 

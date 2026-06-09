@@ -43,7 +43,7 @@
 - `background` registers runtime loops, observers, and consumers that start
   after Registry registration.
 - `procedures` declares the public module procedure surface.
-- Control Plane contributions are not module surface. Keep them in Control
+- Dashboard contributions are not module surface. Keep them in Control
   Plane-owned discovery, not Registry manifests.
 - Event bus code must stay simple: publish by string type, subscribe by subject, no event registration, no validation layer.
 - Modules receive `events` from setup. Module packages must not create NATS

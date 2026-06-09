@@ -8,7 +8,7 @@ request/reply RPC.
 
 Internal reads and commands use module-owned procedures exposed through the
 module framework RPC transport. Browser and external agent protocols are
-separate edge protocols owned by Control Plane and Gateway.
+separate edge protocols owned by Dashboard and Gateway.
 
 ## Envelope
 
@@ -108,7 +108,7 @@ Gateway subscribes only to `telegram.login.completed` and forwards that event to
 external agent WebSocket clients. All other events remain internal unless a
 Gateway API change explicitly exposes them.
 
-Control Plane server subscribes to `>` and forwards live events to
+Dashboard server subscribes to `>` and forwards live events to
 browser clients.
 
 Telegram event `data` embeds Telegram domain objects as inline ModelRefs.
@@ -124,7 +124,7 @@ After reconnecting, consumers must rebuild state through these surfaces:
 
 - Gateway external clients: Gateway WebSocket RPC methods backed by Telegram
   procedures.
-- Control Plane browser clients: Control Plane WebSocket RPC methods resolved
+- Dashboard browser clients: Dashboard WebSocket RPC methods resolved
   through registry and forwarded to the owning procedure service.
 - History Sync: its own Postgres tables plus Telegram read and history-fetch
   module RPC.
@@ -145,7 +145,7 @@ Internal procedure contracts are owned by the serving module package:
 - Modules own package-local procedure contracts. Module schemas, storage schema,
   registrations, and runtime remain package-internal.
 
-Gateway owns the external agent WebSocket protocol. Control Plane owns the
+Gateway owns the external agent WebSocket protocol. Dashboard owns the
 browser-facing WebSocket protocol. Neither protocol is an internal procedure
 contract, and neither browser nor external agent clients call module procedures
 directly.

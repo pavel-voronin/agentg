@@ -78,7 +78,7 @@ services:
     profiles:
       - registry
       - container-client
-      - control-plane
+      - dashboard
     build:
       context: .
       target: runtime
@@ -93,13 +93,13 @@ services:
       PORT: 8080
     restart: 'no'
 
-  control-plane:
+  dashboard:
     profiles:
-      - control-plane
+      - dashboard
     build:
       context: .
       target: runtime
-    command: ['npm', '--workspace', '@agentg/control-plane', 'run', 'start']
+    command: ['npm', '--workspace', '@agentg/dashboard', 'run', 'start']
     depends_on:
       registry:
         condition: service_started
@@ -108,20 +108,20 @@ services:
     environment:
       <<: *agentg-telemetry-environment
       DATABASE_URL: postgres://agentg:agentg@postgres:5432/agentg
-      CONTROL_PLANE_HOST: 0.0.0.0
-      CONTROL_PLANE_PORT: ${CONTROL_PLANE_PORT:-8788}
-      CONTROL_PLANE_URL: http://control-plane:${CONTROL_PLANE_PORT:-8788}
+      DASHBOARD_HOST: 0.0.0.0
+      DASHBOARD_PORT: ${DASHBOARD_PORT:-8788}
+      DASHBOARD_URL: http://dashboard:${DASHBOARD_PORT:-8788}
       NATS_URL: nats://nats:4222
       REGISTRY_URL: http://registry:8080
       TDLIB_FILES_DIR: /app/td-data/files
     ports:
-      - '${CONTROL_PLANE_PORT:-8788}:${CONTROL_PLANE_PORT:-8788}'
+      - '${DASHBOARD_PORT:-8788}:${DASHBOARD_PORT:-8788}'
     restart: 'no'
 
   history-sync:
     profiles:
       - container-client
-      - control-plane
+      - dashboard
     build:
       context: .
       target: runtime
@@ -145,7 +145,7 @@ services:
   gateway:
     profiles:
       - container-client
-      - control-plane
+      - dashboard
     build:
       context: .
       target: runtime

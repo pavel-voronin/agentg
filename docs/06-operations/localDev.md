@@ -1,7 +1,7 @@
 # Local Development
 
 Local development uses separate workspace packages for the long-running
-Telegram ingestion process, History Sync, Control Plane, and the Agent Gateway,
+Telegram ingestion process, History Sync, Dashboard, and the Agent Gateway,
 with Docker Compose providing Postgres, NATS, OpenTelemetry Collector,
 VictoriaMetrics, Jaeger, Loki, Grafana, and NATS and Postgres exporters.
 
@@ -29,8 +29,8 @@ Process Compose runs the app-side services:
 - `telegram`
 - `history-sync`
 - `gateway`
-- `control-plane-server`
-- `control-plane`
+- `dashboard-server`
+- `dashboard`
 
 It also runs setup commands before the app services:
 
@@ -58,8 +58,8 @@ metrics, such as `service_name="telegram"` and `service_name="history-sync"`.
 `npm run db:migrate` applies versioned Drizzle migrations owned by Telegram and
 History Sync.
 
-The Telemetry Control Plane page is owned by `@agentg/telemetry`, but its
-backend procedures run inside `control-plane-server`; there is no standalone
+The Telemetry Dashboard page is owned by `@agentg/telemetry`, but its
+backend procedures run inside `dashboard-server`; there is no standalone
 Telemetry runtime service.
 
 Useful Process Compose commands:
@@ -68,7 +68,7 @@ Useful Process Compose commands:
 npm run dev:status
 npm run dev:attach
 npm run dev:tui
-npm run dev:logs -- control-plane-server --tail 100
+npm run dev:logs -- dashboard-server --tail 100
 npm run dev:restart -- telegram
 npm run dev:down
 ```
@@ -94,13 +94,13 @@ snapshot before internal procedure calls.
 active module manifests, publishes version invalidations, and serves the current
 topology snapshot.
 
-`npm run dev:control-plane-server` runs the server-side Control Plane boundary.
+`npm run dev:dashboard-server` runs the server-side Dashboard boundary.
 It serves the browser-facing operator WebSocket on `127.0.0.1:8789`, subscribes
 to live NATS events, and resolves History Sync and Telegram through Service
 Registry before internal procedure calls.
 
-`npm run dev:control-plane` runs the Vite browser UI on `127.0.0.1:8788`. Its
-`/ws` path is proxied to the Control Plane server during development.
+`npm run dev:dashboard` runs the Vite browser UI on `127.0.0.1:8788`. Its
+`/ws` path is proxied to the Dashboard server during development.
 
 `npm run dev:gateway` runs the `@agentg/gateway` package. It subscribes to live
 NATS events and serves the external agent WebSocket boundary. Gateway currently
@@ -121,8 +121,8 @@ Local development defaults:
 - History Sync local RPC port: `PORT=8704`
 - Registry local RPC port: `PORT=8701`
 - Services to Registry URL: `REGISTRY_URL=http://127.0.0.1:8701`
-- Control Plane server bind: `CONTROL_PLANE_HOST=127.0.0.1`,
-  `CONTROL_PLANE_PORT=8789`
+- Dashboard server bind: `DASHBOARD_HOST=127.0.0.1`,
+  `DASHBOARD_PORT=8789`
 
 Docker Compose uses internal service DNS names:
 
@@ -130,9 +130,9 @@ Docker Compose uses internal service DNS names:
 - History Sync binds `0.0.0.0:8080` inside its container.
 - Registry binds `0.0.0.0:8080` inside its container.
 - Telegram and History Sync join `http://registry:8080`.
-- History Sync, Gateway, and Control Plane resolve module RPC URLs
+- History Sync, Gateway, and Dashboard resolve module RPC URLs
   from Registry snapshots.
-- Control Plane exposes the browser UI on `${CONTROL_PLANE_PORT:-8788}`.
+- Dashboard exposes the browser UI on `${DASHBOARD_PORT:-8788}`.
 
 Run the containerized Telegram ingestion path when validating Docker packaging:
 
@@ -174,7 +174,7 @@ Registry stores active module manifests only. It does not call domain or module
 RPC methods.
 
 Core services register with `required: true`: Telegram ingestion, History Sync,
-Gateway, and Control Plane. Disappearing required services trigger graceful
+Gateway, and Dashboard. Disappearing required services trigger graceful
 shutdown in Registry clients. Disappearing optional services only
 removes their procedures from snapshots.
 
@@ -213,7 +213,7 @@ Initial local stack includes:
 - Telegram ingestion process backed by TDLib
 - History Sync process
 - Registry process
-- Control Plane server and browser UI for operator views
+- Dashboard server and browser UI for operator views
 - Agent Gateway process when testing agent-facing APIs
 - Postgres
 - NATS

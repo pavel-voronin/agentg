@@ -1,0 +1,37 @@
+{
+  "name": "@agentg/dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite --host 127.0.0.1 --port 8788",
+    "dev:server": "tsx watch --clear-screen=false src/server/main.ts",
+    "preview": "vite preview --host 127.0.0.1 --port 8788",
+    "start": "tsx src/server/main.ts",
+    "test": "vitest run",
+    "typecheck": "vue-tsc --noEmit"
+  },
+  "dependencies": {
+    "@agentg/framework": "file:../framework",
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/semantic-conventions": "^1.41.1",
+    "drizzle-orm": "^0.45.2",
+    "pinia": "^3.0.4",
+    "vue": "^3.5.33",
+    "ws": "^8.20.0",
+    "zod": "^4.4.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.2.4",
+    "@types/node": "24.10.0",
+    "@types/ws": "^8.18.1",
+    "@vitejs/plugin-vue": "^6.0.6",
+    "tailwindcss": "^4.2.4",
+    "tsx": "4.21.0",
+    "typescript": "6.0.3",
+    "unplugin-icons": "^23.0.1",
+    "vite": "8.0.10",
+    "vue-tsc": "^3.2.7"
+  }
+}

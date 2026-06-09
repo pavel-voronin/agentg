@@ -9,7 +9,7 @@ const packageDirs = [
   'packages/registry',
   'packages/gateway',
   'packages/telemetry',
-  'packages/control-plane',
+  'packages/dashboard',
   'packages/telegram',
   'packages/history-sync'
 ];

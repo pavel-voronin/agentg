@@ -7,7 +7,7 @@ Accepted. Updated by the Registry migration.
 ## Context
 
 AgenTG has a working internal contour made of domain services, Postgres, NATS,
-Gateway, and Control Plane. Domains own their module RPC APIs and storage. NATS
+Gateway, and Dashboard. Domains own their module RPC APIs and storage. NATS
 carries live facts rather than addressed commands or reads.
 
 The next layer of product value needs additional modules such as summarization,
@@ -92,7 +92,7 @@ Costs:
 - Cross-module reads depend on procedure naming and Registry routing.
 - Service routing depends on live Registry snapshots.
 - Product views that combine multiple owners must be explicit procedures or
-  Control Plane composition owned by the appropriate boundary.
+  Dashboard composition owned by the appropriate boundary.
 
 Non-goals:
 
@@ -110,7 +110,7 @@ Services know Registry URL, NATS URL, their own service URL, and their own
 manifest. Cross-service topology is read from the local Registry snapshot.
 
 Core services register as required: Telegram ingestion, History Sync, Gateway,
-and Control Plane. Trusted modules that add optional product behavior register
+and Dashboard. Trusted modules that add optional product behavior register
 as not required unless their absence must stop the whole runtime.
 
 Service startup order is managed outside Registry. Local development uses

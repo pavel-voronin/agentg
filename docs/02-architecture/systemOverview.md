@@ -45,8 +45,8 @@ TDLib sidecar
   -> NATS Core live integration events
   <- module RPC history fetch calls from History Sync
   -> History Sync service
-  <- module RPC operator calls from Control Plane server
-  -> Control Plane browser UI
+  <- module RPC operator calls from Dashboard server
+  -> Dashboard browser UI
   -> Agent Gateway WebSocket API
   -> agent MCP plugin
 ```
@@ -57,23 +57,23 @@ through Telegram domain tables and Telegram history coverage.
 History Sync is a separate process from Telegram ingestion: it owns templates,
 targets, and sync cadence. Telegram ingestion owns TDLib, Telegram-shaped
 persistence, page continuity, and Telegram history coverage.
-Control Plane is a separate operator boundary: the browser UI calls Control
-Plane server, and Control Plane server resolves internal domain RPC through
+Dashboard is a separate operator boundary: the browser UI calls Control
+Plane server, and Dashboard server resolves internal domain RPC through
 Registry before making module RPC calls. The browser UI is composed from
-slots: Control Plane owns the shell, layout, browser WebSocket, and event fanout;
-domains provide the concrete Control Plane content components and own their view
-state. Control Plane SDK owns the mechanical slot runtime, host bridge, debug
+slots: Dashboard owns the shell, layout, browser WebSocket, and event fanout;
+domains provide the concrete Dashboard content components and own their view
+state. Dashboard SDK owns the mechanical slot runtime, host bridge, debug
 overlay, and shared UI primitives used by those content components. Gateway
 remains the external agent edge and also resolves its allowed internal RPC calls
 through Registry.
-Default operator layout is derived from domain-declared Control Plane content
+Default operator layout is derived from domain-declared Dashboard content
 placements. The shell does not hard-code domain content IDs into its own layout.
 Telegram ingestion, History Sync, and trusted modules run as independent
 services inside the same internal contour. They own their storage and module RPC
 surface, and join Registry with their procedure routing metadata. Gateway
 methods are managed directly in Gateway code. Product views that combine
-multiple owners are explicit RPC or Control Plane UI contracts owned by the
-appropriate boundary. Operator UI composition uses domain-provided Control Plane
+multiple owners are explicit RPC or Dashboard UI contracts owned by the
+appropriate boundary. Operator UI composition uses domain-provided Dashboard
 slot content rather than shell-owned domain view models.
 
 The preferred starting runtime is TypeScript/Node.js, provided TDLib can be integrated reliably through its JSON/C interface or a maintained wrapper. If Node.js integration becomes the risky part of the project, re-plan the sidecar runtime before implementation continues.

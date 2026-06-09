@@ -5,7 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./cp": "./src/cp/index.ts"
+    "./dashboard": "./src/dashboard/index.ts"
   },
   "scripts": {
     "test": "vitest run",

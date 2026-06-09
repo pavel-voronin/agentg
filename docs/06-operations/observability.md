@@ -51,7 +51,7 @@ Compose runs and can be overridden with `AGENTG_TELEMETRY=1`.
 Traces:
 
 - RPC client and server calls with OpenTelemetry RPC semantic attributes
-- Control Plane server procedure calls
+- Dashboard server procedure calls
 - Postgres query operation, summary, system, and relation attributes
 - NATS publish/process spans with OpenTelemetry messaging semantic attributes
 - Telegram live update persistence and bounded UI/file pipeline stages
@@ -130,21 +130,21 @@ Metric rules:
 - Do not keep old and new metric names, compatibility labels, or migration-only
   telemetry side by side.
 
-## Control Plane
+## Dashboard
 
 The telemetry page is a thin read and navigation surface:
 
-- `telemetry.links` is a Control Plane backend procedure that reads backend UI
+- `telemetry.links` is a Dashboard backend procedure that reads backend UI
   links for embedded dashboards and debug tools.
 - The Operations, Telegram, Files, History Sync, TDLib Updates,
   Postgres, and NATS tabs embed provisioned Grafana dashboards. Dashboard UIDs
-  and slugs are fixed in the Control Plane component; backend-provided links
+  and slugs are fixed in the Dashboard component; backend-provided links
   cover only external observability tool base URLs.
 - The NATS dashboard is backed by prometheus-nats-exporter metrics.
 - The Postgres dashboard is backed by postgres_exporter metrics and app-level
   `db.client.operation.duration` metrics.
 
-Control Plane does not subscribe to telemetry report events and does not run a
+Dashboard does not subscribe to telemetry report events and does not run a
 background report refresh loop. Further reads happen only during initialization
 or an explicit refresh action.
 
@@ -170,14 +170,14 @@ Grafana for RPC methods and TDLib update types.
 The provisioned `Telegram` dashboard groups module telemetry by internal
 subsystem: ingestion, read path, storage, and events. It reads Telegram queue
 gauges, queue wait latency, update processing latency, update catalog and
-last-seen timestamps, non-file Control Plane Telegram RPC latency, messages-page
+last-seen timestamps, non-file Dashboard Telegram RPC latency, messages-page
 and message-view stage latency, non-file app DB client operation latency, and
 non-file app-level NATS send/process latency for Telegram event subjects.
 
 The provisioned `Files` dashboard is the operator x-ray for Telegram
 file handling. It reads file queue asset, job, and byte gauges, unknown-size
 backlog, worker wake reasons, worker job outcomes, worker stage latency and
-rate, file-record stage latency and rate, file-facing Control Plane RPC latency
+rate, file-record stage latency and rate, file-facing Dashboard RPC latency
 and rate, file-table DB latency and rate, `telegram.files.*` event send/process
 telemetry, and recent Jaeger traces for file worker passes. The top row is made
 of red-flag indicators rather than raw graphs: queued backlog, failed assets,
