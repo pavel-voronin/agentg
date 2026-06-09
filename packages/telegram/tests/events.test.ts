@@ -16,10 +16,14 @@ describe('Telegram update events', () => {
     };
 
     await events.publishTelegramMessageCreated(message);
+    await events.publishTelegramChatDiscovered('20');
     await events.publishTelegramChatDirectoryUpdated('20');
 
     expect(publish).toHaveBeenCalledWith('telegram.update.message.created', {
       args: [message]
+    });
+    expect(publish).toHaveBeenCalledWith('telegram.update.chat.discovered', {
+      args: ['20']
     });
     expect(publish).toHaveBeenCalledWith('telegram.update.chat.directory.updated', {
       args: ['20']

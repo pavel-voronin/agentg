@@ -17,6 +17,7 @@ export type UpdateEvents = {
   publishTelegramCallUpdated: UpdateEventPublisher;
   publishTelegramCallbackQueryReceived: UpdateEventPublisher;
   publishTelegramChatAction: UpdateEventPublisher;
+  publishTelegramChatDiscovered: UpdateEventPublisher;
   publishTelegramChatDirectoryUpdated: UpdateEventPublisher;
   publishTelegramChatFoldersUpdated: UpdateEventPublisher;
   publishTelegramChatJoinRequestCreated: UpdateEventPublisher;

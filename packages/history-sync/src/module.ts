@@ -26,8 +26,8 @@ export const historySyncModule = defineModule('history-sync', {
 
     background('sync', () => {
       const subscriptions = [
-        events.subscribe('telegram.update.chat.directory.updated', () => {
-          controller.request('chat-updated');
+        events.subscribe('telegram.update.chat.discovered', () => {
+          controller.request('chat-discovered');
         })
       ];
 

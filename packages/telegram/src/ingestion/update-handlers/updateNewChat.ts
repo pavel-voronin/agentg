@@ -24,5 +24,6 @@ export async function handleUpdateNewChat(
     await recordMessageFiles(files, lastMessage, 'live_update');
   }
 
+  await events.publishTelegramChatDiscovered(String(chat.id));
   await events.publishTelegramChatDirectoryUpdated(String(chat.id));
 }

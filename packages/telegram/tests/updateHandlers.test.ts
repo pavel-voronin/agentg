@@ -140,6 +140,7 @@ describe('TDLib update handlers', () => {
     const context = createHandlerContext();
     const {
       insert,
+      publishTelegramChatDiscovered,
       publishTelegramChatDirectoryUpdated,
       recordChatFiles,
       recordMessageFiles,
@@ -194,6 +195,7 @@ describe('TDLib update handlers', () => {
     );
     expect(recordChatFiles).toHaveBeenCalledWith(update.chat, 'live_update');
     expect(recordMessageFiles).toHaveBeenCalledWith(update.chat.last_message, 'live_update');
+    expect(publishTelegramChatDiscovered).toHaveBeenCalledWith('20');
     expect(publishTelegramChatDirectoryUpdated).toHaveBeenCalledWith('20');
   });
 
@@ -438,6 +440,7 @@ function resourcesFromContext(
     },
     database: context.database,
     events: {
+      publishTelegramChatDiscovered: context.publishTelegramChatDiscovered,
       publishTelegramChatDirectoryUpdated: context.publishTelegramChatDirectoryUpdated,
       publishTelegramMessageCreated: context.publishTelegramMessageCreated,
       publishTelegramMessageDeleted: context.publishTelegramMessageDeleted,
@@ -518,6 +521,7 @@ function createHandlerContext(
     update: updateRows
   };
   const publishTelegramChatDirectoryUpdated = vi.fn(() => Promise.resolve(undefined));
+  const publishTelegramChatDiscovered = vi.fn(() => Promise.resolve(undefined));
   const publishTelegramMessageCreated = vi.fn(() => Promise.resolve(undefined));
   const publishTelegramMessageDeleted = vi.fn(() => Promise.resolve(undefined));
   const publishTelegramStoredMessageUpdated = vi.fn(() => Promise.resolve(undefined));
@@ -532,6 +536,7 @@ function createHandlerContext(
     insert,
     onConflictDoNothing,
     onConflictDoUpdate,
+    publishTelegramChatDiscovered,
     publishTelegramChatDirectoryUpdated,
     publishTelegramMessageCreated,
     publishTelegramMessageDeleted,
