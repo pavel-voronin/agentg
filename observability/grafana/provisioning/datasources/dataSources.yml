@@ -21,6 +21,17 @@ datasources:
         enabled: true
       traceIdTimeParams:
         enabled: true
+      tracesToLogsV2:
+        datasourceUid: loki
+        filterBySpanID: false
+        filterByTraceID: false
+        customQuery: true
+        spanStartTimeShift: '-2m'
+        spanEndTimeShift: '2m'
+        tags:
+          - key: service.name
+            value: service_name
+        query: '{$${__tags}} |= "$${__trace.traceId}"'
       tracesToMetrics:
         datasourceUid: victoria-metrics
         spanStartTimeShift: '-2m'
@@ -69,3 +80,15 @@ datasources:
             query: 'histogram_quantile(0.95, sum by (le) (rate(telegram_update_processing_duration_seconds_bucket{$$__tags}[5m])))'
           - name: Telegram page stage p95
             query: 'histogram_quantile(0.95, sum by (le) (rate(telegram_messages_page_stage_duration_seconds_bucket{$$__tags}[5m])))'
+  - name: Loki
+    type: loki
+    uid: loki
+    access: proxy
+    url: http://loki:3100
+    jsonData:
+      derivedFields:
+        - datasourceUid: jaeger
+          matcherRegex: '"trace_id":"([0-9a-f]{32})"'
+          name: TraceID
+          url: '$${__value.raw}'
+      maxLines: 1000

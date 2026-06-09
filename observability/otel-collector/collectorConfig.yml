@@ -14,9 +14,15 @@ exporters:
     metrics_endpoint: http://victoria-metrics:8428/opentelemetry/v1/metrics
   otlp_http/jaeger:
     traces_endpoint: http://jaeger:4318/v1/traces
+  otlp_http/loki:
+    endpoint: http://loki:3100/otlp
 
 service:
   pipelines:
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp_http/loki]
     metrics:
       receivers: [otlp]
       processors: [batch]

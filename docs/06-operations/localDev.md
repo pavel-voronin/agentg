@@ -3,7 +3,7 @@
 Local development uses separate workspace packages for the long-running
 Telegram ingestion process, History Sync, Control Plane, and the Agent Gateway,
 with Docker Compose providing Postgres, NATS, OpenTelemetry Collector,
-VictoriaMetrics, Jaeger, Grafana, and NATS and Postgres exporters.
+VictoriaMetrics, Jaeger, Loki, Grafana, and NATS and Postgres exporters.
 
 ## Commands
 
@@ -38,14 +38,22 @@ It also runs setup commands before the app services:
 - `db-migrate`, which calls `npm run db:migrate`
 
 `npm run dev` defaults `AGENTG_TELEMETRY` to `1`, so `npm run infra:up` starts
-Postgres, NATS, OpenTelemetry Collector, VictoriaMetrics, Jaeger, Grafana, the
-NATS exporter, and the Postgres exporter through Docker Compose. With
+Postgres, NATS, OpenTelemetry Collector, VictoriaMetrics, Jaeger, Loki,
+Grafana, the NATS exporter, and the Postgres exporter through Docker Compose. With
 `AGENTG_TELEMETRY=0`,
 `npm run infra:up` starts only
 Postgres and NATS. These services stay Docker-owned. The observability services
-are development tools. Jaeger keeps traces in memory, VictoriaMetrics writes to
-`tmpfs`, and Grafana is rebuilt from provisioning files instead of a persistent
-volume.
+are development tools. Jaeger keeps traces in memory, VictoriaMetrics and Loki
+write to `tmpfs`, and Grafana is rebuilt from provisioning files instead of a
+persistent volume.
+
+Runtime packages write structured pino JSON to stdout for Process Compose logs
+and mirror the same log calls to OpenTelemetry logs when telemetry is enabled.
+The local OpenTelemetry Collector receives logs through OTLP HTTP and exports
+them to Loki with `otlp_http/loki`. Grafana provisions Loki as a logs datasource
+and the Jaeger datasource links traces to Loki by `trace_id`. Loki indexes
+runtime logs by the same application service resource labels used by traces and
+metrics, such as `service_name="telegram"` and `service_name="history-sync"`.
 
 `npm run db:migrate` applies versioned Drizzle migrations owned by Telegram and
 History Sync.
@@ -212,6 +220,7 @@ Initial local stack includes:
 - OpenTelemetry Collector
 - VictoriaMetrics
 - Jaeger
+- Loki
 - Grafana
 - NATS exporter
 - Postgres exporter

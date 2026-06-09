@@ -1,5 +1,6 @@
 x-agentg-telemetry-environment: &agentg-telemetry-environment
   AGENTG_TELEMETRY: ${AGENTG_TELEMETRY:-0}
+  OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: http://otel-collector:4318/v1/logs
   OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: http://otel-collector:4318/v1/metrics
   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
   GRAFANA_URL: http://127.0.0.1:3000
@@ -61,9 +62,10 @@ services:
     <<: *agentg-module-service
     command:
       [
-        'node',
+        'npx',
+        'tsx',
         '-e',
-        "console.log(JSON.stringify({event:'module.smoke.ready',slug:process.env.MODULE_SLUG,rpcUrl:process.env.MODULE_RPC_URL,natsUrl:process.env.NATS_URL,databaseUrl:process.env.DATABASE_URL})); setInterval(() => {}, 1000)"
+        "import { createLogger, startTelemetryRuntime } from '@agentg/framework'; const serviceName = process.env.MODULE_SLUG || 'modulesmoke'; const stopTelemetry = startTelemetryRuntime(serviceName); const logger = createLogger(serviceName); logger.info({event:'module.smoke.ready',slug:process.env.MODULE_SLUG,rpcUrl:process.env.MODULE_RPC_URL,natsUrl:process.env.NATS_URL,databaseUrl:process.env.DATABASE_URL}, 'module smoke ready'); const shutdown = async () => { await stopTelemetry(); process.exit(0); }; process.once('SIGTERM', shutdown); process.once('SIGINT', shutdown); setInterval(() => {}, 1000)"
       ]
     environment:
       <<: *agentg-module-environment
@@ -245,6 +247,8 @@ services:
     image: otel/opentelemetry-collector:0.153.0
     command: ['--config=/etc/otel-collector/collectorConfig.yml']
     depends_on:
+      loki:
+        condition: service_started
       victoria-metrics:
         condition: service_started
       jaeger:
@@ -254,6 +258,18 @@ services:
       - '4318:4318'
     volumes:
       - ./observability/otel-collector/collectorConfig.yml:/etc/otel-collector/collectorConfig.yml:ro
+
+  loki:
+    profiles:
+      - telemetry
+    image: grafana/loki:3.6.0
+    command: ['-config.file=/etc/loki/lokiConfig.yml']
+    ports:
+      - '3100:3100'
+    tmpfs:
+      - /loki:uid=10001,gid=10001
+    volumes:
+      - ./observability/loki/lokiConfig.yml:/etc/loki/lokiConfig.yml:ro
 
   victoria-metrics:
     profiles:
@@ -288,6 +304,8 @@ services:
     image: grafana/grafana:13.0.2
     depends_on:
       jaeger:
+        condition: service_started
+      loki:
         condition: service_started
       victoria-metrics:
         condition: service_started
