@@ -1,5 +1,19 @@
 import { describe, expect, it, vi } from 'vitest';
 
+const logs = vi.hoisted(() => [] as Record<string, unknown>[]);
+
+vi.mock('../src/log.js', () => ({
+  createLogger: () => ({
+    error(entry: Record<string, unknown>) {
+      logs.push(entry);
+    }
+  }),
+  logError: (error: unknown) => ({
+    'error.type': error instanceof Error ? error.name : typeof error,
+    error
+  })
+}));
+
 import {
   consumeEventMessages,
   type EventMessage,
@@ -9,33 +23,26 @@ import {
 describe('event subscription consumption', () => {
   it('continues consuming after a handler error', async () => {
     const handled: string[] = [];
-    const errors: string[] = [];
-    const consoleError = vi.spyOn(console, 'error').mockImplementation((message) => {
-      errors.push(String(message));
+    logs.length = 0;
+
+    await consumeEventMessages({
+      closed: () => false,
+      decode: (data) => Buffer.from(data).toString('utf8'),
+      handler(event) {
+        handled.push(event.type);
+        if (event.type === 'alpha.failed') {
+          throw new Error('handler boom');
+        }
+      },
+      source: eventSource([envelope('alpha.failed'), envelope('alpha.next')])
     });
 
-    try {
-      await consumeEventMessages({
-        closed: () => false,
-        decode: (data) => Buffer.from(data).toString('utf8'),
-        handler(event) {
-          handled.push(event.type);
-          if (event.type === 'alpha.failed') {
-            throw new Error('handler boom');
-          }
-        },
-        source: eventSource([envelope('alpha.failed'), envelope('alpha.next')])
-      });
-
-      expect(handled).toEqual(['alpha.failed', 'alpha.next']);
-      expect(errors.map((message) => JSON.parse(message) as { event: string })).toEqual([
-        expect.objectContaining({
-          event: 'event_bus.handler_failed'
-        })
-      ]);
-    } finally {
-      consoleError.mockRestore();
-    }
+    expect(handled).toEqual(['alpha.failed', 'alpha.next']);
+    expect(logs).toEqual([
+      expect.objectContaining({
+        event: 'event_bus.handler_failed'
+      })
+    ]);
   });
 });
 

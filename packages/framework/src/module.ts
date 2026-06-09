@@ -1,4 +1,5 @@
 import type { EventBus, EventBusFactory } from './events/eventBus.js';
+import { createLogger, logError } from './log.js';
 import { callProcedure } from './rpc/httpRpc.js';
 import type { ProcedureServer, RpcFactory } from './rpc/rpc.js';
 import { moduleByName } from './registry/client.js';
@@ -129,6 +130,7 @@ function createModuleApp<TConfig, TSurface extends ModuleSurface>(
   const resources = new Map<string, unknown>();
   const startupProcesses: ModuleProcess[] = [];
   const events = options.connect.events();
+  const logger = createLogger(name);
   let required = false;
   let running = false;
   let runningBackgroundProcesses: RunningProcess[] = [];
@@ -234,7 +236,20 @@ function createModuleApp<TConfig, TSurface extends ModuleSurface>(
         }
         runningBackgroundProcesses = startedBackground;
         running = true;
+        logger.info(
+          {
+            event: 'module.started'
+          },
+          'module started'
+        );
       } catch (error) {
+        logger.error(
+          {
+            event: 'module.start_failed',
+            ...logError(error)
+          },
+          'module start failed'
+        );
         await stopProcesses(startedBackground);
         activeRegistryConnection?.close();
         if (procedureServer !== undefined) {
@@ -273,6 +288,12 @@ function createModuleApp<TConfig, TSurface extends ModuleSurface>(
       await stopCallbacks(runningTelemetryRuntime === undefined ? [] : [runningTelemetryRuntime]);
       runningTelemetryRuntime = undefined;
       await events.stop();
+      logger.info(
+        {
+          event: 'module.stopped'
+        },
+        'module stopped'
+      );
     }
   };
 }

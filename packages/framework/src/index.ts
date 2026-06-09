@@ -17,6 +17,7 @@ export { nats } from './events/nats.js';
 export { parseLimit } from './input.js';
 export { toJsonValue } from './json.js';
 export type { JsonObject, JsonValue } from './json.js';
+export { createLogger, logError } from './log.js';
 export { defineModule } from './module.js';
 export type {
   ModuleApp,

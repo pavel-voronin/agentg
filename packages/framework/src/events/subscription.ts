@@ -1,4 +1,5 @@
 import type { EventEnvelope } from './eventBus.js';
+import { createLogger, logError } from '../log.js';
 
 export type EventMessage = {
   data: Uint8Array;
@@ -7,6 +8,8 @@ export type EventMessage = {
 export type EventMessageSource = AsyncIterable<EventMessage> & {
   getSubject(): string;
 };
+
+const logger = createLogger('event-bus');
 
 export async function consumeEventMessages(input: {
   closed(): boolean;
@@ -72,11 +75,12 @@ function isTraceCarrier(value: unknown): value is Record<string, string> {
 }
 
 function logSubscriptionError(event: string, subject: string, error: unknown): void {
-  console.error(
-    JSON.stringify({
-      error: error instanceof Error ? error.message : String(error),
+  logger.error(
+    {
       event,
-      subject
-    })
+      subject,
+      ...logError(error)
+    },
+    'event bus subscription failed'
   );
 }

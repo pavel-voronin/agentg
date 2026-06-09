@@ -2,6 +2,7 @@ import { hostname } from 'node:os';
 import { performance } from 'node:perf_hooks';
 
 import {
+  context,
   metrics,
   SpanKind,
   SpanStatusCode,
@@ -14,9 +15,12 @@ import {
   type Span,
   type Tracer
 } from '@opentelemetry/api';
+import { SeverityNumber, type LogAttributes, type LogBody } from '@opentelemetry/api-logs';
+import { OTLPLogExporter } from '@opentelemetry/exporter-logs-otlp-proto';
 import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-proto';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-proto';
 import { resourceFromAttributes } from '@opentelemetry/resources';
+import { BatchLogRecordProcessor, LoggerProvider } from '@opentelemetry/sdk-logs';
 import {
   AggregationType,
   InstrumentType,
@@ -29,9 +33,11 @@ import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
 import { ATTR_ERROR_TYPE, ATTR_SERVICE_NAME } from '@opentelemetry/semantic-conventions';
 import { ATTR_HOST_NAME } from '@opentelemetry/semantic-conventions/incubating';
 
+import { configuredServiceName } from '../runtimeIdentity.js';
 import type { TelemetryAttributes } from './contracts.js';
 
 type TelemetryRuntime = {
+  loggerProvider: LoggerProvider;
   meterProvider: MeterProvider;
   tracerProvider: NodeTracerProvider;
 };
@@ -59,6 +65,7 @@ export type TelemetrySpan = {
 };
 
 const DISABLED_VALUES = new Set(['0', 'false', 'no', 'off']);
+const DEFAULT_LOGS_ENDPOINT = 'http://127.0.0.1:4318/v1/logs';
 const DEFAULT_METRIC_EXPORT_INTERVAL_MS = 15_000;
 const DEFAULT_TRACES_ENDPOINT = 'http://127.0.0.1:4318/v1/traces';
 const DEFAULT_METRICS_ENDPOINT = 'http://127.0.0.1:4318/v1/metrics';
@@ -75,6 +82,13 @@ let runtime: TelemetryRuntime | null = null;
 type GaugeValue = {
   attributes: TelemetryAttributes;
   value: number;
+};
+
+export type TelemetryLogRecord = {
+  attributes?: LogAttributes | undefined;
+  body: LogBody;
+  severityNumber: SeverityNumber;
+  severityText: string;
 };
 
 export function telemetryEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
@@ -94,6 +108,16 @@ export function startTelemetryRuntime(serviceName: string): () => Promise<undefi
   const resource = resourceFromAttributes({
     [ATTR_HOST_NAME]: hostname(),
     [ATTR_SERVICE_NAME]: configuredName
+  });
+  const loggerProvider = new LoggerProvider({
+    processors: [
+      new BatchLogRecordProcessor(
+        new OTLPLogExporter({
+          url: telemetryEndpoint('OTEL_EXPORTER_OTLP_LOGS_ENDPOINT', DEFAULT_LOGS_ENDPOINT)
+        })
+      )
+    ],
+    resource
   });
   const tracerProvider = new NodeTracerProvider({
     resource,
@@ -122,6 +146,7 @@ export function startTelemetryRuntime(serviceName: string): () => Promise<undefi
   metrics.setGlobalMeterProvider(meterProvider);
   resetMetricInstruments();
   runtime = {
+    loggerProvider,
     meterProvider,
     tracerProvider
   };
@@ -132,10 +157,24 @@ export function startTelemetryRuntime(serviceName: string): () => Promise<undefi
     if (activeRuntime === null) {
       return undefined;
     }
+    await activeRuntime.loggerProvider.shutdown();
     await activeRuntime.meterProvider.shutdown();
     await activeRuntime.tracerProvider.shutdown();
     return undefined;
   };
+}
+
+export function recordTelemetryLog(record: TelemetryLogRecord): void {
+  if (!telemetryEnabled() || runtime === null) {
+    return;
+  }
+  runtime.loggerProvider.getLogger('agentg.log').emit({
+    ...(record.attributes === undefined ? {} : { attributes: record.attributes }),
+    body: record.body,
+    context: context.active(),
+    severityNumber: record.severityNumber,
+    severityText: record.severityText
+  });
 }
 
 export function startTelemetrySpan(input: TelemetrySpanInput): TelemetrySpan | null {
@@ -375,11 +414,6 @@ function attributesKey(attributes: TelemetryAttributes): string {
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([key, value]) => [key, String(value)])
   );
-}
-
-function configuredServiceName(fallback: string): string {
-  const configured = process.env.OTEL_SERVICE_NAME?.trim();
-  return configured === undefined || configured.length === 0 ? fallback : configured;
 }
 
 function metricExportIntervalMs(): number {
