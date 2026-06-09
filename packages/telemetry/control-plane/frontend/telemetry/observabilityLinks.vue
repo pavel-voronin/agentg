@@ -21,6 +21,10 @@ onMounted(() => {
       <SolarArrowRightUpBold class="observability-links__link-icon" aria-hidden="true" />
       <span class="observability-links__link-label">Grafana</span>
     </a>
+    <a class="observability-links__link" :href="links.logsUi" target="_blank" rel="noreferrer">
+      <SolarArrowRightUpBold class="observability-links__link-icon" aria-hidden="true" />
+      <span class="observability-links__link-label">Loki</span>
+    </a>
     <a class="observability-links__link" :href="links.jaegerUi" target="_blank" rel="noreferrer">
       <SolarArrowRightUpBold class="observability-links__link-icon" aria-hidden="true" />
       <span class="observability-links__link-label">Jaeger</span>
