@@ -1,4 +1,4 @@
-import type { EventBus } from '@agentg/framework';
+import { createLogger, type EventBus } from '@agentg/framework';
 import type {
   $Function,
   Chat,
@@ -13,6 +13,8 @@ import type {
 } from 'tdlib-types';
 
 import { invokeWithEvents, type InvokeOptions, type Invoker } from './operationEvents.js';
+
+const logger = createLogger('telegram');
 
 type OperationDeps = {
   client: Invoker;
@@ -215,12 +217,13 @@ async function invoke(
         throw error;
       }
 
-      console.warn(
-        JSON.stringify({
+      logger.warn(
+        {
           event: 'telegram.flood_wait',
           request: request._,
           seconds: floodWaitSeconds
-        })
+        },
+        'telegram flood wait'
       );
       await delay((floodWaitSeconds + 1) * 1000);
     }

@@ -1,5 +1,6 @@
 import { rm } from 'node:fs/promises';
 
+import { createLogger, logError } from '@agentg/framework';
 import type { chat, message, updateFile, updateMessageContent } from 'tdlib-types';
 
 import { tdJsonObject } from '../tdlib/value.js';
@@ -42,6 +43,8 @@ import {
 } from './runtime.js';
 import { logWorkerError, processCompletedFileBatch, processQueuedFileBatch } from './queue.js';
 import type { FileOwner } from './types.js';
+
+const logger = createLogger('telegram');
 
 // TODO(file-size): Split public facade, record methods, generation, and worker lifecycle.
 export type FileSubsystem = {
@@ -257,12 +260,13 @@ export function useFiles(options: FileSubsystemOptions): FileSubsystemRuntime {
           if (generation.controller.signal.aborted) {
             return;
           }
-          console.error(
-            JSON.stringify({
-              error: error instanceof Error ? error.message : String(error),
+          logger.error(
+            {
               event: 'telegram.file_generation_unhandled_failure',
-              generationId: update.generation_id
-            })
+              generationId: update.generation_id,
+              ...logError(error)
+            },
+            'telegram file generation failed'
           );
         })
         .finally(() => {

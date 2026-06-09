@@ -4,6 +4,7 @@ import { mkdir, rename, rm, stat } from 'node:fs/promises';
 import { basename, extname, join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 
+import { createLogger, logError } from '@agentg/framework';
 import { and, eq, sql } from 'drizzle-orm';
 import type { file } from 'tdlib-types';
 
@@ -38,6 +39,7 @@ import {
 
 // TODO(file-size): Split worker loop, TDLib dispatch, canonical storage, and cleanup helpers.
 const DOWNLOAD_CLAIM_TIMEOUT_MS = 5 * 60 * 1000;
+const logger = createLogger('telegram');
 
 export async function processQueuedFileBatch(
   options: FileSubsystemOptions,
@@ -644,11 +646,12 @@ function parseTdlibInteger(value: string, label: string): number {
 }
 
 export function logWorkerError(error: unknown): void {
-  console.warn(
-    JSON.stringify({
-      error: error instanceof Error ? error.message : String(error),
-      event: 'telegram.file_subsystem_worker_failed'
-    })
+  logger.warn(
+    {
+      event: 'telegram.file_subsystem_worker_failed',
+      ...logError(error)
+    },
+    'telegram file subsystem worker failed'
   );
 }
 
@@ -656,12 +659,13 @@ export function logTdlibCleanupError(assetKey: string, error: unknown): void {
   if (isTdlibMissingFileError(error)) {
     return;
   }
-  console.warn(
-    JSON.stringify({
+  logger.warn(
+    {
       assetKey,
-      error: error instanceof Error ? error.message : String(error),
-      event: 'telegram.file_download_cleanup_failed'
-    })
+      event: 'telegram.file_download_cleanup_failed',
+      ...logError(error)
+    },
+    'telegram file download cleanup failed'
   );
 }
 

@@ -1,19 +1,23 @@
+import { createLogger, logError } from '@agentg/framework';
+
 import { readDatabaseConfig } from '../config.js';
 
 import { createDatabase } from './client.js';
 
 const config = readDatabaseConfig(process.env);
 const database = createDatabase(config.databaseUrl);
+const logger = createLogger('telegram');
 
 try {
   await database.start();
-  console.log(JSON.stringify({ event: 'telegram.database_migrated' }));
+  logger.info({ event: 'telegram.database_migrated' }, 'telegram database migrated');
 } catch (error) {
-  console.error(
-    JSON.stringify({
-      error: error instanceof Error ? error.message : String(error),
-      event: 'telegram.database_failed'
-    })
+  logger.error(
+    {
+      event: 'telegram.database_failed',
+      ...logError(error)
+    },
+    'telegram database migration failed'
   );
   process.exitCode = 1;
 } finally {

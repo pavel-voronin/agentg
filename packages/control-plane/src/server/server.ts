@@ -5,6 +5,7 @@ import { extname, resolve, sep } from 'node:path';
 
 import {
   callProcedure,
+  createLogger,
   timeTelemetrySpan,
   type EventBus,
   type EventSubscription,
@@ -63,15 +64,17 @@ const MAX_WEBSOCKET_MESSAGE_BYTES = 1_000_000;
 const RPC_TIMEOUT_MS = 15_000;
 const nodeRequire = createRequire(import.meta.url);
 const vueRuntimeFilePath = nodeRequire.resolve('vue/dist/vue.runtime.esm-browser.js');
+const logger = createLogger('control-plane-server');
 
 export async function runServer(options: ServerOptions): Promise<void> {
   const handle = await startServer(options);
-  console.log(
-    JSON.stringify({
+  logger.info(
+    {
       event: 'control_plane.ready',
       host: handle.host,
       port: handle.port
-    })
+    },
+    'control plane ready'
   );
 
   await new Promise<void>((resolve) => {

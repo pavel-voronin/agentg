@@ -1,3 +1,5 @@
+import { createLogger } from '@agentg/framework';
+
 import type { IngestionResources } from './resources.js';
 import type { IngestionUpdate, UpdateByType } from './types.js';
 import { handleUpdateAccentColors } from './update-handlers/updateAccentColors.js';
@@ -380,6 +382,7 @@ const runtimeUpdateHandlers = updateHandlers as Record<
   string,
   (nextUpdate: IngestionUpdate, resources: IngestionResources) => Promise<void> | void
 >;
+const logger = createLogger('telegram');
 
 export async function persistLiveUpdate(
   update: RuntimeUpdate,
@@ -387,12 +390,12 @@ export async function persistLiveUpdate(
 ): Promise<void> {
   const handler = runtimeUpdateHandlers[update._];
   if (handler === undefined) {
-    console.error(
-      JSON.stringify({
+    logger.error(
+      {
         event: 'telegram.tdlib_update_unhandled',
-        level: 'error',
         updateType: update._
-      })
+      },
+      'telegram tdlib update unhandled'
     );
     return;
   }

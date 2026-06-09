@@ -1,19 +1,23 @@
+import { createLogger, logError } from '@agentg/framework';
+
 import { readConfig } from '../config.js';
 
 import { createDatabase } from './client.js';
 
 const config = readConfig(process.env);
 const database = createDatabase(config.databaseUrl);
+const logger = createLogger('history-sync');
 
 try {
   await database.start();
-  console.log(JSON.stringify({ event: 'history-sync.database_migrated' }));
+  logger.info({ event: 'history-sync.database_migrated' }, 'history sync database migrated');
 } catch (error) {
-  console.error(
-    JSON.stringify({
-      error: error instanceof Error ? error.message : String(error),
-      event: 'history-sync.database_failed'
-    })
+  logger.error(
+    {
+      event: 'history-sync.database_failed',
+      ...logError(error)
+    },
+    'history sync database migration failed'
   );
   process.exitCode = 1;
 } finally {

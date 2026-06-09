@@ -1,8 +1,9 @@
-import { httpRpc, nats, registry } from '@agentg/framework';
+import { createLogger, httpRpc, logError, nats, registry } from '@agentg/framework';
 
 import { readConfig } from './config.js';
 import { gatewayModule } from './module.js';
 
+const logger = createLogger('gateway');
 const config = readConfig(process.env);
 const app = gatewayModule({
   config,
@@ -19,13 +20,13 @@ const app = gatewayModule({
 
 try {
   await app.start();
-  console.log('gateway started');
 } catch (error) {
-  console.error(
-    JSON.stringify({
-      error: error instanceof Error ? error.message : String(error),
-      event: 'gateway.failed'
-    })
+  logger.error(
+    {
+      event: 'gateway.failed',
+      ...logError(error)
+    },
+    'gateway failed'
   );
   process.exitCode = 1;
 }

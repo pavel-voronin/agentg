@@ -1,7 +1,15 @@
-import { httpRpc, nats, selfRegistry, registryModule } from '@agentg/framework';
+import {
+  createLogger,
+  httpRpc,
+  logError,
+  nats,
+  selfRegistry,
+  registryModule
+} from '@agentg/framework';
 
 import { readConfig } from './config.js';
 
+const logger = createLogger('registry');
 const config = readConfig(process.env);
 const app = registryModule({
   config: {},
@@ -14,9 +22,18 @@ const app = registryModule({
   }
 });
 
-await app.start();
-
-console.log('registry started');
+try {
+  await app.start();
+} catch (error) {
+  logger.error(
+    {
+      event: 'registry.failed',
+      ...logError(error)
+    },
+    'registry failed'
+  );
+  process.exitCode = 1;
+}
 
 globalThis.process.once('SIGINT', () => {
   void app.stop();

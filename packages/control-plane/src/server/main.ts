@@ -1,6 +1,8 @@
 import {
   callProcedure,
+  createLogger,
   createRegistryClient,
+  logError,
   nats,
   startTelemetryRuntime
 } from '@agentg/framework';
@@ -11,6 +13,7 @@ import { procedures as telemetryProcedures } from '../../../telemetry/control-pl
 import { readConfig } from './config.js';
 import { runServer } from './server.js';
 
+const logger = createLogger('control-plane');
 const config = readConfig(process.env);
 const stopTelemetry = startTelemetryRuntime('control-plane');
 const events = nats(config.natsUrl)();
@@ -47,11 +50,12 @@ try {
     registry
   });
 } catch (error) {
-  console.error(
-    JSON.stringify({
-      error: error instanceof Error ? error.message : String(error),
-      event: 'control_plane.failed'
-    })
+  logger.error(
+    {
+      event: 'control_plane.failed',
+      ...logError(error)
+    },
+    'control plane failed'
   );
   process.exitCode = 1;
 } finally {

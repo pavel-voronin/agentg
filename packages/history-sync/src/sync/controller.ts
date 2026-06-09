@@ -1,4 +1,10 @@
-import { timeTelemetrySpan, type EventBus, type TelemetryAttributes } from '@agentg/framework';
+import {
+  createLogger,
+  logError,
+  timeTelemetrySpan,
+  type EventBus,
+  type TelemetryAttributes
+} from '@agentg/framework';
 
 import { runHistorySync, type SyncOptions } from './executor.js';
 import type { Database } from '../database/client.js';
@@ -12,6 +18,7 @@ export type Controller = {
 
 const RETRY_DELAY_MS = 5000;
 const METRIC_CONTROLLER_PASS_DURATION = 'history_sync.controller.pass.duration';
+const logger = createLogger('history-sync');
 
 export function createController(
   database: Database,
@@ -53,11 +60,12 @@ export function createController(
         );
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        console.error(
-          JSON.stringify({
-            error: message,
-            event: 'history-sync.failed_pass'
-          })
+        logger.error(
+          {
+            event: 'history-sync.failed_pass',
+            ...logError(error)
+          },
+          'history sync pass failed'
         );
         events.publish('history-sync.sync.failed', {
           error: message,

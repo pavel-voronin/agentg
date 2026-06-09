@@ -1,8 +1,9 @@
-import { httpRpc, nats, registry } from '@agentg/framework';
+import { createLogger, httpRpc, logError, nats, registry } from '@agentg/framework';
 
 import { readConfig } from './config.js';
 import { telegramModule } from './module.js';
 
+const logger = createLogger('telegram');
 const config = readConfig(process.env);
 const app = telegramModule({
   config,
@@ -15,6 +16,15 @@ const app = telegramModule({
   }
 });
 
-await app.start();
-
-console.log('telegram started');
+try {
+  await app.start();
+} catch (error) {
+  logger.error(
+    {
+      event: 'telegram.failed',
+      ...logError(error)
+    },
+    'telegram failed'
+  );
+  process.exitCode = 1;
+}

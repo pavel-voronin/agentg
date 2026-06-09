@@ -1,4 +1,4 @@
-import type { EventBus } from '@agentg/framework';
+import { createLogger, logError, type EventBus } from '@agentg/framework';
 import type { Update } from 'tdlib-types';
 import type { Client } from 'tdl';
 
@@ -15,6 +15,8 @@ export type TdlibOptions = {
   config: ClientConfig;
   events: EventBus;
 };
+
+const logger = createLogger('telegram');
 
 type TdlibRuntime = {
   start(): Promise<() => Promise<undefined>>;
@@ -51,7 +53,13 @@ export function useTdlib(options: TdlibOptions): TdlibRuntime {
     try {
       client = await createClient(options.config);
       client.on('error', (error: unknown) => {
-        console.error(JSON.stringify({ event: 'telegram.error', error: String(error) }));
+        logger.error(
+          {
+            event: 'telegram.error',
+            ...logError(error)
+          },
+          'telegram tdlib error'
+        );
       });
       client.on('update', handleUpdate);
       scheduler = createScheduler(client);

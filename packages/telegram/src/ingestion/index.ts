@@ -1,4 +1,10 @@
-import { recordTelemetryHistogram, timeTelemetrySpan, type EventBus } from '@agentg/framework';
+import {
+  createLogger,
+  logError,
+  recordTelemetryHistogram,
+  timeTelemetrySpan,
+  type EventBus
+} from '@agentg/framework';
 import { asc } from 'drizzle-orm';
 import type { ChatList$Input } from 'tdlib-types';
 
@@ -40,6 +46,7 @@ const STATUS_HEARTBEAT_MS = 5000;
 const INITIAL_CHAT_SYNC_LIMIT = 100;
 const METRIC_UPDATE_PROCESSING_DURATION = 'telegram.update.processing.duration';
 const METRIC_UPDATE_QUEUE_WAIT_DURATION = 'telegram.ingestion.queue.wait.duration';
+const logger = createLogger('telegram');
 
 type ChatListKind =
   | {
@@ -95,12 +102,13 @@ export function useIngestion(options: IngestionOptions): IngestionRuntime {
       );
     },
     onError(error, update): void {
-      console.error(
-        JSON.stringify({
-          error: error instanceof Error ? error.message : String(error),
+      logger.error(
+        {
           event: 'telegram.tdlib_update_persist_failed',
-          updateType: update._
-        })
+          updateType: update._,
+          ...logError(error)
+        },
+        'telegram tdlib update persist failed'
       );
     }
   });
@@ -174,8 +182,8 @@ async function persistAuthenticatedClient(options: IngestionOptions): Promise<vo
     { priority: priorities.maximum }
   );
 
-  console.log(
-    JSON.stringify({
+  logger.info(
+    {
       chatCount: chats.chat_ids.length,
       event: 'telegram.authenticated',
       me: {
@@ -185,7 +193,8 @@ async function persistAuthenticatedClient(options: IngestionOptions): Promise<vo
         lastName: me.last_name,
         username: me.usernames?.active_usernames[0]
       }
-    })
+    },
+    'telegram authenticated'
   );
 }
 
@@ -228,13 +237,14 @@ async function syncInitialChats(options: IngestionOptions): Promise<void> {
     storedChatCount += 1;
   }
 
-  console.log(
-    JSON.stringify({
+  logger.info(
+    {
       event: 'telegram.initial_chats_synced',
       folderCount: folderIds.length,
       listCount: chatLists.length,
       storedChatCount
-    })
+    },
+    'telegram initial chats synced'
   );
 }
 

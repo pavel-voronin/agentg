@@ -1,10 +1,16 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 
-import type { EventBus, EventEnvelope, EventSubscription } from '@agentg/framework';
+import {
+  createLogger,
+  type EventBus,
+  type EventEnvelope,
+  type EventSubscription
+} from '@agentg/framework';
 import { WebSocket, WebSocketServer, type RawData } from 'ws';
 
 const EXTERNAL_EVENT_SUBJECT = 'telegram.login.completed';
 const MAX_WEBSOCKET_MESSAGE_BYTES = 1_000_000;
+const logger = createLogger('gateway');
 
 type ServerConfig = {
   host: string;
@@ -85,12 +91,13 @@ export async function startGatewayServer(
 
   try {
     const port = await listen(server, options.config.host, options.config.port);
-    console.log(
-      JSON.stringify({
+    logger.info(
+      {
         event: 'gateway.ready',
         host: options.config.host,
         port
-      })
+      },
+      'gateway ready'
     );
 
     return {

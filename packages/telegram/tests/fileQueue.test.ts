@@ -1,10 +1,25 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+const logs = vi.hoisted(() => [] as Record<string, unknown>[]);
+
+vi.mock('@agentg/framework', () => ({
+  createLogger: () => ({
+    warn(entry: Record<string, unknown>) {
+      logs.push(entry);
+    }
+  }),
+  logError: (error: unknown) => ({
+    'error.type': error instanceof Error ? error.name : typeof error,
+    error
+  })
+}));
+
 import { fileDownloadRequest, logTdlibCleanupError } from '../src/files/queue.js';
 import type { FileDownloadRow } from '../src/files/runtime.js';
 
 describe('Telegram file download worker', () => {
   afterEach(() => {
+    logs.length = 0;
     vi.restoreAllMocks();
   });
 
@@ -59,20 +74,20 @@ describe('Telegram file download worker', () => {
   });
 
   it("treats TDLib cleanup Can't find file as a no-op", () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-
     logTdlibCleanupError('asset-a', new Error("Can't find file"));
 
-    expect(warn).not.toHaveBeenCalled();
+    expect(logs).toEqual([]);
   });
 
   it('keeps warning for real TDLib cleanup failures', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-
     logTdlibCleanupError('asset-a', new Error('TDLib transport failed'));
 
-    expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn.mock.calls[0]?.[0]).toContain('telegram.file_download_cleanup_failed');
+    expect(logs).toEqual([
+      expect.objectContaining({
+        assetKey: 'asset-a',
+        event: 'telegram.file_download_cleanup_failed'
+      })
+    ]);
   });
 });
 
