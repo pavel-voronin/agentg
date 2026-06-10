@@ -41,6 +41,12 @@ export type FileOwnerKey = {
   ownerModel: FileOwnerModel;
 };
 
+export type FileOwnerChangedEvent = {
+  files: FileRef[];
+  owner: FileOwnerKey;
+  updatedAt: string;
+};
+
 export type ExtractedFileSlot = {
   byteSize: number | null;
   durationSeconds: number | null;

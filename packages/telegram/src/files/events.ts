@@ -1,7 +1,12 @@
-import { readFileOwnersForAssets, readFileQueueStats } from './read.js';
+import {
+  ownerKey,
+  readFileOwnersForAssets,
+  readFileQueueStats,
+  readFileRefsForOwners
+} from './read.js';
 import type { FileSubsystemOptions } from './runtime.js';
 import { recordQueueStatsTelemetry } from './telemetry.js';
-import type { FileOwnerKey } from './types.js';
+import type { FileOwnerChangedEvent, FileOwnerKey } from './types.js';
 
 type FileEventOptions = Pick<FileSubsystemOptions, 'database' | 'events'>;
 
@@ -15,19 +20,36 @@ export async function publishAssetOwnersAndQueue(
   }
 
   const owners = await readFileOwnersForAssets(options.database, uniqueAssetKeys);
-  for (const owner of owners) {
-    publishFileOwnerUpdated(options, owner);
-  }
+  await publishFileOwnersUpdated(options, owners);
   await publishFileQueueUpdated(options);
 }
 
-export function publishFileOwnerUpdated(options: FileEventOptions, owner: FileOwnerKey): void {
-  // TODO(file-event-consumers): this neutral event replaced old direct projection updates for
-  // active notifications, chat directory entries, default backgrounds, emoji chat themes, and
-  // read-message cards. Add consumers that rebuild those projections from
-  // `telegram.files.ownerChanged`; otherwise file changes will be stored correctly but
-  // already-mounted views will not learn about the changed file slots.
-  options.events.publish('telegram.files.ownerChanged', owner);
+export function publishFileOwnerUpdated(
+  options: FileEventOptions,
+  owner: FileOwnerKey
+): Promise<void> {
+  return publishFileOwnersUpdated(options, [owner]);
+}
+
+export async function publishFileOwnersUpdated(
+  options: FileEventOptions,
+  owners: FileOwnerKey[]
+): Promise<void> {
+  const uniqueOwners = [...new Map(owners.map((owner) => [ownerKey(owner), owner])).values()];
+  if (uniqueOwners.length === 0) {
+    return;
+  }
+
+  const filesByOwner = await readFileRefsForOwners(options.database, uniqueOwners);
+  const updatedAt = new Date().toISOString();
+  for (const owner of uniqueOwners) {
+    const event: FileOwnerChangedEvent = {
+      files: filesByOwner.get(ownerKey(owner)) ?? [],
+      owner,
+      updatedAt
+    };
+    options.events.publish('telegram.files.ownerChanged', event);
+  }
 }
 
 export async function publishFileQueueUpdated(options: FileEventOptions): Promise<void> {

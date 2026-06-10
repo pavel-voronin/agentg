@@ -29,7 +29,7 @@ import {
 } from '../model/refs.js';
 import { priorities } from '../tdlib/priority.js';
 import { extractFileSlots, type FileSlotUpdate } from './extractor.js';
-import { publishFileOwnerUpdated, publishFileQueueUpdated } from './events.js';
+import { publishFileOwnersUpdated, publishFileQueueUpdated } from './events.js';
 import { ownerKey } from './read.js';
 import { decideFilePolicy, type MediaDownloadPolicyCause } from './policy.js';
 import {
@@ -39,7 +39,6 @@ import {
 } from './runtime.js';
 import type { ExtractedFileSlot, FileOwnerKey } from './types.js';
 
-// TODO(file-size): Split slot ownership, asset persistence, queue enqueue, and snapshots.
 const METRIC_FILE_RECORD_STAGE_DURATION = 'telegram.file.record.stage.duration';
 
 type FileSlotScope = {
@@ -100,9 +99,7 @@ export async function recordFileSlotUpdate(
     cause,
     ownerModelLabel(changedOwners.values()),
     async () => {
-      for (const owner of changedOwners.values()) {
-        publishFileOwnerUpdated(options, owner);
-      }
+      await publishFileOwnersUpdated(options, [...changedOwners.values()]);
       if (queueChanged) {
         await publishFileQueueUpdated(options);
       }

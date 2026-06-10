@@ -61,7 +61,7 @@ export async function requestFileSlot(
       row.assetKey,
       downloadPriorityForCause('explicit_request')
     );
-    publishFileOwnerUpdated(options, {
+    await publishFileOwnerUpdated(options, {
       ownerId: input.owner.id,
       ownerModel: input.owner._model
     });
