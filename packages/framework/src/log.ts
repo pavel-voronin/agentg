@@ -6,6 +6,7 @@ import pino, { type LogFn, type Logger } from 'pino';
 import { configuredServiceName } from './runtimeIdentity.js';
 import { recordTelemetryLog } from './telemetry/recorder.js';
 
+const LOG_CONTEXT = Symbol.for('agentg:log:context');
 const DEFAULT_LOG_LEVEL = 'info';
 const REDACT_PATHS = [
   'apiHash',
@@ -27,6 +28,10 @@ const REDACT_PATHS = [
   '*.phone_number_authentication_code',
   '*.token'
 ];
+
+type LogContextCarrier = {
+  [LOG_CONTEXT]?: LogAttributes;
+};
 
 export function createLogger(serviceName: string): Logger {
   return pino({
@@ -67,6 +72,12 @@ export function createLogger(serviceName: string): Logger {
     },
     timestamp: pino.stdTimeFunctions.isoTime
   });
+}
+
+export function logContext(attributes: LogAttributes): LogContextCarrier {
+  return {
+    [LOG_CONTEXT]: attributes
+  };
 }
 
 export function logError(error: unknown): Record<string, unknown> {
@@ -112,13 +123,42 @@ function logBody(args: Parameters<LogFn>): LogBody {
 function logAttributes(args: Parameters<LogFn>): LogAttributes {
   const first = args[0];
   if (!isRecord(first)) {
-    return {};
+    return traceAttributes();
   }
   return {
+    ...traceAttributes(),
+    ...explicitLogContext(first),
     ...(typeof first.event === 'string' ? { event: first.event } : {}),
     ...(typeof first[ATTR_ERROR_TYPE] === 'string'
       ? { [ATTR_ERROR_TYPE]: first[ATTR_ERROR_TYPE] }
-      : {})
+      : {}),
+    ...errorAttributes(first.error)
+  };
+}
+
+function explicitLogContext(value: object): LogAttributes {
+  const attributes = (value as LogContextCarrier)[LOG_CONTEXT];
+  return isRecord(attributes) ? attributes : {};
+}
+
+function errorAttributes(error: unknown): LogAttributes {
+  if (error === undefined) {
+    return {};
+  }
+  return {
+    'error.message': errorMessage(error)
+  };
+}
+
+function traceAttributes(): LogAttributes {
+  const active = trace.getSpan(context.active())?.spanContext();
+  if (active === undefined) {
+    return {};
+  }
+  return {
+    span_id: active.spanId,
+    trace_flags: active.traceFlags,
+    trace_id: active.traceId
   };
 }
 

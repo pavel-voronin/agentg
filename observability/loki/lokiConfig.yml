@@ -40,8 +40,15 @@ limits_config:
     log_attributes:
       - action: structured_metadata
         attributes:
+          - assetKey
+          - error.message
           - error.type
           - event
+          - source
+          - span_id
+          - trace_flags
+          - trace_id
+          - transport
       - action: drop
         regex: .*
   volume_enabled: true
