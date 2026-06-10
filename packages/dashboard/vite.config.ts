@@ -12,6 +12,9 @@ const browserSharedModules = new Set(['vue']);
 const browserSharedModuleUrls = new Map([['vue', '/dashboard/runtime/vue.js']]);
 const nodeRequire = createRequire(import.meta.url);
 const vueRuntimeFilePath = nodeRequire.resolve('vue/dist/vue.runtime.esm-browser.js');
+const mediaServerUrl = safeMediaServerUrl(
+  process.env.TELEGRAM_FILES_URL ?? 'http://127.0.0.1:8790'
+);
 
 export default defineConfig(({ command }): UserConfig => {
   const devServer = command === 'serve';
@@ -43,6 +46,9 @@ export default defineConfig(({ command }): UserConfig => {
       proxy: {
         '/dashboard': {
           target: 'http://127.0.0.1:8789'
+        },
+        '/telegram-files': {
+          target: mediaServerUrl
         },
         '/ws': {
           target: 'ws://127.0.0.1:8789',
@@ -109,4 +115,19 @@ function rewriteModuleImport(code: string, moduleName: string, moduleUrl: string
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function safeMediaServerUrl(value: string): string {
+  const url = new URL(value);
+  if (
+    (url.protocol !== 'http:' && url.protocol !== 'https:') ||
+    url.username.length > 0 ||
+    url.password.length > 0 ||
+    url.pathname !== '/' ||
+    url.search.length > 0 ||
+    url.hash.length > 0
+  ) {
+    throw new Error('TELEGRAM_FILES_URL must be an HTTP(S) origin without credentials or path');
+  }
+  return value;
 }

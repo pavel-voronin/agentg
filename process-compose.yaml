@@ -21,12 +21,22 @@ environment:
   - 'VICTORIA_METRICS_URL=${VICTORIA_METRICS_URL:-http://127.0.0.1:8428}'
   - 'GRAFANA_URL=${GRAFANA_URL:-http://127.0.0.1:3000}'
   - 'JAEGER_UI_URL=${JAEGER_UI_URL:-http://127.0.0.1:16686}'
+  - 'TELEGRAM_FILES_PORT=${TELEGRAM_FILES_PORT:-8790}'
+  - 'TELEGRAM_FILES_URL=${TELEGRAM_FILES_URL:-http://127.0.0.1:8790}'
 
 processes:
   infra-up:
     namespace: setup
     description: Start Docker-backed development infrastructure.
     command: npm run infra:up
+
+  telegram-files-ready:
+    namespace: setup
+    description: Wait for the Telegram file server.
+    command: sh -c 'for i in $(seq 1 120); do curl -fsS "http://127.0.0.1:${TELEGRAM_FILES_PORT:-8790}/healthz" >/dev/null && exit 0; sleep 1; done; exit 1'
+    depends_on:
+      infra-up:
+        condition: process_completed_successfully
 
   db-migrate:
     namespace: setup
@@ -155,6 +165,8 @@ processes:
     depends_on:
       dashboard-server:
         condition: process_healthy
+      telegram-files-ready:
+        condition: process_completed_successfully
     readiness_probe:
       http_get:
         host: 127.0.0.1

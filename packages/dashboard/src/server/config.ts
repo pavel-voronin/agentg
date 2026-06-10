@@ -8,7 +8,6 @@ export const readConfig = defineConfig({
   natsUrl: string('NATS_URL'),
   port: number('DASHBOARD_PORT').default(8789),
   registryUrl: string('REGISTRY_URL'),
-  tdlibFilesDirectory: string('TDLIB_FILES_DIR').default('./td-data/files'),
   victoriaMetricsUrl: string('VICTORIA_METRICS_URL').default('http://127.0.0.1:8428')
 });
 

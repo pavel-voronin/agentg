@@ -38,8 +38,7 @@ try {
       ...telegramProcedures({
         callTelegramProcedure,
         database: database.db,
-        events,
-        filesDirectory: config.tdlibFilesDirectory
+        events
       }),
       ...telemetryProcedures({
         grafanaUrl: config.grafanaUrl,

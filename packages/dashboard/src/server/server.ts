@@ -21,7 +21,6 @@ import {
 } from '@opentelemetry/semantic-conventions/incubating';
 import { WebSocket, WebSocketServer, type RawData } from 'ws';
 
-// TODO(file-size): Split HTTP serving, WebSocket RPC, module-file proxy, and server lifecycle.
 export type ServerConfig = {
   host: string;
   port: number;
@@ -290,7 +289,7 @@ async function handleHttpRequest(
     return;
   }
   if (path.startsWith(MODULE_FILES_PREFIX)) {
-    await proxyModuleFile(runtime, path, request.method, response);
+    sendHttp(response, 404, 'text/plain; charset=utf-8', 'Not Found');
     return;
   }
 
@@ -315,96 +314,6 @@ async function handleHttpRequest(
     return;
   }
   response.end();
-}
-
-async function proxyModuleFile(
-  runtime: Runtime,
-  path: string,
-  method: string | undefined,
-  response: ServerResponse
-): Promise<void> {
-  const file = moduleFileFromPath(path);
-  if (file === null) {
-    sendHttp(response, 404, 'text/plain; charset=utf-8', 'Not Found');
-    return;
-  }
-
-  try {
-    const content = requireFileContent(
-      await callProcedureByMethod(runtime, `${file.module}.dashboard.file`, {
-        path: file.modulePath
-      })
-    );
-    const body = Buffer.from(content.bodyBase64, 'base64');
-    response.writeHead(200, {
-      'cache-control': 'private, max-age=3600',
-      'content-length': body.byteLength,
-      'content-type': content.contentType
-    });
-    if (method !== 'HEAD') {
-      response.end(body);
-      return;
-    }
-    response.end();
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (message === 'File not found') {
-      sendHttp(response, 404, 'text/plain; charset=utf-8', 'Not Found');
-      return;
-    }
-    sendHttp(response, 502, 'text/plain; charset=utf-8', 'Bad Gateway');
-  }
-}
-
-function moduleFileFromPath(path: string): { module: string; modulePath: string } | null {
-  const relativePath = path.slice(MODULE_FILES_PREFIX.length);
-  const segments = relativePath.split('/');
-  if (segments.length < 2) {
-    return null;
-  }
-  const module = decodeURIComponent(segments[0] ?? '');
-  const modulePath = `/${segments
-    .slice(1)
-    .map((segment) => decodeURIComponent(segment))
-    .join('/')}`;
-  if (!safeModuleSegment(module) || !safeModuleFilePath(modulePath)) {
-    return null;
-  }
-  return {
-    module,
-    modulePath
-  };
-}
-
-function requireFileContent(value: unknown): { bodyBase64: string; contentType: string } {
-  if (
-    typeof value !== 'object' ||
-    value === null ||
-    !('bodyBase64' in value) ||
-    typeof value.bodyBase64 !== 'string' ||
-    !('contentType' in value) ||
-    typeof value.contentType !== 'string'
-  ) {
-    throw new Error('File response is invalid');
-  }
-
-  return {
-    bodyBase64: value.bodyBase64,
-    contentType: value.contentType
-  };
-}
-
-function safeModuleSegment(segment: string): boolean {
-  return (
-    segment.length > 0 &&
-    !segment.includes('/') &&
-    !segment.includes('..') &&
-    !segment.includes('\\')
-  );
-}
-
-function safeModuleFilePath(path: string): boolean {
-  return path.startsWith('/') && path.length > 1 && !path.includes('..') && !path.includes('\\');
 }
 
 async function sendFile(
@@ -439,7 +348,11 @@ async function readStaticFile(filePath: string, staticRoot: string): Promise<Sta
       filePath
     };
   } catch (error) {
-    if (isNotFoundError(error) && filePath !== resolve(staticRoot, 'index.html')) {
+    if (
+      isNotFoundError(error) &&
+      extname(filePath).length === 0 &&
+      filePath !== resolve(staticRoot, 'index.html')
+    ) {
       return readStaticFile(resolve(staticRoot, 'index.html'), staticRoot);
     }
     if (isNotFoundError(error)) {

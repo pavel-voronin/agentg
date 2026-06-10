@@ -1,7 +1,11 @@
+.prettierignore
 dist
 dist-tdlib-docs
 coverage
 node_modules
+output
 td-data
 .claude/settings.local.json
 **/drizzle/meta
+infra/file-server/fileServer.config
+infra/dashboard-edge/dashboardEdge.config

@@ -218,19 +218,41 @@ describe('Dashboard server boundary', () => {
     }
   });
 
-  it('proxies module file URLs through the module file procedure', async () => {
+  it('returns not found for missing asset-like paths instead of the app entry', async () => {
+    const staticDir = await mkdtemp(join(tmpdir(), 'agentg-dashboard-'));
+    await writeFile(join(staticDir, 'index.html'), '<div id="dashboardApp"></div>');
     const events = createFakeEventBus();
+    const registry = createFakeRegistry({
+      modules: [],
+      version: 0
+    });
+
+    const server = await startServer({
+      config: testServerConfig({ staticDir }),
+      events,
+      registry
+    });
+
+    try {
+      const response = await fetch(`http://127.0.0.1:${String(server.port)}/assets/missing.jpg`);
+      expect(response.status).toBe(404);
+      await expect(response.text()).resolves.toBe('Not Found');
+    } finally {
+      await server.close();
+      registry.close();
+      await rm(staticDir, { force: true, recursive: true });
+    }
+  });
+
+  it('rejects module file routes instead of proxying module RPC', async () => {
+    const events = createFakeEventBus();
+    const fileProcedure = vi.fn(() =>
+      Promise.resolve({
+        ignored: true
+      })
+    );
     const moduleServer = await httpRpc({ port: 0 }).start({
-      'dashboard.file': (...args: never[]) => {
-        const input = args[0] as unknown;
-        if (isFileRequest(input) && input.path === '/assets/icon.svg') {
-          return Promise.resolve({
-            bodyBase64: Buffer.from('<svg />').toString('base64'),
-            contentType: 'image/svg+xml'
-          });
-        }
-        throw new Error('File not found');
-      }
+      'dashboard.file': fileProcedure
     });
     const registry = createFakeRegistry({
       modules: [
@@ -255,15 +277,13 @@ describe('Dashboard server boundary', () => {
       const response = await fetch(
         `http://127.0.0.1:${String(server.port)}/dashboard/module-files/alpha/assets/icon.svg`
       );
-      expect(response.status).toBe(200);
-      expect(response.headers.get('content-type')).toBe('image/svg+xml');
-      await expect(response.text()).resolves.toBe('<svg />');
+      expect(response.status).toBe(404);
 
-      await expect(
-        fetch(
-          `http://127.0.0.1:${String(server.port)}/dashboard/module-files/alpha/assets/missing.svg`
-        ).then((missing) => missing.status)
-      ).resolves.toBe(404);
+      const telegramResponse = await fetch(
+        `http://127.0.0.1:${String(server.port)}/dashboard/module-files/telegram/telegram-files/agentg-media/file.jpg`
+      );
+      expect(telegramResponse.status).toBe(404);
+      expect(fileProcedure).not.toHaveBeenCalled();
     } finally {
       await server.close();
       registry.close();
@@ -445,10 +465,4 @@ function rawDataToString(data: RawData): string {
   }
 
   return Buffer.from(data).toString('utf8');
-}
-
-function isFileRequest(value: unknown): value is { path: string } {
-  return (
-    typeof value === 'object' && value !== null && 'path' in value && typeof value.path === 'string'
-  );
 }

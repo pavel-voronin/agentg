@@ -109,13 +109,24 @@ services:
       <<: *agentg-telemetry-environment
       DATABASE_URL: postgres://agentg:agentg@postgres:5432/agentg
       DASHBOARD_HOST: 0.0.0.0
-      DASHBOARD_PORT: ${DASHBOARD_PORT:-8788}
-      DASHBOARD_URL: http://dashboard:${DASHBOARD_PORT:-8788}
+      DASHBOARD_PORT: 8080
       NATS_URL: nats://nats:4222
       REGISTRY_URL: http://registry:8080
-      TDLIB_FILES_DIR: /app/td-data/files
+    restart: 'no'
+
+  dashboard-edge:
+    profiles:
+      - dashboard
+    image: nginx:1.29-alpine
+    depends_on:
+      dashboard:
+        condition: service_started
+      telegram-files:
+        condition: service_started
     ports:
-      - '${DASHBOARD_PORT:-8788}:${DASHBOARD_PORT:-8788}'
+      - '${DASHBOARD_PORT:-8788}:8080'
+    volumes:
+      - ./infra/dashboard-edge/dashboardEdge.config:/etc/nginx/conf.d/default.conf:ro
     restart: 'no'
 
   history-sync:
@@ -165,6 +176,15 @@ services:
       GATEWAY_PORT: ${GATEWAY_PORT:-8787}
     ports:
       - '${GATEWAY_PORT:-8787}:${GATEWAY_PORT:-8787}'
+    restart: 'no'
+
+  telegram-files:
+    image: nginx:1.29-alpine
+    ports:
+      - '${TELEGRAM_FILES_PORT:-8790}:8080'
+    volumes:
+      - ./td-data/files:/srv/tdlib-files:ro
+      - ./infra/file-server/fileServer.config:/etc/nginx/conf.d/default.conf:ro
     restart: 'no'
 
   nats:
