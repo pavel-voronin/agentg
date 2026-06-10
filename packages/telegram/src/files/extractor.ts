@@ -16,7 +16,6 @@ import {
 import { tdFileOrUndefined } from '../tdlib/value.js';
 import type { ExtractedFileSlot, FileMediaKind, FileOwner, FileRenderKind } from './types.js';
 
-// TODO(file-size): Split by extracted owner/content kind; this file is above the target size.
 export type FileSlotUpdate = {
   chat?: {
     chat: JsonObject;

@@ -14,6 +14,8 @@ export type FileSubsystemOptions = {
   failureBackoffMs?: number;
   fileDownloadDeferMs?: number;
   filesDirectory: string;
+  generationDownloadTimeoutMs?: number;
+  generationMaxBytes?: number;
   maxConcurrentDownloads?: number;
   maxFilesPerTick?: number;
   staleCheckMs?: number;
@@ -27,7 +29,9 @@ export type FileRequestResult = {
 
 export type FileDownloadRow = {
   assetKey: string;
+  attempts: number;
   byteSize: number | null;
+  downloadedByteSize: number | null;
   fileName: string | null;
   latestTdlibFileId: number | null;
   mimeType: string | null;
@@ -96,6 +100,7 @@ export type FileAssetStatus = 'failed' | 'known' | 'ready';
 
 export const DEFAULT_WORKER_FAILURE_BACKOFF_MS = 5000;
 export const DEFAULT_WORKER_FILE_DOWNLOAD_DEFER_MS = 1000;
+export const DEFAULT_WORKER_DOWNLOAD_CLAIM_TIMEOUT_MS = 5 * 60 * 1000;
 export const DEFAULT_WORKER_MAX_CONCURRENT_DOWNLOADS = 2;
 export const DEFAULT_WORKER_MAX_FILES_PER_TICK = 4;
 export const DEFAULT_WORKER_STALE_CHECK_MS = 5 * 60 * 1000;
@@ -129,6 +134,8 @@ export function emptyBatchResult(): FileDownloadBatchResult {
   };
 }
 
-export function positiveInteger(value: number | undefined, fallback: number): number {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : fallback;
+export function positiveInteger(value: number | undefined, defaultValue: number): number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+    ? value
+    : defaultValue;
 }

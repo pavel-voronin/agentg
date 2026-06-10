@@ -53,7 +53,6 @@ import type { FileOwner } from './types.js';
 
 const logger = createLogger('telegram');
 
-// TODO(file-size): Split public facade, record methods, generation, and worker lifecycle.
 export type FileSubsystem = {
   getQueueStats(): ReturnType<typeof readFileQueueStats>;
   handleUpdateFile(update: updateFile): Promise<void>;

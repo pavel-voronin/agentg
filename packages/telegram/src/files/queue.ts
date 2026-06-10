@@ -1,10 +1,10 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream, createWriteStream } from 'node:fs';
-import { mkdir, rename, rm, stat } from 'node:fs/promises';
-import { basename, extname, join } from 'node:path';
+import { mkdir, realpath, rename, rm, stat } from 'node:fs/promises';
+import { basename, extname, join, resolve, sep } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 
-import { createLogger, logError } from '@agentg/framework';
+import { createLogger, logContext, logError } from '@agentg/framework';
 import { and, eq, sql } from 'drizzle-orm';
 import type { file } from 'tdlib-types';
 
@@ -18,6 +18,7 @@ import { MESSAGE_MODEL, messageModelParts } from '../model/refs.js';
 import { assertPriority, priorities } from '../tdlib/priority.js';
 import { tdFileOrUndefined } from '../tdlib/value.js';
 import { publishAssetOwnersAndQueue, publishFileQueueUpdated } from './events.js';
+import { handleFileSnapshot } from './persistence.js';
 import type {
   CompletedFileAsset,
   FileDownloadBatchResult,
@@ -29,6 +30,7 @@ import type {
 } from './runtime.js';
 import {
   CANONICAL_FILES_DIR,
+  DEFAULT_WORKER_DOWNLOAD_CLAIM_TIMEOUT_MS,
   DEFAULT_WORKER_MAX_CONCURRENT_DOWNLOADS,
   DEFAULT_WORKER_MAX_FILES_PER_TICK,
   completedFileAssetFromTdlibFile,
@@ -38,8 +40,7 @@ import {
 } from './runtime.js';
 import { recordWorkerBatchResult, recordWorkerJobs, timeWorkerStage } from './telemetry.js';
 
-// TODO(file-size): Split worker loop, TDLib dispatch, canonical storage, and cleanup helpers.
-const DOWNLOAD_CLAIM_TIMEOUT_MS = 5 * 60 * 1000;
+const MAX_STALE_DOWNLOAD_ATTEMPTS = 3;
 const logger = createLogger('telegram');
 
 export async function processQueuedFileBatch(
@@ -89,7 +90,8 @@ export async function processQueuedFileBatch(
     return {
       ...reconciled,
       watchdogCount:
-        reconciled.watchdogCount + (await hasDownloadingFileDownloads(options.database))
+        reconciled.watchdogCount +
+        (reconciled.processedCount === 0 ? await hasDownloadingFileDownloads(options.database) : 0)
     };
   }
 
@@ -202,7 +204,7 @@ async function reconcileStaleFileDownloads(
   options: FileSubsystemOptions,
   limit: number
 ): Promise<FileDownloadBatchResult> {
-  const staleBefore = new Date(Date.now() - DOWNLOAD_CLAIM_TIMEOUT_MS);
+  const staleBefore = new Date(Date.now() - DEFAULT_WORKER_DOWNLOAD_CLAIM_TIMEOUT_MS);
   const rows = await readStaleFileDownloadRows(options.database, staleBefore, limit);
   if (rows.length === 0) {
     return emptyBatchResult();
@@ -278,8 +280,24 @@ async function reconcileStaleFileDownload(
         ready: true
       };
     }
+    if (file !== undefined) {
+      const changedAssets = await handleFileSnapshot(options.database, file);
+      if (changedAssets.includes(row.assetKey)) {
+        await refreshFileDownloadClaim(options.database, row.assetKey);
+        return {
+          assetKey: row.assetKey,
+          failed: false,
+          ready: false
+        };
+      }
+    }
+    if (row.attempts >= MAX_STALE_DOWNLOAD_ATTEMPTS) {
+      throw new Error(
+        `Telegram file download stale retry limit reached after ${String(row.attempts)} attempts`
+      );
+    }
     await timeWorkerStage('dispatch_tdlib', () => dispatchTdlibFileDownload(options, row));
-    await markFileDownloadDispatched(options.database, row.assetKey);
+    await markFileDownloadRedispatched(options.database, row.assetKey);
     return {
       assetKey: row.assetKey,
       failed: false,
@@ -450,7 +468,9 @@ async function readFileDownloadRow(
   const [row] = await database
     .select({
       assetKey: telegramFileAssets.assetKey,
+      attempts: telegramFileDownloadJobs.attempts,
       byteSize: telegramFileAssets.byteSize,
+      downloadedByteSize: telegramFileAssets.downloadedByteSize,
       fileName: telegramFileSlots.fileName,
       latestTdlibFileId: telegramFileAssets.latestTdlibFileId,
       mimeType: telegramFileSlots.mimeType,
@@ -477,7 +497,9 @@ async function readFileDownloadRow(
     ? null
     : {
         assetKey: row.assetKey,
+        attempts: row.attempts,
         byteSize: row.byteSize,
+        downloadedByteSize: row.downloadedByteSize,
         fileName: row.fileName,
         latestTdlibFileId: row.latestTdlibFileId,
         mimeType: row.mimeType,
@@ -509,10 +531,45 @@ async function markFileDownloadReady(
     .where(eq(telegramFileDownloadJobs.assetKey, assetKey));
 }
 
+async function refreshFileDownloadClaim(database: Database, assetKey: string): Promise<void> {
+  await database
+    .update(telegramFileDownloadJobs)
+    .set({
+      claimedAt: sql`now()`,
+      lastError: null,
+      status: 'downloading',
+      updatedAt: sql`now()`
+    })
+    .where(
+      and(
+        eq(telegramFileDownloadJobs.assetKey, assetKey),
+        eq(telegramFileDownloadJobs.status, 'downloading')
+      )
+    );
+}
+
 async function markFileDownloadDispatched(database: Database, assetKey: string): Promise<void> {
   await database
     .update(telegramFileDownloadJobs)
     .set({
+      claimedAt: sql`now()`,
+      lastError: null,
+      status: 'downloading',
+      updatedAt: sql`now()`
+    })
+    .where(
+      and(
+        eq(telegramFileDownloadJobs.assetKey, assetKey),
+        eq(telegramFileDownloadJobs.status, 'downloading')
+      )
+    );
+}
+
+async function markFileDownloadRedispatched(database: Database, assetKey: string): Promise<void> {
+  await database
+    .update(telegramFileDownloadJobs)
+    .set({
+      attempts: sql`${telegramFileDownloadJobs.attempts} + 1`,
       claimedAt: sql`now()`,
       lastError: null,
       status: 'downloading',
@@ -553,34 +610,71 @@ async function storeCanonicalFile(
   localPath: string,
   row: FileDownloadRow
 ): Promise<StoredCanonicalFile> {
-  const root = join(filesDirectory, CANONICAL_FILES_DIR);
-  await mkdir(root, { recursive: true });
+  const filesRoot = await realpath(filesDirectory);
+  const root = await resolveCanonicalFilesRoot(filesRoot);
+  const safeLocalPath = await resolveTdlibLocalFilePath(filesRoot, root, localPath);
   const temporaryPath = join(root, `.tmp-${randomUUID()}`);
-  const hash = createHash('sha256');
-  const input = createReadStream(localPath);
-  input.on('data', (chunk: Buffer | string) => {
-    hash.update(chunk);
-  });
-  await pipeline(input, createWriteStream(temporaryPath));
-  const sha256 = hash.digest('hex');
-  const byteSize = (await stat(temporaryPath)).size;
-  const relativePath = `${CANONICAL_FILES_DIR}/${sha256}${fileExtension(row, localPath)}`;
-  const canonicalPath = join(filesDirectory, relativePath);
-
   try {
-    await rename(temporaryPath, canonicalPath);
+    const hash = createHash('sha256');
+    const input = createReadStream(safeLocalPath);
+    input.on('data', (chunk: Buffer | string) => {
+      hash.update(chunk);
+    });
+    await pipeline(input, createWriteStream(temporaryPath));
+    const sha256 = hash.digest('hex');
+    const byteSize = (await stat(temporaryPath)).size;
+    const extension = fileExtension(row, safeLocalPath);
+    const relativePath = `${CANONICAL_FILES_DIR}/${sha256}${extension}`;
+    const canonicalPath = join(root, `${sha256}${extension}`);
+
+    try {
+      await rename(temporaryPath, canonicalPath);
+    } catch (error) {
+      await rm(temporaryPath, { force: true });
+      if (!isExistingFileError(error)) {
+        throw error;
+      }
+    }
+
+    return {
+      byteSize,
+      relativePath,
+      sha256
+    };
   } catch (error) {
     await rm(temporaryPath, { force: true });
-    if (!isExistingFileError(error)) {
-      throw error;
-    }
+    throw error;
   }
+}
 
-  return {
-    byteSize,
-    relativePath,
-    sha256
-  };
+async function resolveCanonicalFilesRoot(filesRoot: string): Promise<string> {
+  const root = resolve(filesRoot, CANONICAL_FILES_DIR);
+  await mkdir(root, { recursive: true });
+  const canonicalRoot = await realpath(root);
+  if (!isPathInsideDirectory(filesRoot, canonicalRoot)) {
+    throw new Error('Telegram canonical media storage is outside the configured files directory');
+  }
+  return canonicalRoot;
+}
+
+async function resolveTdlibLocalFilePath(
+  filesRoot: string,
+  canonicalRoot: string,
+  localPath: string
+): Promise<string> {
+  const candidate = await realpath(localPath);
+  if (candidate !== filesRoot && !isPathInsideDirectory(filesRoot, candidate)) {
+    throw new Error('Telegram TDLib local file path is outside the configured files directory');
+  }
+  if (candidate === canonicalRoot || isPathInsideDirectory(canonicalRoot, candidate)) {
+    throw new Error('Telegram TDLib local file path points at canonical media storage');
+  }
+  return candidate;
+}
+
+function isPathInsideDirectory(root: string, candidate: string): boolean {
+  const rootWithSeparator = root.endsWith(sep) ? root : `${root}${sep}`;
+  return candidate.startsWith(rootWithSeparator);
 }
 
 async function cleanupTdlibFile(
@@ -731,6 +825,7 @@ export function logTdlibCleanupError(assetKey: string, error: unknown): void {
     {
       assetKey,
       event: 'telegram.file_download_cleanup_failed',
+      ...logContext({ assetKey }),
       ...logError(error)
     },
     'telegram file download cleanup failed'
@@ -748,6 +843,11 @@ function logFileDownloadFailed(
       event: 'telegram.file_download_failed',
       source,
       transport: row.transport?.kind ?? 'unknown',
+      ...logContext({
+        assetKey: row.assetKey,
+        source,
+        transport: row.transport?.kind ?? 'unknown'
+      }),
       ...logError(error)
     },
     'telegram file download failed'

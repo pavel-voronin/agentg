@@ -37,20 +37,36 @@ import type {
   FileRenderKind,
   FileStatus
 } from './types.js';
+import { CANONICAL_FILES_DIR, DEFAULT_WORKER_DOWNLOAD_CLAIM_TIMEOUT_MS } from './runtime.js';
 import { fileRefId } from './types.js';
 
 type FileQueueStats = {
   downloadingCount: number;
   failedCount: number;
+  failureReasonCounts: FailureReasonCount[];
   knownCount: number;
   knownDownloadedBytes: number;
   knownRemainingBytes: number;
   knownTotalBytes: number;
+  oldestDownloadingAgeSeconds: number;
   queuedCount: number;
   readyCount: number;
   remainingCount: number;
+  staleDownloadingCount: number;
   totalCount: number;
   unknownRemainingCount: number;
+};
+
+type FailureReason =
+  | 'missing_tdlib_file_id'
+  | 'not_found'
+  | 'stale_retry_limit'
+  | 'storage_io'
+  | 'unknown';
+
+type FailureReasonCount = {
+  count: number;
+  reason: FailureReason;
 };
 
 type FileRefRow = {
@@ -78,6 +94,14 @@ type FileRefRow = {
 };
 
 const FILE_STATIC_PREFIX = '/telegram-files/';
+const CANONICAL_FILES_PREFIX = `${CANONICAL_FILES_DIR}/`;
+const FAILURE_REASONS = [
+  'missing_tdlib_file_id',
+  'not_found',
+  'stale_retry_limit',
+  'storage_io',
+  'unknown'
+] as const satisfies readonly FailureReason[];
 
 export async function readFileOwnersForAsset(
   database: Database,
@@ -116,8 +140,13 @@ export async function readFileQueueStats(database: Database): Promise<FileQueueS
     .select({
       failedCount: sql<number>`count(*) filter (where ${telegramFileAssets.status} = ${'failed'})::int`,
       knownCount: sql<number>`count(*) filter (where ${telegramFileAssets.status} = ${'known'})::int`,
+      missingTdlibFileIdFailureCount: sql<number>`count(*) filter (where ${telegramFileAssets.status} = ${'failed'} and ${telegramFileAssets.downloadError} like ${'Telegram file asset has no TDLib file id%'})::int`,
+      notFoundFailureCount: sql<number>`count(*) filter (where ${telegramFileAssets.status} = ${'failed'} and ${telegramFileAssets.downloadError} = ${'Not Found'})::int`,
       readyCount: sql<number>`count(*) filter (where ${telegramFileAssets.status} = ${'ready'})::int`,
-      totalCount: sql<number>`count(*)::int`
+      staleRetryLimitFailureCount: sql<number>`count(*) filter (where ${telegramFileAssets.status} = ${'failed'} and ${telegramFileAssets.downloadError} like ${'Telegram file download stale retry limit reached%'})::int`,
+      storageIoFailureCount: sql<number>`count(*) filter (where ${telegramFileAssets.status} = ${'failed'} and (${telegramFileAssets.downloadError} like ${'ENOENT%'} or ${telegramFileAssets.downloadError} like ${'EACCES%'} or ${telegramFileAssets.downloadError} like ${'EPERM%'}))::int`,
+      totalCount: sql<number>`count(*)::int`,
+      unknownFailureCount: sql<number>`count(*) filter (where ${telegramFileAssets.status} = ${'failed'} and (${telegramFileAssets.downloadError} is null or (${telegramFileAssets.downloadError} <> ${'Not Found'} and ${telegramFileAssets.downloadError} not like ${'Telegram file asset has no TDLib file id%'} and ${telegramFileAssets.downloadError} not like ${'Telegram file download stale retry limit reached%'} and ${telegramFileAssets.downloadError} not like ${'ENOENT%'} and ${telegramFileAssets.downloadError} not like ${'EACCES%'} and ${telegramFileAssets.downloadError} not like ${'EPERM%'})))::int`
     })
     .from(telegramFileAssets);
   const [jobRow] = await database
@@ -126,7 +155,9 @@ export async function readFileQueueStats(database: Database): Promise<FileQueueS
       knownDownloadedBytes: sql<number>`coalesce(sum(coalesce(${telegramFileAssets.downloadedByteSize}, 0)) filter (where ${telegramFileAssets.byteSize} is not null), 0)::float8`,
       knownRemainingBytes: sql<number>`coalesce(sum(greatest(coalesce(${telegramFileAssets.byteSize}, 0) - coalesce(${telegramFileAssets.downloadedByteSize}, 0), 0)) filter (where ${telegramFileAssets.byteSize} is not null), 0)::float8`,
       knownTotalBytes: sql<number>`coalesce(sum(${telegramFileAssets.byteSize}) filter (where ${telegramFileAssets.byteSize} is not null), 0)::float8`,
+      oldestDownloadingAgeSeconds: sql<number>`coalesce(extract(epoch from now() - (min(coalesce(${telegramFileDownloadJobs.claimedAt}, ${telegramFileDownloadJobs.updatedAt})) filter (where ${telegramFileDownloadJobs.status} = ${'downloading'}))), 0)::float8`,
       queuedCount: sql<number>`count(*) filter (where ${telegramFileDownloadJobs.status} = ${'queued'})::int`,
+      staleDownloadingCount: sql<number>`count(*) filter (where ${telegramFileDownloadJobs.status} = ${'downloading'} and coalesce(${telegramFileDownloadJobs.claimedAt}, ${telegramFileDownloadJobs.updatedAt}) < now() - (${DEFAULT_WORKER_DOWNLOAD_CLAIM_TIMEOUT_MS} * interval '1 millisecond'))::int`,
       unknownRemainingCount: sql<number>`count(*) filter (where ${telegramFileAssets.byteSize} is null)::int`
     })
     .from(telegramFileDownloadJobs)
@@ -141,16 +172,43 @@ export async function readFileQueueStats(database: Database): Promise<FileQueueS
   return {
     downloadingCount,
     failedCount: aggregateNumber(assetRow?.failedCount),
+    failureReasonCounts: failureReasonCounts(assetRow),
     knownCount: aggregateNumber(assetRow?.knownCount),
     knownDownloadedBytes: aggregateNumber(jobRow?.knownDownloadedBytes),
     knownRemainingBytes: aggregateNumber(jobRow?.knownRemainingBytes),
     knownTotalBytes: aggregateNumber(jobRow?.knownTotalBytes),
+    oldestDownloadingAgeSeconds: aggregateNumber(jobRow?.oldestDownloadingAgeSeconds),
     queuedCount,
     readyCount: aggregateNumber(assetRow?.readyCount),
     remainingCount: queuedCount + downloadingCount,
+    staleDownloadingCount: aggregateNumber(jobRow?.staleDownloadingCount),
     totalCount: aggregateNumber(assetRow?.totalCount),
     unknownRemainingCount: aggregateNumber(jobRow?.unknownRemainingCount)
   };
+}
+
+function failureReasonCounts(
+  row:
+    | {
+        missingTdlibFileIdFailureCount: number;
+        notFoundFailureCount: number;
+        staleRetryLimitFailureCount: number;
+        storageIoFailureCount: number;
+        unknownFailureCount: number;
+      }
+    | undefined
+): FailureReasonCount[] {
+  const counts = {
+    missing_tdlib_file_id: aggregateNumber(row?.missingTdlibFileIdFailureCount),
+    not_found: aggregateNumber(row?.notFoundFailureCount),
+    stale_retry_limit: aggregateNumber(row?.staleRetryLimitFailureCount),
+    storage_io: aggregateNumber(row?.storageIoFailureCount),
+    unknown: aggregateNumber(row?.unknownFailureCount)
+  } satisfies Record<FailureReason, number>;
+  return FAILURE_REASONS.map((reason) => ({
+    count: counts[reason],
+    reason
+  }));
 }
 
 export async function readFileRefsForOwners(
@@ -278,10 +336,7 @@ function toFileRef(row: FileRefRow): FileRef {
     slotKey: row.slotKey,
     status,
     updatedAt: maxDate(row.assetUpdatedAt, row.slotUpdatedAt).toISOString(),
-    url:
-      status === 'ready' && row.assetRelativePath !== null
-        ? `${FILE_STATIC_PREFIX}${encodeRelativeUrlPath(row.assetRelativePath)}`
-        : null,
+    url: readyFileUrl(status, row.assetRelativePath),
     width: row.width
   };
 }
@@ -346,6 +401,39 @@ function canRequestFile(row: FileRefRow, status: FileStatus): boolean {
     status !== 'downloading' &&
     row.mediaKind !== 'avatar'
   );
+}
+
+function readyFileUrl(status: FileStatus, relativePath: string | null): string | null {
+  if (status !== 'ready' || relativePath === null || !safeCanonicalRelativePath(relativePath)) {
+    return null;
+  }
+  return `${FILE_STATIC_PREFIX}${encodeRelativeUrlPath(relativePath)}`;
+}
+
+function safeCanonicalRelativePath(relativePath: string): boolean {
+  if (!relativePath.startsWith(CANONICAL_FILES_PREFIX)) {
+    return false;
+  }
+  const pathSegments = relativePath.slice(CANONICAL_FILES_PREFIX.length).split('/');
+  return pathSegments.every(safeCanonicalPathSegment);
+}
+
+function safeCanonicalPathSegment(segment: string): boolean {
+  if (segment.length === 0 || segment.includes('\\')) {
+    return false;
+  }
+  try {
+    const decoded = decodeURIComponent(segment);
+    return (
+      decoded.length > 0 &&
+      decoded !== '.' &&
+      decoded !== '..' &&
+      !decoded.includes('/') &&
+      !decoded.includes('\\')
+    );
+  } catch {
+    return false;
+  }
 }
 
 function encodeRelativeUrlPath(relativePath: string): string {

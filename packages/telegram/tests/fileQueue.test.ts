@@ -1,3 +1,7 @@
+import { mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SQL } from 'drizzle-orm';
 import { PgDialect } from 'drizzle-orm/pg-core';
@@ -22,6 +26,9 @@ vi.mock('@agentg/framework', () => ({
     'error.type': error instanceof Error ? error.name : typeof error,
     error
   }),
+  logContext: (attributes: Record<string, unknown>) => ({
+    logContext: attributes
+  }),
   setTelemetryGauge: telemetry.setTelemetryGauge,
   timeTelemetrySpan: (_options: unknown, operation: () => Promise<unknown>) => operation()
 }));
@@ -29,10 +36,15 @@ vi.mock('@agentg/framework', () => ({
 import {
   fileDownloadRequest,
   logTdlibCleanupError,
+  processCompletedFileBatch,
   processQueuedFileBatch
 } from '../src/files/queue.js';
 import type { Database } from '../src/database/client.js';
-import type { FileDownloadRow, FileSubsystemOptions } from '../src/files/runtime.js';
+import type {
+  CompletedFileAsset,
+  FileDownloadRow,
+  FileSubsystemOptions
+} from '../src/files/runtime.js';
 
 describe('Telegram file download worker', () => {
   afterEach(() => {
@@ -104,7 +116,10 @@ describe('Telegram file download worker', () => {
     expect(logs).toEqual([
       expect.objectContaining({
         assetKey: 'asset-a',
-        event: 'telegram.file_download_cleanup_failed'
+        event: 'telegram.file_download_cleanup_failed',
+        logContext: {
+          assetKey: 'asset-a'
+        }
       })
     ]);
   });
@@ -221,12 +236,209 @@ describe('Telegram file download worker', () => {
       'coalesce("telegram_file_download_jobs"."claimed_at", "telegram_file_download_jobs"."updated_at")'
     );
   });
+
+  it('redispatches stale downloading jobs and increments their attempt count', async () => {
+    const deleted = { count: 0 };
+    const updates: Record<string, unknown>[] = [];
+    const tdlib = {
+      addFileToDownloads: vi.fn(),
+      downloadFile: vi.fn().mockResolvedValue(undefined),
+      getFile: vi.fn().mockResolvedValue(undefined),
+      getQueueStats() {
+        return {
+          highestPendingPriority: null,
+          pendingCount: 0,
+          runningCount: 0
+        };
+      }
+    };
+
+    const result = await processQueuedFileBatch(
+      workerOptions({
+        database: staleDownloadDatabase({
+          attempts: 1,
+          deleted,
+          updates
+        }),
+        tdlib
+      }),
+      {
+        maxConcurrentDownloads: 1,
+        maxFilesPerTick: 1
+      }
+    );
+
+    expect(result).toEqual({
+      delayedCount: 0,
+      failedCount: 0,
+      immediateCount: 0,
+      processedCount: 1,
+      readyCount: 0,
+      watchdogCount: 1
+    });
+    expect(tdlib.downloadFile).toHaveBeenCalledTimes(1);
+    expect(tdlib.addFileToDownloads).not.toHaveBeenCalled();
+    expect(deleted.count).toBe(0);
+    expect(updates).toHaveLength(1);
+    const redispatchUpdate = updates[0];
+    if (redispatchUpdate === undefined) {
+      throw new Error('Expected stale redispatch update');
+    }
+    expect(redispatchUpdate).toMatchObject({
+      lastError: null,
+      status: 'downloading'
+    });
+    expect(redispatchUpdate).toHaveProperty('attempts');
+  });
+
+  it('fails stale downloading jobs after the stale retry limit', async () => {
+    const deleted = { count: 0 };
+    const updates: Record<string, unknown>[] = [];
+    const tdlib = {
+      addFileToDownloads: vi.fn(),
+      downloadFile: vi.fn(),
+      getFile: vi.fn().mockResolvedValue(undefined),
+      getQueueStats() {
+        return {
+          highestPendingPriority: null,
+          pendingCount: 0,
+          runningCount: 0
+        };
+      }
+    };
+
+    const result = await processQueuedFileBatch(
+      workerOptions({
+        database: staleDownloadDatabase({
+          attempts: 3,
+          deleted,
+          updates
+        }),
+        tdlib
+      }),
+      {
+        maxConcurrentDownloads: 1,
+        maxFilesPerTick: 1
+      }
+    );
+
+    expect(result).toEqual({
+      delayedCount: 0,
+      failedCount: 1,
+      immediateCount: 0,
+      processedCount: 1,
+      readyCount: 0,
+      watchdogCount: 0
+    });
+    expect(tdlib.downloadFile).not.toHaveBeenCalled();
+    expect(deleted.count).toBe(1);
+    expect(updates).toEqual([
+      expect.objectContaining({
+        downloadError: 'Telegram file download stale retry limit reached after 3 attempts',
+        status: 'failed'
+      })
+    ]);
+  });
+
+  it('fails completed files whose TDLib local path resolves outside the files directory', async () => {
+    const filesDirectory = await mkdtemp(join(tmpdir(), 'agentg-td-files-'));
+    const outsideDirectory = await mkdtemp(join(tmpdir(), 'agentg-outside-file-'));
+    const outsidePath = join(outsideDirectory, 'file.jpg');
+    await writeFile(outsidePath, 'secret');
+    const updates: Record<string, unknown>[] = [];
+
+    try {
+      const result = await processCompletedFileBatch(
+        {
+          ...workerOptions({
+            database: completedPathFailureDatabase(updates),
+            tdlib: idleTdlib()
+          }),
+          filesDirectory
+        },
+        new Map<string, CompletedFileAsset>([
+          [
+            'asset-a',
+            {
+              assetKey: 'asset-a',
+              localPath: outsidePath,
+              tdlibFileId: 1
+            }
+          ]
+        ]),
+        1
+      );
+
+      expect(result).toMatchObject({
+        failedCount: 1,
+        readyCount: 0
+      });
+      expect(updates).toEqual([
+        expect.objectContaining({
+          downloadError: 'Telegram TDLib local file path is outside the configured files directory',
+          status: 'failed'
+        })
+      ]);
+    } finally {
+      await rm(filesDirectory, { force: true, recursive: true });
+      await rm(outsideDirectory, { force: true, recursive: true });
+    }
+  });
+
+  it('fails completed files when canonical media storage resolves outside the files directory', async () => {
+    const filesDirectory = await mkdtemp(join(tmpdir(), 'agentg-td-files-'));
+    const outsideDirectory = await mkdtemp(join(tmpdir(), 'agentg-outside-media-'));
+    const localPath = join(filesDirectory, 'file.jpg');
+    await writeFile(localPath, 'secret');
+    await symlink(outsideDirectory, join(filesDirectory, 'agentg-media'));
+    const updates: Record<string, unknown>[] = [];
+
+    try {
+      const result = await processCompletedFileBatch(
+        {
+          ...workerOptions({
+            database: completedPathFailureDatabase(updates),
+            tdlib: idleTdlib()
+          }),
+          filesDirectory
+        },
+        new Map<string, CompletedFileAsset>([
+          [
+            'asset-a',
+            {
+              assetKey: 'asset-a',
+              localPath,
+              tdlibFileId: 1
+            }
+          ]
+        ]),
+        1
+      );
+
+      expect(result).toMatchObject({
+        failedCount: 1,
+        readyCount: 0
+      });
+      expect(updates).toEqual([
+        expect.objectContaining({
+          downloadError:
+            'Telegram canonical media storage is outside the configured files directory',
+          status: 'failed'
+        })
+      ]);
+    } finally {
+      await rm(filesDirectory, { force: true, recursive: true });
+      await rm(outsideDirectory, { force: true, recursive: true });
+    }
+  });
 });
 
 function downloadRow(): FileDownloadRow {
   return {
     assetKey: 'asset-a',
+    attempts: 1,
     byteSize: 1024,
+    downloadedByteSize: 0,
     fileName: 'file.jpg',
     latestTdlibFileId: 1,
     mimeType: 'image/jpeg',
@@ -368,4 +580,229 @@ function staleOrderDatabase(captured: { orderBy?: SQL }): Database {
       };
     }
   } as unknown as Database;
+}
+
+function staleDownloadDatabase(input: {
+  attempts: number;
+  deleted: { count: number };
+  updates: Record<string, unknown>[];
+}): Database {
+  let selectCount = 0;
+  return {
+    delete() {
+      return {
+        where() {
+          input.deleted.count += 1;
+          return Promise.resolve([]);
+        }
+      };
+    },
+    select() {
+      selectCount += 1;
+      if (selectCount === 1) {
+        return staleAssetKeySelect();
+      }
+      if (selectCount === 2) {
+        return staleDownloadRowSelect(input.attempts);
+      }
+      if (selectCount === 3) {
+        return ownerRowsSelect();
+      }
+      if (selectCount === 4) {
+        return fileAssetStatsSelect();
+      }
+      if (selectCount === 5) {
+        return fileJobStatsSelect();
+      }
+      return emptyQueuedSelect();
+    },
+    update() {
+      return {
+        set(values: Record<string, unknown>) {
+          input.updates.push(values);
+          return {
+            where() {
+              return Promise.resolve([]);
+            }
+          };
+        }
+      };
+    }
+  } as unknown as Database;
+}
+
+function completedPathFailureDatabase(updates: Record<string, unknown>[]): Database {
+  let selectCount = 0;
+  return {
+    delete() {
+      return {
+        where() {
+          return Promise.resolve([]);
+        }
+      };
+    },
+    select() {
+      selectCount += 1;
+      if (selectCount === 1) {
+        return staleDownloadRowSelect(1);
+      }
+      if (selectCount === 2) {
+        return ownerRowsSelect();
+      }
+      if (selectCount === 3) {
+        return fileAssetStatsSelect();
+      }
+      return fileJobStatsSelect();
+    },
+    update() {
+      return {
+        set(values: Record<string, unknown>) {
+          updates.push(values);
+          return {
+            where() {
+              return Promise.resolve([]);
+            }
+          };
+        }
+      };
+    }
+  } as unknown as Database;
+}
+
+function staleAssetKeySelect() {
+  return {
+    from() {
+      return {
+        where() {
+          return {
+            orderBy() {
+              return {
+                limit() {
+                  return Promise.resolve([{ assetKey: 'asset-a' }]);
+                }
+              };
+            }
+          };
+        }
+      };
+    }
+  };
+}
+
+function staleDownloadRowSelect(attempts: number) {
+  return {
+    from() {
+      return {
+        innerJoin() {
+          return {
+            leftJoin() {
+              return {
+                where() {
+                  return {
+                    orderBy() {
+                      return {
+                        limit() {
+                          return Promise.resolve([
+                            {
+                              assetKey: 'asset-a',
+                              attempts,
+                              byteSize: 1024,
+                              downloadedByteSize: 0,
+                              fileName: 'file.jpg',
+                              latestTdlibFileId: 1,
+                              mimeType: 'image/jpeg',
+                              ownerId: null,
+                              ownerModel: null,
+                              priority: 16
+                            }
+                          ]);
+                        }
+                      };
+                    }
+                  };
+                }
+              };
+            }
+          };
+        }
+      };
+    }
+  };
+}
+
+function ownerRowsSelect() {
+  return {
+    from() {
+      return {
+        where() {
+          return Promise.resolve([]);
+        }
+      };
+    }
+  };
+}
+
+function fileAssetStatsSelect() {
+  return {
+    from() {
+      return Promise.resolve([
+        {
+          failedCount: 0,
+          knownCount: 1,
+          readyCount: 0,
+          totalCount: 1
+        }
+      ]);
+    }
+  };
+}
+
+function fileJobStatsSelect() {
+  return {
+    from() {
+      return {
+        innerJoin() {
+          return {
+            where() {
+              return Promise.resolve([
+                {
+                  downloadingCount: 1,
+                  knownDownloadedBytes: 0,
+                  knownRemainingBytes: 1024,
+                  knownTotalBytes: 1024,
+                  oldestDownloadingAgeSeconds: 301,
+                  queuedCount: 0,
+                  staleDownloadingCount: 1,
+                  unknownRemainingCount: 0
+                }
+              ]);
+            }
+          };
+        }
+      };
+    }
+  };
+}
+
+function emptyQueuedSelect() {
+  return {
+    from() {
+      return {
+        where() {
+          return {
+            limit() {
+              return Promise.resolve([]);
+            },
+            orderBy() {
+              return {
+                limit() {
+                  return Promise.resolve([]);
+                }
+              };
+            }
+          };
+        }
+      };
+    }
+  };
 }
