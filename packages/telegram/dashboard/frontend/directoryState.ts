@@ -7,6 +7,12 @@ import {
 } from '@agentg/framework/dashboard';
 
 import type { FileRef } from '../../src/files/types.js';
+import {
+  fileOwnerEventKey,
+  normalizeFileOwnerChangedEvent,
+  type FileOwnerChangedPayload
+} from './fileEvents.js';
+import { normalizeFileRef } from './fileRefs.js';
 import type { ChatPlacement, TelegramDirectoryChat, TelegramDirectoryFolder } from './views.js';
 
 type TelegramDirectoryResult = {
@@ -20,6 +26,7 @@ const folders = ref<TelegramDirectoryFolder[]>([]);
 const hydrated = ref(false);
 const lastError = ref<unknown>(null);
 
+const fileOwnerVersions = new Map<string, string>();
 let hydratePromise: Promise<void> | null = null;
 let subscribers = 0;
 let stopEvents: (() => void) | null = null;
@@ -76,6 +83,12 @@ async function hydrateTelegramDirectory(host: DashboardHost): Promise<void> {
 }
 
 function applyTelegramDirectoryEvent(event: DashboardHostEvent): void {
+  const fileChange = normalizeFileOwnerChangedEvent(event);
+  if (fileChange !== null) {
+    applyFileOwnerChange(fileChange);
+    return;
+  }
+
   if (event.type === 'telegram.chat.updated') {
     const chat = normalizeDirectoryChat(asRecord(asRecord(event.data)?.chat));
     if (chat === undefined || chat.placements.length === 0) {
@@ -101,6 +114,42 @@ function applyTelegramDirectoryEvent(event: DashboardHostEvent): void {
       asArray(asRecord(event.data)?.folders).map(normalizeDirectoryFolder).filter(isDefined)
     );
   }
+}
+
+function applyFileOwnerChange(change: FileOwnerChangedPayload): void {
+  if (!shouldApplyFileOwnerChange(change)) {
+    return;
+  }
+  if (change.owner.ownerModel !== 'telegram.chat') {
+    return;
+  }
+  chats.value = sortDirectoryChats(
+    chats.value.map((chat) =>
+      chat.id === change.owner.ownerId
+        ? {
+            ...chat,
+            avatar: {
+              big: fileBySlot(change.files, 'avatar.big'),
+              small: fileBySlot(change.files, 'avatar.small')
+            }
+          }
+        : chat
+    )
+  );
+}
+
+function shouldApplyFileOwnerChange(change: FileOwnerChangedPayload): boolean {
+  const key = fileOwnerEventKey(change);
+  const previous = fileOwnerVersions.get(key);
+  if (previous !== undefined && previous > change.updatedAt) {
+    return false;
+  }
+  fileOwnerVersions.set(key, change.updatedAt);
+  return true;
+}
+
+function fileBySlot(files: FileRef[], slotKey: string): FileRef | null {
+  return files.find((file) => file.slotKey === slotKey) ?? null;
 }
 
 function sortDirectoryChats(input: TelegramDirectoryChat[]): TelegramDirectoryChat[] {
@@ -166,66 +215,6 @@ function normalizeLastMessage(
   };
 }
 
-function normalizeFileRef(value: Record<string, unknown> | undefined): FileRef | null {
-  const id = asString(value?.id);
-  const owner = normalizeFileOwner(value?.owner);
-  const slotKey = asString(value?.slotKey);
-  const status = asString(value?.status);
-  const mediaKind = asString(value?.mediaKind);
-  const renderKind = asString(value?.renderKind);
-  const updatedAt = asString(value?.updatedAt);
-  if (
-    id === undefined ||
-    owner === null ||
-    slotKey === undefined ||
-    !isFileStatus(status) ||
-    !isFileMediaKind(mediaKind) ||
-    !isFileRenderKind(renderKind) ||
-    updatedAt === undefined
-  ) {
-    return null;
-  }
-  return {
-    _model: 'telegram.file',
-    byteSize: asNullableNonNegativeInteger(value?.byteSize),
-    canRequest: value?.canRequest === true,
-    downloadedByteSize: asNullableNonNegativeInteger(value?.downloadedByteSize),
-    downloadError: asNullableString(value?.downloadError),
-    durationSeconds: asNullableNonNegativeInteger(value?.durationSeconds),
-    fileName: asNullableString(value?.fileName),
-    height: asNullableNonNegativeInteger(value?.height),
-    id,
-    mediaKind,
-    mimeType: asNullableString(value?.mimeType),
-    owner,
-    renderKind,
-    slotKey,
-    status,
-    updatedAt,
-    url: asNullableString(value?.url),
-    width: asNullableNonNegativeInteger(value?.width)
-  };
-}
-
-function normalizeFileOwner(value: unknown): FileRef['owner'] | null {
-  const owner = asRecord(value);
-  const model = asString(owner?._model);
-  const id = asString(owner?.id);
-  if (id === undefined) {
-    return null;
-  }
-  if (model === 'telegram.chat') {
-    return { _model: 'telegram.chat', id };
-  }
-  if (model === 'telegram.message') {
-    return { _model: 'telegram.message', id };
-  }
-  if (model === 'telegram.emojiChatThemes') {
-    return { _model: 'telegram.emojiChatThemes', id };
-  }
-  return null;
-}
-
 function normalizeDirectoryFolder(
   value: Record<string, unknown> | undefined
 ): TelegramDirectoryFolder | undefined {
@@ -277,41 +266,12 @@ function asNullableString(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
-function asNullableNonNegativeInteger(value: unknown): number | null {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
-}
-
 function asNonNegativeInteger(value: unknown): number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : 0;
 }
 
 function isDefined<T>(value: T | undefined): value is T {
   return value !== undefined;
-}
-
-function isFileStatus(value: string | undefined): value is FileRef['status'] {
-  return (
-    value === 'known' ||
-    value === 'queued' ||
-    value === 'downloading' ||
-    value === 'ready' ||
-    value === 'failed'
-  );
-}
-
-function isFileMediaKind(value: string | undefined): value is FileRef['mediaKind'] {
-  return (
-    value === 'avatar' ||
-    value === 'document' ||
-    value === 'photo' ||
-    value === 'thumbnail' ||
-    value === 'video' ||
-    value === 'voice'
-  );
-}
-
-function isFileRenderKind(value: string | undefined): value is FileRef['renderKind'] {
-  return value === 'audio' || value === 'download' || value === 'image' || value === 'video';
 }
 
 function pushDirectoryStateError(error: unknown): void {

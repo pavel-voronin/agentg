@@ -10,6 +10,7 @@ import type {
   ChatSidebarView,
   DashboardChat
 } from './views.js';
+import { providerFileUrl } from './mediaUrl.js';
 
 export type ChatSidebarViewSource = {
   chatFilter: string;
@@ -146,13 +147,6 @@ function firstGrapheme(value: string): string {
     return segment.segment;
   }
   return '';
-}
-
-function providerFileUrl(url: string | null): string | null {
-  if (!url?.startsWith('/')) {
-    return null;
-  }
-  return `/dashboard/module-files/telegram/${url.slice(1).split('/').map(encodeURIComponent).join('/')}`;
 }
 
 function chatIcon(chat: DashboardChat): ChatIconKind | null {

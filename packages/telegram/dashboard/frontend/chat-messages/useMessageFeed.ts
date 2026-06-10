@@ -12,10 +12,15 @@ import {
 import { useDashboardHost, type DashboardHostEvent } from '@agentg/framework/dashboard';
 import type { FileRef, ReadMessage } from '../../../src/views/schemas.js';
 import {
+  fileOwnerEventKey,
+  normalizeFileOwnerChangedEvent,
+  type FileOwnerChangedPayload
+} from '../fileEvents.js';
+import { normalizeFileRef } from '../fileRefs.js';
+import {
   asRecord,
   errorMessage,
   normalizeDecisionReason,
-  normalizeFileRef,
   normalizeMessage,
   normalizeMessageDeletion,
   normalizeMessageUpdate,
@@ -52,6 +57,7 @@ export function useMessageFeed(options: {
 
   let loadSequence = 0;
   let stopEvents: (() => void) | null = null;
+  const fileOwnerVersions = new Map<string, string>();
 
   const sortedMessages = computed(() => sortMessages(messages.value));
   const messagesByTelegramId = computed(() => {
@@ -207,6 +213,12 @@ export function useMessageFeed(options: {
   }
 
   function applyEvent(event: DashboardHostEvent): void {
+    const fileChange = normalizeFileOwnerChangedEvent(event);
+    if (fileChange !== null) {
+      applyFileOwnerChange(fileChange);
+      return;
+    }
+
     if (event.type === 'telegram.message.created') {
       applyCreatedMessage(event);
       return;
@@ -218,6 +230,35 @@ export function useMessageFeed(options: {
     if (event.type === 'telegram.message.deleted') {
       applyDeletedMessages(event);
     }
+  }
+
+  function applyFileOwnerChange(change: FileOwnerChangedPayload): void {
+    if (change.owner.ownerModel !== 'telegram.message' || !shouldApplyFileOwnerChange(change)) {
+      return;
+    }
+    messages.value = messages.value.map((message) =>
+      message.id === change.owner.ownerId
+        ? {
+            ...message,
+            media: {
+              files: change.files
+            }
+          }
+        : message
+    );
+    void nextTick(() => {
+      options.scroll.updateScrollDownVisibility();
+    });
+  }
+
+  function shouldApplyFileOwnerChange(change: FileOwnerChangedPayload): boolean {
+    const key = fileOwnerEventKey(change);
+    const previous = fileOwnerVersions.get(key);
+    if (previous !== undefined && previous > change.updatedAt) {
+      return false;
+    }
+    fileOwnerVersions.set(key, change.updatedAt);
+    return true;
   }
 
   function applyCreatedMessage(event: DashboardHostEvent): void {

@@ -5,6 +5,7 @@ import {
   chatPlacementRank,
   type ChatListKind
 } from './chatListFiltering.js';
+export { providerFileUrl } from './mediaUrl.js';
 import type {
   ChatListMode,
   ChatNavigation,
@@ -146,17 +147,6 @@ export function preferredChatListSelection(chat: TelegramDirectoryChat): {
     return { folderId: placement.folderId, mode: 'folder' };
   }
   return { folderId: null, mode: placement.kind };
-}
-
-export function providerFileUrl(url: string | null): string | null {
-  if (!url?.startsWith('/')) {
-    return null;
-  }
-  return `/dashboard/module-files/telegram/${url
-    .slice(1)
-    .split('/')
-    .map(encodeURIComponent)
-    .join('/')}`;
 }
 
 export function visibleDirectoryChats(input: {

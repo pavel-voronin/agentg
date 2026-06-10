@@ -4,6 +4,7 @@ import type {
   MessageTextEntity,
   ReadMessage
 } from '../../../src/views/schemas.js';
+import { normalizeFileRefs } from '../fileRefs.js';
 import type { MessageDeletion, MessageUpdate } from './types.js';
 
 export function readMessages(value: unknown): ReadMessage[] {
@@ -97,47 +98,6 @@ export function normalizeMessageDeletion(value: unknown): MessageDeletion | null
   };
 }
 
-export function normalizeFileRef(value: Record<string, unknown> | undefined): FileRef | null {
-  const id = asString(value?.id);
-  const owner = normalizeFileOwner(value?.owner);
-  const slotKey = asString(value?.slotKey);
-  const status = asString(value?.status);
-  const mediaKind = asString(value?.mediaKind);
-  const renderKind = asString(value?.renderKind);
-  const updatedAt = asString(value?.updatedAt);
-  if (
-    id === undefined ||
-    owner === null ||
-    slotKey === undefined ||
-    !isFileStatus(status) ||
-    !isFileMediaKind(mediaKind) ||
-    !isFileRenderKind(renderKind) ||
-    updatedAt === undefined
-  ) {
-    return null;
-  }
-  return {
-    _model: 'telegram.file',
-    byteSize: asNullableNonNegativeInteger(value?.byteSize),
-    canRequest: value?.canRequest === true,
-    downloadedByteSize: asNullableNonNegativeInteger(value?.downloadedByteSize),
-    downloadError: asNullableString(value?.downloadError),
-    durationSeconds: asNullableNonNegativeInteger(value?.durationSeconds),
-    fileName: asNullableString(value?.fileName),
-    height: asNullableNonNegativeInteger(value?.height),
-    id,
-    mediaKind,
-    mimeType: asNullableString(value?.mimeType),
-    owner,
-    renderKind,
-    slotKey,
-    status,
-    updatedAt,
-    url: asNullableString(value?.url),
-    width: asNullableNonNegativeInteger(value?.width)
-  };
-}
-
 export function normalizeDecisionReason(value: unknown): string | null {
   const decision = asRecord(value);
   return decision?.action === 'deny' ? (asString(decision.reason) ?? 'File request denied') : null;
@@ -185,34 +145,6 @@ function normalizeMessageReaction(
     totalCount,
     usedSenderId: value.usedSenderId ?? null
   };
-}
-
-function normalizeFileRefs(value: unknown): FileRef[] {
-  return Array.isArray(value)
-    ? value
-        .map((item) => normalizeFileRef(asRecord(item)))
-        .filter(isDefined)
-        .sort(compareFileRefs)
-    : [];
-}
-
-function normalizeFileOwner(value: unknown): FileRef['owner'] | null {
-  const owner = asRecord(value);
-  const model = asString(owner?._model);
-  const id = asString(owner?.id);
-  if (id === undefined) {
-    return null;
-  }
-  if (model === 'telegram.chat') {
-    return { _model: 'telegram.chat', id };
-  }
-  if (model === 'telegram.message') {
-    return { _model: 'telegram.message', id };
-  }
-  if (model === 'telegram.emojiChatThemes') {
-    return { _model: 'telegram.emojiChatThemes', id };
-  }
-  return null;
 }
 
 function normalizeTextEntities(value: unknown): MessageTextEntity[] {
@@ -327,45 +259,12 @@ function asNullableString(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
-function asNullableNonNegativeInteger(value: unknown): number | null {
-  return asNonNegativeInteger(value) ?? null;
-}
-
 function asNonNegativeInteger(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
 }
 
 function isDefined<T>(value: T | null | undefined): value is T {
   return value !== null && value !== undefined;
-}
-
-function isFileStatus(value: string | undefined): value is FileRef['status'] {
-  return (
-    value === 'known' ||
-    value === 'queued' ||
-    value === 'downloading' ||
-    value === 'ready' ||
-    value === 'failed'
-  );
-}
-
-function isFileMediaKind(value: string | undefined): value is FileRef['mediaKind'] {
-  return (
-    value === 'avatar' ||
-    value === 'document' ||
-    value === 'photo' ||
-    value === 'thumbnail' ||
-    value === 'video' ||
-    value === 'voice'
-  );
-}
-
-function isFileRenderKind(value: string | undefined): value is FileRef['renderKind'] {
-  return value === 'audio' || value === 'download' || value === 'image' || value === 'video';
-}
-
-function compareFileRefs(left: FileRef, right: FileRef): number {
-  return left.slotKey.localeCompare(right.slotKey);
 }
 
 function isSafeLinkUrl(value: string): boolean {

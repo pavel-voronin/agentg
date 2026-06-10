@@ -6,6 +6,7 @@ import type {
   MessageView,
   TimelineItem
 } from './types.js';
+import { providerFileUrl } from '../mediaUrl.js';
 
 type TimelineOptions = {
   messagesByTelegramId: ReadonlyMap<string, ReadMessage>;
@@ -178,13 +179,6 @@ function formatDurationLabel(value: number | null): string | null {
   const minutes = Math.floor(value / 60);
   const seconds = value % 60;
   return `${minutes.toString()}:${seconds.toString().padStart(2, '0')}`;
-}
-
-function providerFileUrl(url: string | null): string | null {
-  if (!url?.startsWith('/')) {
-    return null;
-  }
-  return `/dashboard/module-files/telegram/${url.slice(1).split('/').map(encodeURIComponent).join('/')}`;
 }
 
 function compareFileRefs(left: FileRef, right: FileRef): number {
