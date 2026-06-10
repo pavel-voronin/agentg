@@ -132,7 +132,10 @@ Docker Compose uses internal service DNS names:
 - Telegram and History Sync join `http://registry:8080`.
 - History Sync, Gateway, and Dashboard resolve module RPC URLs
   from Registry snapshots.
-- Dashboard exposes the browser UI on `${DASHBOARD_PORT:-8788}`.
+- Dashboard binds `0.0.0.0:8080` inside its container.
+- The Dashboard edge proxy exposes the browser UI on
+  `${DASHBOARD_PORT:-8788}` and routes `/telegram-files/` to the Telegram file
+  server.
 
 Run the containerized Telegram ingestion path when validating Docker packaging:
 
