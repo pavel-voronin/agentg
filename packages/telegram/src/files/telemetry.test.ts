@@ -19,10 +19,12 @@ vi.mock('@agentg/framework', async (importOriginal) => {
 });
 
 import {
+  recordFileGenerationOutcome,
   recordQueueStatsTelemetry,
   recordWorkerBatchResult,
   recordWorkerJobs,
   recordWorkerWake,
+  timeFileGeneration,
   timeWorkerStage
 } from './telemetry.js';
 
@@ -37,12 +39,21 @@ describe('Telegram file telemetry', () => {
     recordQueueStatsTelemetry({
       downloadingCount: 2,
       failedCount: 3,
+      failureReasonCounts: [
+        { count: 1, reason: 'missing_tdlib_file_id' },
+        { count: 2, reason: 'not_found' },
+        { count: 0, reason: 'stale_retry_limit' },
+        { count: 0, reason: 'storage_io' },
+        { count: 0, reason: 'unknown' }
+      ],
       knownCount: 5,
       knownDownloadedBytes: 100,
       knownRemainingBytes: 200,
       knownTotalBytes: 300,
+      oldestDownloadingAgeSeconds: 17,
       queuedCount: 7,
       readyCount: 11,
+      staleDownloadingCount: 19,
       unknownRemainingCount: 13
     });
 
@@ -50,8 +61,19 @@ describe('Telegram file telemetry', () => {
       ['telegram.file.queue.assets', 5, { 'telegram.file.asset.status': 'known' }],
       ['telegram.file.queue.assets', 11, { 'telegram.file.asset.status': 'ready' }],
       ['telegram.file.queue.assets', 3, { 'telegram.file.asset.status': 'failed' }],
+      [
+        'telegram.file.queue.failures',
+        1,
+        { 'telegram.file.failure.reason': 'missing_tdlib_file_id' }
+      ],
+      ['telegram.file.queue.failures', 2, { 'telegram.file.failure.reason': 'not_found' }],
+      ['telegram.file.queue.failures', 0, { 'telegram.file.failure.reason': 'stale_retry_limit' }],
+      ['telegram.file.queue.failures', 0, { 'telegram.file.failure.reason': 'storage_io' }],
+      ['telegram.file.queue.failures', 0, { 'telegram.file.failure.reason': 'unknown' }],
       ['telegram.file.queue.jobs', 7, { 'telegram.file.job.status': 'queued' }],
       ['telegram.file.queue.jobs', 2, { 'telegram.file.job.status': 'downloading' }],
+      ['telegram.file.queue.oldest_downloading_age', 17],
+      ['telegram.file.queue.stale_downloading', 19],
       ['telegram.file.queue.bytes', 100, { 'telegram.file.queue.bytes.kind': 'downloaded' }],
       ['telegram.file.queue.bytes', 200, { 'telegram.file.queue.bytes.kind': 'remaining' }],
       ['telegram.file.queue.bytes', 300, { 'telegram.file.queue.bytes.kind': 'total' }],
@@ -101,6 +123,40 @@ describe('Telegram file telemetry', () => {
     ]);
     expect(JSON.stringify(telemetry.incrementTelemetryCounter.mock.calls)).not.toContain('chatId');
     expect(JSON.stringify(telemetry.incrementTelemetryCounter.mock.calls)).not.toContain('delayed');
+  });
+
+  it('records file generation outcomes with bounded labels', async () => {
+    recordFileGenerationOutcome('completed');
+    recordFileGenerationOutcome('failed', 'blocked_url');
+    await expect(timeFileGeneration(() => Promise.resolve('ok'))).resolves.toBe('ok');
+
+    expect(telemetry.incrementTelemetryCounter.mock.calls).toEqual([
+      [
+        'telegram.file.generation.outcomes',
+        1,
+        {
+          'telegram.file.generation.outcome': 'completed'
+        }
+      ],
+      [
+        'telegram.file.generation.outcomes',
+        1,
+        {
+          'telegram.file.generation.failure.reason': 'blocked_url',
+          'telegram.file.generation.outcome': 'failed'
+        }
+      ]
+    ]);
+    expect(telemetry.timeTelemetrySpan).toHaveBeenCalledWith(
+      {
+        metric: {
+          name: 'telegram.file.generation.duration'
+        },
+        name: 'telegram.file.generation'
+      },
+      expect.any(Function)
+    );
+    expect(JSON.stringify(telemetry.incrementTelemetryCounter.mock.calls)).not.toContain('http');
   });
 
   it('wraps worker stages in stable spans and duration metrics', async () => {

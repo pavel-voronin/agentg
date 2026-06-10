@@ -1,6 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue';
-import { slotRoute, UiGrafanaDashboard, type SlotContext } from '@agentg/framework/dashboard';
+import { computed, onMounted, ref } from 'vue';
+import {
+  slotRoute,
+  UiGrafanaDashboard,
+  UiPage,
+  type SlotContext
+} from '@agentg/framework/dashboard';
 
 import { telemetryRouteSegments, telemetryTabFromSegment, type TelemetryTabId } from './route.js';
 import { useLinks } from './links.js';
@@ -27,18 +32,26 @@ const tabs: TabView[] = [
 const route = computed(() => slotRoute(props.slotContext));
 const activeTab = computed(() => telemetryTabFromSegment(route.value.segment(0)));
 const { links, error, loadLinks } = useLinks();
+const reloadVersion = ref(0);
+const activeViewKey = computed(() => `${activeTab.value ?? 'unknown'}:${reloadVersion.value}`);
 
 onMounted(() => {
   void loadLinks();
 });
 
 function selectTab(tabId: TelemetryTabId): void {
+  if (activeTab.value === tabId) {
+    reloadVersion.value += 1;
+    void loadLinks();
+    return;
+  }
+
   route.value.replace(telemetryRouteSegments(tabId));
 }
 </script>
 
 <template>
-  <section class="telemetry-page">
+  <UiPage>
     <nav class="telemetry-page__tabs" aria-label="Telemetry sections">
       <button
         v-for="tab in tabs"
@@ -58,6 +71,7 @@ function selectTab(tabId: TelemetryTabId): void {
     <section v-if="activeTab === 'operations'" class="telemetry-page__section">
       <UiGrafanaDashboard
         v-if="links"
+        :key="activeViewKey"
         :base-url="links.grafanaUi"
         dashboard-slug="agentg-operations"
         dashboard-uid="agentg-operations"
@@ -70,6 +84,7 @@ function selectTab(tabId: TelemetryTabId): void {
     <section v-if="activeTab === 'telegram'" class="telemetry-page__section">
       <UiGrafanaDashboard
         v-if="links"
+        :key="activeViewKey"
         :base-url="links.grafanaUi"
         dashboard-slug="agentg-telegram"
         dashboard-uid="agentg-telegram"
@@ -82,6 +97,7 @@ function selectTab(tabId: TelemetryTabId): void {
     <section v-if="activeTab === 'files'" class="telemetry-page__section">
       <UiGrafanaDashboard
         v-if="links"
+        :key="activeViewKey"
         :base-url="links.grafanaUi"
         dashboard-slug="agentg-files"
         dashboard-uid="agentg-files"
@@ -94,6 +110,7 @@ function selectTab(tabId: TelemetryTabId): void {
     <section v-if="activeTab === 'history-sync'" class="telemetry-page__section">
       <UiGrafanaDashboard
         v-if="links"
+        :key="activeViewKey"
         :base-url="links.grafanaUi"
         dashboard-slug="agentg-history-sync"
         dashboard-uid="agentg-history-sync"
@@ -106,6 +123,7 @@ function selectTab(tabId: TelemetryTabId): void {
     <section v-if="activeTab === 'updates'" class="telemetry-page__section">
       <UiGrafanaDashboard
         v-if="links"
+        :key="activeViewKey"
         :base-url="links.grafanaUi"
         dashboard-slug="agentg-tdlib-updates"
         dashboard-uid="agentg-tdlib-updates"
@@ -118,6 +136,7 @@ function selectTab(tabId: TelemetryTabId): void {
     <section v-if="activeTab === 'nats'" class="telemetry-page__section">
       <UiGrafanaDashboard
         v-if="links"
+        :key="activeViewKey"
         :base-url="links.grafanaUi"
         dashboard-slug="agentg-nats"
         dashboard-uid="agentg-nats"
@@ -130,6 +149,7 @@ function selectTab(tabId: TelemetryTabId): void {
     <section v-if="activeTab === 'postgres'" class="telemetry-page__section">
       <UiGrafanaDashboard
         v-if="links"
+        :key="activeViewKey"
         :base-url="links.grafanaUi"
         dashboard-slug="agentg-postgres"
         dashboard-uid="agentg-postgres"
@@ -142,15 +162,11 @@ function selectTab(tabId: TelemetryTabId): void {
     <section v-if="activeTab === null" class="telemetry-page__section">
       <div class="telemetry-page__empty">Unknown telemetry section</div>
     </section>
-  </section>
+  </UiPage>
 </template>
 
 <style scoped>
 @reference "tailwindcss";
-
-.telemetry-page {
-  @apply min-h-0 w-full flex-1 overflow-auto bg-white p-5 text-zinc-950;
-}
 
 .telemetry-page__tabs {
   @apply flex flex-wrap gap-2;
