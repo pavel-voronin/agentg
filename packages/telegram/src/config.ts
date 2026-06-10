@@ -7,6 +7,7 @@ export const readConfig = defineConfig({
   apiId: number('TELEGRAM_API_ID').optional(),
   databaseUrl,
   host: string('HOST').optional(),
+  // TODO: Revisit whether ingestion needs configurable update concurrency at all.
   ingestionUpdateConcurrency: number('TELEGRAM_INGESTION_UPDATE_CONCURRENCY').default(10),
   natsUrl: string('NATS_URL'),
   port: number('PORT').default(8702),
