@@ -10,6 +10,7 @@ export default tseslint.config(
       '**/dist-dashboard/**',
       'dist-server/**',
       '**/dist-server/**',
+      '.tmp/**',
       'coverage/**',
       'node_modules/**'
     ]

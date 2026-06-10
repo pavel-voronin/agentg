@@ -27,6 +27,7 @@
     "dev:status": "process-compose -U -u .tmp/process-compose.sock process list",
     "dev:logs": "process-compose -U -u .tmp/process-compose.sock process logs",
     "dev:restart": "process-compose -U -u .tmp/process-compose.sock process restart",
+    "dev:full-restart": "node scripts/devFullRestart.mjs",
     "dev:dashboard": "npm --workspace @agentg/dashboard run dev",
     "dev:dashboard-server": "sh -c 'set -a; [ ! -f .env ] || . ./.env; set +a; DATABASE_URL=\"${DATABASE_URL:-postgres://agentg:agentg@127.0.0.1:5432/agentg}\" NATS_URL=\"${NATS_URL:-nats://127.0.0.1:4222}\" REGISTRY_URL=\"${REGISTRY_URL:-http://127.0.0.1:8701}\" DASHBOARD_PORT=\"${DASHBOARD_PORT:-8789}\" npm --workspace @agentg/dashboard run dev:server'",
     "dev:registry": "sh -c 'set -a; [ ! -f .env ] || . ./.env; set +a; NATS_URL=\"${NATS_URL:-nats://127.0.0.1:4222}\" PORT=\"${PORT:-8701}\" npm --workspace @agentg/registry run dev'",
