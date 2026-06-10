@@ -14,6 +14,7 @@ import { getChatHistoryFactsProcedure } from './procedures/getChatHistoryFacts.j
 import { getHistoryCoverageProcedure } from './procedures/getHistoryCoverage.js';
 import { listChatsProcedure } from './procedures/listChats.js';
 import { listRecentMessagesProcedure } from './procedures/listRecentMessages.js';
+import { requestFileProcedure } from './procedures/requestFile.js';
 import { searchMessagesProcedure } from './procedures/searchMessages.js';
 import { createStatusTracker } from './status/tracker.js';
 import { useTdlib } from './tdlib/index.js';
@@ -95,6 +96,7 @@ export const telegramModule = defineModule('telegram', {
         getHistoryCoverage: getHistoryCoverageProcedure(procedureResources),
         listChats: listChatsProcedure(procedureResources),
         listRecentMessages: listRecentMessagesProcedure(procedureResources),
+        requestFile: requestFileProcedure(procedureResources),
         searchMessages: searchMessagesProcedure(procedureResources),
         status: () => ({
           ready: status.snapshot().ready

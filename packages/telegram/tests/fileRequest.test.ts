@@ -5,6 +5,9 @@ import { chatRef } from '../src/model/refs.js';
 import { procedures } from '../dashboard/backend/procedures.js';
 import { requestFileSlot } from '../src/files/request.js';
 import type { FileSubsystemOptions } from '../src/files/runtime.js';
+import type { FileOwner } from '../src/files/types.js';
+import { requestFileProcedure } from '../src/procedures/requestFile.js';
+import type { ProcedureResources } from '../src/procedures/resources.js';
 
 describe('Telegram file request', () => {
   it('publishes a queue wake event even when an explicit request finds an existing job', async () => {
@@ -22,34 +25,98 @@ describe('Telegram file request', () => {
     );
 
     expect(events.map((event) => event.type)).toContain('telegram.files.ownerChanged');
+    expect(
+      events.find((event) => event.type === 'telegram.files.ownerChanged')?.data
+    ).toMatchObject({
+      files: [
+        {
+          owner: {
+            _model: 'telegram.chat',
+            id: 'chat-1'
+          },
+          slotKey: 'photo.main',
+          status: 'queued'
+        }
+      ],
+      owner: {
+        ownerId: 'chat-1',
+        ownerModel: 'telegram.chat'
+      }
+    });
     const queueEvent = events.find((event) => event.type === 'telegram.files.queueChanged');
     expect(queueEvent?.data).toMatchObject({
       queuedCount: 1
     });
   });
 
-  it('uses the same domain request path from the Dashboard procedure', async () => {
+  it('exposes the domain request path from the Telegram procedure', async () => {
     const events: { data?: unknown; type: string }[] = [];
-    const rpc = procedures({
-      callTelegramProcedure() {
-        throw new Error('unexpected Telegram RPC call');
-      },
-      database: existingQueuedJobDatabase(),
-      events: eventSink(events),
-      filesDirectory: '/tmp/agentg-test-files'
-    });
+    const rpc = requestFileProcedure(procedureResources(events));
 
-    const result = await rpc['telegram.dashboard.requestFile']({
+    const result = await rpc({
       owner: chatRef('chat-1'),
       slotKey: 'photo.main'
     });
 
     expect(result.decision.action).toBe('enqueue');
     expect(events.map((event) => event.type)).toContain('telegram.files.ownerChanged');
+    expect(
+      events.find((event) => event.type === 'telegram.files.ownerChanged')?.data
+    ).toMatchObject({
+      files: [
+        {
+          owner: {
+            _model: 'telegram.chat',
+            id: 'chat-1'
+          },
+          slotKey: 'photo.main',
+          status: 'queued'
+        }
+      ],
+      owner: {
+        ownerId: 'chat-1',
+        ownerModel: 'telegram.chat'
+      }
+    });
     const queueEvent = events.find((event) => event.type === 'telegram.files.queueChanged');
     expect(queueEvent?.data).toMatchObject({
       queuedCount: 1
     });
+  });
+
+  it('proxies the Dashboard procedure to the Telegram procedure', async () => {
+    const events: { data?: unknown; type: string }[] = [];
+    const calls: { input: unknown; procedure: string }[] = [];
+    const output = {
+      decision: {
+        action: 'enqueue',
+        reason: 'file download was enqueued'
+      },
+      file: null
+    };
+    const rpc = procedures({
+      callTelegramProcedure<T>(procedure: string, input: unknown): Promise<T> {
+        calls.push({ input, procedure });
+        return Promise.resolve(output as T);
+      },
+      database: existingQueuedJobDatabase(),
+      events: eventSink(events)
+    });
+
+    const input = {
+      owner: chatRef('chat-1'),
+      slotKey: 'photo.main'
+    };
+    const result = await rpc['telegram.dashboard.requestFile'](input);
+
+    expect(result).toEqual(output);
+    expect(calls).toEqual([
+      {
+        input,
+        procedure: 'requestFile'
+      }
+    ]);
+    expect(events).toEqual([]);
   });
 });
 
@@ -88,6 +155,25 @@ function requestOptions(input: {
       }
     }
   } as unknown as FileSubsystemOptions;
+}
+
+function procedureResources(events: { data?: unknown; type: string }[]): ProcedureResources {
+  return {
+    database: existingQueuedJobDatabase(),
+    events: eventSink(events),
+    files: {
+      requestFile(input: { owner: FileOwner; slotKey: string }) {
+        return requestFileSlot(
+          requestOptions({
+            database: existingQueuedJobDatabase(),
+            events
+          }),
+          input
+        );
+      }
+    },
+    tdlib: {}
+  } as unknown as ProcedureResources;
 }
 
 function eventSink(events: { data?: unknown; type: string }[]): FileSubsystemOptions['events'] {
@@ -135,9 +221,12 @@ function existingQueuedJobDatabase(): Database {
         return requestRowSelect();
       }
       if (selectCount === 2) {
-        return assetStatsSelect();
+        return fileRefSelect();
       }
       if (selectCount === 3) {
+        return assetStatsSelect();
+      }
+      if (selectCount === 4) {
         return jobStatsSelect();
       }
       return fileRefSelect();
@@ -205,7 +294,9 @@ function jobStatsSelect() {
                   knownDownloadedBytes: 0,
                   knownRemainingBytes: 100,
                   knownTotalBytes: 100,
+                  oldestDownloadingAgeSeconds: 0,
                   queuedCount: 1,
+                  staleDownloadingCount: 0,
                   unknownRemainingCount: 0
                 }
               ]);

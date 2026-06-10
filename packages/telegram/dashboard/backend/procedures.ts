@@ -8,8 +8,6 @@ import {
   telegramChats,
   telegramMessages
 } from '../../src/database/schema.js';
-import { requestFileSlot } from '../../src/files/request.js';
-import { readStaticFileContent } from '../../src/files/staticFile.js';
 import { HISTORY_PAST_BOUNDARY, HISTORY_TICK_MS } from '../../src/history/time.js';
 import { chatSearchWhere, readChatSelection, toChatStorageRow } from '../../src/views/chat.js';
 import { readMessageSelection, toReadMessages } from '../../src/views/message.js';
@@ -23,8 +21,6 @@ import {
 import {
   chatDirectoryInputSchema,
   chatDirectoryOutputSchema,
-  fileContentInputSchema,
-  fileContentOutputSchema,
   fileRequestInputSchema,
   fileRequestOutputSchema,
   messageLookupInputSchema,
@@ -40,7 +36,6 @@ const METRIC_MESSAGES_PAGE_STAGE_DURATION = 'telegram.messages_page.stage.durati
 
 type ChatDirectoryInput = z.infer<typeof chatDirectoryInputSchema>;
 type ChatDirectoryOutput = z.infer<typeof chatDirectoryOutputSchema>;
-type FileContentOutput = z.infer<typeof fileContentOutputSchema>;
 type FileRequestInput = z.infer<typeof fileRequestInputSchema>;
 type FileRequestOutput = z.infer<typeof fileRequestOutputSchema>;
 type MessageLookupInput = z.infer<typeof messageLookupInputSchema>;
@@ -52,7 +47,6 @@ type Resources = {
   callTelegramProcedure<T>(procedure: string, input: unknown): Promise<T>;
   database: Database;
   events: EventBus;
-  filesDirectory: string;
 };
 
 type FetchPageResult =
@@ -69,16 +63,6 @@ export function procedures(resources: Resources) {
     'telegram.dashboard.chatDirectory': async (input: unknown): Promise<ChatDirectoryOutput> => {
       const output = await runChatDirectory(chatDirectoryInputSchema.parse(input), resources);
       return chatDirectoryOutputSchema.parse(output);
-    },
-    'telegram.dashboard.file': async (input: unknown): Promise<FileContentOutput> => {
-      const file = await readStaticFileContent(
-        resources.filesDirectory,
-        fileContentInputSchema.parse(input).path
-      );
-      if (file === null) {
-        throw new Error('File not found');
-      }
-      return fileContentOutputSchema.parse(file);
     },
     'telegram.dashboard.message': async (input: unknown): Promise<MessageLookupOutput> => {
       const output = await runMessage(messageLookupInputSchema.parse(input), resources);
@@ -277,7 +261,7 @@ async function requestFile(
   input: FileRequestInput,
   resources: Resources
 ): Promise<FileRequestOutput> {
-  return requestFileSlot(resources, input);
+  return resources.callTelegramProcedure<FileRequestOutput>('requestFile', input);
 }
 
 function parseOptionalMessageId(value: string | undefined): number | undefined {

@@ -85,15 +85,6 @@ export const chatDirectoryOutputSchema = z.object({
   types: z.array(chatTypeCountSchema)
 });
 
-export const fileContentInputSchema = z.object({
-  path: nonEmptyStringSchema
-});
-
-export const fileContentOutputSchema = z.object({
-  bodyBase64: nonEmptyStringSchema,
-  contentType: nonEmptyStringSchema
-});
-
 export const messageLookupInputSchema = z.object({
   chatId: nonEmptyStringSchema,
   messageId: nonEmptyStringSchema
