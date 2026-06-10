@@ -1,3 +1,7 @@
+<script setup lang="ts">
+import { UiPage } from '@agentg/framework/dashboard';
+</script>
+
 <template>
-  <div />
+  <UiPage />
 </template>

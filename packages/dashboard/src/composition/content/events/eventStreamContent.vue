@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 
-import type { SlotContext } from '@agentg/framework/dashboard';
+import { UiPage, type SlotContext } from '@agentg/framework/dashboard';
 import EventsPanel from '../../../components/eventsPanel.vue';
 import { useEventsStore } from '../../../stores/events.js';
 import { eventListItems } from '../../../view-models/eventsPanelView.js';
@@ -50,32 +50,26 @@ function contextString(context: SlotContext | undefined, key: string, fallback: 
 </script>
 
 <template>
-  <EventsPanel
-    class="event-stream-content"
-    :clear-button-id="`${idPrefix}ClearEvents`"
-    :event-list-id="`${idPrefix}Events`"
-    :event-limit="eventLimit"
-    :event-settings-id="`${idPrefix}EventSettings`"
-    :event-yaml-list-limit="eventYamlListLimit"
-    :events="eventItems"
-    :has-events="hasEvents"
-    :mode="eventsPanelMode"
-    :panel-id="`${idPrefix}Panel`"
-    :settings-toggle-id="`${idPrefix}EventSettingsToggle`"
-    :stream-paused="eventsPaused"
-    :stream-toggle-id="`${idPrefix}EventStreamToggle`"
-    @clear="clearEvents"
-    @close-settings="closeEventSettings"
-    @event-limit-change="setEventLimit"
-    @event-yaml-list-limit-change="setEventYamlListLimit"
-    @settings-toggle="toggleEventSettings"
-    @stream-toggle="toggleEventStream"
-  />
+  <UiPage padding="none" scroll="hidden">
+    <EventsPanel
+      :clear-button-id="`${idPrefix}ClearEvents`"
+      :event-list-id="`${idPrefix}Events`"
+      :event-limit="eventLimit"
+      :event-settings-id="`${idPrefix}EventSettings`"
+      :event-yaml-list-limit="eventYamlListLimit"
+      :events="eventItems"
+      :has-events="hasEvents"
+      :mode="eventsPanelMode"
+      :panel-id="`${idPrefix}Panel`"
+      :settings-toggle-id="`${idPrefix}EventSettingsToggle`"
+      :stream-paused="eventsPaused"
+      :stream-toggle-id="`${idPrefix}EventStreamToggle`"
+      @clear="clearEvents"
+      @close-settings="closeEventSettings"
+      @event-limit-change="setEventLimit"
+      @event-yaml-list-limit-change="setEventYamlListLimit"
+      @settings-toggle="toggleEventSettings"
+      @stream-toggle="toggleEventStream"
+    />
+  </UiPage>
 </template>
-
-<style scoped>
-@reference "tailwindcss";
-.event-stream-content {
-  @apply h-full min-h-0 w-full;
-}
-</style>

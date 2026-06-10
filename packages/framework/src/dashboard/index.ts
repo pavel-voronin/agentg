@@ -31,4 +31,5 @@ export type * from './slots/index.js';
 export { default as UiButton } from './ui/uiButton.vue';
 export { default as UiGrafanaDashboard } from './ui/uiGrafanaDashboard.vue';
 export { default as UiMetricTile } from './ui/uiMetricTile.vue';
+export { default as UiPage } from './ui/uiPage.vue';
 export { default as UiStatusBadge } from './ui/uiStatusBadge.vue';

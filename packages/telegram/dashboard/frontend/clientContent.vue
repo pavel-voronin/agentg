@@ -9,6 +9,7 @@ import {
   type SlotItemRenderState,
   type SlotResolution,
   type SlotRenderState,
+  UiPage,
   useSlotRuntime
 } from '@agentg/framework/dashboard';
 
@@ -496,7 +497,7 @@ function isDefined<T>(value: T | undefined): value is T {
 </script>
 
 <template>
-  <div class="telegram-client">
+  <UiPage padding="none" scroll="hidden">
     <section
       class="telegram-client__chat-interface"
       :data-resizing="isResizingChatSidebar ? 'true' : undefined"
@@ -534,18 +535,14 @@ function isDefined<T>(value: T | undefined): value is T {
         @state-change="setActivePrimaryItemState"
       />
     </section>
-  </div>
+  </UiPage>
 </template>
 
 <style scoped>
 @reference "tailwindcss";
 
-.telegram-client {
-  @apply h-full min-h-0 w-full flex-1 overflow-hidden;
-}
-
 .telegram-client__chat-interface {
-  @apply relative grid h-full min-h-0 w-full min-w-0 grid-cols-[var(--telegram-chat-sidebar-width)_minmax(0,1fr)] overflow-hidden rounded-lg border border-zinc-200 bg-white;
+  @apply relative grid h-full min-h-0 w-full min-w-0 grid-cols-[var(--telegram-chat-sidebar-width)_minmax(0,1fr)] overflow-hidden;
 }
 
 .telegram-client__chat-interface[data-resizing='true'] {

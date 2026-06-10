@@ -116,7 +116,7 @@ const eventStreamStateLabel = computed(() => (props.streamPaused ? 'Paused' : 'L
 <style scoped>
 @reference "tailwindcss";
 .events-panel {
-  @apply flex h-full min-h-0 w-full flex-col overflow-hidden rounded-lg border border-zinc-200 bg-white;
+  @apply flex h-full min-h-0 w-full flex-col overflow-hidden;
 }
 
 .events-panel__header {

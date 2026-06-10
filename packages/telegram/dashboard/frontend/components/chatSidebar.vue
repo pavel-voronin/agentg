@@ -28,7 +28,6 @@ import SolarFootballBold from '~icons/solar/football-bold';
 import { useDashboardHost } from '@agentg/framework/dashboard';
 import type { ChatFolderNavItem, ChatSidebarView } from '../views.js';
 
-// TODO(file-size): Split search, folder navigation, model-ref handling, and row rendering.
 const props = defineProps<{
   view: ChatSidebarView;
 }>();

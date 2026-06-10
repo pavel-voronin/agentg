@@ -9,7 +9,7 @@ import {
   SlotDebugLayer,
   SlotOutlet
 } from '@agentg/framework/dashboard';
-import { UiButton } from '@agentg/framework/dashboard';
+import { UiButton, UiPage } from '@agentg/framework/dashboard';
 
 import { useDashboardRuntime } from '../runtime/useDashboardRuntime.js';
 import { useAppShellStore } from '../stores/appShell.js';
@@ -176,9 +176,13 @@ onBeforeUnmount(() => {
         slot-id="dashboard.page"
         :tags="['dashboard.page']"
       >
-        <div class="dashboard-app__empty-page">No page contribution is available.</div>
+        <UiPage>
+          <div class="dashboard-app__empty-page">No page contribution is available.</div>
+        </UiPage>
       </SlotOutlet>
-      <div v-else class="dashboard-app__empty-page">No page contribution is available.</div>
+      <UiPage v-else>
+        <div class="dashboard-app__empty-page">No page contribution is available.</div>
+      </UiPage>
     </main>
   </div>
   <SlotDebugLayer />
@@ -243,6 +247,6 @@ onBeforeUnmount(() => {
 }
 
 .dashboard-app__empty-page {
-  @apply flex min-h-0 flex-1 items-center justify-center bg-white p-8 text-sm text-zinc-500;
+  @apply flex min-h-0 flex-1 items-center justify-center text-sm text-zinc-500;
 }
 </style>
