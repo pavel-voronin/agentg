@@ -1,14 +1,14 @@
 import { defineModule } from '@agentg/framework';
+import { telegramClient } from '@agentg/telegram';
 
 import { readConfig } from './config.js';
 import { createDatabase } from './database/client.js';
-import type { TelegramHistoryClient } from './model/types.js';
-import { procedures } from './procedures/index.js';
+import { createProcedures } from './procedures/index.js';
 import { createController } from './sync/controller.js';
 
 export const historySyncModule = defineModule('history-sync', {
   config: readConfig,
-  setup({ background, config, events, resource, rpc }) {
+  setup({ background, config, events, resource }) {
     const database = resource('database', ({ startup }) => {
       const databaseResource = createDatabase(config.databaseUrl);
 
@@ -16,7 +16,7 @@ export const historySyncModule = defineModule('history-sync', {
 
       return databaseResource.db;
     });
-    const telegram = rpc<TelegramHistoryClient>('telegram');
+    const telegram = telegramClient({ url: config.telegramRpcUrl });
     const controller = createController(database, telegram, events, {
       chatLoadBatchSize: config.chatLoadBatchSize,
       messageLimit: config.messageLimit,
@@ -41,14 +41,11 @@ export const historySyncModule = defineModule('history-sync', {
       };
     });
 
-    return {
-      procedures: procedures({
-        controller,
-        database,
-        events,
-        telegram
-      }),
-      required: true
-    };
+    return createProcedures({
+      controller,
+      database,
+      events,
+      telegram
+    });
   }
 });

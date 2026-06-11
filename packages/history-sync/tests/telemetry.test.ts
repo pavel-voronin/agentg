@@ -257,6 +257,7 @@ function createFakeTelegramHistoryClient(): TelegramHistoryClient {
     listChats: vi.fn(() =>
       Promise.resolve([
         {
+          _model: 'telegram.chat' as const,
           id: 'secret-chat-id',
           title: 'Private Chat',
           type: 'private'

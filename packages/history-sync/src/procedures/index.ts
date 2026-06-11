@@ -120,7 +120,7 @@ const targetMutationOutputSchema = z.object({
 type StateOutput = z.infer<typeof stateOutputSchema>;
 type TargetMutationOutput = z.infer<typeof targetMutationOutputSchema>;
 
-export function procedures(resources: Resources) {
+export function createProcedures(resources: Resources) {
   return {
     async deleteTarget(input: unknown): Promise<TargetMutationOutput> {
       const target = await deleteManualHistorySyncTargetFromCommand(

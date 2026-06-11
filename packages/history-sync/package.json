@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/module.ts"
+    ".": "./src/index.ts"
   },
   "scripts": {
     "db:generate": "drizzle-kit generate",
@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@agentg/framework": "file:../framework",
+    "@agentg/telegram": "file:../telegram",
     "dotenv": "17.4.2",
     "drizzle-orm": "^0.45.2",
     "vue": "^3.5.33",
