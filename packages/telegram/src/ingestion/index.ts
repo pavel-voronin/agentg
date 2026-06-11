@@ -22,7 +22,7 @@ import type { StatusTracker } from '../status/tracker.js';
 import { createUpdateEvents } from './events.js';
 import { startIngestionQueueTelemetry } from './queueTelemetry.js';
 import type { IngestionResources } from './resources.js';
-import { persistLiveUpdate } from './registry.js';
+import { persistLiveUpdate } from './catalog.js';
 import { recordHandledUpdateCatalog, recordUpdateSeen } from './updateCatalogTelemetry.js';
 import { createUpdateQueue } from './updateQueue.js';
 

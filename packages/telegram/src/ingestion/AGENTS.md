@@ -2,7 +2,7 @@
 
 - This folder owns TDLib update ingestion for the current Telegram module.
 - Preserve update handler coverage mechanically: every reviewed handler file must
-  have a matching current handler file and registry entry until the reviewed handler inventory is complete.
+  have a matching current handler file and catalog entry until the reviewed handler inventory is complete.
 - `updateCoverage.test.ts` is the migration guard. Do not weaken it to make a
   port compile.
 - Update handlers must receive module resources from the dispatcher. Do not add

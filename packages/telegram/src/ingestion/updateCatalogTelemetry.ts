@@ -1,6 +1,6 @@
 import { setTelemetryGauge, telemetryEnabled } from '@agentg/framework';
 
-import { handledUpdateTypes } from './registry.js';
+import { handledUpdateTypes } from './catalog.js';
 
 const METRIC_CATALOG = 'telegram.update.catalog.info';
 const METRIC_LAST_SEEN = 'telegram.update.last_seen.unix_seconds';

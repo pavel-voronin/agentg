@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { handledUpdateTypes } from './registry.js';
+import { handledUpdateTypes } from './catalog.js';
 import { recordHandledUpdateCatalog, recordUpdateSeen } from './updateCatalogTelemetry.js';
 
 const telemetry = vi.hoisted(() => ({
