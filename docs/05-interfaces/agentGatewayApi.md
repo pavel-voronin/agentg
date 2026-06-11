@@ -98,7 +98,7 @@ Errors:
 {
   "id": "req_1",
   "error": {
-    "code": "method_failed",
+    "code": "unknown_method",
     "message": "Unknown method: example"
   }
 }
@@ -107,9 +107,11 @@ Errors:
 Gateway error codes:
 
 - `unknown_method`: the external method is not part of Gateway's public API.
-- `dependency_unavailable`: the method is allowed, but its downstream service
-  call failed before returning a domain result.
-- `method_failed`: the downstream call failed after routing.
+- `dependency_unavailable`: the method is allowed, but the internal RPC
+  dependency failed at the transport or protocol boundary before returning a
+  domain result.
+- `method_failed`: the method reached domain logic and failed with a domain
+  procedure error.
 
 ## Methods
 

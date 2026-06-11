@@ -48,6 +48,10 @@ import { telegramClient } from '@agentg/telegram';
 const telegram = telegramClient({ url: config.telegramRpcUrl });
 ```
 
+Typed RPC clients classify transport and protocol failures as infrastructure
+failures. Domain procedure failures stay separate: they mean the serving
+procedure was reached and failed while running domain logic.
+
 Process Compose, Docker Compose, or the production supervisor owns startup
 ordering and service addresses. Failure of a dependency is represented as an
 RPC call failure or service process failure, not as discovery snapshot state.

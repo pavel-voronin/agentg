@@ -63,7 +63,7 @@ export type SelectedHistorySyncState = {
   targets: HistorySyncTarget[];
 };
 
-export type SelectedHistorySyncStatus = 'idle' | 'loading' | 'ready' | 'unavailable';
+export type SelectedHistorySyncStatus = 'failed' | 'idle' | 'loading' | 'ready' | 'unavailable';
 
 export type SelectedChatHeaderView = {
   historySyncLabel: string | null;
@@ -91,10 +91,15 @@ export type SelectedClientView =
       status: 'loading';
     }
   | {
+      message: string;
+      status: 'failed';
+    }
+  | {
       status: 'unavailable';
     }
   | {
       chat: SelectedChatHeaderView;
+      errorMessage: string | null;
       historySyncState: SelectedHistorySyncState;
       scaleButtons: TimelineScaleButtonView[];
       status: 'ready';

@@ -81,6 +81,21 @@ export class ProcedureTransportError extends Error {
   }
 }
 
+export class ProcedureProtocolError extends Error {
+  readonly code = 'procedure_protocol_failed';
+
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = 'ProcedureProtocolError';
+  }
+}
+
+export function isProcedureInfrastructureError(
+  error: unknown
+): error is ProcedureTransportError | ProcedureProtocolError {
+  return error instanceof ProcedureTransportError || error instanceof ProcedureProtocolError;
+}
+
 export async function startProcedureServer(
   procedures: ProcedureMap,
   options: ProcedureServerOptions
@@ -129,7 +144,7 @@ export async function callProcedure<T>(
   options: ProcedureCallOptions
 ): Promise<T> {
   const controller = new AbortController();
-  const endpoint = new URL(procedureEndpoint(url));
+  const endpoint = procedureUrl(url);
   const service = rpcServiceName(options.service);
   const attributes = rpcAttributes(procedure, service);
   const spanAttributes = {
@@ -161,13 +176,11 @@ export async function callProcedure<T>(
         const headers = {
           'content-type': 'application/json'
         };
+        const requestBody = procedureRequestBody(procedure, input);
         propagation.inject(context.active(), headers);
         try {
           response = await fetch(endpoint, {
-            body: JSON.stringify({
-              input,
-              procedure
-            }),
+            body: requestBody,
             headers,
             method: 'POST',
             signal: controller.signal
@@ -180,21 +193,12 @@ export async function callProcedure<T>(
             { cause: error }
           );
         }
-        const body: unknown = await response.json();
+        const body = await readProcedureResponseBody(response);
         if (!response.ok) {
-          throw new Error(responseErrorMessage(body, response.status));
-        }
-        if (
-          typeof body !== 'object' ||
-          body === null ||
-          !('ok' in body) ||
-          body.ok !== true ||
-          !('result' in body)
-        ) {
-          throw new Error('Procedure response is invalid');
+          throw procedureCallError(requireProcedureErrorEnvelope(body));
         }
 
-        return body.result as T;
+        return requireProcedureResultEnvelope(body) as T;
       }
     );
   } finally {
@@ -235,7 +239,7 @@ async function handleProcedureRequest(
 
   try {
     const body = await readRequestBody(request);
-    const envelope = requireProcedureEnvelope(JSON.parse(body) as unknown);
+    const envelope = parseProcedureEnvelope(body);
     const procedure = procedures[envelope.procedure];
     if (procedure === undefined) {
       writeJson(response, 404, {
@@ -278,12 +282,47 @@ async function handleProcedureRequest(
       return;
     }
 
+    if (error instanceof ProcedureRequestProtocolError) {
+      writeJson(response, 400, {
+        error: {
+          code: 'procedure_protocol_failed',
+          message: error.message
+        },
+        ok: false
+      });
+      return;
+    }
+
+    if (isProcedureInfrastructureError(error)) {
+      writeJson(response, procedureInfrastructureStatus(error), {
+        error: {
+          code: error.code,
+          message: error.message
+        },
+        ok: false
+      });
+      return;
+    }
+
     writeJson(response, 400, {
       error: {
         code: 'procedure_failed',
         message: error instanceof Error ? error.message : String(error)
       },
       ok: false
+    });
+  }
+}
+
+function parseProcedureEnvelope(body: string): { input: unknown; procedure: string } {
+  try {
+    return requireProcedureEnvelope(JSON.parse(body) as unknown);
+  } catch (error) {
+    if (error instanceof ProcedureRequestProtocolError) {
+      throw error;
+    }
+    throw new ProcedureRequestProtocolError('Procedure request body must be JSON', {
+      cause: error
     });
   }
 }
@@ -296,13 +335,83 @@ function requireProcedureEnvelope(value: unknown): { input: unknown; procedure: 
     typeof value.procedure !== 'string' ||
     value.procedure.trim() === ''
   ) {
-    throw new Error('Procedure request must include procedure');
+    throw new ProcedureRequestProtocolError('Procedure request must include procedure');
   }
 
   return {
     input: 'input' in value ? value.input : undefined,
     procedure: value.procedure
   };
+}
+
+function requireProcedureResultEnvelope(value: unknown): unknown {
+  if (!isPlainRecord(value) || value.ok !== true || !('result' in value)) {
+    throw new ProcedureProtocolError('Procedure response is invalid');
+  }
+
+  return value.result;
+}
+
+function requireProcedureErrorEnvelope(value: unknown): { code: string; message: string } {
+  if (!isPlainRecord(value) || value.ok !== false || !isPlainRecord(value.error)) {
+    throw new ProcedureProtocolError('Procedure error response is invalid');
+  }
+
+  const code = value.error.code;
+  const message = value.error.message;
+  if (typeof code !== 'string' || code.trim() === '' || typeof message !== 'string') {
+    throw new ProcedureProtocolError('Procedure error response is invalid');
+  }
+
+  return {
+    code,
+    message
+  };
+}
+
+function procedureRequestBody(procedure: string, input: unknown): string {
+  try {
+    return JSON.stringify({
+      input,
+      procedure
+    });
+  } catch (error) {
+    throw new ProcedureProtocolError(
+      `Procedure request body is not JSON-serializable: ${errorMessage(error)}`,
+      { cause: error }
+    );
+  }
+}
+
+async function readProcedureResponseBody(response: Response): Promise<unknown> {
+  try {
+    return (await response.json()) as unknown;
+  } catch (error) {
+    throw new ProcedureProtocolError(`Procedure response is not JSON: ${errorMessage(error)}`, {
+      cause: error
+    });
+  }
+}
+
+function procedureCallError(error: { code: string; message: string }): Error {
+  if (error.code === 'procedure_transport_failed') {
+    return new ProcedureTransportError(error.message);
+  }
+  if (
+    error.code === 'procedure_protocol_failed' ||
+    error.code === 'procedure_not_found' ||
+    error.code === 'payload_too_large'
+  ) {
+    return new ProcedureProtocolError(error.message);
+  }
+
+  return new ProcedureRemoteError(error.code, error.message);
+}
+
+function procedureInfrastructureStatus(
+  error: ProcedureTransportError | ProcedureProtocolError
+): number {
+  return error instanceof ProcedureTransportError ? 503 : 502;
 }
 
 function rpcAttributes(method: string, service: string): TelemetryAttributes {
@@ -319,6 +428,16 @@ function rpcServiceName(value: string): string {
     throw new Error('RPC service name is required');
   }
   return trimmed;
+}
+
+function procedureUrl(value: string): URL {
+  try {
+    return new URL(procedureEndpoint(value));
+  } catch (error) {
+    throw new ProcedureProtocolError(`Procedure URL is invalid: ${errorMessage(error)}`, {
+      cause: error
+    });
+  }
 }
 
 function contentLengthExceedsLimit(request: IncomingMessage): boolean {
@@ -342,6 +461,10 @@ function firstString(value: unknown): string | undefined {
 
   const first: unknown = value[0];
   return typeof first === 'string' ? first : undefined;
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function readRequestBody(request: IncomingMessage): Promise<string> {
@@ -408,21 +531,6 @@ function procedureEndpoint(value: string): string {
   return url.toString();
 }
 
-function responseErrorMessage(body: unknown, status: number): string {
-  if (
-    typeof body === 'object' &&
-    body !== null &&
-    'error' in body &&
-    typeof body.error === 'object' &&
-    body.error !== null &&
-    'message' in body.error &&
-    typeof body.error.message === 'string'
-  ) {
-    return body.error.message;
-  }
-  return `Procedure call failed with status ${String(status)}`;
-}
-
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -430,5 +538,22 @@ function errorMessage(error: unknown): string {
 class RequestBodyTooLargeError extends Error {
   constructor() {
     super('Procedure request body is too large');
+  }
+}
+
+class ProcedureRequestProtocolError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = 'ProcedureRequestProtocolError';
+  }
+}
+
+class ProcedureRemoteError extends Error {
+  readonly code: string;
+
+  constructor(code: string, message: string) {
+    super(message);
+    this.code = code;
+    this.name = 'ProcedureRemoteError';
   }
 }

@@ -40,10 +40,25 @@ type PendingRpc = {
   timeoutId: ReturnType<typeof setTimeout>;
 };
 
+type DashboardRpcErrorData = {
+  code: string;
+  message: string;
+};
+
 const DEFAULT_DASHBOARD_WS_URL = 'ws://127.0.0.1:8789/ws';
 const DEFAULT_RECONNECT_DELAY_MS = 1000;
 const DEFAULT_RPC_TIMEOUT_MS = 15000;
 const WEBSOCKET_OPEN = 1;
+
+class DashboardRpcError extends Error {
+  constructor(
+    readonly code: string,
+    message: string
+  ) {
+    super(message);
+    this.name = 'DashboardRpcError';
+  }
+}
 
 export class DashboardClient {
   private connection: Promise<void> | null = null;
@@ -121,8 +136,14 @@ export class DashboardClient {
       return Promise.reject(new Error('Dashboard WebSocket is not connected'));
     }
     const id = this.nextId;
+    let payload: string;
+    try {
+      payload = dashboardRpcRequestPayload(id, method, params);
+      socket.send(payload);
+    } catch (error) {
+      return Promise.reject(dashboardRequestError(error));
+    }
     this.nextId += 1;
-    socket.send(JSON.stringify(params === undefined ? { id, method } : { id, method, params }));
 
     return new Promise<T>((resolve, reject) => {
       const timeoutId = setTimeout(() => {
@@ -178,9 +199,9 @@ export class DashboardClient {
     clearTimeout(pending.timeoutId);
     this.pending.delete(id);
 
-    const errorMessage = dashboardErrorMessage(payload.error);
-    if (errorMessage !== null) {
-      pending.reject(new Error(errorMessage));
+    const error = dashboardError(payload.error);
+    if (error !== null) {
+      pending.reject(new DashboardRpcError(error.code, error.message));
       return;
     }
     pending.resolve(payload.result);
@@ -219,16 +240,23 @@ function defaultDashboardUrl(): string {
   return DEFAULT_DASHBOARD_WS_URL;
 }
 
-function dashboardErrorMessage(error: unknown): string | null {
+function dashboardError(error: unknown): DashboardRpcErrorData | null {
   if (error === undefined || error === null) {
     return null;
   }
   if (isPlainRecord(error)) {
+    const code = typeof error.code === 'string' ? error.code : 'dashboard_rpc_failed';
     const message = error.message;
-    return typeof message === 'string' ? message : JSON.stringify(error);
+    return {
+      code,
+      message: typeof message === 'string' ? message : JSON.stringify(error)
+    };
   }
   if (Array.isArray(error)) {
-    return JSON.stringify(error);
+    return {
+      code: 'dashboard_rpc_failed',
+      message: JSON.stringify(error)
+    };
   }
   if (
     typeof error === 'string' ||
@@ -236,12 +264,39 @@ function dashboardErrorMessage(error: unknown): string | null {
     typeof error === 'boolean' ||
     typeof error === 'bigint'
   ) {
-    return String(error);
+    return {
+      code: 'dashboard_rpc_failed',
+      message: String(error)
+    };
   }
   if (typeof error === 'symbol') {
-    return error.description ?? 'Dashboard RPC failed';
+    return {
+      code: 'dashboard_rpc_failed',
+      message: error.description ?? 'Dashboard RPC failed'
+    };
   }
-  return 'Dashboard RPC failed';
+  return {
+    code: 'dashboard_rpc_failed',
+    message: 'Dashboard RPC failed'
+  };
+}
+
+function dashboardRpcRequestPayload(id: number, method: string, params: unknown): string {
+  try {
+    return JSON.stringify(params === undefined ? { id, method } : { id, method, params });
+  } catch (error) {
+    throw new DashboardRpcError(
+      'dashboard_rpc_failed',
+      `Dashboard RPC request is not JSON-serializable: ${errorMessage(error)}`
+    );
+  }
+}
+
+function dashboardRequestError(error: unknown): Error {
+  if (error instanceof Error) {
+    return error;
+  }
+  return new DashboardRpcError('dashboard_rpc_failed', errorMessage(error));
 }
 
 function isDashboardEvent(value: unknown): value is DashboardEvent {
@@ -262,4 +317,8 @@ function parseMessagePayload(data: unknown): Record<string, unknown> | null {
   } catch {
     return null;
   }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

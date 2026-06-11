@@ -116,6 +116,23 @@ needs another domain's data calls that domain's module RPC surface.
 Internal module RPC methods return their result bodies directly. A read that
 returns a chat returns the chat shape, not a compatibility envelope.
 
+## RPC Failures
+
+Typed internal RPC clients classify failures by boundary:
+
+- Transport failure: the client could not complete the HTTP call to the
+  configured service URL. Examples: connection refused, DNS failure, and timeout.
+- Protocol failure: the configured service answered in a way that did not
+  produce a valid domain result. Examples: invalid URL, non-JSON response,
+  invalid RPC envelope, unknown procedure, and payload too large.
+- Domain procedure failure: the call reached the serving module procedure and
+  that procedure failed while executing domain logic.
+
+Transport and protocol failures are infrastructure failures. Callers that expose
+an edge protocol, such as Gateway or Dashboard server, map them to dependency
+unavailability for that edge. Domain procedure failures remain method failures
+for the edge method that invoked the procedure.
+
 ## Gateway RPC
 
 Gateway owns the external agent WebSocket boundary directly. Modules do not

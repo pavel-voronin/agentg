@@ -82,6 +82,8 @@ History Sync publishes:
 Internal RPC calls are telemetry signals, not NATS facts. The HTTP RPC transport
 records client and server spans and duration metrics. Modules publish NATS facts
 explicitly when a domain state transition matters to other consumers.
+Internal RPC transport, protocol, and domain procedure failures are part of the
+module runtime contract, not event-plane state.
 
 `history-sync.sync.requested` is a notification that a sync wake-up was accepted at
 the History Sync boundary. It is not consumed as a NATS command.

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createServer } from 'node:http';
 import {
   context,
   propagation,
@@ -38,6 +39,8 @@ vi.mock('../src/telemetry/index.js', async (importOriginal) => {
 
 import {
   callProcedure,
+  isProcedureInfrastructureError,
+  ProcedureProtocolError,
   ProcedureTransportError,
   startProcedureServer
 } from '../src/rpc/httpRpc.js';
@@ -88,6 +91,58 @@ describe('http RPC transport', () => {
     }
   });
 
+  it('classifies oversized typed client calls as procedure infrastructure errors', async () => {
+    const server = await startProcedureServer(
+      {
+        failIfCalled() {
+          throw new Error('procedure should not be called');
+        }
+      },
+      { port: 0, service: 'sample' }
+    );
+
+    try {
+      const error = await rejectedError(
+        callProcedure(server.url, 'failIfCalled', 'x'.repeat(1_000_001), { service: 'sample' })
+      );
+
+      expect(error).toBeInstanceOf(ProcedureProtocolError);
+      expect(error).toMatchObject({
+        message: 'Procedure request body exceeds 1000000 bytes'
+      });
+      expect(isProcedureInfrastructureError(error)).toBe(true);
+    } finally {
+      await server.stop();
+    }
+  });
+
+  it('classifies non-serializable typed client inputs as procedure protocol errors', async () => {
+    const server = await startProcedureServer(
+      {
+        failIfCalled() {
+          throw new Error('procedure should not be called');
+        }
+      },
+      { port: 0, service: 'sample' }
+    );
+
+    try {
+      const error = await rejectedError(
+        callProcedure(server.url, 'failIfCalled', { value: 1n }, { service: 'sample' })
+      );
+
+      expect(error).toBeInstanceOf(ProcedureProtocolError);
+      expect(error).toMatchObject({
+        message:
+          'Procedure request body is not JSON-serializable: Do not know how to serialize a BigInt'
+      });
+      expect(error).not.toBeInstanceOf(ProcedureTransportError);
+      expect(isProcedureInfrastructureError(error)).toBe(true);
+    } finally {
+      await server.stop();
+    }
+  });
+
   it('propagates trace context from client to server procedures', async () => {
     const provider = new NodeTracerProvider();
     provider.register({
@@ -130,9 +185,161 @@ describe('http RPC transport', () => {
     const url = server.url;
     await server.stop();
 
-    await expect(
+    const error = await rejectedError(
       callProcedure(url, 'missing', undefined, { service: 'sample' })
-    ).rejects.toBeInstanceOf(ProcedureTransportError);
+    );
+
+    expect(error).toBeInstanceOf(ProcedureTransportError);
+    expect(isProcedureInfrastructureError(error)).toBe(true);
+  });
+
+  it('wraps invalid procedure URLs in a typed procedure protocol error', async () => {
+    const error = await rejectedError(
+      callProcedure('file:///tmp/socket', 'missing', undefined, { service: 'sample' })
+    );
+
+    expect(error).toBeInstanceOf(ProcedureProtocolError);
+    expect(isProcedureInfrastructureError(error)).toBe(true);
+  });
+
+  it('wraps non-JSON procedure responses in a typed procedure protocol error', async () => {
+    const server = await startHttpResponseServer(200, 'not-json', 'text/plain; charset=utf-8');
+
+    try {
+      const error = await rejectedError(
+        callProcedure(server.url, 'missing', undefined, { service: 'sample' })
+      );
+
+      expect(error).toBeInstanceOf(ProcedureProtocolError);
+      expect(isProcedureInfrastructureError(error)).toBe(true);
+    } finally {
+      await server.stop();
+    }
+  });
+
+  it('wraps invalid procedure envelopes in a typed procedure protocol error', async () => {
+    const server = await startHttpResponseServer(
+      200,
+      JSON.stringify({
+        ok: true
+      }),
+      'application/json; charset=utf-8'
+    );
+
+    try {
+      const error = await rejectedError(
+        callProcedure(server.url, 'missing', undefined, { service: 'sample' })
+      );
+
+      expect(error).toBeInstanceOf(ProcedureProtocolError);
+      expect(isProcedureInfrastructureError(error)).toBe(true);
+    } finally {
+      await server.stop();
+    }
+  });
+
+  it('wraps missing remote procedures in a typed procedure protocol error', async () => {
+    const server = await startProcedureServer({}, { port: 0, service: 'sample' });
+
+    try {
+      const error = await rejectedError(
+        callProcedure(server.url, 'missing', undefined, { service: 'sample' })
+      );
+
+      expect(error).toBeInstanceOf(ProcedureProtocolError);
+      expect(error).toMatchObject({
+        message: 'Procedure is not registered: missing'
+      });
+      expect(isProcedureInfrastructureError(error)).toBe(true);
+    } finally {
+      await server.stop();
+    }
+  });
+
+  it('does not classify domain procedure failures as infrastructure errors', async () => {
+    const server = await startProcedureServer(
+      {
+        fail() {
+          throw new Error('Domain procedure failed');
+        }
+      },
+      { port: 0, service: 'sample' }
+    );
+
+    try {
+      const error = await rejectedError(
+        callProcedure(server.url, 'fail', undefined, { service: 'sample' })
+      );
+
+      expect(error).toMatchObject({
+        message: 'Domain procedure failed'
+      });
+      expect(isProcedureInfrastructureError(error)).toBe(false);
+    } finally {
+      await server.stop();
+    }
+  });
+
+  it('preserves downstream procedure infrastructure errors through procedure servers', async () => {
+    const server = await startProcedureServer(
+      {
+        failDependency() {
+          throw new ProcedureTransportError('Procedure transport failed: fetch failed');
+        },
+        failProtocol() {
+          throw new ProcedureProtocolError('Procedure response is invalid');
+        }
+      },
+      { port: 0, service: 'sample' }
+    );
+
+    try {
+      const transportError = await rejectedError(
+        callProcedure(server.url, 'failDependency', undefined, { service: 'sample' })
+      );
+      const protocolError = await rejectedError(
+        callProcedure(server.url, 'failProtocol', undefined, { service: 'sample' })
+      );
+
+      expect(transportError).toBeInstanceOf(ProcedureTransportError);
+      expect(isProcedureInfrastructureError(transportError)).toBe(true);
+      expect(protocolError).toBeInstanceOf(ProcedureProtocolError);
+      expect(isProcedureInfrastructureError(protocolError)).toBe(true);
+    } finally {
+      await server.stop();
+    }
+  });
+
+  it('rejects invalid procedure request envelopes as protocol errors', async () => {
+    const server = await startProcedureServer(
+      {
+        failIfCalled() {
+          throw new Error('procedure should not be called');
+        }
+      },
+      { port: 0, service: 'sample' }
+    );
+
+    try {
+      const response = await fetch(`${server.url}/rpc`, {
+        body: 'not-json',
+        headers: {
+          'content-type': 'application/json'
+        },
+        method: 'POST'
+      });
+
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toEqual({
+        error: {
+          code: 'procedure_protocol_failed',
+          message: 'Procedure request body must be JSON'
+        },
+        ok: false
+      });
+    } finally {
+      await server.stop();
+    }
   });
 
   it('records the configured RPC service on client and server telemetry', async () => {
@@ -167,6 +374,55 @@ describe('http RPC transport', () => {
     }
   });
 });
+
+async function startHttpResponseServer(
+  statusCode: number,
+  body: string,
+  contentType: string
+): Promise<{ stop(): Promise<void>; url: string }> {
+  const server = createServer((_request, response) => {
+    response.writeHead(statusCode, {
+      'content-type': contentType
+    });
+    response.end(body);
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      server.off('error', reject);
+      resolve();
+    });
+  });
+  const address = server.address();
+  if (address === null || typeof address === 'string') {
+    throw new Error('Test server did not expose a TCP address');
+  }
+
+  return {
+    stop() {
+      return new Promise((resolve, reject) => {
+        server.close((error) => {
+          if (error !== undefined) {
+            reject(error);
+            return;
+          }
+          resolve();
+        });
+      });
+    },
+    url: `http://127.0.0.1:${String(address.port)}`
+  };
+}
+
+async function rejectedError(operation: Promise<unknown>): Promise<unknown> {
+  try {
+    await operation;
+  } catch (error) {
+    return error;
+  }
+  throw new Error('Expected promise to reject');
+}
 
 const testTraceContextPropagator: TextMapPropagator = {
   extract(activeContext, carrier, getter: TextMapGetter<unknown>) {

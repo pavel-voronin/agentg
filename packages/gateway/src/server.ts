@@ -2,7 +2,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 
 import {
   createLogger,
-  ProcedureTransportError,
+  isProcedureInfrastructureError,
   type EventBus,
   type EventEnvelope,
   type EventSubscription
@@ -218,7 +218,7 @@ function rpcErrorFromUnknown(error: unknown): { code: string; message: string } 
 }
 
 function isDependencyUnavailableError(error: unknown): boolean {
-  return error instanceof ProcedureTransportError;
+  return isProcedureInfrastructureError(error);
 }
 
 class UnknownGatewayMethodError extends Error {

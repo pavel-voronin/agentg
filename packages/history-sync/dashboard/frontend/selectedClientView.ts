@@ -11,6 +11,7 @@ import {
 export type SelectedClientViewSource = {
   defaultViewportDays: number;
   selectedChatId: string | null;
+  selectedHistorySyncError: string | null;
   selectedHistorySyncLoadingVisible: boolean;
   selectedHistorySyncState: SelectedHistorySyncState | null;
   selectedHistorySyncStatus: SelectedHistorySyncStatus;
@@ -27,6 +28,12 @@ export function selectedClientView(source: SelectedClientViewSource): SelectedCl
   ) {
     return source.selectedHistorySyncLoadingVisible ? { status: 'loading' } : { status: 'pending' };
   }
+  if (source.selectedHistorySyncStatus === 'failed') {
+    return {
+      message: source.selectedHistorySyncError ?? 'History Sync is unavailable.',
+      status: 'failed'
+    };
+  }
   if (
     source.selectedHistorySyncStatus === 'unavailable' ||
     !source.selectedHistorySyncState?.chat
@@ -35,6 +42,7 @@ export function selectedClientView(source: SelectedClientViewSource): SelectedCl
   }
   return {
     chat: selectedChatHeaderView(source.selectedHistorySyncState.chat),
+    errorMessage: source.selectedHistorySyncError,
     historySyncState: source.selectedHistorySyncState,
     scaleButtons: timelineScaleButtons(source),
     status: 'ready',
@@ -48,6 +56,17 @@ export function normalizeViewportDays(value: number | string): number {
     return 30;
   }
   return Math.max(0, Math.round(days));
+}
+
+export function selectedMutationErrorMessage(input: {
+  error: unknown;
+  mutationChatId: string;
+  selectedChatId: string | null;
+}): string | null {
+  if (input.selectedChatId !== input.mutationChatId) {
+    return null;
+  }
+  return input.error instanceof Error ? input.error.message : String(input.error);
 }
 
 function selectedChatHeaderView(chat: SelectedHistorySyncChat): SelectedChatHeaderView {

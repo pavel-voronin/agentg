@@ -7,7 +7,11 @@ import type { SlotContext } from '@agentg/framework/dashboard';
 import { useHistorySyncDashboardApi } from './api.js';
 import SelectedClient from './components/selectedClient.vue';
 import { applyTimelineEvent } from './selectedEvents.js';
-import { normalizeViewportDays, selectedClientView } from './selectedClientView.js';
+import {
+  normalizeViewportDays,
+  selectedClientView,
+  selectedMutationErrorMessage
+} from './selectedClientView.js';
 import { readStorage, writeStorage } from './storage.js';
 import {
   DEFAULT_VIEWPORT_DAYS,
@@ -29,6 +33,7 @@ const SELECTED_HISTORY_SYNC_LOADING_FEEDBACK_DELAY_MS = 240;
 const storagePrefix = 'agentg.history-sync.dashboard';
 const api = useHistorySyncDashboardApi();
 const host = useDashboardHost();
+const selectedHistorySyncError = ref<string | null>(null);
 const selectedHistorySyncState = ref<SelectedHistorySyncState | null>(null);
 const selectedHistorySyncLoadingVisible = ref(false);
 const selectedHistorySyncStatus = ref<SelectedHistorySyncStatus>('idle');
@@ -43,6 +48,7 @@ const view = computed(() =>
   selectedClientView({
     defaultViewportDays: defaultViewportDays.value,
     selectedChatId: selectedChatId.value,
+    selectedHistorySyncError: selectedHistorySyncError.value,
     selectedHistorySyncLoadingVisible: selectedHistorySyncLoadingVisible.value,
     selectedHistorySyncState: selectedHistorySyncState.value,
     selectedHistorySyncStatus: selectedHistorySyncStatus.value,
@@ -54,6 +60,7 @@ watch(
   selectedChatId,
   (chatId) => {
     clearLoadingFeedbackTimeout();
+    selectedHistorySyncError.value = null;
     selectedHistorySyncState.value = null;
     selectedHistorySyncLoadingVisible.value = false;
     selectedHistorySyncStatus.value = chatId === null ? 'idle' : 'loading';
@@ -62,7 +69,7 @@ watch(
       loadSequence += 1;
       return;
     }
-    void loadSelectedState(chatId).catch(pushLocalError);
+    void loadSelectedState(chatId);
   },
   { immediate: true }
 );
@@ -88,13 +95,27 @@ onBeforeUnmount(() => {
 
 async function loadSelectedState(chatId: string): Promise<void> {
   const sequence = ++loadSequence;
+  selectedHistorySyncError.value = null;
   selectedHistorySyncStatus.value = 'loading';
   scheduleLoadingFeedback(sequence);
-  const result = await api.getChatHistorySyncState({ chatId });
+  let result: unknown;
+  try {
+    result = await api.getChatHistorySyncState({ chatId });
+  } catch (error) {
+    if (sequence !== loadSequence || selectedChatId.value !== chatId) {
+      return;
+    }
+    clearLoadingFeedbackTimeout();
+    selectedHistorySyncError.value = errorMessage(error);
+    selectedHistorySyncLoadingVisible.value = false;
+    selectedHistorySyncStatus.value = 'failed';
+    return;
+  }
   if (sequence !== loadSequence || selectedChatId.value !== chatId) {
     return;
   }
   clearLoadingFeedbackTimeout();
+  selectedHistorySyncError.value = null;
   const selectedState = normalizeSelectedHistorySyncState(result);
   selectedHistorySyncState.value = selectedState;
   selectedHistorySyncLoadingVisible.value = false;
@@ -106,7 +127,7 @@ function addPresetTarget(preset: string): void {
   if (chatId === null) {
     return;
   }
-  void api.upsertTarget({ chatId, preset }).catch(pushLocalError);
+  void runSelectedMutation(chatId, () => api.upsertTarget({ chatId, preset }));
 }
 
 function addCustomTarget(start: string, end: string): void {
@@ -114,14 +135,15 @@ function addCustomTarget(start: string, end: string): void {
   if (chatId === null) {
     return;
   }
-  void api.upsertTarget({ chatId, end, start }).catch(pushLocalError);
+  void runSelectedMutation(chatId, () => api.upsertTarget({ chatId, end, start }));
 }
 
 function deleteTarget(targetId: string): void {
-  if (targetId.trim().length === 0) {
+  const chatId = selectedChatId.value;
+  if (chatId === null || targetId.trim().length === 0) {
     return;
   }
-  void api.deleteTarget({ targetId }).catch(pushLocalError);
+  void runSelectedMutation(chatId, () => api.deleteTarget({ targetId }));
 }
 
 function clearTimelineScale(): void {
@@ -147,8 +169,28 @@ function contextString(context: SlotContext | undefined, key: string): string | 
   return typeof value === 'string' && value.trim().length > 0 ? value : null;
 }
 
-function pushLocalError(error: unknown): void {
-  console.error(error);
+async function runSelectedMutation(
+  chatId: string,
+  operation: () => Promise<unknown>
+): Promise<void> {
+  selectedHistorySyncError.value = null;
+  try {
+    await operation();
+  } catch (error) {
+    const message = selectedMutationErrorMessage({
+      error,
+      mutationChatId: chatId,
+      selectedChatId: selectedChatId.value
+    });
+    if (message === null) {
+      return;
+    }
+    selectedHistorySyncError.value = message;
+  }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function scheduleLoadingFeedback(sequence: number): void {

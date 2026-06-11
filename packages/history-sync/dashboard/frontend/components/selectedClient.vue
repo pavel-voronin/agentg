@@ -57,8 +57,16 @@ function scaleButtonVariant(scale: TimelineScaleButtonView): 'neutral' | 'select
       Selected chat is not available.
     </div>
 
+    <div v-else-if="view.status === 'failed'" class="selected-client__state-message">
+      {{ view.message }}
+    </div>
+
     <div v-else class="selected-client__content">
       <div class="selected-client__body">
+        <div v-if="view.errorMessage !== null" class="selected-client__error-message">
+          {{ view.errorMessage }}
+        </div>
+
         <section class="selected-client__section">
           <div class="selected-client__section-header">
             <div>
@@ -154,6 +162,10 @@ function scaleButtonVariant(scale: TimelineScaleButtonView): 'neutral' | 'select
 
 .selected-client__state-message {
   @apply min-h-0 flex-1 overflow-auto p-8 text-center text-sm text-zinc-500;
+}
+
+.selected-client__error-message {
+  @apply rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700;
 }
 
 .selected-client__content {

@@ -2,7 +2,12 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { type EventBus, type EventEnvelope, type EventSubscription } from '@agentg/framework';
+import {
+  ProcedureTransportError,
+  type EventBus,
+  type EventEnvelope,
+  type EventSubscription
+} from '@agentg/framework';
 import { WebSocket, type RawData } from 'ws';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -105,6 +110,35 @@ describe('Dashboard server boundary', () => {
         error: {
           code: 'method_failed',
           message: 'Procedure failed'
+        }
+      });
+    } finally {
+      socket.close();
+      await server.close();
+    }
+  });
+
+  it('returns dependency_unavailable when a Dashboard procedure dependency is absent', async () => {
+    const events = createFakeEventBus();
+
+    const server = await startServer({
+      config: testServerConfig(),
+      events,
+      procedures: {
+        'dashboard.failDependency': () =>
+          Promise.reject(new ProcedureTransportError('Procedure transport failed: fetch failed'))
+      }
+    });
+    const socket = await openWebSocket(`ws://127.0.0.1:${String(server.port)}/ws`);
+
+    try {
+      socket.send(JSON.stringify({ id: 3, method: 'dashboard.failDependency', params: {} }));
+
+      await expect(nextJsonMessage(socket)).resolves.toEqual({
+        id: 3,
+        error: {
+          code: 'dependency_unavailable',
+          message: 'Procedure transport failed: fetch failed'
         }
       });
     } finally {

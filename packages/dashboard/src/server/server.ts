@@ -5,6 +5,7 @@ import { extname, resolve, sep } from 'node:path';
 
 import {
   createLogger,
+  isProcedureInfrastructureError,
   timeTelemetrySpan,
   type EventBus,
   type EventSubscription
@@ -197,7 +198,7 @@ async function handleClientMessage(
   } catch (error) {
     sendResponse(client, {
       error: {
-        code: 'method_failed',
+        code: isProcedureInfrastructureError(error) ? 'dependency_unavailable' : 'method_failed',
         message: error instanceof Error ? error.message : String(error)
       },
       id

@@ -10,7 +10,12 @@ export type { JsonObject, JsonValue } from './json.js';
 export { createLogger, logContext, logError } from './log.js';
 export { defineModule } from './module.js';
 export type { ProceduresOf } from './module.js';
-export { defineInternalRpcDomain, httpRpc, ProcedureTransportError } from './rpc/httpRpc.js';
+export {
+  defineInternalRpcDomain,
+  httpRpc,
+  isProcedureInfrastructureError,
+  ProcedureTransportError
+} from './rpc/httpRpc.js';
 export {
   incrementTelemetryCounter,
   recordTelemetryHistogram,
