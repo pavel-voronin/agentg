@@ -6,7 +6,7 @@ type Resources = {
   victoriaMetricsUrl: string;
 };
 
-export function procedures(
+export function createProcedures(
   resources: Resources
 ): Record<string, (input: unknown) => Promise<unknown>> {
   const linkSet = buildLinks(

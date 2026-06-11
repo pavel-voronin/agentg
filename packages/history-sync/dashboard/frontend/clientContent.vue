@@ -4,6 +4,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useDashboardHost } from '@agentg/framework/dashboard';
 import type { SlotContext } from '@agentg/framework/dashboard';
 
+import { useHistorySyncDashboardApi } from './api.js';
 import SelectedClient from './components/selectedClient.vue';
 import { applyTimelineEvent } from './selectedEvents.js';
 import { normalizeViewportDays, selectedClientView } from './selectedClientView.js';
@@ -26,6 +27,7 @@ const props = defineProps<{
 
 const SELECTED_HISTORY_SYNC_LOADING_FEEDBACK_DELAY_MS = 240;
 const storagePrefix = 'agentg.history-sync.dashboard';
+const api = useHistorySyncDashboardApi();
 const host = useDashboardHost();
 const selectedHistorySyncState = ref<SelectedHistorySyncState | null>(null);
 const selectedHistorySyncLoadingVisible = ref(false);
@@ -88,7 +90,7 @@ async function loadSelectedState(chatId: string): Promise<void> {
   const sequence = ++loadSequence;
   selectedHistorySyncStatus.value = 'loading';
   scheduleLoadingFeedback(sequence);
-  const result = await host.rpc('history-sync.getChatHistorySyncState', { chatId });
+  const result = await api.getChatHistorySyncState({ chatId });
   if (sequence !== loadSequence || selectedChatId.value !== chatId) {
     return;
   }
@@ -104,7 +106,7 @@ function addPresetTarget(preset: string): void {
   if (chatId === null) {
     return;
   }
-  void host.rpc('history-sync.upsertTarget', { chatId, preset }).catch(pushLocalError);
+  void api.upsertTarget({ chatId, preset }).catch(pushLocalError);
 }
 
 function addCustomTarget(start: string, end: string): void {
@@ -112,14 +114,14 @@ function addCustomTarget(start: string, end: string): void {
   if (chatId === null) {
     return;
   }
-  void host.rpc('history-sync.upsertTarget', { chatId, end, start }).catch(pushLocalError);
+  void api.upsertTarget({ chatId, end, start }).catch(pushLocalError);
 }
 
 function deleteTarget(targetId: string): void {
   if (targetId.trim().length === 0) {
     return;
   }
-  void host.rpc('history-sync.deleteTarget', { targetId }).catch(pushLocalError);
+  void api.deleteTarget({ targetId }).catch(pushLocalError);
 }
 
 function clearTimelineScale(): void {

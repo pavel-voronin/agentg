@@ -1,15 +1,11 @@
-import {
-  callProcedure,
-  createLogger,
-  createRegistryClient,
-  logError,
-  nats,
-  startTelemetryRuntime
-} from '@agentg/framework';
+import { createLogger, logError, nats, startTelemetryRuntime } from '@agentg/framework';
+import { historySyncClient } from '@agentg/history-sync';
+import { telegramClient } from '@agentg/telegram';
 
-import { procedures as telegramProcedures } from '../../../telegram/dashboard/backend/procedures.js';
+import { createProcedures as createHistorySyncProcedures } from '../../../history-sync/dashboard/backend/procedures.js';
+import { createProcedures as createTelegramProcedures } from '../../../telegram/dashboard/backend/procedures.js';
 import { createDatabase } from '../../../telegram/src/database/client.js';
-import { procedures as telemetryProcedures } from '../../../telemetry/dashboard/backend/procedures.js';
+import { createProcedures as createTelemetryProcedures } from '../../../telemetry/dashboard/backend/procedures.js';
 import { readConfig } from './config.js';
 import { runServer } from './server.js';
 
@@ -20,13 +16,10 @@ const events = nats(config.natsUrl)();
 await events.start();
 const database = createDatabase(config.databaseUrl);
 await database.start();
-
-const registry = createRegistryClient({
-  url: config.registryUrl
-});
+const historySync = historySyncClient({ timeoutMs: 15_000, url: config.historySyncRpcUrl });
+const telegram = telegramClient({ timeoutMs: 15_000, url: config.telegramRpcUrl });
 
 try {
-  await registry.refresh();
   await runServer({
     config: {
       host: config.host,
@@ -35,18 +28,20 @@ try {
     },
     events,
     procedures: {
-      ...telegramProcedures({
-        callTelegramProcedure,
-        database: database.db,
-        events
+      ...createHistorySyncProcedures({
+        historySync
       }),
-      ...telemetryProcedures({
+      ...createTelegramProcedures({
+        database: database.db,
+        events,
+        telegram
+      }),
+      ...createTelemetryProcedures({
         grafanaUrl: config.grafanaUrl,
         jaegerUiUrl: config.jaegerUiUrl,
         victoriaMetricsUrl: config.victoriaMetricsUrl
       })
-    },
-    registry
+    }
   });
 } catch (error) {
   logger.error(
@@ -59,17 +54,6 @@ try {
   process.exitCode = 1;
 } finally {
   await stopTelemetry();
-  registry.close();
   await database.stop();
   await events.stop();
-}
-
-async function callTelegramProcedure<T>(procedure: string, input: unknown): Promise<T> {
-  const snapshot = registry.getSnapshot();
-  const record = snapshot.modules.find((module) => module.module === 'telegram');
-  if (!record?.procedures.includes(procedure)) {
-    throw new Error(`Telegram procedure is not registered: ${procedure}`);
-  }
-
-  return callProcedure(record.rpcUrl, procedure, input, { timeoutMs: 15_000 });
 }

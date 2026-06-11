@@ -2,12 +2,15 @@ import { describe, expect, it } from 'vitest';
 
 import type { Database } from '../src/database/client.js';
 import { chatRef } from '../src/model/refs.js';
-import { procedures } from '../dashboard/backend/procedures.js';
+import { createProcedures } from '../dashboard/backend/procedures.js';
 import { requestFileSlot } from '../src/files/request.js';
 import type { FileSubsystemOptions } from '../src/files/runtime.js';
 import type { FileOwner } from '../src/files/types.js';
+import type { telegramClient } from '../src/index.js';
 import { requestFileProcedure } from '../src/procedures/requestFile.js';
 import type { ProcedureResources } from '../src/procedures/resources.js';
+
+type TelegramDashboardClient = Pick<ReturnType<typeof telegramClient>, 'fetchPage' | 'requestFile'>;
 
 describe('Telegram file request', () => {
   it('publishes a queue wake event even when an explicit request finds an existing job', async () => {
@@ -89,18 +92,26 @@ describe('Telegram file request', () => {
     const calls: { input: unknown; procedure: string }[] = [];
     const output = {
       decision: {
-        action: 'enqueue',
+        action: 'enqueue' as const,
         reason: 'file download was enqueued'
       },
       file: null
     };
-    const rpc = procedures({
-      callTelegramProcedure<T>(procedure: string, input: unknown): Promise<T> {
-        calls.push({ input, procedure });
-        return Promise.resolve(output as T);
-      },
+    const rpc = createProcedures({
       database: existingQueuedJobDatabase(),
-      events: eventSink(events)
+      events: eventSink(events),
+      telegram: {
+        fetchPage() {
+          return Promise.reject(new Error('fetchPage is not used by this test'));
+        },
+        requestFile(input: unknown) {
+          calls.push({
+            input,
+            procedure: 'requestFile'
+          });
+          return Promise.resolve(output);
+        }
+      } satisfies TelegramDashboardClient
     });
 
     const input = {

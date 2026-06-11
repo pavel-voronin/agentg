@@ -4,12 +4,10 @@ import { createRequire } from 'node:module';
 import { extname, resolve, sep } from 'node:path';
 
 import {
-  callProcedure,
   createLogger,
   timeTelemetrySpan,
   type EventBus,
-  type EventSubscription,
-  type RegistryClient
+  type EventSubscription
 } from '@agentg/framework';
 import { SpanKind } from '@opentelemetry/api';
 import {
@@ -31,7 +29,6 @@ export type ServerOptions = {
   config: ServerConfig;
   events: EventBus;
   procedures?: Record<string, (input: unknown) => Promise<unknown>>;
-  registry: RegistryClient;
 };
 
 export type ServerHandle = {
@@ -42,7 +39,6 @@ export type ServerHandle = {
 
 type Runtime = {
   procedures: Record<string, (input: unknown) => Promise<unknown>>;
-  registry: RegistryClient;
   vueRuntimeFilePath: string;
 };
 
@@ -60,7 +56,6 @@ type RpcRequest = {
 const RUNTIME_VUE_PATH = '/dashboard/runtime/vue.js';
 const MODULE_FILES_PREFIX = '/dashboard/module-files/';
 const MAX_WEBSOCKET_MESSAGE_BYTES = 1_000_000;
-const RPC_TIMEOUT_MS = 15_000;
 const nodeRequire = createRequire(import.meta.url);
 const vueRuntimeFilePath = nodeRequire.resolve('vue/dist/vue.runtime.esm-browser.js');
 const logger = createLogger('dashboard-server');
@@ -89,7 +84,6 @@ export async function startServer(options: ServerOptions): Promise<ServerHandle>
   const clients = new Set<WebSocket>();
   const runtime: Runtime = {
     procedures: options.procedures ?? {},
-    registry: options.registry,
     vueRuntimeFilePath
   };
   const staticRoot = resolve(options.config.staticDir);
@@ -233,39 +227,13 @@ async function callProcedureByMethod(
     },
     async () => {
       const localProcedure = runtime.procedures[method];
-      return localProcedure === undefined
-        ? callModuleProcedure(runtime, method, params)
-        : localProcedure(params);
+      if (localProcedure === undefined) {
+        throw new Error(`Dashboard procedure is not registered: ${method}`);
+      }
+
+      return localProcedure(params);
     }
   );
-}
-
-async function callModuleProcedure(
-  runtime: Runtime,
-  method: string,
-  params: unknown
-): Promise<unknown> {
-  const snapshot = runtime.registry.getSnapshot();
-  const route = procedureRoute(method);
-  const moduleRecord = snapshot.modules.find((record) => record.module === route.module);
-  if (!moduleRecord?.procedures.includes(route.procedure)) {
-    throw new Error(`Procedure is not registered: ${method}`);
-  }
-
-  return callProcedure(moduleRecord.rpcUrl, route.procedure, params, { timeoutMs: RPC_TIMEOUT_MS });
-}
-
-function procedureRoute(method: string): { module: string; procedure: string } {
-  const [moduleName, ...procedureSegments] = method.split('.');
-  const procedure = procedureSegments.join('.');
-  if (moduleName === undefined || moduleName.length === 0 || procedure.length === 0) {
-    throw new Error(`Dashboard method is invalid: ${method}`);
-  }
-
-  return {
-    module: moduleName,
-    procedure
-  };
 }
 
 async function handleHttpRequest(

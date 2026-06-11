@@ -2,14 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import {
-  httpRpc,
-  type EventBus,
-  type EventEnvelope,
-  type EventSubscription,
-  type RegistryClient,
-  type Snapshot
-} from '@agentg/framework';
+import { type EventBus, type EventEnvelope, type EventSubscription } from '@agentg/framework';
 import { WebSocket, type RawData } from 'ws';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -18,10 +11,6 @@ import { startServer, type ServerConfig } from '../src/server/server.js';
 describe('Dashboard server boundary', () => {
   it('routes browser RPC through local procedures and forwards events', async () => {
     const events = createFakeEventBus();
-    const registry = createFakeRegistry({
-      modules: [],
-      version: 0
-    });
     const localProcedure = vi.fn(() =>
       Promise.resolve({
         items: 3,
@@ -34,8 +23,7 @@ describe('Dashboard server boundary', () => {
       events,
       procedures: {
         'dashboard.getStatus': localProcedure
-      },
-      registry
+      }
     });
     const socket = await openWebSocket(`ws://127.0.0.1:${String(server.port)}/ws`);
 
@@ -69,37 +57,15 @@ describe('Dashboard server boundary', () => {
     } finally {
       socket.close();
       await server.close();
-      registry.close();
     }
   });
 
-  it('routes browser RPC through registry module procedures', async () => {
+  it('rejects browser RPC methods without a registered Dashboard procedure', async () => {
     const events = createFakeEventBus();
-    const moduleServer = await httpRpc({ port: 0 }).start({
-      getStatus: (...args: never[]) =>
-        Promise.resolve({
-          input: args[0],
-          ok: true
-        })
-    });
-    const registry = createFakeRegistry({
-      modules: [
-        {
-          module: 'beta',
-          procedures: ['getStatus'],
-          registeredAt: '2026-05-04T00:00:00.000Z',
-          required: false,
-          rpcUrl: moduleServer.url
-        }
-      ],
-      version: 1
-    });
-    const refresh = vi.spyOn(registry, 'refresh');
 
     const server = await startServer({
       config: testServerConfig(),
-      events,
-      registry
+      events
     });
     const socket = await openWebSocket(`ws://127.0.0.1:${String(server.port)}/ws`);
 
@@ -108,36 +74,26 @@ describe('Dashboard server boundary', () => {
 
       await expect(nextJsonMessage(socket)).resolves.toEqual({
         id: 1,
-        result: {
-          input: {
-            limit: 10
-          },
-          ok: true
+        error: {
+          code: 'method_failed',
+          message: 'Dashboard procedure is not registered: beta.getStatus'
         }
       });
-      expect(refresh).not.toHaveBeenCalled();
     } finally {
       socket.close();
       await server.close();
-      registry.close();
-      await moduleServer.stop();
     }
   });
 
   it('returns procedure failures as RPC errors', async () => {
     const events = createFakeEventBus();
-    const registry = createFakeRegistry({
-      modules: [],
-      version: 0
-    });
 
     const server = await startServer({
       config: testServerConfig(),
       events,
       procedures: {
         'dashboard.fail': () => Promise.reject(new Error('Procedure failed'))
-      },
-      registry
+      }
     });
     const socket = await openWebSocket(`ws://127.0.0.1:${String(server.port)}/ws`);
 
@@ -154,21 +110,15 @@ describe('Dashboard server boundary', () => {
     } finally {
       socket.close();
       await server.close();
-      registry.close();
     }
   });
 
   it('serves the Vue runtime endpoint', async () => {
     const events = createFakeEventBus();
-    const registry = createFakeRegistry({
-      modules: [],
-      version: 0
-    });
 
     const server = await startServer({
       config: testServerConfig(),
-      events,
-      registry
+      events
     });
 
     try {
@@ -179,7 +129,6 @@ describe('Dashboard server boundary', () => {
       await expect(runtimeResponse.text()).resolves.toContain('__VUE_HMR_RUNTIME__');
     } finally {
       await server.close();
-      registry.close();
     }
   });
 
@@ -187,15 +136,10 @@ describe('Dashboard server boundary', () => {
     const staticDir = await mkdtemp(join(tmpdir(), 'agentg-dashboard-'));
     await writeFile(join(staticDir, 'index.html'), '<div id="dashboardApp"></div>');
     const events = createFakeEventBus();
-    const registry = createFakeRegistry({
-      modules: [],
-      version: 0
-    });
 
     const server = await startServer({
       config: testServerConfig({ staticDir }),
-      events,
-      registry
+      events
     });
 
     try {
@@ -213,7 +157,6 @@ describe('Dashboard server boundary', () => {
       await expect(nestedPageResponse.text()).resolves.toBe('<div id="dashboardApp"></div>');
     } finally {
       await server.close();
-      registry.close();
       await rm(staticDir, { force: true, recursive: true });
     }
   });
@@ -222,15 +165,10 @@ describe('Dashboard server boundary', () => {
     const staticDir = await mkdtemp(join(tmpdir(), 'agentg-dashboard-'));
     await writeFile(join(staticDir, 'index.html'), '<div id="dashboardApp"></div>');
     const events = createFakeEventBus();
-    const registry = createFakeRegistry({
-      modules: [],
-      version: 0
-    });
 
     const server = await startServer({
       config: testServerConfig({ staticDir }),
-      events,
-      registry
+      events
     });
 
     try {
@@ -239,38 +177,16 @@ describe('Dashboard server boundary', () => {
       await expect(response.text()).resolves.toBe('Not Found');
     } finally {
       await server.close();
-      registry.close();
       await rm(staticDir, { force: true, recursive: true });
     }
   });
 
   it('rejects module file routes instead of proxying module RPC', async () => {
     const events = createFakeEventBus();
-    const fileProcedure = vi.fn(() =>
-      Promise.resolve({
-        ignored: true
-      })
-    );
-    const moduleServer = await httpRpc({ port: 0 }).start({
-      'dashboard.file': fileProcedure
-    });
-    const registry = createFakeRegistry({
-      modules: [
-        {
-          module: 'alpha',
-          procedures: ['dashboard.file'],
-          registeredAt: '2026-05-04T00:00:00.000Z',
-          required: false,
-          rpcUrl: moduleServer.url
-        }
-      ],
-      version: 1
-    });
 
     const server = await startServer({
       config: testServerConfig(),
-      events,
-      registry
+      events
     });
 
     try {
@@ -283,24 +199,16 @@ describe('Dashboard server boundary', () => {
         `http://127.0.0.1:${String(server.port)}/dashboard/module-files/telegram/telegram-files/agentg-media/file.jpg`
       );
       expect(telegramResponse.status).toBe(404);
-      expect(fileProcedure).not.toHaveBeenCalled();
     } finally {
       await server.close();
-      registry.close();
-      await moduleServer.stop();
     }
   });
 
   it('closes browser WebSocket connections that send oversized payloads', async () => {
     const events = createFakeEventBus();
-    const registry = createFakeRegistry({
-      modules: [],
-      version: 0
-    });
     const server = await startServer({
       config: testServerConfig(),
-      events,
-      registry
+      events
     });
     const socket = await openWebSocket(`ws://127.0.0.1:${String(server.port)}/ws`);
 
@@ -312,7 +220,6 @@ describe('Dashboard server boundary', () => {
     } finally {
       socket.close();
       await server.close();
-      registry.close();
     }
   });
 });
@@ -392,28 +299,6 @@ function matchesSubject(subject: string, type: string): boolean {
   }
 
   return subject === type;
-}
-
-function createFakeRegistry(
-  initialSnapshot: Snapshot,
-  refreshedSnapshot: Snapshot = initialSnapshot
-): RegistryClient {
-  let snapshot = initialSnapshot;
-  return {
-    close(): void {
-      return;
-    },
-    getSnapshot(): Snapshot {
-      return snapshot;
-    },
-    join(): Promise<Snapshot> {
-      return Promise.resolve(snapshot);
-    },
-    refresh(): Promise<Snapshot> {
-      snapshot = refreshedSnapshot;
-      return Promise.resolve(snapshot);
-    }
-  };
 }
 
 function openWebSocket(url: string): Promise<WebSocket> {

@@ -17,6 +17,7 @@ auditNoPublicProcedureDtoExports(tsFiles);
 auditNoModuleRpcClientFacades(tsFiles);
 auditModuleRpcFolders(tsFiles);
 auditNoContextProcedureApi(tsFiles);
+auditDashboardProcedureCallsStayBehindApiWrappers(dashboardRpcBoundaryFiles());
 auditTablePrefixes();
 auditDashboardSdkHasNoDomainKnowledge(tsFiles);
 auditDockerfileWorkspacePackageCopies();
@@ -228,6 +229,37 @@ function auditNoContextProcedureApi(files) {
   }
 }
 
+function auditDashboardProcedureCallsStayBehindApiWrappers(files) {
+  for (const file of files) {
+    const rel = toRel(file);
+    if (!rel.includes('/dashboard/frontend/')) {
+      continue;
+    }
+    if (rel.endsWith('.test.ts') || dashboardProcedureApiWrapper(rel)) {
+      continue;
+    }
+
+    const source = readFileSync(file, 'utf8');
+    if (/\bhost\.rpc\s*(?:<[^>]+>)?\s*\(/.test(source)) {
+      failures.push(
+        `Dashboard frontend procedure calls must go through local api.ts wrappers: ${rel}`
+      );
+    }
+  }
+}
+
+function dashboardProcedureApiWrapper(rel) {
+  return /^packages\/[^/]+\/dashboard\/frontend\/(?:.*\/)?api\.ts$/.test(rel);
+}
+
+function dashboardRpcBoundaryFiles() {
+  const packagesRoot = join(root, 'packages');
+  if (!existsSync(packagesRoot)) {
+    return [];
+  }
+  return listFilesForTelemetry(packagesRoot).filter((file) => /\.(?:ts|vue)$/.test(file));
+}
+
 function auditTablePrefixes() {
   const schemas = [
     {
@@ -288,7 +320,6 @@ function auditDockerfileWorkspacePackageCopies() {
 function isCurrentModuleWorkspace(workspace) {
   return (
     workspace === 'packages/framework' ||
-    workspace === 'packages/registry' ||
     workspace === 'packages/gateway' ||
     workspace === 'packages/telemetry' ||
     workspace === 'packages/dashboard' ||
@@ -943,7 +974,6 @@ function ignoredDirectory(directory) {
     rel === 'dist-server' ||
     rel === 'output' ||
     rel === 'packages/framework' ||
-    rel === 'packages/registry' ||
     rel === 'packages/gateway' ||
     rel === 'packages/dashboard' ||
     rel === 'packages/telegram' ||
@@ -958,7 +988,6 @@ function ignoredDirectory(directory) {
     rel.endsWith('/dist-server') ||
     rel.endsWith('/output') ||
     rel.endsWith('/packages/framework') ||
-    rel.endsWith('/packages/registry') ||
     rel.endsWith('/packages/gateway') ||
     rel.endsWith('/packages/dashboard') ||
     rel.endsWith('/packages/telegram') ||
@@ -981,7 +1010,6 @@ function ignored(file) {
     rel.includes('/dist-server/') ||
     rel.includes('/output/') ||
     rel.includes('/packages/framework/') ||
-    rel.includes('/packages/registry/') ||
     rel.includes('/packages/gateway/') ||
     rel.includes('/packages/dashboard/') ||
     rel.includes('/packages/telegram/') ||
@@ -996,7 +1024,6 @@ function ignored(file) {
     rel.startsWith('dist-server/') ||
     rel.startsWith('output/') ||
     rel.startsWith('packages/framework/') ||
-    rel.startsWith('packages/registry/') ||
     rel.startsWith('packages/gateway/') ||
     rel.startsWith('packages/dashboard/') ||
     rel.startsWith('packages/telegram/') ||

@@ -11,6 +11,7 @@ import {
 
 import { useDashboardHost, type DashboardHostEvent } from '@agentg/framework/dashboard';
 import type { FileRef, ReadMessage } from '../../../src/views/schemas.js';
+import { useTelegramDashboardApi } from '../api.js';
 import {
   fileOwnerEventKey,
   normalizeFileOwnerChangedEvent,
@@ -32,12 +33,7 @@ import {
   sortMessages,
   upsertMessageFile
 } from './timeline.js';
-import type {
-  FetchMessagesPageResult,
-  GetMessageResult,
-  MessageTarget,
-  RequestFileResult
-} from './types.js';
+import type { MessageTarget } from './types.js';
 import type { MessageScroll } from './useMessageScroll.js';
 
 const MESSAGE_PAGE_SIZE = 100;
@@ -47,6 +43,7 @@ export function useMessageFeed(options: {
   selectedChatAvatarUrl: ComputedRef<string | null>;
   selectedChatId: ComputedRef<string | null>;
 }) {
+  const api = useTelegramDashboardApi();
   const host = useDashboardHost();
   const messages = shallowRef<ReadMessage[]>([]);
   const loadingInitial = ref(false);
@@ -104,7 +101,7 @@ export function useMessageFeed(options: {
     loadingInitial.value = true;
     lastError.value = null;
     try {
-      const result = await host.rpc<FetchMessagesPageResult>('telegram.dashboard.messagesPage', {
+      const result = await api.messagesPage({
         chatId,
         limit: MESSAGE_PAGE_SIZE
       });
@@ -150,7 +147,7 @@ export function useMessageFeed(options: {
     loadingOlder.value = true;
     lastError.value = null;
     try {
-      const result = await host.rpc<FetchMessagesPageResult>('telegram.dashboard.messagesPage', {
+      const result = await api.messagesPage({
         beforeMessageId,
         chatId,
         limit: MESSAGE_PAGE_SIZE
@@ -195,7 +192,7 @@ export function useMessageFeed(options: {
       return;
     }
     try {
-      const result = await host.rpc<RequestFileResult>('telegram.dashboard.requestFile', {
+      const result = await api.requestFile({
         owner: file.owner,
         slotKey: file.slotKey
       });
@@ -327,7 +324,7 @@ export function useMessageFeed(options: {
   }
 
   async function loadSingleLocalMessage(target: MessageTarget): Promise<void> {
-    const result = await host.rpc<GetMessageResult>('telegram.dashboard.message', {
+    const result = await api.message({
       chatId: target.chatId,
       messageId: target.messageId
     });

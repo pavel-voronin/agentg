@@ -2,7 +2,9 @@ import { parseLimit, timeTelemetrySpan, type EventBus } from '@agentg/framework'
 import { and, asc, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
+import { TELEGRAM_DASHBOARD_METHODS } from '../contracts.js';
 import type { Database } from '../../src/database/client.js';
+import type { telegramClient } from '../../src/index.js';
 import {
   telegramChatFolderInfos,
   telegramChats,
@@ -42,37 +44,35 @@ type MessageLookupInput = z.infer<typeof messageLookupInputSchema>;
 type MessageLookupOutput = z.infer<typeof messageLookupOutputSchema>;
 type MessagesPageInput = z.infer<typeof messagesPageInputSchema>;
 type MessagesPageOutput = z.infer<typeof messagesPageOutputSchema>;
+type TelegramDashboardClient = Pick<ReturnType<typeof telegramClient>, 'fetchPage' | 'requestFile'>;
 
 type Resources = {
-  callTelegramProcedure<T>(procedure: string, input: unknown): Promise<T>;
   database: Database;
   events: EventBus;
+  telegram: TelegramDashboardClient;
 };
 
-type FetchPageResult =
-  | {
-      kind: 'anchor_before_start' | 'no_messages_before_end';
-    }
-  | {
-      kind: 'page';
-      reachedBeginning: boolean;
-    };
-
-export function procedures(resources: Resources) {
+export function createProcedures(resources: Resources) {
   return {
-    'telegram.dashboard.chatDirectory': async (input: unknown): Promise<ChatDirectoryOutput> => {
+    [TELEGRAM_DASHBOARD_METHODS.chatDirectory]: async (
+      input: unknown
+    ): Promise<ChatDirectoryOutput> => {
       const output = await runChatDirectory(chatDirectoryInputSchema.parse(input), resources);
       return chatDirectoryOutputSchema.parse(output);
     },
-    'telegram.dashboard.message': async (input: unknown): Promise<MessageLookupOutput> => {
+    [TELEGRAM_DASHBOARD_METHODS.message]: async (input: unknown): Promise<MessageLookupOutput> => {
       const output = await runMessage(messageLookupInputSchema.parse(input), resources);
       return messageLookupOutputSchema.parse(output);
     },
-    'telegram.dashboard.messagesPage': async (input: unknown): Promise<MessagesPageOutput> => {
+    [TELEGRAM_DASHBOARD_METHODS.messagesPage]: async (
+      input: unknown
+    ): Promise<MessagesPageOutput> => {
       const output = await runMessagesPage(messagesPageInputSchema.parse(input), resources);
       return messagesPageOutputSchema.parse(output);
     },
-    'telegram.dashboard.requestFile': async (input: unknown): Promise<FileRequestOutput> => {
+    [TELEGRAM_DASHBOARD_METHODS.requestFile]: async (
+      input: unknown
+    ): Promise<FileRequestOutput> => {
       const output = await requestFile(fileRequestInputSchema.parse(input), resources);
       return fileRequestOutputSchema.parse(output);
     }
@@ -165,7 +165,7 @@ async function runMessagesPage(
         ceilToHistorySecond(new Date()))
   );
   const fetchResult = await timeMessagesPageStage('fetch', () =>
-    resources.callTelegramProcedure<FetchPageResult>('fetchPage', {
+    resources.telegram.fetchPage({
       chatId: input.chatId,
       ...(cursorMessageId === undefined ? {} : { cursorMessageId }),
       endAt: pageEndAt.toISOString(),
@@ -261,7 +261,7 @@ async function requestFile(
   input: FileRequestInput,
   resources: Resources
 ): Promise<FileRequestOutput> {
-  return resources.callTelegramProcedure<FileRequestOutput>('requestFile', input);
+  return resources.telegram.requestFile(input);
 }
 
 function parseOptionalMessageId(value: string | undefined): number | undefined {

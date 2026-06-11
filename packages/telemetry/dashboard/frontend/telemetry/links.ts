@@ -1,7 +1,7 @@
 import { readonly, shallowRef, type DeepReadonly, type Ref } from 'vue';
-import { useDashboardHost } from '@agentg/framework/dashboard';
 
-import { LINKS_METHOD, type LinkSet } from './contracts.js';
+import { useTelemetryDashboardApi } from './api.js';
+import type { LinkSet } from './contracts.js';
 
 const links = shallowRef<LinkSet | null>(null);
 const error = shallowRef<string | null>(null);
@@ -12,7 +12,7 @@ export function useLinks(): {
   links: DeepReadonly<Ref<LinkSet | null>>;
   loadLinks: () => Promise<void>;
 } {
-  const host = useDashboardHost();
+  const api = useTelemetryDashboardApi();
 
   async function loadLinks(): Promise<void> {
     if (links.value !== null) {
@@ -24,8 +24,8 @@ export function useLinks(): {
     }
 
     error.value = null;
-    pendingLoad = host
-      .rpc<LinkSet>(LINKS_METHOD)
+    pendingLoad = api
+      .links()
       .then((result) => {
         links.value = result;
       })

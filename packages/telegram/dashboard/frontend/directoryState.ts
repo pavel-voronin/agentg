@@ -1,12 +1,9 @@
 import { computed, onBeforeUnmount, onMounted, readonly, ref } from 'vue';
 
-import {
-  useDashboardHost,
-  type DashboardHost,
-  type DashboardHostEvent
-} from '@agentg/framework/dashboard';
+import { useDashboardHost, type DashboardHostEvent } from '@agentg/framework/dashboard';
 
 import type { FileRef } from '../../src/files/types.js';
+import { useTelegramDashboardApi } from './api.js';
 import {
   fileOwnerEventKey,
   normalizeFileOwnerChangedEvent,
@@ -14,12 +11,6 @@ import {
 } from './fileEvents.js';
 import { normalizeFileRef } from './fileRefs.js';
 import type { ChatPlacement, TelegramDirectoryChat, TelegramDirectoryFolder } from './views.js';
-
-type TelegramDirectoryResult = {
-  chats?: unknown;
-  folders?: unknown;
-  navigationChats?: unknown;
-};
 
 const chats = ref<TelegramDirectoryChat[]>([]);
 const folders = ref<TelegramDirectoryFolder[]>([]);
@@ -32,12 +23,13 @@ let subscribers = 0;
 let stopEvents: (() => void) | null = null;
 
 export function useTelegramDirectoryState() {
+  const api = useTelegramDashboardApi();
   const host = useDashboardHost();
 
   onMounted(() => {
     subscribers += 1;
     stopEvents ??= host.subscribeEvents(applyTelegramDirectoryEvent);
-    void hydrateTelegramDirectory(host).catch(pushDirectoryStateError);
+    void hydrateTelegramDirectory(api).catch(pushDirectoryStateError);
   });
 
   onBeforeUnmount(() => {
@@ -58,9 +50,11 @@ export function useTelegramDirectoryState() {
   };
 }
 
-async function hydrateTelegramDirectory(host: DashboardHost): Promise<void> {
-  hydratePromise ??= host
-    .rpc<TelegramDirectoryResult>('telegram.dashboard.chatDirectory', {})
+async function hydrateTelegramDirectory(
+  api: ReturnType<typeof useTelegramDashboardApi>
+): Promise<void> {
+  hydratePromise ??= api
+    .chatDirectory()
     .then((directory) => {
       const directoryChats = asArray(directory.navigationChats ?? directory.chats)
         .map(normalizeDirectoryChat)
