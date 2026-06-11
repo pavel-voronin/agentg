@@ -26,14 +26,7 @@ export type {
   ModuleDefinition,
   ProceduresOf
 } from './module.js';
-export { callProcedure, httpRpc } from './rpc/httpRpc.js';
-export type { ProcedureServer, ProcedureServerOptions, RpcFactory } from './rpc/rpc.js';
-export { createRegistryClient } from './registry/client.js';
-export type { RegistryClient, RegistryClientConfig } from './registry/client.js';
-export type { Snapshot } from './registry/contracts.js';
-export { registryModule } from './registry/module.js';
-export { registry } from './registry/remote.js';
-export { selfRegistry } from './registry/self.js';
+export { defineInternalRpcDomain, httpRpc, ProcedureTransportError } from './rpc/httpRpc.js';
 export {
   incrementTelemetryCounter,
   recordTelemetryHistogram,

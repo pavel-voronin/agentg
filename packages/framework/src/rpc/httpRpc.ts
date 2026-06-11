@@ -14,9 +14,16 @@ import {
 
 import { timeTelemetrySpan, type TelemetryAttributes } from '../telemetry/index.js';
 import type { MaybePromise, ProcedureMap } from '../types.js';
-import type { ProcedureServer, ProcedureServerOptions, RpcFactory } from './rpc.js';
+import type {
+  InternalRpcDomain,
+  ProcedureServer,
+  ProcedureServerOptions,
+  RpcClient,
+  RpcFactory
+} from './rpc.js';
 
 type ProcedureCallOptions = {
+  service: string;
   timeoutMs?: number | undefined;
 };
 
@@ -31,24 +38,63 @@ const incomingHeadersGetter: TextMapGetter<IncomingMessage['headers']> = {
 };
 
 export function httpRpc(options: ProcedureServerOptions): RpcFactory {
+  const service = rpcServiceName(options.service);
   return {
     start(procedures) {
-      return startProcedureServer(procedures, options);
+      return startProcedureServer(procedures, { ...options, service });
     }
   };
+}
+
+export function defineInternalRpcDomain<TProcedures extends ProcedureMap>(
+  serviceName: string
+): InternalRpcDomain<TProcedures> {
+  const service = rpcServiceName(serviceName);
+  return (options) =>
+    new Proxy(
+      {},
+      {
+        get(_target, property) {
+          if (property === 'then') {
+            return undefined;
+          }
+          if (typeof property !== 'string') {
+            return undefined;
+          }
+
+          return (input?: unknown) =>
+            callProcedure(options.url, property, input, {
+              service,
+              timeoutMs: options.timeoutMs
+            });
+        }
+      }
+    ) as RpcClient<TProcedures>;
+}
+
+export class ProcedureTransportError extends Error {
+  readonly code = 'procedure_transport_failed';
+
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = 'ProcedureTransportError';
+  }
 }
 
 export async function startProcedureServer(
   procedures: ProcedureMap,
   options: ProcedureServerOptions
 ): Promise<ProcedureServer> {
+  const service = rpcServiceName(options.service);
   const server = createServer((request, response) => {
     const requestContext = propagation.extract(
       context.active(),
       request.headers,
       incomingHeadersGetter
     );
-    void context.with(requestContext, () => handleProcedureRequest(procedures, request, response));
+    void context.with(requestContext, () =>
+      handleProcedureRequest(procedures, request, response, service)
+    );
   });
   const host = options.host ?? '127.0.0.1';
 
@@ -79,12 +125,13 @@ export async function startProcedureServer(
 export async function callProcedure<T>(
   url: string,
   procedure: string,
-  input?: unknown,
-  options: ProcedureCallOptions = {}
+  input: unknown,
+  options: ProcedureCallOptions
 ): Promise<T> {
   const controller = new AbortController();
   const endpoint = new URL(procedureEndpoint(url));
-  const attributes = rpcAttributes(procedure);
+  const service = rpcServiceName(options.service);
+  const attributes = rpcAttributes(procedure, service);
   const spanAttributes = {
     ...attributes,
     [ATTR_SERVER_ADDRESS]: endpoint.hostname,
@@ -94,11 +141,10 @@ export async function callProcedure<T>(
     options.timeoutMs === undefined
       ? undefined
       : setTimeout(() => {
-          controller.abort(
-            new Error(`Procedure call timed out after ${String(options.timeoutMs)}ms`)
-          );
+          controller.abort();
         }, options.timeoutMs);
   timeout?.unref();
+  let response: Response;
 
   try {
     return await timeTelemetrySpan(
@@ -116,15 +162,24 @@ export async function callProcedure<T>(
           'content-type': 'application/json'
         };
         propagation.inject(context.active(), headers);
-        const response = await fetch(endpoint, {
-          body: JSON.stringify({
-            input,
-            procedure
-          }),
-          headers,
-          method: 'POST',
-          signal: controller.signal
-        });
+        try {
+          response = await fetch(endpoint, {
+            body: JSON.stringify({
+              input,
+              procedure
+            }),
+            headers,
+            method: 'POST',
+            signal: controller.signal
+          });
+        } catch (error) {
+          throw new ProcedureTransportError(
+            controller.signal.aborted && options.timeoutMs !== undefined
+              ? `Procedure call timed out after ${String(options.timeoutMs)}ms`
+              : `Procedure transport failed: ${errorMessage(error)}`,
+            { cause: error }
+          );
+        }
         const body: unknown = await response.json();
         if (!response.ok) {
           throw new Error(responseErrorMessage(body, response.status));
@@ -152,7 +207,8 @@ export async function callProcedure<T>(
 async function handleProcedureRequest(
   procedures: ProcedureMap,
   request: IncomingMessage,
-  response: ServerResponse
+  response: ServerResponse,
+  service: string
 ): Promise<void> {
   if (request.method !== 'POST' || request.url !== '/rpc') {
     writeJson(response, 404, {
@@ -192,7 +248,7 @@ async function handleProcedureRequest(
       return;
     }
 
-    const attributes = rpcAttributes(envelope.procedure);
+    const attributes = rpcAttributes(envelope.procedure, service);
     const result = await timeTelemetrySpan(
       {
         attributes,
@@ -249,12 +305,20 @@ function requireProcedureEnvelope(value: unknown): { input: unknown; procedure: 
   };
 }
 
-function rpcAttributes(method: string): TelemetryAttributes {
+function rpcAttributes(method: string, service: string): TelemetryAttributes {
   return {
     [ATTR_RPC_METHOD]: method,
-    [ATTR_RPC_SERVICE]: 'agentg.procedure',
+    [ATTR_RPC_SERVICE]: service,
     [ATTR_RPC_SYSTEM_NAME]: RPC_SYSTEM_NAME_VALUE_JSONRPC
   };
+}
+
+function rpcServiceName(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    throw new Error('RPC service name is required');
+  }
+  return trimmed;
 }
 
 function contentLengthExceedsLimit(request: IncomingMessage): boolean {
@@ -357,6 +421,10 @@ function responseErrorMessage(body: unknown, status: number): string {
     return body.error.message;
   }
   return `Procedure call failed with status ${String(status)}`;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 class RequestBodyTooLargeError extends Error {

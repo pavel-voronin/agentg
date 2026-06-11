@@ -1,21 +1,18 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  callProcedure,
   defineConfig,
+  defineInternalRpcDomain,
   defineModule,
   httpRpc,
   nats,
-  registry,
-  registryModule,
   number,
-  selfRegistry,
   string,
   type EventBusFactory,
-  type ProceduresOf,
-  type Snapshot
+  type ProceduresOf
 } from '../src/index.js';
-import { startProcedureServer } from '../src/rpc/httpRpc.js';
+import { callProcedure, startProcedureServer } from '../src/rpc/httpRpc.js';
+import type { ProcedureServer } from '../src/rpc/rpc.js';
 
 const readEmptyConfig = defineConfig({});
 
@@ -24,7 +21,7 @@ describe('defineModule', () => {
     const readConfig = defineConfig({
       host: string('HOST').optional(),
       natsUrl: string('NATS_URL'),
-      port: number('PORT').default(8701),
+      port: number('PORT').default(8710),
       timeoutMs: number('REQUEST_TIMEOUT_MS').optional()
     });
 
@@ -99,48 +96,45 @@ describe('defineModule', () => {
     const module = definition({ config: {}, connect: testConnect() });
 
     expect(created).toBe(1);
-    expect(Object.keys(module)).toEqual(['procedures', 'start', 'stop']);
+    expect(Object.keys(module)).toEqual(['start', 'stop']);
   });
 
   it('keeps resource lifecycle inside resource creation', async () => {
     const calls: string[] = [];
+    let database: { ready: boolean } | undefined;
     const definition = defineModule('sample', {
       config: readEmptyConfig,
       setup({ resource }) {
-        const database = resource('database', ({ shutdown, startup }) => {
-          const database = {
+        database = resource('database', ({ shutdown, startup }) => {
+          const resource = {
             ready: false
           };
 
           startup(() => {
             calls.push('start:database');
-            database.ready = true;
+            resource.ready = true;
             return undefined;
           });
           shutdown(() => {
             calls.push('stop:database');
-            database.ready = false;
+            resource.ready = false;
             return undefined;
           });
 
-          return database;
+          return resource;
         });
 
-        return {
-          procedures: {
-            ready: () => database.ready
-          }
-        };
+        return {};
       }
     });
     const module = definition({ config: {}, connect: testConnect() });
 
-    expect(module.procedures.ready()).toBe(false);
+    expect(database?.ready).toBe(false);
     await module.start();
-    expect(module.procedures.ready()).toBe(true);
+    expect(database?.ready).toBe(true);
     await module.stop();
 
-    expect(module.procedures.ready()).toBe(false);
+    expect(database?.ready).toBe(false);
     expect(calls).toEqual(['start:database', 'stop:database']);
   });
 
@@ -176,7 +170,7 @@ describe('defineModule', () => {
     expect(calls).toEqual(['start:database', 'stop:database-startup', 'shutdown:database']);
   });
 
-  it('starts resource background work after registry registration', async () => {
+  it('starts resource background work after RPC exposure', async () => {
     const calls: string[] = [];
     const definition = defineModule('sample', {
       config: readEmptyConfig,
@@ -201,17 +195,15 @@ describe('defineModule', () => {
 
     await module.start();
 
-    expect(calls).toEqual(['events:start', 'rpc:start', 'registry:connect', 'background:files']);
+    expect(calls).toEqual(['events:start', 'rpc:start', 'background:files']);
 
     await module.stop();
 
     expect(calls).toEqual([
       'events:start',
       'rpc:start',
-      'registry:connect',
       'background:files',
       'stop:files',
-      'registry:close',
       'rpc:stop',
       'events:stop'
     ]);
@@ -275,14 +267,13 @@ describe('defineModule', () => {
     const definition = defineModule('sample', {
       config: readEmptyConfig,
       setup: () => ({
-        procedures: {
-          greeting: () => 'hello'
-        }
+        greeting: () => 'hello'
       })
     });
-    const module = definition({ config: {}, connect: testConnect() });
+    const procedure: ProceduresOf<typeof definition>['greeting'] = () => 'hello';
 
-    expect(module.procedures.greeting()).toBe('hello');
+    expect(typeof definition).toBe('function');
+    expect(procedure()).toBe('hello');
   });
 
   it('extracts procedure types from configured module definitions', () => {
@@ -293,24 +284,16 @@ describe('defineModule', () => {
       config: readConfig,
       setup({ config }) {
         return {
-          procedures: {
-            greeting: (input: { name: string }) => `${config.greeting} ${input.name}`
-          }
+          greeting: (input: { name: string }) => `${config.greeting} ${input.name}`
         };
       }
     });
 
     const procedure: ProceduresOf<typeof definition>['greeting'] = (input: { name: string }) =>
       `hello ${input.name}`;
-    const module = definition({
-      config: {
-        greeting: 'hello'
-      },
-      connect: testConnect()
-    });
 
+    expect(typeof definition).toBe('function');
     expect(procedure({ name: 'Pavel' })).toBe('hello Pavel');
-    expect(module.procedures.greeting({ name: 'Pavel' })).toBe('hello Pavel');
   });
 
   it('starts startup work before background work and stops both in reverse order', async () => {
@@ -345,7 +328,7 @@ describe('defineModule', () => {
     expect(calls).toEqual(['start:database', 'start:worker', 'stop:worker', 'stop:database']);
   });
 
-  it('exposes the module only after startup work succeeds', async () => {
+  it('exposes the module RPC only after startup work succeeds', async () => {
     const calls: string[] = [];
     const definition = defineModule('sample', {
       config: readEmptyConfig,
@@ -365,9 +348,7 @@ describe('defineModule', () => {
           };
         });
         return {
-          procedures: {
-            ping: () => 'pong'
-          }
+          ping: () => 'pong'
         };
       }
     });
@@ -394,28 +375,6 @@ describe('defineModule', () => {
             };
           }
         }),
-        registry: {
-          connect() {
-            calls.push('registry:connect');
-            return Promise.resolve({
-              close() {
-                calls.push('registry:close');
-              },
-              getSnapshot() {
-                return {
-                  modules: [],
-                  version: 0
-                };
-              },
-              refresh() {
-                return Promise.resolve({
-                  modules: [],
-                  version: 0
-                });
-              }
-            });
-          }
-        },
         rpc: {
           start() {
             calls.push('rpc:start');
@@ -433,13 +392,7 @@ describe('defineModule', () => {
 
     await module.start();
 
-    expect(calls).toEqual([
-      'events:start',
-      'startup:database',
-      'rpc:start',
-      'registry:connect',
-      'background:worker'
-    ]);
+    expect(calls).toEqual(['events:start', 'startup:database', 'rpc:start', 'background:worker']);
 
     await module.stop();
 
@@ -447,10 +400,8 @@ describe('defineModule', () => {
       'events:start',
       'startup:database',
       'rpc:start',
-      'registry:connect',
       'background:worker',
       'stop:worker',
-      'registry:close',
       'rpc:stop',
       'stop:database',
       'events:stop'
@@ -463,9 +414,7 @@ describe('defineModule', () => {
     const definition = defineModule('sample', {
       config: readEmptyConfig,
       setup: () => ({
-        procedures: {
-          ping: () => 'pong'
-        }
+        ping: () => 'pong'
       })
     });
     const module = definition({
@@ -529,35 +478,54 @@ describe('defineModule', () => {
     expect(calls).toEqual(['start:started', 'start:failed', 'stop:started']);
   });
 
-  it('exposes declared procedures', () => {
+  it('passes returned procedures to the rpc factory', async () => {
     const listChats = () => ['chat'];
+    let exposedProcedures: Record<string, unknown> | undefined;
     const definition = defineModule('sample', {
       config: readEmptyConfig,
       setup: () => ({
-        procedures: {
-          listChats
-        }
+        listChats
       })
     });
-    const module = definition({ config: {}, connect: testConnect() });
+    const module = definition({
+      config: {},
+      connect: {
+        events: testEventBus(),
+        rpc: {
+          start(procedures) {
+            exposedProcedures = procedures;
+            return Promise.resolve({
+              stop() {
+                return Promise.resolve();
+              },
+              url: 'http://sample.test'
+            });
+          }
+        }
+      }
+    });
 
-    expect(module.procedures).toEqual({ listChats });
+    await module.start();
+    expect(exposedProcedures).toEqual({ listChats });
+    await module.stop();
   });
 
   it('serves module procedures through one JSON endpoint', async () => {
     const definition = defineModule('sample', {
       config: readEmptyConfig,
       setup: () => ({
-        procedures: {
-          echo: (input: { text: string }) => ({ text: input.text })
-        }
+        echo: (input: { text: string }) => ({ text: input.text })
       })
     });
-    const module = definition({ config: {}, connect: testConnect() });
-    const server = await startProcedureServer(module.procedures, { port: 0 });
+    const runtime: { server?: ProcedureServer | undefined } = {};
+    const module = definition({
+      config: {},
+      connect: testConnectWithProcedureServer('sample', runtime)
+    });
 
     try {
-      const response = await fetch(`${server.url}/rpc`, {
+      await module.start();
+      const response = await fetch(`${String(runtime.server?.url)}/rpc`, {
         body: JSON.stringify({
           input: {
             text: 'hello'
@@ -578,7 +546,7 @@ describe('defineModule', () => {
         }
       });
     } finally {
-      await server.stop();
+      await module.stop();
     }
   });
 
@@ -586,198 +554,63 @@ describe('defineModule', () => {
     const definition = defineModule('sample', {
       config: readEmptyConfig,
       setup: () => ({
-        procedures: {
-          echo: (input: { text: string }) => ({ text: input.text })
-        }
+        echo: (input: { text: string }) => ({ text: input.text })
       })
     });
-    const module = definition({ config: {}, connect: testConnect() });
-    const server = await startProcedureServer(module.procedures, { port: 0 });
+    const runtime: { server?: ProcedureServer | undefined } = {};
+    const module = definition({
+      config: {},
+      connect: testConnectWithProcedureServer('sample', runtime)
+    });
 
     try {
+      await module.start();
       await expect(
-        callProcedure(server.url, 'echo', {
-          text: 'hello'
-        })
+        callProcedure(
+          String(runtime.server?.url),
+          'echo',
+          {
+            text: 'hello'
+          },
+          { service: 'sample' }
+        )
       ).resolves.toEqual({
         text: 'hello'
       });
     } finally {
-      await server.stop();
+      await module.stop();
     }
   });
 
-  it('calls another module through a lazy registry-backed rpc client', async () => {
-    const registryApp = registryModule({
-      config: {},
-      connect: testConnect()
-    });
-    const registryServer = await startProcedureServer(registryApp.procedures, { port: 0 });
+  it('calls another module through a static typed rpc domain client', async () => {
     const profileDefinition = defineModule('profile', {
       config: readEmptyConfig,
       setup: () => ({
-        procedures: {
-          getUser: (input: { id: string }) => ({
-            id: input.id,
-            name: 'Pavel'
-          })
-        }
+        getUser: (input: { id: string }) => ({
+          id: input.id,
+          name: 'Pavel'
+        })
       })
     });
-    const telegramDefinition = defineModule('telegram', {
-      config: readEmptyConfig,
-      setup({ rpc }) {
-        const profile = rpc<ProceduresOf<typeof profileDefinition>>('profile');
-
-        return {
-          procedures: {
-            describeUser: async (input: { id: string }) => {
-              const user = await profile.getUser({
-                id: input.id
-              });
-              return `telegram sees ${user.name}`;
-            }
-          }
-        };
-      }
-    });
+    const runtime: { server?: ProcedureServer | undefined } = {};
     const profile = profileDefinition({
       config: {},
-      connect: testConnect({
-        registryUrl: registryServer.url
-      })
-    });
-    const telegram = telegramDefinition({
-      config: {},
-      connect: testConnect({
-        registryUrl: registryServer.url
-      })
+      connect: testConnectWithProcedureServer('profile', runtime)
     });
 
     try {
       await profile.start();
-      await telegram.start();
-      const telegramRecord = (
-        await callProcedure<Snapshot>(registryServer.url, 'getSnapshot')
-      ).modules.find((moduleRecord) => moduleRecord.module === 'telegram');
+      const profileClient =
+        defineInternalRpcDomain<ProceduresOf<typeof profileDefinition>>('profile');
+      const profileApi = profileClient({ url: String(runtime.server?.url) });
 
-      expect(telegramRecord).toBeDefined();
-      await expect(
-        callProcedure(telegramRecord?.rpcUrl ?? '', 'describeUser', {
-          id: '42'
-        })
-      ).resolves.toBe('telegram sees Pavel');
-    } finally {
-      await telegram.stop();
-      await profile.stop();
-      await registryServer.stop();
-    }
-  });
-
-  it('refreshes lazy rpc discovery when a target module joins after the caller starts', async () => {
-    const events = testSharedEventBus();
-    const registryApp = registryModule({
-      config: {},
-      connect: testConnect({
-        events
-      })
-    });
-    const registryServer = await startProcedureServer(registryApp.procedures, { port: 0 });
-    const profileDefinition = defineModule('profile', {
-      config: readEmptyConfig,
-      setup: () => ({
-        procedures: {
-          getUser: (input: { id: string }) => ({
-            id: input.id,
-            name: 'Pavel'
-          })
-        }
-      })
-    });
-    const telegramDefinition = defineModule('telegram', {
-      config: readEmptyConfig,
-      setup({ rpc }) {
-        const profile = rpc<ProceduresOf<typeof profileDefinition>>('profile');
-
-        return {
-          procedures: {
-            describeUser: async (input: { id: string }) => {
-              const user = await profile.getUser({
-                id: input.id
-              });
-              return `telegram sees ${user.name}`;
-            }
-          }
-        };
-      }
-    });
-    const telegram = telegramDefinition({
-      config: {},
-      connect: testConnect({
-        events,
-        registryUrl: registryServer.url
-      })
-    });
-    const profile = profileDefinition({
-      config: {},
-      connect: testConnect({
-        events,
-        registryUrl: registryServer.url
-      })
-    });
-
-    try {
-      await telegram.start();
-      const telegramRecord = (
-        await callProcedure<Snapshot>(registryServer.url, 'getSnapshot')
-      ).modules.find((moduleRecord) => moduleRecord.module === 'telegram');
-
-      expect(telegramRecord).toBeDefined();
-      await expect(
-        callProcedure(telegramRecord?.rpcUrl ?? '', 'describeUser', {
-          id: '42'
-        })
-      ).rejects.toThrow('Module is not registered: profile');
-
-      await profile.start();
-      await expect(
-        callProcedure(telegramRecord?.rpcUrl ?? '', 'describeUser', {
-          id: '42'
-        })
-      ).resolves.toBe('telegram sees Pavel');
+      await expect(profileApi.getUser({ id: '42' })).resolves.toEqual({
+        id: '42',
+        name: 'Pavel'
+      });
     } finally {
       await profile.stop();
-      await telegram.stop();
-      await registryServer.stop();
     }
-  });
-
-  it('fails lazy rpc calls before the module is connected', async () => {
-    type ProfileProcedures = {
-      getUser: (input: { id: string }) => { id: string };
-    };
-    const telegramDefinition = defineModule('telegram', {
-      config: readEmptyConfig,
-      setup({ rpc }) {
-        const profile = rpc<ProfileProcedures>('profile');
-
-        return {
-          procedures: {
-            getUser: (input: { id: string }) => profile.getUser(input)
-          }
-        };
-      }
-    });
-    const telegram = telegramDefinition({
-      config: {},
-      connect: testConnect()
-    });
-
-    await expect(
-      telegram.procedures.getUser({
-        id: '42'
-      })
-    ).rejects.toThrow('Module RPC is not connected');
   });
 });
 
@@ -802,62 +635,28 @@ function testEventBus(): EventBusFactory {
   });
 }
 
-function testSharedEventBus(): EventBusFactory {
-  const subscriptions: {
-    handler: Parameters<ReturnType<EventBusFactory>['subscribe']>[1];
-    subject: string;
-  }[] = [];
-  let eventId = 0;
-
-  return () => ({
-    start() {
-      return Promise.resolve();
-    },
-    stop() {
-      return Promise.resolve();
-    },
-    publish(type, data) {
-      eventId += 1;
-      const event = {
-        at: new Date().toISOString(),
-        data,
-        id: String(eventId),
-        trace: {},
-        type
-      };
-
-      for (const subscription of subscriptions) {
-        if (subscription.subject === type) {
-          void subscription.handler(event);
-        }
-      }
-    },
-    subscribe(subject, handler) {
-      const subscription = {
-        handler,
-        subject
-      };
-      subscriptions.push(subscription);
-
-      return {
-        unsubscribe() {
-          const index = subscriptions.indexOf(subscription);
-          if (index !== -1) {
-            subscriptions.splice(index, 1);
-          }
-        }
-      };
-    }
-  });
-}
-
-function testConnect(
-  overrides: { events?: EventBusFactory | undefined; registryUrl?: string | undefined } = {}
-) {
+function testConnect(overrides: { events?: EventBusFactory | undefined } = {}) {
   return {
     events: overrides.events ?? testEventBus(),
-    rpc: httpRpc({ port: 0 }),
-    registry: overrides.registryUrl === undefined ? selfRegistry() : registry(overrides.registryUrl)
+    rpc: httpRpc({ port: 0, service: 'sample' })
+  };
+}
+
+function testConnectWithProcedureServer(
+  service: string,
+  runtime: { server?: ProcedureServer | undefined }
+) {
+  return {
+    events: testEventBus(),
+    rpc: {
+      async start(procedures: Record<string, (...args: never[]) => unknown>) {
+        runtime.server = await startProcedureServer(procedures, {
+          port: 0,
+          service
+        });
+        return runtime.server;
+      }
+    }
   };
 }
 
@@ -883,28 +682,6 @@ function testConnectWithCalls(calls: string[]) {
         };
       }
     }),
-    registry: {
-      connect() {
-        calls.push('registry:connect');
-        return Promise.resolve({
-          close() {
-            calls.push('registry:close');
-          },
-          getSnapshot() {
-            return {
-              modules: [],
-              version: 0
-            };
-          },
-          refresh() {
-            return Promise.resolve({
-              modules: [],
-              version: 0
-            });
-          }
-        });
-      }
-    },
     rpc: {
       start() {
         calls.push('rpc:start');

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   context,
   propagation,
@@ -9,14 +9,51 @@ import {
   type TextMapSetter
 } from '@opentelemetry/api';
 import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
+import {
+  ATTR_RPC_METHOD,
+  ATTR_RPC_SERVICE,
+  METRIC_RPC_CLIENT_CALL_DURATION,
+  METRIC_RPC_SERVER_CALL_DURATION
+} from '@opentelemetry/semantic-conventions/incubating';
+import type { TelemetrySpanInput } from '../src/telemetry/recorder.js';
 
-import { callProcedure, startProcedureServer } from '../src/rpc/httpRpc.js';
+const mocks = vi.hoisted(() => ({
+  telemetrySpans: [] as TelemetrySpanInput[]
+}));
+
+const telemetry = vi.hoisted(() => ({
+  timeTelemetrySpan: vi.fn((input: TelemetrySpanInput, operation: () => Promise<unknown>) => {
+    mocks.telemetrySpans.push(input);
+    return operation();
+  })
+}));
+
+vi.mock('../src/telemetry/index.js', async (importOriginal) => {
+  const module = await importOriginal<typeof import('../src/telemetry/index.js')>();
+  return {
+    ...module,
+    timeTelemetrySpan: telemetry.timeTelemetrySpan
+  };
+});
+
+import {
+  callProcedure,
+  ProcedureTransportError,
+  startProcedureServer
+} from '../src/rpc/httpRpc.js';
 
 describe('http RPC transport', () => {
+  beforeEach(() => {
+    mocks.telemetrySpans.length = 0;
+    telemetry.timeTelemetrySpan.mockClear();
+  });
+
   afterEach(() => {
     context.disable();
     propagation.disable();
     trace.disable();
+    mocks.telemetrySpans.length = 0;
+    telemetry.timeTelemetrySpan.mockClear();
   });
 
   it('rejects oversized procedure request bodies before procedure dispatch', async () => {
@@ -26,7 +63,7 @@ describe('http RPC transport', () => {
           throw new Error('procedure should not be called');
         }
       },
-      { port: 0 }
+      { port: 0, service: 'sample' }
     );
 
     try {
@@ -73,18 +110,60 @@ describe('http RPC transport', () => {
           return trace.getSpanContext(context.active())?.traceId ?? null;
         }
       },
-      { port: 0 }
+      { port: 0, service: 'sample' }
     );
 
     try {
       const result = await context.with(activeContext, () =>
-        callProcedure<string | null>(server.url, 'readTrace')
+        callProcedure<string | null>(server.url, 'readTrace', undefined, { service: 'sample' })
       );
 
       expect(result).toBe(traceId);
     } finally {
       await server.stop();
       await provider.shutdown();
+    }
+  });
+
+  it('wraps transport failures in a typed procedure transport error', async () => {
+    const server = await startProcedureServer({}, { port: 0, service: 'sample' });
+    const url = server.url;
+    await server.stop();
+
+    await expect(
+      callProcedure(url, 'missing', undefined, { service: 'sample' })
+    ).rejects.toBeInstanceOf(ProcedureTransportError);
+  });
+
+  it('records the configured RPC service on client and server telemetry', async () => {
+    const server = await startProcedureServer(
+      {
+        echo(input) {
+          return input;
+        }
+      },
+      { port: 0, service: 'profile' }
+    );
+
+    try {
+      await expect(
+        callProcedure(server.url, 'echo', { text: 'hello' }, { service: 'profile' })
+      ).resolves.toEqual({ text: 'hello' });
+
+      expect(mocks.telemetrySpans).toHaveLength(2);
+      const [clientSpan, serverSpan] = mocks.telemetrySpans;
+      expect(clientSpan?.attributes?.[ATTR_RPC_METHOD]).toBe('echo');
+      expect(clientSpan?.attributes?.[ATTR_RPC_SERVICE]).toBe('profile');
+      expect(clientSpan?.metric?.name).toBe(METRIC_RPC_CLIENT_CALL_DURATION);
+      expect(clientSpan?.metric?.attributes?.[ATTR_RPC_METHOD]).toBe('echo');
+      expect(clientSpan?.metric?.attributes?.[ATTR_RPC_SERVICE]).toBe('profile');
+      expect(serverSpan?.attributes?.[ATTR_RPC_METHOD]).toBe('echo');
+      expect(serverSpan?.attributes?.[ATTR_RPC_SERVICE]).toBe('profile');
+      expect(serverSpan?.metric?.name).toBe(METRIC_RPC_SERVER_CALL_DURATION);
+      expect(serverSpan?.metric?.attributes?.[ATTR_RPC_METHOD]).toBe('echo');
+      expect(serverSpan?.metric?.attributes?.[ATTR_RPC_SERVICE]).toBe('profile');
+    } finally {
+      await server.stop();
     }
   });
 });

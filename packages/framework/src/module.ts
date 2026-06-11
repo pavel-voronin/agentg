@@ -1,10 +1,6 @@
 import type { EventBus, EventBusFactory } from './events/eventBus.js';
 import { createLogger, logError } from './log.js';
-import { callProcedure } from './rpc/httpRpc.js';
 import type { ProcedureServer, RpcFactory } from './rpc/rpc.js';
-import { moduleByName } from './registry/client.js';
-import type { RegistryConnection, RegistryConnector } from './registry/connector.js';
-import type { ModuleManifest } from './registry/contracts.js';
 import { startTelemetryRuntime } from './telemetry/recorder.js';
 import type { MaybePromise, ProcedureMap } from './types.js';
 
@@ -12,40 +8,15 @@ type StopProcess = () => MaybePromise<undefined>;
 
 type ProcessStartResult = undefined | StopProcess | { stop?: StopProcess | undefined };
 
-type ModuleSurface<TProcedures extends ProcedureMap = ProcedureMap> = {
-  readonly procedures?: TProcedures | undefined;
-  readonly required?: boolean | undefined;
-};
+declare const moduleProcedures: unique symbol;
 
-type ModuleProcedures<TSurface> = TSurface extends {
-  readonly procedures?: infer TProcedures | undefined;
+export type ProceduresOf<TModule> = TModule extends {
+  readonly [moduleProcedures]: infer TProcedures;
 }
   ? TProcedures extends ProcedureMap
     ? TProcedures
-    : ProcedureMap
-  : ProcedureMap;
-
-type ProcedureOwner = {
-  readonly procedures: ProcedureMap;
-};
-
-export type ProceduresOf<TModule> = TModule extends (...args: never[]) => infer TApp
-  ? TApp extends ProcedureOwner
-    ? TApp['procedures']
     : never
-  : TModule extends ProcedureOwner
-    ? TModule['procedures']
-    : never;
-
-type RpcMethod<TProcedure> = TProcedure extends () => infer TOutput
-  ? () => Promise<Awaited<TOutput>>
-  : TProcedure extends (input: infer TInput) => infer TOutput
-    ? (input: TInput) => Promise<Awaited<TOutput>>
-    : never;
-
-type RpcClient<TProcedures extends ProcedureMap> = {
-  readonly [TName in keyof TProcedures]: RpcMethod<TProcedures[TName]>;
-};
+  : never;
 
 type ModuleProcess = {
   name: string;
@@ -68,8 +39,7 @@ type RunningProcess = {
   stop: StopProcess;
 };
 
-export type ModuleApp<TProcedures extends ProcedureMap = ProcedureMap> = {
-  readonly procedures: TProcedures;
+export type ModuleApp = {
   start(): Promise<void>;
   stop(): Promise<void>;
 };
@@ -82,21 +52,21 @@ export type ModuleCreateOptions<TConfig> = {
 export type ModuleConnect = {
   events: EventBusFactory;
   rpc: RpcFactory;
-  registry: RegistryConnector;
 };
 
 export type ModuleDefinition<
   TConfig = unknown,
   TProcedures extends ProcedureMap = ProcedureMap
-> = ((options: ModuleCreateOptions<TConfig>) => ModuleApp<TProcedures>) & {
+> = ((options: ModuleCreateOptions<TConfig>) => ModuleApp) & {
   readonly config: ModuleConfigReader<TConfig>;
+  readonly [moduleProcedures]: TProcedures;
 };
 
 export type ModuleConfigReader<TConfig> = (...sources: never[]) => TConfig;
 
-type ModuleDefinitionInput<TConfig, TSurface extends ModuleSurface> = {
+type ModuleDefinitionInput<TConfig, TProcedures extends ProcedureMap> = {
   readonly config: ModuleConfigReader<TConfig>;
-  readonly setup: (module: ModuleSetup<TConfig>) => TSurface;
+  readonly setup: (module: ModuleSetup<TConfig>) => TProcedures;
 };
 
 type ModuleSetup<TConfig = unknown> = {
@@ -104,40 +74,36 @@ type ModuleSetup<TConfig = unknown> = {
   readonly events: EventBus;
   background: (name: string, start: ModuleProcess['start']) => void;
   resource: <T>(name: string, create: (resource: ResourceSetup) => T) => T;
-  rpc: <TProcedures extends ProcedureMap>(moduleName: string) => RpcClient<TProcedures>;
   startup: (name: string, start: ModuleProcess['start']) => void;
 };
 
-export function defineModule<TConfig, TSurface extends ModuleSurface>(
+export function defineModule<TConfig, TProcedures extends ProcedureMap>(
   name: string,
-  input: ModuleDefinitionInput<TConfig, TSurface>
-): ModuleDefinition<TConfig, ModuleProcedures<TSurface>> {
+  input: ModuleDefinitionInput<TConfig, TProcedures>
+): ModuleDefinition<TConfig, TProcedures> {
   const definition = (options: ModuleCreateOptions<TConfig>) =>
-    createModuleApp<TConfig, TSurface>(name, input.setup, options);
+    createModuleApp<TConfig>(name, input.setup, options);
 
   return Object.assign(definition, {
     config: input.config
-  });
+  }) as ModuleDefinition<TConfig, TProcedures>;
 }
 
-function createModuleApp<TConfig, TSurface extends ModuleSurface>(
+function createModuleApp<TConfig>(
   name: string,
-  setup: (module: ModuleSetup<TConfig>) => TSurface,
+  setup: (module: ModuleSetup<TConfig>) => ProcedureMap,
   options: ModuleCreateOptions<TConfig>
-): ModuleApp<ModuleProcedures<TSurface>> {
+): ModuleApp {
   const backgroundProcesses: ModuleProcess[] = [];
-  const procedures: ProcedureMap = {};
   const resources = new Map<string, unknown>();
   const startupProcesses: ModuleProcess[] = [];
   const events = options.connect.events();
   const logger = createLogger(name);
-  let required = false;
   let running = false;
   let runningBackgroundProcesses: RunningProcess[] = [];
   let runningProcedureServer: ProcedureServer | undefined;
   let runningStartupProcesses: RunningProcess[] = [];
   let runningTelemetryRuntime: StopProcess | undefined;
-  let registryConnection: RegistryConnection | undefined;
 
   const moduleSetup: ModuleSetup<TConfig> = {
     config: options.config,
@@ -184,26 +150,15 @@ function createModuleApp<TConfig, TSurface extends ModuleSurface>(
       backgroundProcesses.push(...resourceBackgroundProcesses);
       return resource;
     },
-    rpc(moduleName) {
-      return createRpcClient(moduleName, () => registryConnection);
-    },
     startup(startupName, start) {
       pushProcess(startupProcesses, startupName, start);
     }
   };
 
-  const surface = setup(moduleSetup);
+  const procedures = setup(moduleSetup);
   const namedBackgroundProcesses = namedProcesses(backgroundProcesses);
   const namedStartupProcesses = namedProcesses(startupProcesses);
-  if (surface.procedures !== undefined) {
-    for (const [procedureName, procedure] of Object.entries(surface.procedures)) {
-      procedures[procedureName] = procedure;
-    }
-  }
-  required = surface.required ?? false;
-
   return {
-    procedures: procedures as ModuleProcedures<TSurface>,
     async start() {
       if (running) {
         return;
@@ -212,7 +167,6 @@ function createModuleApp<TConfig, TSurface extends ModuleSurface>(
       const startedBackground: RunningProcess[] = [];
       const startedStartup: RunningProcess[] = [];
       let procedureServer: ProcedureServer | undefined;
-      let activeRegistryConnection: RegistryConnection | undefined;
       try {
         runningTelemetryRuntime = startTelemetryRuntime(name);
         await events.start();
@@ -223,13 +177,6 @@ function createModuleApp<TConfig, TSurface extends ModuleSurface>(
         runningStartupProcesses = startedStartup;
         procedureServer = await options.connect.rpc.start(procedures);
         runningProcedureServer = procedureServer;
-        activeRegistryConnection = await options.connect.registry.connect({
-          events,
-          manifest: manifest(name, procedureServer.url, procedures, {
-            required
-          })
-        });
-        registryConnection = activeRegistryConnection;
         for (const moduleProcess of namedBackgroundProcesses) {
           const stop = normalizeProcessStop(await moduleProcess.start());
           startedBackground.push({ name: moduleProcess.name, stop });
@@ -251,7 +198,6 @@ function createModuleApp<TConfig, TSurface extends ModuleSurface>(
           'module start failed'
         );
         await stopProcesses(startedBackground);
-        activeRegistryConnection?.close();
         if (procedureServer !== undefined) {
           await procedureServer.stop();
         }
@@ -263,7 +209,6 @@ function createModuleApp<TConfig, TSurface extends ModuleSurface>(
         runningStartupProcesses = [];
         runningProcedureServer = undefined;
         running = false;
-        registryConnection = undefined;
         throw error;
       }
     },
@@ -275,8 +220,6 @@ function createModuleApp<TConfig, TSurface extends ModuleSurface>(
       const backgroundToStop = runningBackgroundProcesses;
       runningBackgroundProcesses = [];
       await stopProcesses(backgroundToStop);
-      registryConnection?.close();
-      registryConnection = undefined;
       const procedureServer = runningProcedureServer;
       runningProcedureServer = undefined;
       if (procedureServer !== undefined) {
@@ -295,22 +238,6 @@ function createModuleApp<TConfig, TSurface extends ModuleSurface>(
         'module stopped'
       );
     }
-  };
-}
-
-function manifest(
-  moduleName: string,
-  rpcUrl: string,
-  procedures: ProcedureMap,
-  input: {
-    required: boolean;
-  }
-): ModuleManifest {
-  return {
-    module: moduleName,
-    procedures: Object.keys(procedures),
-    required: input.required,
-    rpcUrl
   };
 }
 
@@ -409,55 +336,4 @@ function duplicateProcessName(
 
   nextIndexes.set(processName, nextIndex + 1);
   return nextName;
-}
-
-function createRpcClient<TProcedures extends ProcedureMap>(
-  moduleName: string,
-  currentRegistry: () => RegistryConnection | undefined
-): RpcClient<TProcedures> {
-  return new Proxy(
-    {},
-    {
-      get(_target, property) {
-        if (property === 'then') {
-          return undefined;
-        }
-        if (typeof property !== 'string') {
-          return undefined;
-        }
-
-        return async (input?: unknown) => {
-          const registryConnection = currentRegistry();
-          if (registryConnection === undefined) {
-            throw new Error('Module RPC is not connected');
-          }
-
-          const moduleRecord = await resolveRpcModule(registryConnection, moduleName, property);
-
-          return callProcedure(moduleRecord.rpcUrl, property, input);
-        };
-      }
-    }
-  ) as RpcClient<TProcedures>;
-}
-
-async function resolveRpcModule(
-  registryConnection: RegistryConnection,
-  moduleName: string,
-  procedureName: string
-) {
-  const cachedModule = moduleByName(registryConnection.getSnapshot(), moduleName);
-  if (cachedModule?.procedures.includes(procedureName) === true) {
-    return cachedModule;
-  }
-
-  const refreshedModule = moduleByName(await registryConnection.refresh(), moduleName);
-  if (refreshedModule === undefined) {
-    throw new Error(`Module is not registered: ${moduleName}`);
-  }
-  if (!refreshedModule.procedures.includes(procedureName)) {
-    throw new Error(`Procedure is not registered by module ${moduleName}: ${procedureName}`);
-  }
-
-  return refreshedModule;
 }
