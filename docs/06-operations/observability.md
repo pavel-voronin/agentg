@@ -117,6 +117,9 @@ Span rules:
 
 Metric rules:
 
+- For RPC metrics, `service_name` is the calling or serving process and
+  `rpc.service` is the target/served module boundary such as `telegram`,
+  `history-sync`, `gateway`, or `dashboard`.
 - Use duration histograms for latency and processing time.
 - Use gauges for current state such as queue size, concurrency, and last-seen
   timestamps.

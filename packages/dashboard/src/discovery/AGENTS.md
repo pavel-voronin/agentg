@@ -8,6 +8,6 @@
   the entrypoint through Vite's module graph and read its exported
   `dashboard.contents`.
 - Keep discovery filesystem-based. Do not read Dashboard contributions from
-  registry manifests.
+  service manifests.
 - When adding or removing module Dashboard entrypoints, Vite must invalidate
   the virtual provider module and reload the browser.

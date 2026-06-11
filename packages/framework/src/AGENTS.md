@@ -6,22 +6,18 @@
   when presenting the change.
 - `index.ts` is only the package public barrel.
 - `index.ts` must export only the current public package surface. Do not export
-  internal helpers, test helpers, registry internals, or types without an
+  internal helpers, test helpers, or types without an
   outside-package consumer. Run `npx knip` before changing it.
 - `config.ts` owns schema-first config parsing. It must return plain typed data
   only.
 - `module.ts` owns module setup, resources, framework connectivity, and process lifecycle.
 - `database/` owns standard database resource providers.
-- `procedures.ts` only re-exports RPC APIs for the public package surface.
 - `rpc/rpc.ts` owns the generic RPC contract.
 - `rpc/httpRpc.ts` owns the default HTTP JSON RPC implementation.
 - `events/eventBus.ts` owns the generic event bus contract.
 - `events/nats.ts` owns the default NATS-backed event bus implementation.
 - `json.ts` owns JSON-safe value primitives and conversion used by framework
   consumers.
-- `registry/` owns the generic Registry protocol, connector
-  contract, standard connectors, registry, client, and deployable module
-  definition.
 - `types.ts` contains shared internal framework types.
 - Keep functions short and explicit. Do not hide domain work in helpers.
 - The only supported module definition form is
@@ -36,20 +32,20 @@
 - `background(fn)` inside a resource uses the resource name.
 - `background(name, fn)` inside a resource uses `resource.name`. Duplicate
   process names are allowed and receive stable numeric suffixes internally.
-- `rpc` creates lazy inter-module procedure clients. It must route through
-  Registry snapshot at call time, not during module setup.
+- `defineInternalRpcDomain` creates typed internal procedure clients over the
+  default HTTP RPC transport. Domain packages own and export their own clients.
 - `startup` registers blocking module readiness work. It must complete before
-  RPC exposure and Registry registration.
+  RPC exposure.
 - `background` registers runtime loops, observers, and consumers that start
-  after Registry registration.
-- `procedures` declares the public module procedure surface.
-- Dashboard contributions are not module surface. Keep them in Control
-  Plane-owned discovery, not Registry manifests.
+  after RPC exposure.
+- Module `setup()` returns the public module procedure map directly. Do not add
+  `app.procedures`, `{ procedures }` envelopes, static `.procedures` fields, or
+  runtime procedure accessors.
+- Dashboard contributions are not module surface. Keep them in Dashboard-owned
+  filesystem discovery.
 - Event bus code must stay simple: publish by string type, subscribe by subject, no event registration, no validation layer.
 - Modules receive `events` from setup. Module packages must not create NATS
   connections themselves.
-- Module app creation requires explicit `connect.events`, `connect.rpc`, and
-  `connect.registry` providers. Do not add hidden transport addresses.
-- Modules register in Registry through `connect.registry`.
-  Module packages must not call Registry `join` themselves.
+- Module app creation requires explicit `connect.events` and `connect.rpc`
+  providers. Do not add hidden transport addresses.
 - Do not add transport-specific code here unless the framework concept requires it.

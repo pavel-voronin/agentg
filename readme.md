@@ -121,8 +121,8 @@ AGENTG_TELEMETRY=1 docker compose --profile telemetry --profile container-client
 ```
 
 This starts Postgres, NATS, OpenTelemetry Collector, VictoriaMetrics, Jaeger,
-Grafana, the NATS exporter, the Postgres exporter, Registry, Telegram
-ingestion, History Sync, Gateway, and Dashboard. Open:
+Grafana, the NATS exporter, the Postgres exporter, Telegram ingestion,
+History Sync, Gateway, and Dashboard. Open:
 
 [http://127.0.0.1:8788/](http://127.0.0.1:8788/)
 

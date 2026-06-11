@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted. Updated by the Registry migration.
+Accepted. Updated by the static typed client migration.
 
 ## Context
 
@@ -31,35 +31,26 @@ database package provides database infrastructure, not one centralized domain
 schema. Domains and modules write only their owned tables by convention.
 
 Gateway exposes agent-facing RPC methods directly. Modules do not register
-capabilities with Gateway, and Gateway does not keep a capability registry.
+capabilities with Gateway, and Gateway does not keep a capability catalog.
 
-Internal module RPC procedures return direct result bodies.
+Internal module RPC procedures return direct result bodies. A module declares its
+procedure surface by returning a procedure map directly from `setup()`. The
+framework uses that instance-level map to start the module RPC server; the
+runtime app exposes only `start()` and `stop()`.
 
-RPC lifecycle events are published by default. Callers can pass:
+Cross-module callers use package-owned typed RPC clients. A serving package
+exports a client from its root only when another package currently consumes that
+module:
 
-- `observable: false` to suppress lifecycle events for the current call.
-- `silent: true` to suppress lifecycle events and synchronous fact events
-  published by the current handler.
+```ts
+import { telegramClient } from '@agentg/telegram';
 
-Registry owns service discovery and procedure routing metadata. Each service
-joins with a manifest:
-
-```json
-{
-  "module": "analysis",
-  "rpcUrl": "http://analysis:8080",
-  "required": false,
-  "procedures": ["analysis.requestReport", "analysis.chatInsights"]
-}
+const telegram = telegramClient({ url: config.telegramRpcUrl });
 ```
 
-Registry returns a versioned snapshot. Framework clients keep the snapshot
-locally and refresh it only through explicit `getSnapshot` calls. Registry does
-not call domain or module RPC methods.
-
-Manifest `required` is a runtime invariant flag. Loss of a previously seen
-`required: true` service is fatal for every Registry client. Loss of a
-`required: false` service removes its procedures from the snapshot.
+Process Compose, Docker Compose, or the production supervisor owns startup
+ordering and service addresses. Failure of a dependency is represented as an
+RPC call failure or service process failure, not as discovery snapshot state.
 
 Infrastructure-level events are ephemeral. A domain or module persists its own
 state when persistence is part of its own behavior.
@@ -71,8 +62,8 @@ methods, and publish or consume NATS events.
 
 Module name means the short stable module identifier, for example `analysis`.
 
-Procedure means an internal module RPC method published through the module's
-Registry manifest.
+Procedure means an internal module RPC method exposed by the module runtime and
+called through the serving package's typed client.
 
 ## Consequences
 
@@ -82,15 +73,17 @@ Benefits:
   processes.
 - Gateway keeps one explicit agent-facing edge without module-side registration.
 - Domains keep ownership of their base models and handlers.
-- RPC lifecycle events give modules and operators a common `callId` for live
-  follow-up behavior.
+- RPC telemetry gives modules and operators a common view of internal procedure
+  latency and failures.
 - Storage ownership becomes explicit and matches domain and module boundaries.
 - Docker Compose remains enough for local and single-host deployments.
 
 Costs:
 
-- Cross-module reads depend on procedure naming and Registry routing.
-- Service routing depends on live Registry snapshots.
+- Cross-module reads depend on configured service URLs and the serving
+  package's typed client export.
+- Runtime service availability is managed by the process or container
+  supervisor instead of a project-owned discovery server.
 - Product views that combine multiple owners must be explicit procedures or
   Dashboard composition owned by the appropriate boundary.
 
@@ -106,22 +99,23 @@ Non-goals:
 
 ## Operational Defaults
 
-Services know Registry URL, NATS URL, their own service URL, and their own
-manifest. Cross-service topology is read from the local Registry snapshot.
+Services know NATS URL, their own bind address, and explicit RPC URLs for the
+internal services they consume.
 
-Core services register as required: Telegram ingestion, History Sync, Gateway,
-and Dashboard. Trusted modules that add optional product behavior register
-as not required unless their absence must stop the whole runtime.
+Core service order is explicit in Process Compose and Docker Compose. RPC
+consumers start after the consumed service is healthy: Telegram is healthy
+before History Sync and Gateway, and Telegram plus History Sync are healthy
+before Dashboard server. Dashboard does not depend on Gateway. Trusted modules
+that add product behavior use the same supervisor-owned ordering and address
+model.
 
-Service startup order is managed outside Registry. Local development uses
-Process Compose for product processes and Docker Compose for infrastructure
-dependencies. A service joins Registry only after its startup dependencies are
-ready.
+Local development uses Process Compose for product processes and Docker Compose
+for infrastructure dependencies.
 
 ## Source Audit
 
-`npm run source:audit` guards naming, domain boundary, table ownership,
-Gateway external surface, and Registry isolation rules.
+`npm run source:audit` guards naming, domain boundary, table ownership, Gateway
+external surface, and Dashboard frontend procedure-call boundaries.
 
 ## Current Documentation
 

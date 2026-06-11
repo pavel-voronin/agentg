@@ -57,20 +57,20 @@ through Telegram domain tables and Telegram history coverage.
 History Sync is a separate process from Telegram ingestion: it owns templates,
 targets, and sync cadence. Telegram ingestion owns TDLib, Telegram-shaped
 persistence, page continuity, and Telegram history coverage.
-Dashboard is a separate operator boundary: the browser UI calls Control
-Plane server, and Dashboard server resolves internal domain RPC through
-Registry before making module RPC calls. The browser UI is composed from
-slots: Dashboard owns the shell, layout, browser WebSocket, and event fanout;
-domains provide the concrete Dashboard content components and own their view
-state. Dashboard SDK owns the mechanical slot runtime, host bridge, debug
-overlay, and shared UI primitives used by those content components. Gateway
-remains the external agent edge and also resolves its allowed internal RPC calls
-through Registry.
+Dashboard is a separate operator boundary: the browser UI calls Dashboard
+server, and Dashboard server exposes Dashboard-owned backend procedures that
+call typed module clients. The browser UI is composed from slots: Dashboard owns
+the shell, layout, browser WebSocket, and event fanout; domains provide the
+concrete Dashboard content components and own their view state. Dashboard SDK
+owns the mechanical slot runtime, host bridge, debug overlay, and shared UI
+primitives used by those content components. Gateway remains the external agent
+edge and calls its allowed internal dependencies through typed module clients.
 Default operator layout is derived from domain-declared Dashboard content
 placements. The shell does not hard-code domain content IDs into its own layout.
 Telegram ingestion, History Sync, and trusted modules run as independent
 services inside the same internal contour. They own their storage and module RPC
-surface, and join Registry with their procedure routing metadata. Gateway
+surface. Internal addresses are supplied by the process or container contour,
+and cross-module callers import the owning package's typed client. Gateway
 methods are managed directly in Gateway code. Product views that combine
 multiple owners are explicit RPC or Dashboard UI contracts owned by the
 appropriate boundary. Operator UI composition uses domain-provided Dashboard

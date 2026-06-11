@@ -12,4 +12,5 @@
 - Components should be as small as the responsibility boundary allows. A large
   component file needs an explicit domain reason; visual convenience or keeping
   related code nearby is not enough.
-- Dashboard procedure calls must go through `useDashboardHost()`.
+- Dashboard procedure calls must go through the local typed API wrapper.
+- Components and feature composables must not call `host.rpc(...)` directly.

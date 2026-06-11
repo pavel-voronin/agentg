@@ -5,7 +5,8 @@
   violations, failed checks, risky assumptions, and any workaround before or
   when presenting the change.
 - This package defines the current module runtime vocabulary only: `module`,
-  `resource`, `process`, `procedure`, event bus, and Registry.
+  `resource`, `process`, `procedure`, event bus, and typed internal RPC
+  clients.
 - This package is the module boundary foundation.
 - Do not add domain-specific code here. Telegram, history sync, files, TDLib,
   database schemas, and Dashboard screens belong outside this package.
@@ -15,7 +16,7 @@
   files by relative path; tests alone do not justify widening `src/index.ts`.
   Run `npx knip` before adding or keeping package public exports.
 - Events are not a public module manifest surface. Do not add event registration or publish guards.
-- Module apps use the `connect` option with separate `events`, `rpc`, and
-  `registry` providers. Do not add top-level transport options.
+- Module apps use the `connect` option with separate `events` and `rpc`
+  providers. Do not add top-level transport options.
 - Do not add dependency injection containers, named runtime lookups, compatibility layers, or framework aliases.
 - Every new folder in this package must include its own `AGENTS.md` before code is added there.

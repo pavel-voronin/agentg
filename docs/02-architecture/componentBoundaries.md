@@ -100,8 +100,9 @@ Own:
 - Module-owned tables and Drizzle migrations.
 - Module-owned module RPC methods.
 - Module-owned NATS events with the slug prefix.
-- Registry join for procedure routing metadata.
-- Declaring whether the service is required for whole-runtime availability.
+- A package-owned typed RPC client exported from the package root when another
+  package has a current consumer.
+- Runtime addresses supplied by the local process or container contour.
 
 Do not own:
 

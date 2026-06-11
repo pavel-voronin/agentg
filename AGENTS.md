@@ -40,7 +40,7 @@
   results in compatibility envelopes or preserve old response shapes.
 - For current module work, use `npm run check:modules` as the scoped
   verification command. Use `npm run check:framework`,
-  `npm run check:registry`, `npm run check:dashboard`, or
+  `npm run check:dashboard`, `npm run check:gateway`, or
   `npm run check:telegram` when only one of those packages changed. Keep
   `npm run check` as the full repository gate before final integration.
 - Vue component styling must be scoped to the component. Every Vue component

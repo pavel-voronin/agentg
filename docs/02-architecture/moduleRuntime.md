@@ -33,30 +33,71 @@ Every module has:
 - `databaseUrl`: Postgres URL
 - `tablePrefix`: owned table prefix, for example `analysis_`
 - `migrationFolder`: module-owned Drizzle migration folder
-- `procedures`: module RPC procedure names declared in the Registry manifest
-- `required`: whether loss of the service breaks whole-runtime availability
+- package-local procedure map returned by module `setup()` and exposed by the
+  module runtime
+- a package-owned typed RPC client exported from the package root when another
+  package currently consumes that module
 
-Runtime config helpers live with the current module runtime owner. Service
-registration is owned by the Registry client.
+Runtime config helpers live with the current module runtime owner. Process
+Compose, Docker Compose, or the production supervisor owns service ordering and
+service addresses.
 
-## Registry
+## Static RPC Clients
 
-Registry owns runtime topology and procedure routing metadata. Every service
-joins it with one manifest:
+Internal cross-module calls use package-owned typed clients built with
+`defineInternalRpcDomain`. A consumer imports the client from the serving
+package root and supplies the service URL from its runtime config:
 
-```json
-{
-  "module": "analysis",
-  "rpcUrl": "http://analysis:8080",
-  "required": false,
-  "procedures": ["analysis.requestReport", "analysis.chatInsights"]
-}
+```ts
+import { telegramClient } from '@agentg/telegram';
+
+const telegram = telegramClient({ url: config.telegramRpcUrl });
 ```
 
-Registry returns a versioned snapshot. Framework clients keep the snapshot
-locally and refresh it only through explicit `getSnapshot` calls.
+The owning package derives the client type from the module definition. The
+definition carries a type-only procedure marker based on the `setup()` return
+type; the runtime app does not expose `app.procedures`:
 
-Registry does not call domain or module RPC methods.
+```ts
+import { defineInternalRpcDomain, type ProceduresOf } from '@agentg/framework';
+import type { telegramModule } from './module.js';
+
+export const telegramClient =
+  defineInternalRpcDomain<ProceduresOf<typeof telegramModule>>('telegram');
+```
+
+Consumers do not import another package's module runtime, procedure schemas, or
+procedure DTO types. The root client is the cross-package public surface. The
+client's service name is also the `rpc.service` telemetry label for client RPC
+spans and duration metrics.
+
+## Module Procedure Declaration
+
+Module `setup()` returns the module's procedure map directly. The map is
+instance-level: procedures may close over resources created in the same setup,
+such as databases, TDLib handles, event buses, controllers, or typed clients.
+
+```ts
+export const telegramModule = defineModule('telegram', {
+  config: readConfig,
+  setup({ config, events, resource }) {
+    const database = resource('database', ({ startup }) => {
+      const databaseResource = createDatabase(config.databaseUrl);
+      startup(() => databaseResource.start());
+      return databaseResource.db;
+    });
+
+    return {
+      getChat: getChatProcedure({ database, events }),
+      listChats: listChatsProcedure({ database })
+    };
+  }
+});
+```
+
+The framework starts the module RPC server from this returned map after startup
+resources are ready and before background processes start. `ModuleApp` exposes
+only lifecycle methods: `start()` and `stop()`.
 
 ## Storage
 
@@ -75,38 +116,11 @@ needs another domain's data calls that domain's module RPC surface.
 Internal module RPC methods return their result bodies directly. A read that
 returns a chat returns the chat shape, not a compatibility envelope.
 
-## Procedure Builder And Call Options
-
-Package-local module RPC runtimes expose `rpc` as the procedure builder:
-
-```ts
-readModuleState: rpc
-  .input(readModuleStateInputSchema)
-  .output(readModuleStateOutputSchema)
-  .query(({ input }) => readModuleState(runtime, input.id));
-```
-
-RPC lifecycle events are published by default. Event names use
-`{domain}.rpc.{procedure}.{lifecycle}`, for example:
-
-- `history-sync.rpc.getChatHistorySyncState.started`
-- `history-sync.rpc.getChatHistorySyncState.progress`
-- `history-sync.rpc.getChatHistorySyncState.completed`
-- `history-sync.rpc.getChatHistorySyncState.failed`
-
-Callers can pass call options through internal RPC context:
-
-- `observable: false` suppresses lifecycle events for the current RPC call.
-- `silent: true` suppresses lifecycle events and synchronous fact events
-  published inside the current RPC handler.
-
-There is no `observable` procedure builder. `observable` is only a call option.
-
 ## Gateway RPC
 
 Gateway owns the external agent WebSocket boundary directly. Modules do not
 register capabilities with Gateway, and Gateway does not keep a capability
-registry. Every external Gateway RPC method is a deliberate Gateway-owned method
+catalog. Every external Gateway RPC method is a deliberate Gateway-owned method
 implemented in Gateway code.
 
 ## Source Audits
@@ -117,7 +131,8 @@ implemented in Gateway code.
 - domain and module table names must use their owner prefix
 - Gateway's external RPC and event surface stays covered by source and tests
 - domain runtime code cannot reintroduce `enriched`
-- Registry server code cannot call service RPC methods
+- Dashboard frontend code keeps `host.rpc(...)` calls inside local `api.ts`
+  wrappers under the owning module's Dashboard frontend tree
 
 The audit is part of `npm run check`.
 
@@ -128,9 +143,12 @@ The audit is part of `npm run check`.
 - Create a package-owned `src/schema.ts`, `drizzle/` folder, migration command,
   and migration journal table.
 - Use only owned tables for writes. Call other domains through module RPC.
-- Expose public internal methods through package-local `rpc`.
+- Return public internal methods directly from module `setup()`.
+- Export a typed client from the package root only when a real current consumer
+  imports it.
 - Return public internal results directly.
 - Publish module events with the module name prefix.
-- Join Registry with procedures and `required` at startup.
-- Add tests for storage behavior, direct RPC results, Registry manifest shape,
-  and caller-side procedure routing.
+- Wire process startup order and module RPC URLs in Process Compose, Docker
+  Compose, or the production supervisor.
+- Add tests for storage behavior, direct RPC results, typed client calls, and
+  caller-side procedure routing.

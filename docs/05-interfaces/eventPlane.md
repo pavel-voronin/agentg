@@ -79,18 +79,9 @@ History Sync publishes:
 - `history-sync.target.deleted`
 - `history-sync.target.auto_deleted`
 
-RPC calls publish lifecycle events by default:
-
-- `{domain}.rpc.{procedure}.started`
-- `{domain}.rpc.{procedure}.progress`
-- `{domain}.rpc.{procedure}.completed`
-- `{domain}.rpc.{procedure}.failed`
-
-For example, `history-sync.getChatHistorySyncState` publishes
-`history-sync.rpc.getChatHistorySyncState.started`,
-`history-sync.rpc.getChatHistorySyncState.progress`,
-`history-sync.rpc.getChatHistorySyncState.completed`, and
-`history-sync.rpc.getChatHistorySyncState.failed`.
+Internal RPC calls are telemetry signals, not NATS facts. The HTTP RPC transport
+records client and server spans and duration metrics. Modules publish NATS facts
+explicitly when a domain state transition matters to other consumers.
 
 `history-sync.sync.requested` is a notification that a sync wake-up was accepted at
 the History Sync boundary. It is not consumed as a NATS command.
@@ -124,24 +115,23 @@ After reconnecting, consumers must rebuild state through these surfaces:
 
 - Gateway external clients: Gateway WebSocket RPC methods backed by Telegram
   procedures.
-- Dashboard browser clients: Dashboard WebSocket RPC methods resolved
-  through registry and forwarded to the owning procedure service.
+- Dashboard browser clients: Dashboard WebSocket RPC methods handled by
+  Dashboard-owned backend procedures.
 - History Sync: its own Postgres tables plus Telegram read and history-fetch
   module RPC.
 - Telegram ingestion: TDLib session state and Telegram-shaped Postgres storage.
 - Modules: their owned tables plus domain module RPC reads.
-- Registry clients: their local snapshot plus explicit registry `getSnapshot`.
 
 ## Internal RPC Ownership
 
 Internal procedure contracts are owned by the serving module package:
 
-- Telegram owns `@agentg/telegram`, whose public module entry exposes
-  the typed procedure surface. The Telegram schemas, storage schema, ingestion,
-  normalization, and TDLib plumbing remain package-internal.
-- History Sync owns `@agentg/history-sync`, whose public module entry
-  exposes the typed procedure surface. The History Sync schemas, storage schema,
-  commands, and domain types remain package-internal.
+- Telegram owns `@agentg/telegram`, whose package root exports the typed client
+  for its module procedure surface. The Telegram schemas, storage schema,
+  ingestion, normalization, and TDLib plumbing remain package-internal.
+- History Sync owns `@agentg/history-sync`, whose package root exports the typed
+  client for its module procedure surface. The History Sync schemas, storage
+  schema, commands, and domain types remain package-internal.
 - Modules own package-local procedure contracts. Module schemas, storage schema,
   registrations, and runtime remain package-internal.
 

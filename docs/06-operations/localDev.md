@@ -25,7 +25,6 @@ mode. The Process Compose project is declared in `process-compose.yaml`, uses
 
 Process Compose runs the app-side services:
 
-- `registry`
 - `telegram`
 - `history-sync`
 - `gateway`
@@ -82,45 +81,42 @@ services and leaves Docker-owned infrastructure running.
 TDLib session, receives live Telegram updates, writes Telegram-shaped records to
 Postgres, computes Telegram history coverage from fetched and received messages,
 publishes live integration events to NATS, and serves the Telegram history fetch
-and coverage RPC surface used by History Sync. It joins Registry with its
-advertised RPC URL and procedures.
+and coverage RPC surface used by History Sync.
 
 `npm run dev:history-sync` runs the `@agentg/history-sync` package. It owns
 history sync templates, concrete chat targets, range projection, and the history sync
-lifecycle. It joins Registry and resolves Telegram through the local Registry
-snapshot before internal procedure calls.
-
-`npm run dev:registry` runs the `@agentg/registry` package. It stores
-active module manifests, publishes version invalidations, and serves the current
-topology snapshot.
+lifecycle. It calls Telegram through the typed `@agentg/telegram` client using
+`TELEGRAM_RPC_URL`.
 
 `npm run dev:dashboard-server` runs the server-side Dashboard boundary.
 It serves the browser-facing operator WebSocket on `127.0.0.1:8789`, subscribes
-to live NATS events, and resolves History Sync and Telegram through Service
-Registry before internal procedure calls.
+to live NATS events, and exposes Dashboard-owned backend procedures that call
+typed History Sync and Telegram clients. It starts after Telegram and History
+Sync are ready and does not wait for Gateway.
 
 `npm run dev:dashboard` runs the Vite browser UI on `127.0.0.1:8788`. Its
 `/ws` path is proxied to the Dashboard server during development.
 
 `npm run dev:gateway` runs the `@agentg/gateway` package. It subscribes to live
 NATS events and serves the external agent WebSocket boundary. Gateway currently
-exposes only `telegram.getChat`, resolves Telegram through Registry,
-and forwards only `telegram.login.completed`. Operator views do not require
-Gateway.
+exposes only `telegram.getChat`, calls Telegram through the typed
+`@agentg/telegram` client, and forwards only `telegram.login.completed`.
+Operator views do not require Gateway.
 
 ## Internal RPC Addresses
 
 Telegram and History Sync start package-owned internal HTTP procedure servers.
-Registry is the only direct discovery URL. Services join it with their
-manifest; consumers resolve procedures from the local snapshot before making
-internal procedure calls.
+Consumers know service addresses from the local runtime environment and call
+typed clients imported from the serving package root.
 
 Local development defaults:
 
 - Telegram local RPC port: `PORT=8702`
 - History Sync local RPC port: `PORT=8704`
-- Registry local RPC port: `PORT=8701`
-- Services to Registry URL: `REGISTRY_URL=http://127.0.0.1:8701`
+- Telegram client URL for local consumers:
+  `TELEGRAM_RPC_URL=http://127.0.0.1:8702`
+- History Sync client URL for Dashboard server:
+  `HISTORY_SYNC_RPC_URL=http://127.0.0.1:8704`
 - Dashboard server bind: `DASHBOARD_HOST=127.0.0.1`,
   `DASHBOARD_PORT=8789`
 
@@ -128,11 +124,16 @@ Docker Compose uses internal service DNS names:
 
 - Telegram binds `0.0.0.0:8080` inside its container.
 - History Sync binds `0.0.0.0:8080` inside its container.
-- Registry binds `0.0.0.0:8080` inside its container.
-- Telegram and History Sync join `http://registry:8080`.
-- History Sync, Gateway, and Dashboard resolve module RPC URLs
-  from Registry snapshots.
+- History Sync and Gateway use `TELEGRAM_RPC_URL=http://telegram:8080`.
+- Dashboard server uses `TELEGRAM_RPC_URL=http://telegram:8080` and
+  `HISTORY_SYNC_RPC_URL=http://history-sync:8080`.
 - Dashboard binds `0.0.0.0:8080` inside its container.
+- Telegram and History Sync expose Docker healthchecks through their internal
+  RPC endpoints. Docker Compose waits for Telegram health before starting
+  History Sync, Gateway, and Dashboard, and waits for History Sync health before
+  starting Dashboard.
+- Dashboard does not depend on Gateway in Docker Compose. Gateway may run in the
+  same profile, but Gateway failure must not block operator views.
 - The Dashboard edge proxy exposes the browser UI on
   `${DASHBOARD_PORT:-8788}` and routes `/telegram-files/` to the Telegram file
   server.
@@ -158,7 +159,8 @@ Module runtime environment:
 - `MODULE_MIGRATION_FOLDER`: module-owned Drizzle migration folder
 - `DATABASE_URL`: shared Postgres connection string
 - `NATS_URL`: shared NATS connection string
-- `REGISTRY_URL`: Registry URL for module manifest join
+- `<OWNER>_RPC_URL`: explicitly configured URL for each consumed internal RPC
+  dependency
 
 Docker Compose includes a `module-smoke` profile with the `modulesmoke` service.
 It is a packaging smoke service for the module environment shape, not a product
@@ -168,46 +170,15 @@ module:
 docker compose --profile module-smoke up --build modulesmoke
 ```
 
-## Inspecting Registry
+## Debugging Internal RPC Calls
 
-The current Registry snapshot is exposed by `@agentg/registry` through the
-framework registry client.
+Internal RPC calls do not publish NATS lifecycle events. Inspect them through
+OpenTelemetry traces and RPC duration metrics. Use the procedure name and
+`rpc.service` label to filter client and server spans for a specific call path.
 
-Registry stores active module manifests only. It does not call domain or module
-RPC methods.
-
-Core services register with `required: true`: Telegram ingestion, History Sync,
-Gateway, and Dashboard. Disappearing required services trigger graceful
-shutdown in Registry clients. Disappearing optional services only
-removes their procedures from snapshots.
-
-## Debugging `callId` Flows
-
-RPC methods publish `{domain}.rpc.{procedure}.{lifecycle}` events with one `callId` per
-invocation by default. To inspect one procedure flow, subscribe to that target
-in NATS directly:
-
-```bash
-node --input-type=module -e "
-import { connect, StringCodec } from 'nats';
-const nc = await connect({ servers: process.env.NATS_URL ?? 'nats://127.0.0.1:4222' });
-const codec = StringCodec();
-for await (const msg of nc.subscribe('history-sync.rpc.getChatHistorySyncState.>')) {
-  console.log(codec.decode(msg.data));
-}
-"
-```
-
-Then:
-
-1. Invoke the subscribed RPC method, for example `history-sync.getChatHistorySyncState`.
-   Use `history-sync.rpc.requestSync.>` when inspecting that target.
-2. Correlate `{domain}.rpc.{procedure}.started`, optional
-   `{domain}.rpc.{procedure}.progress`, `{domain}.rpc.{procedure}.completed`,
-   and `{domain}.rpc.{procedure}.failed` by `event.data.callId`.
-
-These events are not durable. If a client disconnects, recover state through the
-owning domain or module RPC surface.
+Domain facts still travel over NATS. To inspect state changes, subscribe to the
+explicit domain subjects such as `history-sync.sync.>` or
+`telegram.update.chat.>`.
 
 ## Expected Services
 
@@ -215,7 +186,6 @@ Initial local stack includes:
 
 - Telegram ingestion process backed by TDLib
 - History Sync process
-- Registry process
 - Dashboard server and browser UI for operator views
 - Agent Gateway process when testing agent-facing APIs
 - Postgres
