@@ -141,7 +141,7 @@ describe('Files Grafana dashboard', () => {
       'sum by (telegram_file_worker_job_source) (increase(telegram_file_worker_jobs_total{telegram_file_worker_job_outcome="failed"}[$__range]))'
     ]);
     expect(expressionsForPanel(panels, 'Failure Logs')).toEqual([
-      '{service_name="telegram"} |= "telegram.file_download_failed"'
+      '{service_name="telegram"} | event="telegram.file_download_failed"'
     ]);
     expect(panelByTitle(panels, 'Failure Logs').datasource).toEqual({
       type: 'loki',
