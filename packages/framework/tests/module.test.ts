@@ -8,9 +8,9 @@ import {
   nats,
   number,
   string,
-  type EventBusFactory,
   type ProceduresOf
 } from '../src/index.js';
+import type { EventBusFactory } from '../src/events/eventBus.js';
 import { callProcedure, startProcedureServer } from '../src/rpc/httpRpc.js';
 import type { ProcedureServer } from '../src/rpc/rpc.js';
 

@@ -3,8 +3,8 @@ import {
   createContentCatalogIndex,
   resolveSlotContents,
   tagsCompatible
-} from '@agentg/framework/dashboard';
-import type { ContentCatalog, SlotLayout } from '@agentg/framework/dashboard';
+} from '../../framework/src/dashboard/slots/resolver.js';
+import type { ContentCatalog, SlotLayout } from '../../framework/src/dashboard/slots/types.js';
 
 const catalog = [
   {
