@@ -2,10 +2,12 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 
 import {
   createLogger,
+  ProcedureTransportError,
   type EventBus,
   type EventEnvelope,
   type EventSubscription
 } from '@agentg/framework';
+import type { telegramClient } from '@agentg/telegram';
 import { WebSocket, WebSocketServer, type RawData } from 'ws';
 
 const EXTERNAL_EVENT_SUBJECT = 'telegram.login.completed';
@@ -18,9 +20,7 @@ type ServerConfig = {
   token?: string | undefined;
 };
 
-type ChatLookup = {
-  getChat(input: { chatId: string }): Promise<unknown>;
-};
+type ChatLookup = Pick<ReturnType<typeof telegramClient>, 'getChat'>;
 
 export type GatewayServerOptions = {
   chatLookup: ChatLookup;
@@ -198,7 +198,7 @@ function requireGetChatParams(params: unknown): { chatId: string } {
 
 function rpcErrorFromUnknown(error: unknown): { code: string; message: string } {
   const message = error instanceof Error ? error.message : String(error);
-  if (isDependencyUnavailableError(error, message)) {
+  if (isDependencyUnavailableError(error)) {
     return {
       code: 'dependency_unavailable',
       message
@@ -217,14 +217,8 @@ function rpcErrorFromUnknown(error: unknown): { code: string; message: string } 
   };
 }
 
-function isDependencyUnavailableError(error: unknown, message: string): boolean {
-  const record = typeof error === 'object' && error !== null ? (error as { code?: unknown }) : {};
-  return (
-    record.code === 'dependency_unavailable' ||
-    message === 'Module RPC is not connected' ||
-    message === 'Module is not registered: telegram' ||
-    message === 'Procedure is not registered by module telegram: getChat'
-  );
+function isDependencyUnavailableError(error: unknown): boolean {
+  return error instanceof ProcedureTransportError;
 }
 
 class UnknownGatewayMethodError extends Error {

@@ -1,4 +1,4 @@
-import { createLogger, httpRpc, logError, nats, registry } from '@agentg/framework';
+import { createLogger, httpRpc, logError, nats } from '@agentg/framework';
 
 import { readConfig } from './config.js';
 import { gatewayModule } from './module.js';
@@ -11,10 +11,9 @@ const app = gatewayModule({
     events: nats(config.natsUrl),
     rpc: httpRpc(
       config.rpcHost === undefined
-        ? { port: config.rpcPort }
-        : { host: config.rpcHost, port: config.rpcPort }
-    ),
-    registry: registry(config.registryUrl)
+        ? { port: config.rpcPort, service: 'gateway' }
+        : { host: config.rpcHost, port: config.rpcPort, service: 'gateway' }
+    )
   }
 });
 

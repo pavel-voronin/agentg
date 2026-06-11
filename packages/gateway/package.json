@@ -3,9 +3,6 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "exports": {
-    ".": "./src/module.ts"
-  },
   "scripts": {
     "dev": "tsx watch --clear-screen=false src/main.ts",
     "test": "vitest run",
@@ -13,6 +10,7 @@
   },
   "dependencies": {
     "@agentg/framework": "file:../framework",
+    "@agentg/telegram": "file:../telegram",
     "ws": "^8.20.0"
   },
   "devDependencies": {

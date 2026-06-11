@@ -1,12 +1,15 @@
 import { randomUUID } from 'node:crypto';
 
+import { ProcedureTransportError } from '@agentg/framework';
 import type { EventBus, EventEnvelope, EventSubscription } from '@agentg/framework';
+import type { telegramClient } from '@agentg/telegram';
 import { WebSocket, type RawData } from 'ws';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { startGatewayServer, type GatewayServerHandle } from '../src/server.js';
 
 const gatewayHandles: GatewayServerHandle[] = [];
+type TestChatLookup = Pick<ReturnType<typeof telegramClient>, 'getChat'>;
 
 describe('gateway server', () => {
   afterEach(async () => {
@@ -18,6 +21,14 @@ describe('gateway server', () => {
     const gateway = await startGateway({
       chatLookup: {
         getChat(input) {
+          if (
+            typeof input !== 'object' ||
+            input === null ||
+            !('chatId' in input) ||
+            typeof input.chatId !== 'string'
+          ) {
+            throw new Error('telegram.getChat requires chatId');
+          }
           calls.push(input);
           return Promise.resolve({
             chat: {
@@ -91,7 +102,9 @@ describe('gateway server', () => {
     const gateway = await startGateway({
       chatLookup: {
         getChat() {
-          return Promise.reject(new Error('Module is not registered: telegram'));
+          return Promise.reject(
+            new ProcedureTransportError('Procedure transport failed: fetch failed')
+          );
         }
       }
     });
@@ -113,7 +126,7 @@ describe('gateway server', () => {
       await expect(responsePromise).resolves.toEqual({
         error: {
           code: 'dependency_unavailable',
-          message: 'Module is not registered: telegram'
+          message: 'Procedure transport failed: fetch failed'
         },
         id
       });
@@ -149,11 +162,46 @@ describe('gateway server', () => {
       client.close();
     }
   });
+
+  it('returns method_failed when Telegram returns a domain procedure error', async () => {
+    const gateway = await startGateway({
+      chatLookup: {
+        getChat() {
+          return Promise.reject(new Error('Telegram chat read failed'));
+        }
+      }
+    });
+    const client = await connectGateway(gateway);
+
+    try {
+      const id = `req_${randomUUID()}`;
+      const responsePromise = nextResponse(client);
+      client.send(
+        JSON.stringify({
+          id,
+          method: 'telegram.getChat',
+          params: {
+            chatId: 'chat-a'
+          }
+        })
+      );
+
+      await expect(responsePromise).resolves.toEqual({
+        error: {
+          code: 'method_failed',
+          message: 'Telegram chat read failed'
+        },
+        id
+      });
+    } finally {
+      client.close();
+    }
+  });
 });
 
 async function startGateway(
   options: {
-    chatLookup?: { getChat(input: { chatId: string }): Promise<unknown> } | undefined;
+    chatLookup?: TestChatLookup | undefined;
     events?: TestEventBus | undefined;
     token?: string | undefined;
   } = {}
@@ -161,7 +209,9 @@ async function startGateway(
   const handle = await startGatewayServer({
     chatLookup: options.chatLookup ?? {
       getChat() {
-        return Promise.reject(new Error('Module is not registered: telegram'));
+        return Promise.reject(
+          new ProcedureTransportError('Procedure transport failed: fetch failed')
+        );
       }
     },
     config: {

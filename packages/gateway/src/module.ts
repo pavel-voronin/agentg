@@ -1,16 +1,13 @@
 import { defineModule } from '@agentg/framework';
+import { telegramClient } from '@agentg/telegram';
 
 import { readConfig } from './config.js';
 import { startGatewayServer } from './server.js';
 
-type ChatLookup = {
-  getChat(input: { chatId: string }): Promise<unknown>;
-};
-
 export const gatewayModule = defineModule('gateway', {
   config: readConfig,
-  setup({ background, config, events, rpc }) {
-    const chatLookup = rpc<ChatLookup>('telegram');
+  setup({ background, config, events }) {
+    const chatLookup = telegramClient({ url: config.telegramRpcUrl });
 
     background('server', () =>
       startGatewayServer({
@@ -24,8 +21,6 @@ export const gatewayModule = defineModule('gateway', {
       })
     );
 
-    return {
-      required: true
-    };
+    return {};
   }
 });
