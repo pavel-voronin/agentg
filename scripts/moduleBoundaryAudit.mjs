@@ -6,7 +6,6 @@ import { join } from 'node:path';
 const root = process.cwd();
 const packageDirs = [
   'packages/framework',
-  'packages/registry',
   'packages/gateway',
   'packages/telemetry',
   'packages/dashboard',

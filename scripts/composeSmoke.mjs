@@ -10,17 +10,17 @@ if (includeTelegram) {
 }
 
 const compose = ['docker', 'compose', ...profiles.flatMap((profile) => ['--profile', profile])];
-const services = [
-  'postgres',
-  'nats',
-  'registry',
-  'dashboard',
-  ...(includeTelegram ? ['telegram'] : [])
-];
+const services = ['postgres', 'nats', 'telegram', 'history-sync', 'gateway', 'dashboard'];
 
 try {
   run(['up', '-d', 'postgres', 'nats', '--quiet-pull']);
-  runNpm(['run', 'db:migrate']);
+  runNpm(['run', 'db:migrate'], {
+    env: {
+      DATABASE_URL: process.env.DATABASE_URL ?? 'postgres://agentg:agentg@127.0.0.1:5432/agentg',
+      NATS_URL: process.env.NATS_URL ?? 'nats://127.0.0.1:4222',
+      TELEGRAM_RPC_URL: process.env.TELEGRAM_RPC_URL ?? 'http://127.0.0.1:8702'
+    }
+  });
   run([
     'rm',
     '--stop',
@@ -28,16 +28,7 @@ try {
     ...services.filter((service) => service !== 'postgres' && service !== 'nats')
   ]);
   run(['up', '--build', '-d', ...services]);
-  run([
-    'run',
-    '--rm',
-    '--no-deps',
-    'dashboard',
-    'node',
-    '--input-type=module',
-    '--eval',
-    smokeDriver(includeTelegram)
-  ]);
+  run(['exec', '-T', 'dashboard', 'node', '--input-type=module', '--eval', smokeDriver()]);
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));
   run(
@@ -66,9 +57,13 @@ function run(args, options = {}) {
   throw new Error(`Command failed: ${[compose[0], ...compose.slice(1), ...args].join(' ')}`);
 }
 
-function runNpm(args) {
+function runNpm(args, options = {}) {
   const result = spawnSync('npm', args, {
     encoding: 'utf8',
+    env: {
+      ...process.env,
+      ...(options.env ?? {})
+    },
     stdio: 'inherit'
   });
 
@@ -77,10 +72,8 @@ function runNpm(args) {
   }
 }
 
-function smokeDriver(checkTelegram) {
+function smokeDriver() {
   return `
-import { callProcedure } from '@agentg/framework';
-
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -103,41 +96,124 @@ async function fetchUntilReady(url, service, acceptedStatuses, attempts = 30) {
   throw new Error(service + ' did not become ready: ' + (lastError instanceof Error ? lastError.message : String(lastError)));
 }
 
-async function waitForModuleRegistrations(expectedModules, attempts = 20) {
-  let snapshot;
+async function callProcedureUntilReady(url, service, procedure, input, attempts = 30) {
+  let lastError;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    snapshot = await callProcedure('http://registry:8080', 'getSnapshot');
-    const activeModules = new Set(snapshot.modules.map((module) => module.module));
-    if (expectedModules.every((module) => activeModules.has(module))) {
-      return snapshot;
+    try {
+      const response = await fetch(url + '/rpc', {
+        body: JSON.stringify({ input, procedure }),
+        headers: {
+          'content-type': 'application/json'
+        },
+        method: 'POST'
+      });
+      const body = await response.json();
+      if (response.ok && body?.ok === true && 'result' in body) {
+        return body.result;
+      }
+      lastError = new Error(service + ' returned HTTP ' + String(response.status) + ': ' + JSON.stringify(body));
+    } catch (error) {
+      lastError = error;
     }
     await sleep(2_000);
   }
 
-  throw new Error('Expected modules are not registered: ' + JSON.stringify({
-    expectedModules,
-    snapshot
-  }));
+  throw new Error(service + ' did not become ready: ' + (lastError instanceof Error ? lastError.message : String(lastError)));
 }
 
-const expectedModules = [
-  ...(checkTelegram ? ['telegram'] : [])
-];
-const registry = await waitForModuleRegistrations(expectedModules);
+async function websocketRpcUntilReady(url, service, method, params, attempts = 30) {
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await websocketRpc(url, method, params);
+    } catch (error) {
+      lastError = error;
+    }
+    await sleep(2_000);
+  }
 
-const dashboardResponse = await fetchUntilReady('http://dashboard:8788/', 'dashboard', [200]);
-
-if (${JSON.stringify(checkTelegram)}) {
-  await fetchUntilReady('http://telegram:8080/', 'telegram RPC', [404], 30);
+  throw new Error(service + ' did not become ready: ' + (lastError instanceof Error ? lastError.message : String(lastError)));
 }
 
-console.log(JSON.stringify({
-  event: 'compose.smoke.ok',
-  dashboard: {
-    contentType: dashboardResponse.headers.get('content-type'),
-    status: dashboardResponse.status
-  },
-  registry
-}, null, 2));
+async function websocketRpc(url, method, params) {
+  const { WebSocket } = await import('ws');
+  return new Promise((resolve, reject) => {
+    const socket = new WebSocket(url);
+    const timeout = setTimeout(() => {
+      socket.close();
+      reject(new Error(method + ' timed out'));
+    }, 5_000);
+
+    socket.once('open', () => {
+      socket.send(JSON.stringify({ id: 'compose-smoke', method, params }));
+    });
+    socket.once('message', (data) => {
+      clearTimeout(timeout);
+      socket.close();
+      const response = JSON.parse(data.toString());
+      if (response.error !== undefined) {
+        reject(new Error(response.error.message));
+        return;
+      }
+      resolve(response.result);
+    });
+    socket.once('error', (error) => {
+      clearTimeout(timeout);
+      reject(error);
+    });
+  });
+}
+
+const dashboardResponse = await fetchUntilReady('http://127.0.0.1:8080/healthz', 'dashboard', [200]);
+const telegramChat = await callProcedureUntilReady('http://telegram:8080', 'telegram RPC', 'getChat', {
+  chatId: '0'
+});
+if (telegramChat.chat !== null) {
+  throw new Error('telegram smoke expected missing chat to return null');
+}
+
+const historyState = await callProcedureUntilReady(
+  'http://history-sync:8080',
+  'history-sync RPC',
+  'getChatHistorySyncState',
+  {
+    chatId: '0'
+  }
+);
+if (historyState.chat !== null) {
+  throw new Error('history-sync smoke expected missing chat to return null');
+}
+
+const dashboardState = await websocketRpcUntilReady(
+  'ws://127.0.0.1:8080/ws',
+  'dashboard RPC',
+  'history-sync.dashboard.getChatHistorySyncState',
+  {
+    chatId: '0'
+  }
+);
+if (dashboardState.chat !== null) {
+  throw new Error('dashboard smoke expected missing history-sync chat to return null');
+}
+
+console.log(
+  JSON.stringify(
+    {
+      event: 'compose.smoke.ok',
+      dashboard: {
+        contentType: dashboardResponse.headers.get('content-type'),
+        status: dashboardResponse.status
+      },
+      historySync: {
+        chat: historyState.chat
+      },
+      telegram: {
+        chat: telegramChat.chat
+      }
+    },
+    null,
+    2
+  )
+);
 `;
 }

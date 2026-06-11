@@ -9,14 +9,7 @@ import net from 'node:net';
 const processComposeArgs = ['-U', '-u', '.tmp/process-compose.sock'];
 const composeProfiles = ['telemetry', 'container-client', 'dashboard'];
 const localEnv = readLocalEnv();
-const appProcesses = [
-  'registry',
-  'telegram',
-  'history-sync',
-  'gateway',
-  'dashboard-server',
-  'dashboard'
-];
+const appProcesses = ['telegram', 'history-sync', 'gateway', 'dashboard-server', 'dashboard'];
 const setupProcesses = ['infra-up', 'db-migrate', 'telegram-files-ready'];
 const telemetryEnabled = enabled(configValue('AGENTG_TELEMETRY', '1'));
 const expectedInfraServices = [
@@ -37,7 +30,6 @@ const expectedInfraServices = [
     : [])
 ];
 const productPorts = [
-  ['registry', 8701],
   ['telegram', 8702],
   ['history-sync', 8704],
   ['gateway', 8787],

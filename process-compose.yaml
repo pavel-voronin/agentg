@@ -13,7 +13,8 @@ ordered_shutdown: true
 environment:
   - 'DATABASE_URL=${DATABASE_URL:-postgres://agentg:agentg@127.0.0.1:5432/agentg}'
   - 'NATS_URL=${NATS_URL:-nats://127.0.0.1:4222}'
-  - 'REGISTRY_URL=${REGISTRY_URL:-http://127.0.0.1:8701}'
+  - 'TELEGRAM_RPC_URL=${TELEGRAM_RPC_URL:-http://127.0.0.1:8702}'
+  - 'HISTORY_SYNC_RPC_URL=${HISTORY_SYNC_RPC_URL:-http://127.0.0.1:8704}'
   - 'AGENTG_TELEMETRY=${AGENTG_TELEMETRY:-1}'
   - 'OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=${OTEL_EXPORTER_OTLP_LOGS_ENDPOINT:-http://127.0.0.1:4318/v1/logs}'
   - 'OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=${OTEL_EXPORTER_OTLP_METRICS_ENDPOINT:-http://127.0.0.1:4318/v1/metrics}'
@@ -46,25 +47,6 @@ processes:
       infra-up:
         condition: process_completed_successfully
 
-  registry:
-    namespace: app
-    description: Registry topology and procedure discovery service.
-    command: npm run dev:registry
-    environment:
-      - 'OTEL_SERVICE_NAME=registry'
-    availability:
-      restart: always
-      backoff_seconds: 2
-    depends_on:
-      db-migrate:
-        condition: process_completed_successfully
-    readiness_probe:
-      exec:
-        command: nc -z 127.0.0.1 8701
-      period_seconds: 1
-      timeout_seconds: 1
-      failure_threshold: 120
-
   telegram:
     namespace: app
     description: Telegram TDLib ingestion and Telegram-owned RPC service.
@@ -75,8 +57,8 @@ processes:
       restart: always
       backoff_seconds: 2
     depends_on:
-      registry:
-        condition: process_healthy
+      db-migrate:
+        condition: process_completed_successfully
     readiness_probe:
       exec:
         command: nc -z 127.0.0.1 8702
@@ -94,8 +76,6 @@ processes:
       restart: always
       backoff_seconds: 2
     depends_on:
-      registry:
-        condition: process_healthy
       telegram:
         condition: process_healthy
     readiness_probe:
@@ -115,11 +95,7 @@ processes:
       restart: always
       backoff_seconds: 2
     depends_on:
-      registry:
-        condition: process_healthy
       telegram:
-        condition: process_healthy
-      history-sync:
         condition: process_healthy
     readiness_probe:
       exec:
@@ -138,13 +114,9 @@ processes:
       restart: always
       backoff_seconds: 2
     depends_on:
-      registry:
-        condition: process_healthy
       telegram:
         condition: process_healthy
       history-sync:
-        condition: process_healthy
-      gateway:
         condition: process_healthy
     readiness_probe:
       exec:

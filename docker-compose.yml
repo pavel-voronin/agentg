@@ -13,7 +13,6 @@ x-agentg-module-environment: &agentg-module-environment
   MODULE_RPC_HOST: 0.0.0.0
   MODULE_RPC_PORT: 8080
   NATS_URL: nats://nats:4222
-  REGISTRY_URL: http://registry:8080
 
 x-agentg-module-service: &agentg-module-service
   build:
@@ -26,16 +25,29 @@ x-agentg-module-service: &agentg-module-service
       condition: service_healthy
   restart: 'no'
 
+x-agentg-rpc-healthcheck: &agentg-rpc-healthcheck
+  test:
+    [
+      'CMD',
+      'node',
+      '--input-type=module',
+      '--eval',
+      "const response = await fetch('http://127.0.0.1:8080/rpc', { body: JSON.stringify({ procedure: '__healthcheck__' }), headers: { 'content-type': 'application/json' }, method: 'POST' }); if (response.status !== 404) process.exit(1);"
+    ]
+  interval: 2s
+  timeout: 3s
+  retries: 60
+  start_period: 5s
+
 services:
   telegram:
     profiles:
       - container-client
+      - dashboard
     build:
       context: .
       target: runtime
     depends_on:
-      registry:
-        condition: service_started
       nats:
         condition: service_started
       postgres:
@@ -44,7 +56,6 @@ services:
       <<: *agentg-telemetry-environment
       DATABASE_URL: postgres://agentg:agentg@postgres:5432/agentg
       NATS_URL: nats://nats:4222
-      REGISTRY_URL: http://registry:8080
       HOST: 0.0.0.0
       PORT: 8080
       TELEGRAM_API_ID: ${TELEGRAM_API_ID:-}
@@ -55,6 +66,7 @@ services:
       - ./td-data:/app/td-data
     restart: 'no'
     command: ['npm', 'run', 'dev:telegram']
+    healthcheck: *agentg-rpc-healthcheck
 
   modulesmoke:
     profiles:
@@ -74,25 +86,6 @@ services:
       MODULE_SLUG: modulesmoke
       MODULE_TABLE_PREFIX: modulesmoke_
 
-  registry:
-    profiles:
-      - registry
-      - container-client
-      - dashboard
-    build:
-      context: .
-      target: runtime
-    command: ['npm', '--workspace', '@agentg/registry', 'run', 'dev']
-    depends_on:
-      nats:
-        condition: service_started
-    environment:
-      <<: *agentg-telemetry-environment
-      NATS_URL: nats://nats:4222
-      HOST: 0.0.0.0
-      PORT: 8080
-    restart: 'no'
-
   dashboard:
     profiles:
       - dashboard
@@ -101,18 +94,36 @@ services:
       target: runtime
     command: ['npm', '--workspace', '@agentg/dashboard', 'run', 'start']
     depends_on:
-      registry:
-        condition: service_started
+      history-sync:
+        condition: service_healthy
       nats:
         condition: service_started
+      postgres:
+        condition: service_healthy
+      telegram:
+        condition: service_healthy
     environment:
       <<: *agentg-telemetry-environment
       DATABASE_URL: postgres://agentg:agentg@postgres:5432/agentg
       DASHBOARD_HOST: 0.0.0.0
       DASHBOARD_PORT: 8080
+      HISTORY_SYNC_RPC_URL: http://history-sync:8080
       NATS_URL: nats://nats:4222
-      REGISTRY_URL: http://registry:8080
+      TELEGRAM_RPC_URL: http://telegram:8080
     restart: 'no'
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '--input-type=module',
+          '--eval',
+          "const response = await fetch('http://127.0.0.1:8080/healthz'); if (response.status !== 200) process.exit(1);"
+        ]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+      start_period: 5s
 
   dashboard-edge:
     profiles:
@@ -120,7 +131,7 @@ services:
     image: nginx:1.29-alpine
     depends_on:
       dashboard:
-        condition: service_started
+        condition: service_healthy
       telegram-files:
         condition: service_started
     ports:
@@ -138,20 +149,33 @@ services:
       target: runtime
     command: ['npm', '--workspace', '@agentg/history-sync', 'run', 'dev']
     depends_on:
-      registry:
-        condition: service_started
       nats:
         condition: service_started
       postgres:
+        condition: service_healthy
+      telegram:
         condition: service_healthy
     environment:
       <<: *agentg-telemetry-environment
       DATABASE_URL: postgres://agentg:agentg@postgres:5432/agentg
       NATS_URL: nats://nats:4222
-      REGISTRY_URL: http://registry:8080
+      TELEGRAM_RPC_URL: http://telegram:8080
       HOST: 0.0.0.0
       PORT: 8080
     restart: 'no'
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '--input-type=module',
+          '--eval',
+          "const response = await fetch('http://127.0.0.1:8080/rpc', { body: JSON.stringify({ procedure: '__healthcheck__' }), headers: { 'content-type': 'application/json' }, method: 'POST' }); if (response.status !== 404) process.exit(1);"
+        ]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+      start_period: 5s
 
   gateway:
     profiles:
@@ -162,14 +186,14 @@ services:
       target: runtime
     command: ['npm', '--workspace', '@agentg/gateway', 'run', 'dev']
     depends_on:
-      registry:
-        condition: service_started
       nats:
         condition: service_started
+      telegram:
+        condition: service_healthy
     environment:
       <<: *agentg-telemetry-environment
       NATS_URL: nats://nats:4222
-      REGISTRY_URL: http://registry:8080
+      TELEGRAM_RPC_URL: http://telegram:8080
       HOST: 0.0.0.0
       PORT: 8080
       GATEWAY_HOST: 0.0.0.0
@@ -177,6 +201,19 @@ services:
     ports:
       - '${GATEWAY_PORT:-8787}:${GATEWAY_PORT:-8787}'
     restart: 'no'
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '--input-type=module',
+          '--eval',
+          "const port = process.env.GATEWAY_PORT ?? '8787'; const response = await fetch('http://127.0.0.1:' + port); if (response.status !== 404) process.exit(1);"
+        ]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+      start_period: 5s
 
   telegram-files:
     image: nginx:1.29-alpine
