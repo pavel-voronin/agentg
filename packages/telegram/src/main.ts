@@ -1,4 +1,4 @@
-import { createLogger, httpRpc, logError, nats, registry } from '@agentg/framework';
+import { createLogger, httpRpc, logError, nats } from '@agentg/framework';
 
 import { readConfig } from './config.js';
 import { telegramModule } from './module.js';
@@ -10,9 +10,10 @@ const app = telegramModule({
   connect: {
     events: nats(config.natsUrl),
     rpc: httpRpc(
-      config.host === undefined ? { port: config.port } : { host: config.host, port: config.port }
-    ),
-    registry: registry(config.registryUrl)
+      config.host === undefined
+        ? { port: config.port, service: 'telegram' }
+        : { host: config.host, port: config.port, service: 'telegram' }
+    )
   }
 });
 

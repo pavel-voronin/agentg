@@ -87,21 +87,19 @@ export const telegramModule = defineModule('telegram', {
     };
 
     return {
-      procedures: {
-        countMessagesInIntervals: countMessagesInIntervalsProcedure(procedureResources),
-        ensureHistoryCoverage: ensureHistoryCoverageProcedure(procedureResources),
-        fetchPage: fetchPageProcedure(procedureResources),
-        getChat: getChatProcedure(procedureResources),
-        getChatHistoryFacts: getChatHistoryFactsProcedure(procedureResources),
-        getHistoryCoverage: getHistoryCoverageProcedure(procedureResources),
-        listChats: listChatsProcedure(procedureResources),
-        listRecentMessages: listRecentMessagesProcedure(procedureResources),
-        requestFile: requestFileProcedure(procedureResources),
-        searchMessages: searchMessagesProcedure(procedureResources),
-        status: () => ({
-          ready: status.snapshot().ready
-        })
-      }
+      countMessagesInIntervals: countMessagesInIntervalsProcedure(procedureResources),
+      ensureHistoryCoverage: ensureHistoryCoverageProcedure(procedureResources),
+      fetchPage: fetchPageProcedure(procedureResources),
+      getChat: getChatProcedure(procedureResources),
+      getChatHistoryFacts: getChatHistoryFactsProcedure(procedureResources),
+      getHistoryCoverage: getHistoryCoverageProcedure(procedureResources),
+      listChats: listChatsProcedure(procedureResources),
+      listRecentMessages: listRecentMessagesProcedure(procedureResources),
+      requestFile: requestFileProcedure(procedureResources),
+      searchMessages: searchMessagesProcedure(procedureResources),
+      status: () => ({
+        ready: status.snapshot().ready
+      })
     };
   }
 });

@@ -11,7 +11,6 @@ export const readConfig = defineConfig({
   ingestionUpdateConcurrency: number('TELEGRAM_INGESTION_UPDATE_CONCURRENCY').default(10),
   natsUrl: string('NATS_URL'),
   port: number('PORT').default(8702),
-  registryUrl: string('REGISTRY_URL'),
   tdlibDatabaseDirectory: string('TDLIB_DATABASE_DIR').default('./td-data/database'),
   tdlibFilesDirectory: string('TDLIB_FILES_DIR').default('./td-data/files')
 });

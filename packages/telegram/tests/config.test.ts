@@ -6,8 +6,7 @@ describe('Telegram config', () => {
   it('reads required module config and local defaults', () => {
     const config = readConfig({
       DATABASE_URL: 'postgres://agentg:agentg@127.0.0.1:5432/agentg',
-      NATS_URL: 'nats://127.0.0.1:4222',
-      REGISTRY_URL: 'http://127.0.0.1:8701'
+      NATS_URL: 'nats://127.0.0.1:4222'
     });
 
     expect(config).toEqual({
@@ -18,7 +17,6 @@ describe('Telegram config', () => {
       ingestionUpdateConcurrency: 10,
       natsUrl: 'nats://127.0.0.1:4222',
       port: 8702,
-      registryUrl: 'http://127.0.0.1:8701',
       tdlibDatabaseDirectory: './td-data/database',
       tdlibFilesDirectory: './td-data/files'
     });
@@ -30,7 +28,6 @@ describe('Telegram config', () => {
       HOST: '0.0.0.0',
       NATS_URL: 'nats://127.0.0.1:4222',
       PORT: '8080',
-      REGISTRY_URL: 'http://127.0.0.1:8701',
       TDLIB_DATABASE_DIR: '/td/database',
       TDLIB_FILES_DIR: '/td/files',
       TELEGRAM_INGESTION_UPDATE_CONCURRENCY: '2',
