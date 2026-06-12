@@ -27,6 +27,7 @@ import {
 } from './time.js';
 import { priorities, type Priority } from '../tdlib/priority.js';
 import { tdDate, tdIdNumber } from '../tdlib/value.js';
+import { messagesNeedingFileRecording } from './fileRecording.js';
 
 // TODO(file-size): Split page fetch, ensure coverage orchestration, and persistence helpers.
 export type FetchPageInput = {
@@ -438,6 +439,7 @@ async function persistPageAndCoverage(
       messageDate < input.request.endAt
     );
   });
+  const messagesForFileRecording = await messagesNeedingFileRecording(database, messages);
 
   let storedMessages = 0;
   await withHistoryCoverageLocks([input.request.chatId], async () =>
@@ -455,7 +457,7 @@ async function persistPageAndCoverage(
     })
   );
 
-  for (const message of messages) {
+  for (const message of messagesForFileRecording) {
     await recordMessageFiles(files, message, 'history_fetch');
   }
 

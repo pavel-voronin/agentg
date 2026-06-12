@@ -23,6 +23,7 @@ type RequestFileSlotRow = {
   assetKey: string;
   assetStatus: string;
   byteSize: number | null;
+  downloadError: string | null;
   jobStatus: string | null;
   mediaKind: string;
 };
@@ -45,6 +46,7 @@ export async function requestFileSlot(
   const decision = decideFilePolicy({
     cause: 'explicit_request',
     current: {
+      failureReason: row.downloadError,
       sourceFingerprint: row.assetKey,
       status: row.jobStatus ?? row.assetStatus
     },
@@ -84,6 +86,7 @@ async function readRequestFileSlotRow(
       assetKey: telegramFileSlots.assetKey,
       assetStatus: telegramFileAssets.status,
       byteSize: telegramFileSlots.byteSize,
+      downloadError: telegramFileAssets.downloadError,
       jobStatus: telegramFileDownloadJobs.status,
       mediaKind: telegramFileSlots.mediaKind
     })

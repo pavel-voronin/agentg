@@ -49,6 +49,7 @@ export const telegramModule = defineModule('telegram', {
         database,
         events,
         filesDirectory: config.tdlibFilesDirectory,
+        tdlibSourceDirectories: [config.tdlibFilesDirectory, config.tdlibDatabaseDirectory],
         tdlib
       });
 

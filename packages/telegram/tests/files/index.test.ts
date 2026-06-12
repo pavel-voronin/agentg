@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { Database } from '../database/client.js';
-import type { FileSubsystemOptions } from './runtime.js';
+import type { Database } from '../../src/database/client.js';
+import type { FileSubsystemOptions } from '../../src/files/runtime.js';
 
 const emptyBatchResult = {
   delayedCount: 0,
@@ -38,20 +38,20 @@ vi.mock('@agentg/framework', () => ({
   })
 }));
 
-vi.mock('./queue.js', () => ({
+vi.mock('../../src/files/queue.js', () => ({
   logWorkerError: vi.fn(),
   processCompletedFileBatch: worker.processCompletedFileBatch,
   processQueuedFileBatch: worker.processQueuedFileBatch
 }));
 
-vi.mock('./telemetry.js', () => ({
+vi.mock('../../src/files/telemetry.js', () => ({
   recordQueueStatsTelemetry: telemetry.recordQueueStatsTelemetry,
   recordWorkerBatchResult: telemetry.recordWorkerBatchResult,
   recordWorkerWake: telemetry.recordWorkerWake,
   timeWorkerStage: telemetry.timeWorkerStage
 }));
 
-import { useFiles } from './index.js';
+import { useFiles } from '../../src/files/index.js';
 
 describe('Telegram file subsystem worker scheduling', () => {
   beforeEach(() => {
@@ -149,6 +149,7 @@ function queueStatsDatabase(): Database {
                 failedCount: 0,
                 knownCount: 0,
                 readyCount: 0,
+                readyDownloadedBytes: 0,
                 totalCount: 0
               }
             ]);

@@ -20,6 +20,7 @@ export type FileSubsystemOptions = {
   maxFilesPerTick?: number;
   staleCheckMs?: number;
   tdlib: Tdlib;
+  tdlibSourceDirectories: readonly string[];
 };
 
 export type FileRequestResult = {
@@ -34,8 +35,12 @@ export type FileDownloadRow = {
   downloadedByteSize: number | null;
   fileName: string | null;
   latestTdlibFileId: number | null;
+  mediaKind: string | null;
   mimeType: string | null;
+  ownerId: string | null;
+  ownerModel: string | null;
   priority: number;
+  slotKey: string | null;
   transport: FileDownloadTransport;
 };
 

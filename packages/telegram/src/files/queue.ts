@@ -43,6 +43,11 @@ import { recordWorkerBatchResult, recordWorkerJobs, timeWorkerStage } from './te
 const MAX_STALE_DOWNLOAD_ATTEMPTS = 3;
 const logger = createLogger('telegram');
 
+type StaleFileDownloadRows = {
+  hasMore: boolean;
+  rows: FileDownloadRow[];
+};
+
 export async function processQueuedFileBatch(
   options: FileSubsystemOptions,
   limits: {
@@ -205,7 +210,7 @@ async function reconcileStaleFileDownloads(
   limit: number
 ): Promise<FileDownloadBatchResult> {
   const staleBefore = new Date(Date.now() - DEFAULT_WORKER_DOWNLOAD_CLAIM_TIMEOUT_MS);
-  const rows = await readStaleFileDownloadRows(options.database, staleBefore, limit);
+  const { hasMore, rows } = await readStaleFileDownloadRows(options.database, staleBefore, limit);
   if (rows.length === 0) {
     return emptyBatchResult();
   }
@@ -233,7 +238,7 @@ async function reconcileStaleFileDownloads(
   return {
     delayedCount: 0,
     failedCount,
-    immediateCount: 0,
+    immediateCount: hasMore ? 1 : 0,
     processedCount: results.length,
     readyCount,
     watchdogCount: downloadingCount
@@ -244,7 +249,7 @@ async function readStaleFileDownloadRows(
   database: Database,
   staleBefore: Date,
   limit: number
-): Promise<FileDownloadRow[]> {
+): Promise<StaleFileDownloadRows> {
   const jobs = await database
     .select({
       assetKey: telegramFileDownloadJobs.assetKey
@@ -254,10 +259,15 @@ async function readStaleFileDownloadRows(
     .orderBy(
       sql`coalesce(${telegramFileDownloadJobs.claimedAt}, ${telegramFileDownloadJobs.updatedAt})`
     )
-    .limit(limit);
+    .limit(limit + 1);
 
-  const rows = await Promise.all(jobs.map((job) => readFileDownloadRow(database, job.assetKey)));
-  return rows.filter((row): row is FileDownloadRow => row !== null);
+  const rows = await Promise.all(
+    jobs.slice(0, limit).map((job) => readFileDownloadRow(database, job.assetKey))
+  );
+  return {
+    hasMore: jobs.length > limit,
+    rows: rows.filter((row): row is FileDownloadRow => row !== null)
+  };
 }
 
 async function reconcileStaleFileDownload(
@@ -292,12 +302,14 @@ async function reconcileStaleFileDownload(
       }
     }
     if (row.attempts >= MAX_STALE_DOWNLOAD_ATTEMPTS) {
+      logStaleFileDownloadDecision('retry_limit', row, file);
       throw new Error(
         `Telegram file download stale retry limit reached after ${String(row.attempts)} attempts`
       );
     }
     await timeWorkerStage('dispatch_tdlib', () => dispatchTdlibFileDownload(options, row));
     await markFileDownloadRedispatched(options.database, row.assetKey);
+    logStaleFileDownloadDecision('redispatched', row, file);
     return {
       assetKey: row.assetKey,
       failed: false,
@@ -450,7 +462,12 @@ async function canonicalizeCompletedFile(
   }
 
   try {
-    const stored = await storeCanonicalFile(options.filesDirectory, file.localPath, row);
+    const stored = await storeCanonicalFile(
+      options.filesDirectory,
+      options.tdlibSourceDirectories,
+      file.localPath,
+      row
+    );
     await markFileDownloadReady(options.database, file.assetKey, stored);
     await cleanupTdlibFile(options, row);
   } catch (error) {
@@ -473,10 +490,12 @@ async function readFileDownloadRow(
       downloadedByteSize: telegramFileAssets.downloadedByteSize,
       fileName: telegramFileSlots.fileName,
       latestTdlibFileId: telegramFileAssets.latestTdlibFileId,
+      mediaKind: telegramFileSlots.mediaKind,
       mimeType: telegramFileSlots.mimeType,
       ownerId: telegramFileSlots.ownerId,
       ownerModel: telegramFileSlots.ownerModel,
-      priority: telegramFileDownloadJobs.priority
+      priority: telegramFileDownloadJobs.priority,
+      slotKey: telegramFileSlots.slotKey
     })
     .from(telegramFileDownloadJobs)
     .innerJoin(
@@ -502,8 +521,12 @@ async function readFileDownloadRow(
         downloadedByteSize: row.downloadedByteSize,
         fileName: row.fileName,
         latestTdlibFileId: row.latestTdlibFileId,
+        mediaKind: row.mediaKind,
         mimeType: row.mimeType,
+        ownerId: row.ownerId,
+        ownerModel: row.ownerModel,
         priority: row.priority,
+        slotKey: row.slotKey,
         transport: fileDownloadTransport(row.ownerModel, row.ownerId)
       };
 }
@@ -607,12 +630,14 @@ async function markFileDownloadFailed(
 
 async function storeCanonicalFile(
   filesDirectory: string,
+  sourceDirectories: readonly string[],
   localPath: string,
   row: FileDownloadRow
 ): Promise<StoredCanonicalFile> {
   const filesRoot = await realpath(filesDirectory);
   const root = await resolveCanonicalFilesRoot(filesRoot);
-  const safeLocalPath = await resolveTdlibLocalFilePath(filesRoot, root, localPath);
+  const sourceRoots = await resolveTdlibSourceRoots(sourceDirectories);
+  const safeLocalPath = await resolveTdlibLocalFilePath(sourceRoots, root, localPath);
   const temporaryPath = join(root, `.tmp-${randomUUID()}`);
   try {
     const hash = createHash('sha256');
@@ -647,6 +672,14 @@ async function storeCanonicalFile(
   }
 }
 
+async function resolveTdlibSourceRoots(sourceDirectories: readonly string[]): Promise<string[]> {
+  if (sourceDirectories.length === 0) {
+    throw new Error('Telegram TDLib source directories are not configured');
+  }
+  const roots = await Promise.all(sourceDirectories.map((directory) => realpath(directory)));
+  return [...new Set(roots)];
+}
+
 async function resolveCanonicalFilesRoot(filesRoot: string): Promise<string> {
   const root = resolve(filesRoot, CANONICAL_FILES_DIR);
   await mkdir(root, { recursive: true });
@@ -658,13 +691,13 @@ async function resolveCanonicalFilesRoot(filesRoot: string): Promise<string> {
 }
 
 async function resolveTdlibLocalFilePath(
-  filesRoot: string,
+  sourceRoots: readonly string[],
   canonicalRoot: string,
   localPath: string
 ): Promise<string> {
   const candidate = await realpath(localPath);
-  if (candidate !== filesRoot && !isPathInsideDirectory(filesRoot, candidate)) {
-    throw new Error('Telegram TDLib local file path is outside the configured files directory');
+  if (!sourceRoots.some((root) => candidate === root || isPathInsideDirectory(root, candidate))) {
+    throw new Error('Telegram TDLib local file path is outside the configured source directories');
   }
   if (candidate === canonicalRoot || isPathInsideDirectory(canonicalRoot, candidate)) {
     throw new Error('Telegram TDLib local file path points at canonical media storage');
@@ -832,6 +865,82 @@ export function logTdlibCleanupError(assetKey: string, error: unknown): void {
   );
 }
 
+function logStaleFileDownloadDecision(
+  decision: 'redispatched' | 'retry_limit',
+  row: FileDownloadRow,
+  file: file | undefined
+): void {
+  const event =
+    decision === 'retry_limit'
+      ? 'telegram.file_download_stale_retry_limit'
+      : 'telegram.file_download_stale_redispatched';
+  const level = decision === 'retry_limit' ? 'warn' : 'info';
+  const rowFields = fileDownloadRowLogFields(row);
+  const snapshotFields = tdlibFileSnapshotLogFields(file);
+  const contextFields = {
+    ...rowFields,
+    ...snapshotFields,
+    decision,
+    nextAttempt: decision === 'redispatched' ? row.attempts + 1 : row.attempts
+  };
+  const message = staleFileDownloadDecisionMessage(decision, contextFields);
+  logger[level](
+    {
+      ...rowFields,
+      decision,
+      event,
+      nextAttempt: decision === 'redispatched' ? row.attempts + 1 : row.attempts,
+      ...snapshotFields,
+      ...logContext(contextFields)
+    },
+    message
+  );
+}
+
+function staleFileDownloadDecisionMessage(
+  decision: 'redispatched' | 'retry_limit',
+  fields: ReturnType<typeof fileDownloadRowLogFields> &
+    ReturnType<typeof tdlibFileSnapshotLogFields> & {
+      decision: 'redispatched' | 'retry_limit';
+      nextAttempt: number;
+    }
+): string {
+  const action =
+    decision === 'retry_limit'
+      ? 'telegram file download reached stale retry limit'
+      : 'telegram file download was redispatched after stale snapshot';
+  return [
+    action,
+    `asset=${formatLogValue(fields.assetKey)}`,
+    `attempts=${formatLogValue(fields.attempts)}`,
+    `next=${formatLogValue(fields.nextAttempt)}`,
+    `owner=${formatLogValue(fields.ownerModel)}`,
+    `ownerId=${formatLogValue(fields.ownerId)}`,
+    `slot=${formatLogValue(fields.slotKey)}`,
+    `media=${formatLogValue(fields.mediaKind)}`,
+    `tdlib=${formatLogValue(fields.tdlibFileId)}`,
+    `tdlibDownloaded=${formatLogValue(fields.tdlibLocalDownloadedSize)}`,
+    `tdlibActive=${formatLogValue(fields.tdlibLocalIsDownloadingActive)}`,
+    `tdlibCompleted=${formatLogValue(fields.tdlibLocalIsDownloadingCompleted)}`,
+    `tdlibPath=${formatLogValue(fields.tdlibLocalPath)}`
+  ].join(' ');
+}
+
+function formatLogValue(value: unknown): string {
+  if (value === null || value === undefined || value === '') {
+    return '-';
+  }
+  if (
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean' ||
+    typeof value === 'bigint'
+  ) {
+    return String(value);
+  }
+  return JSON.stringify(value);
+}
+
 function logFileDownloadFailed(
   source: 'batch' | 'completed' | 'stale',
   row: { assetKey: string; transport?: FileDownloadTransport },
@@ -852,6 +961,46 @@ function logFileDownloadFailed(
     },
     'telegram file download failed'
   );
+}
+
+function fileDownloadRowLogFields(row: FileDownloadRow) {
+  return {
+    assetKey: row.assetKey,
+    attempts: row.attempts,
+    byteSize: row.byteSize,
+    downloadedByteSize: row.downloadedByteSize,
+    fileName: row.fileName,
+    latestTdlibFileId: row.latestTdlibFileId,
+    mediaKind: row.mediaKind,
+    mimeType: row.mimeType,
+    ownerId: row.ownerId,
+    ownerModel: row.ownerModel,
+    priority: row.priority,
+    slotKey: row.slotKey,
+    transport: row.transport.kind
+  };
+}
+
+function tdlibFileSnapshotLogFields(file: file | undefined) {
+  return {
+    tdlibExpectedSize: file?.expected_size ?? null,
+    tdlibFileId: file?.id ?? null,
+    tdlibLocalCanBeDeleted: file?.local.can_be_deleted ?? null,
+    tdlibLocalCanBeDownloaded: file?.local.can_be_downloaded ?? null,
+    tdlibLocalDownloadOffset: file?.local.download_offset ?? null,
+    tdlibLocalDownloadedPrefixSize: file?.local.downloaded_prefix_size ?? null,
+    tdlibLocalDownloadedSize: file?.local.downloaded_size ?? null,
+    tdlibLocalIsDownloadingActive: file?.local.is_downloading_active ?? null,
+    tdlibLocalIsDownloadingCompleted: file?.local.is_downloading_completed ?? null,
+    tdlibLocalPath: file?.local.path ?? null,
+    tdlibRemoteId: file?.remote.id ?? null,
+    tdlibRemoteIsUploadingActive: file?.remote.is_uploading_active ?? null,
+    tdlibRemoteIsUploadingCompleted: file?.remote.is_uploading_completed ?? null,
+    tdlibRemoteUniqueId: file?.remote.unique_id ?? null,
+    tdlibRemoteUploadedSize: file?.remote.uploaded_size ?? null,
+    tdlibSize: file?.size ?? null,
+    tdlibSnapshotPresent: file !== undefined
+  };
 }
 
 function isTdlibMissingFileError(error: unknown): boolean {

@@ -380,6 +380,7 @@ describe('Telegram file policy', () => {
       decideFilePolicy({
         cause: 'live_update',
         current: {
+          failureReason: 'Not Found',
           sourceFingerprint: 'photo-asset',
           status: 'failed'
         },
@@ -391,6 +392,49 @@ describe('Telegram file policy', () => {
       decideFilePolicy({
         cause: 'explicit_request',
         current: {
+          failureReason: 'Not Found',
+          sourceFingerprint: 'photo-asset',
+          status: 'failed'
+        },
+        slot: photo,
+        sourceFingerprint: 'photo-asset'
+      }).action
+    ).toBe('enqueue');
+  });
+
+  it('automatically retries stale retry limit failures when the source appears again', () => {
+    const [photo] = extractFileSlots(
+      messageSlotUpdate(
+        message({
+          content: {
+            _: 'messagePhoto',
+            photo: {
+              _: 'photo',
+              sizes: [
+                {
+                  _: 'photoSize',
+                  height: 800,
+                  photo: tdFile(7101, 800_000),
+                  width: 800
+                }
+              ]
+            }
+          },
+          id: 42
+        })
+      )
+    );
+
+    expect(photo).toBeDefined();
+    if (photo === undefined) {
+      throw new Error('expected stale failed photo slot');
+    }
+
+    expect(
+      decideFilePolicy({
+        cause: 'live_update',
+        current: {
+          failureReason: 'Telegram file download stale retry limit reached after 3 attempts',
           sourceFingerprint: 'photo-asset',
           status: 'failed'
         },

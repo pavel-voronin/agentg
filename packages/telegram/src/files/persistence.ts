@@ -489,6 +489,7 @@ async function upsertExtractedSlot(
   const decision = decideFilePolicy({
     cause,
     current: {
+      failureReason: asset.downloadError,
       sourceFingerprint: assetKey,
       status: asset.status
     },
@@ -589,7 +590,7 @@ async function upsertFileAsset(
   database: Database,
   slot: ExtractedFileSlot,
   assetKey: string
-): Promise<{ assetKey: string; status: FileAssetStatus }> {
+): Promise<{ assetKey: string; downloadError: string | null; status: FileAssetStatus }> {
   const byteSizeMissingCondition =
     slot.byteSize === null ? sql`false` : sql`${telegramFileAssets.byteSize} is null`;
   const [asset] = await database
@@ -611,12 +612,14 @@ async function upsertFileAsset(
     })
     .returning({
       assetKey: telegramFileAssets.assetKey,
+      downloadError: telegramFileAssets.downloadError,
       status: telegramFileAssets.status
     });
 
   if (asset !== undefined) {
     return {
       assetKey: asset.assetKey,
+      downloadError: asset.downloadError,
       status: assertAssetStatus(asset.status)
     };
   }
@@ -624,6 +627,7 @@ async function upsertFileAsset(
   const [existing] = await database
     .select({
       assetKey: telegramFileAssets.assetKey,
+      downloadError: telegramFileAssets.downloadError,
       status: telegramFileAssets.status
     })
     .from(telegramFileAssets)
@@ -634,6 +638,7 @@ async function upsertFileAsset(
   }
   return {
     assetKey: existing.assetKey,
+    downloadError: existing.downloadError,
     status: assertAssetStatus(existing.status)
   };
 }
@@ -664,7 +669,19 @@ export async function enqueueFileAssetDownload(
     .returning({
       assetKey: telegramFileDownloadJobs.assetKey
     });
+  await resetFileAssetFailureForRetry(database, assetKey);
   return changed.length > 0;
+}
+
+async function resetFileAssetFailureForRetry(database: Database, assetKey: string): Promise<void> {
+  await database
+    .update(telegramFileAssets)
+    .set({
+      downloadError: null,
+      status: 'known',
+      updatedAt: sql`now()`
+    })
+    .where(and(eq(telegramFileAssets.assetKey, assetKey), eq(telegramFileAssets.status, 'failed')));
 }
 
 export async function handleFileSnapshot(database: Database, file: file): Promise<string[]> {

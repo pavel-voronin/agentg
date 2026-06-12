@@ -52,6 +52,36 @@ describe('Telegram file request', () => {
     });
   });
 
+  it('clears terminal failed state when an explicit request retries the asset', async () => {
+    const assetUpdates: Record<string, unknown>[] = [];
+    const events: { data?: unknown; type: string }[] = [];
+
+    await requestFileSlot(
+      requestOptions({
+        database: existingQueuedJobDatabase({
+          assetUpdates,
+          requestRow: {
+            assetStatus: 'failed',
+            downloadError: 'Not Found',
+            jobStatus: null
+          }
+        }),
+        events
+      }),
+      {
+        owner: chatRef('chat-1'),
+        slotKey: 'photo.main'
+      }
+    );
+
+    expect(assetUpdates).toContainEqual(
+      expect.objectContaining({
+        downloadError: null,
+        status: 'known'
+      })
+    );
+  });
+
   it('exposes the domain request path from the Telegram procedure', async () => {
     const events: { data?: unknown; type: string }[] = [];
     const rpc = requestFileProcedure(procedureResources(events));
@@ -208,7 +238,21 @@ function eventSink(events: { data?: unknown; type: string }[]): FileSubsystemOpt
   };
 }
 
-function existingQueuedJobDatabase(): Database {
+type RequestRowFixture = {
+  assetKey: string;
+  assetStatus: string;
+  byteSize: number;
+  downloadError: string | null;
+  jobStatus: string | null;
+  mediaKind: string;
+};
+
+function existingQueuedJobDatabase(
+  input: {
+    assetUpdates?: Record<string, unknown>[];
+    requestRow?: Partial<RequestRowFixture>;
+  } = {}
+): Database {
   let selectCount = 0;
   return {
     insert() {
@@ -226,10 +270,22 @@ function existingQueuedJobDatabase(): Database {
         }
       };
     },
+    update() {
+      return {
+        set(values: Record<string, unknown>) {
+          input.assetUpdates?.push(values);
+          return {
+            where() {
+              return Promise.resolve([]);
+            }
+          };
+        }
+      };
+    },
     select() {
       selectCount += 1;
       if (selectCount === 1) {
-        return requestRowSelect();
+        return requestRowSelect(input.requestRow);
       }
       if (selectCount === 2) {
         return fileRefSelect();
@@ -245,7 +301,17 @@ function existingQueuedJobDatabase(): Database {
   } as unknown as Database;
 }
 
-function requestRowSelect() {
+function requestRowSelect(overrides: Partial<RequestRowFixture> = {}) {
+  const row: RequestRowFixture = {
+    assetKey: 'telegram:asset-a',
+    assetStatus: 'known',
+    byteSize: 100,
+    downloadError: null,
+    jobStatus: 'queued',
+    mediaKind: 'photo',
+    ...overrides
+  };
+
   return {
     from() {
       return {
@@ -256,15 +322,7 @@ function requestRowSelect() {
                 where() {
                   return {
                     limit() {
-                      return Promise.resolve([
-                        {
-                          assetKey: 'telegram:asset-a',
-                          assetStatus: 'known',
-                          byteSize: 100,
-                          jobStatus: 'queued',
-                          mediaKind: 'photo'
-                        }
-                      ]);
+                      return Promise.resolve([row]);
                     }
                   };
                 }

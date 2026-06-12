@@ -9,6 +9,7 @@ import type { ExtractedFileSlot } from './types.js';
 type FilePolicyInput = {
   cause: MediaDownloadPolicyCause;
   current: {
+    failureReason: string | null;
     sourceFingerprint: string;
     status: string;
   } | null;
@@ -45,7 +46,8 @@ export function decideFilePolicy(input: FilePolicyInput): FilePolicyDecision {
   if (
     input.cause !== 'explicit_request' &&
     input.current?.sourceFingerprint === input.sourceFingerprint &&
-    input.current.status === 'failed'
+    input.current.status === 'failed' &&
+    !isAutomaticRetryableFailure(input.current.failureReason)
   ) {
     return {
       action: 'record',
@@ -80,6 +82,10 @@ export function decideFilePolicy(input: FilePolicyInput): FilePolicyDecision {
     action: 'enqueue',
     reason: rule.name
   };
+}
+
+function isAutomaticRetryableFailure(failureReason: string | null): boolean {
+  return failureReason?.startsWith('Telegram file download stale retry limit reached') === true;
 }
 
 function ruleMatches(rule: MediaDownloadPolicyRule, input: FilePolicyInput): boolean {

@@ -7,6 +7,7 @@ import type { SQL } from 'drizzle-orm';
 import { PgDialect } from 'drizzle-orm/pg-core';
 
 const logs = vi.hoisted(() => [] as Record<string, unknown>[]);
+const logMessages = vi.hoisted(() => [] as string[]);
 const telemetry = vi.hoisted(() => ({
   incrementTelemetryCounter: vi.fn(),
   setTelemetryGauge: vi.fn()
@@ -17,8 +18,11 @@ vi.mock('@agentg/framework', () => ({
     info() {
       return undefined;
     },
-    warn(entry: Record<string, unknown>) {
+    warn(entry: Record<string, unknown>, message?: string) {
       logs.push(entry);
+      if (message !== undefined) {
+        logMessages.push(message);
+      }
     }
   }),
   incrementTelemetryCounter: telemetry.incrementTelemetryCounter,
@@ -49,6 +53,7 @@ import type {
 describe('Telegram file download worker', () => {
   afterEach(() => {
     logs.length = 0;
+    logMessages.length = 0;
     telemetry.incrementTelemetryCounter.mockReset();
     telemetry.setTelemetryGauge.mockReset();
     vi.restoreAllMocks();
@@ -291,6 +296,51 @@ describe('Telegram file download worker', () => {
     expect(redispatchUpdate).toHaveProperty('attempts');
   });
 
+  it('continues immediately when stale download backlog exceeds the tick limit', async () => {
+    const deleted = { count: 0 };
+    const updates: Record<string, unknown>[] = [];
+    const tdlib = {
+      addFileToDownloads: vi.fn(),
+      downloadFile: vi.fn().mockResolvedValue(undefined),
+      getFile: vi.fn().mockResolvedValue(undefined),
+      getQueueStats() {
+        return {
+          highestPendingPriority: null,
+          pendingCount: 0,
+          runningCount: 0
+        };
+      }
+    };
+
+    const result = await processQueuedFileBatch(
+      workerOptions({
+        database: staleDownloadDatabase({
+          attempts: 1,
+          deleted,
+          staleAssetKeys: ['asset-a', 'asset-b'],
+          updates
+        }),
+        tdlib
+      }),
+      {
+        maxConcurrentDownloads: 1,
+        maxFilesPerTick: 1
+      }
+    );
+
+    expect(result).toEqual({
+      delayedCount: 0,
+      failedCount: 0,
+      immediateCount: 1,
+      processedCount: 1,
+      readyCount: 0,
+      watchdogCount: 1
+    });
+    expect(tdlib.downloadFile).toHaveBeenCalledTimes(1);
+    expect(deleted.count).toBe(0);
+    expect(updates).toHaveLength(1);
+  });
+
   it('fails stale downloading jobs after the stale retry limit', async () => {
     const deleted = { count: 0 };
     const updates: Record<string, unknown>[] = [];
@@ -338,6 +388,26 @@ describe('Telegram file download worker', () => {
         status: 'failed'
       })
     ]);
+    expect(logs).toContainEqual(
+      expect.objectContaining({
+        assetKey: 'asset-a',
+        attempts: 3,
+        decision: 'retry_limit',
+        event: 'telegram.file_download_stale_retry_limit',
+        latestTdlibFileId: 1,
+        nextAttempt: 3,
+        tdlibFileId: null,
+        tdlibLocalCanBeDownloaded: null,
+        tdlibLocalDownloadedSize: null,
+        tdlibLocalIsDownloadingCompleted: null,
+        tdlibRemoteUniqueId: null,
+        tdlibSnapshotPresent: false,
+        transport: 'file'
+      })
+    );
+    expect(logMessages).toContain(
+      'telegram file download reached stale retry limit asset=asset-a attempts=3 next=3 owner=- ownerId=- slot=- media=photo tdlib=- tdlibDownloaded=- tdlibActive=- tdlibCompleted=- tdlibPath=-'
+    );
   });
 
   it('fails completed files whose TDLib local path resolves outside the files directory', async () => {
@@ -354,7 +424,8 @@ describe('Telegram file download worker', () => {
             database: completedPathFailureDatabase(updates),
             tdlib: idleTdlib()
           }),
-          filesDirectory
+          filesDirectory,
+          tdlibSourceDirectories: [filesDirectory]
         },
         new Map<string, CompletedFileAsset>([
           [
@@ -375,13 +446,61 @@ describe('Telegram file download worker', () => {
       });
       expect(updates).toEqual([
         expect.objectContaining({
-          downloadError: 'Telegram TDLib local file path is outside the configured files directory',
+          downloadError:
+            'Telegram TDLib local file path is outside the configured source directories',
           status: 'failed'
         })
       ]);
     } finally {
       await rm(filesDirectory, { force: true, recursive: true });
       await rm(outsideDirectory, { force: true, recursive: true });
+    }
+  });
+
+  it('canonicalizes completed files from any configured TDLib source directory', async () => {
+    const filesDirectory = await mkdtemp(join(tmpdir(), 'agentg-td-files-'));
+    const databaseDirectory = await mkdtemp(join(tmpdir(), 'agentg-td-database-'));
+    const localPath = join(databaseDirectory, 'profile-photo.jpg');
+    await writeFile(localPath, 'secret');
+    const updates: Record<string, unknown>[] = [];
+
+    try {
+      const result = await processCompletedFileBatch(
+        {
+          ...workerOptions({
+            database: completedPathFailureDatabase(updates),
+            tdlib: idleTdlib()
+          }),
+          filesDirectory,
+          tdlibSourceDirectories: [filesDirectory, databaseDirectory]
+        },
+        new Map<string, CompletedFileAsset>([
+          [
+            'asset-a',
+            {
+              assetKey: 'asset-a',
+              localPath,
+              tdlibFileId: 1
+            }
+          ]
+        ]),
+        1
+      );
+
+      expect(result).toMatchObject({
+        failedCount: 0,
+        readyCount: 1
+      });
+      expect(updates).toEqual([
+        expect.objectContaining({
+          downloadError: null,
+          status: 'ready'
+        })
+      ]);
+      expect(updates[0]?.relativePath).toEqual(expect.stringMatching(/^agentg-media\/.+\.jpg$/));
+    } finally {
+      await rm(filesDirectory, { force: true, recursive: true });
+      await rm(databaseDirectory, { force: true, recursive: true });
     }
   });
 
@@ -400,7 +519,8 @@ describe('Telegram file download worker', () => {
             database: completedPathFailureDatabase(updates),
             tdlib: idleTdlib()
           }),
-          filesDirectory
+          filesDirectory,
+          tdlibSourceDirectories: [filesDirectory]
         },
         new Map<string, CompletedFileAsset>([
           [
@@ -441,8 +561,12 @@ function downloadRow(): FileDownloadRow {
     downloadedByteSize: 0,
     fileName: 'file.jpg',
     latestTdlibFileId: 1,
+    mediaKind: 'photo',
     mimeType: 'image/jpeg',
+    ownerId: null,
+    ownerModel: null,
     priority: 16,
+    slotKey: null,
     transport: {
       kind: 'file'
     }
@@ -471,6 +595,7 @@ function workerOptions(input: { database: Database; tdlib: unknown }): FileSubsy
       }
     },
     filesDirectory: '/tmp/agentg-test-files',
+    tdlibSourceDirectories: ['/tmp/agentg-test-files'],
     tdlib: input.tdlib
   } as unknown as FileSubsystemOptions;
 }
@@ -585,6 +710,7 @@ function staleOrderDatabase(captured: { orderBy?: SQL }): Database {
 function staleDownloadDatabase(input: {
   attempts: number;
   deleted: { count: number };
+  staleAssetKeys?: string[];
   updates: Record<string, unknown>[];
 }): Database {
   let selectCount = 0;
@@ -600,7 +726,7 @@ function staleDownloadDatabase(input: {
     select() {
       selectCount += 1;
       if (selectCount === 1) {
-        return staleAssetKeySelect();
+        return staleAssetKeySelect(input.staleAssetKeys);
       }
       if (selectCount === 2) {
         return staleDownloadRowSelect(input.attempts);
@@ -669,7 +795,7 @@ function completedPathFailureDatabase(updates: Record<string, unknown>[]): Datab
   } as unknown as Database;
 }
 
-function staleAssetKeySelect() {
+function staleAssetKeySelect(assetKeys = ['asset-a']) {
   return {
     from() {
       return {
@@ -678,7 +804,7 @@ function staleAssetKeySelect() {
             orderBy() {
               return {
                 limit() {
-                  return Promise.resolve([{ assetKey: 'asset-a' }]);
+                  return Promise.resolve(assetKeys.map((assetKey) => ({ assetKey })));
                 }
               };
             }
@@ -710,10 +836,12 @@ function staleDownloadRowSelect(attempts: number) {
                               downloadedByteSize: 0,
                               fileName: 'file.jpg',
                               latestTdlibFileId: 1,
+                              mediaKind: 'photo',
                               mimeType: 'image/jpeg',
                               ownerId: null,
                               ownerModel: null,
-                              priority: 16
+                              priority: 16,
+                              slotKey: null
                             }
                           ]);
                         }
@@ -750,6 +878,7 @@ function fileAssetStatsSelect() {
           failedCount: 0,
           knownCount: 1,
           readyCount: 0,
+          readyDownloadedBytes: 0,
           totalCount: 1
         }
       ]);
