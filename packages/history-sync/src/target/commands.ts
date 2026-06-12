@@ -5,20 +5,16 @@ import type { Database } from '../database/client.js';
 import type { HistorySyncRange, HistorySyncTarget } from '../model/types.js';
 import { parseHistorySyncTargetUpsertCommand } from '../range/commands.js';
 import { historySyncRangeKey } from '../range/ranges.js';
-import {
-  deleteHistorySyncTarget,
-  listHistorySyncTargets,
-  upsertHistorySyncTarget
-} from './store.js';
+import { deleteHistorySyncTarget, upsertHistorySyncTarget } from './store.js';
 
 export async function upsertManualHistorySyncTargetFromCommand(
   database: Database,
-  command: unknown
+  command: unknown,
+  existingTargets: readonly HistorySyncTarget[]
 ): Promise<HistorySyncTarget> {
   const input = parseHistorySyncTargetUpsertCommand(command, 'history-sync.upsertTarget');
   const chatId = input.chatId;
   const range = input.range;
-  const existingTargets = await listHistorySyncTargets(database);
   const rangeKey = historySyncRangeKey(range);
   const existingSameRange = existingTargets.find(
     (target) => target.chatId === chatId && historySyncRangeKey(target.range) === rangeKey

@@ -7,6 +7,7 @@ export const readConfig = defineConfig({
   messageLimit: number('HISTORY_SYNC_MESSAGE_LIMIT').default(100),
   natsUrl: string('NATS_URL'),
   port: number('PORT').default(8704),
+  reconcileIntervalMs: number('HISTORY_SYNC_RECONCILE_INTERVAL_MS').default(60000),
   requestDelayMs: number('HISTORY_SYNC_REQUEST_DELAY_MS').default(1000),
   telegramRpcUrl: string('TELEGRAM_RPC_URL'),
   windowDays: number('HISTORY_SYNC_WINDOW_DAYS').default(31)

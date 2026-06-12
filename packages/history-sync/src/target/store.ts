@@ -63,6 +63,10 @@ export async function listHistorySyncTargets(database: Database): Promise<Histor
   }));
 }
 
+export function isRelativeHistorySyncTarget(target: Pick<HistorySyncTarget, 'range'>): boolean {
+  return hasExpressionBoundary(target.range);
+}
+
 export async function upsertHistorySyncTarget(
   database: Database,
   target: HistorySyncTarget
@@ -120,4 +124,8 @@ export async function upsertHistorySyncTargets(
   for (const target of targets) {
     await upsertHistorySyncTarget(database, target);
   }
+}
+
+function hasExpressionBoundary(range: HistorySyncRange): boolean {
+  return range.start.kind === 'expression' || range.end.kind === 'expression';
 }

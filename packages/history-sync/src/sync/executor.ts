@@ -10,34 +10,63 @@ import type { Database } from '../database/client.js';
 import type {
   HistorySyncInterval,
   HistorySyncTarget,
+  HistorySyncTemplate,
+  TelegramChatForHistorySync,
   TelegramHistoryClient
 } from '../model/types.js';
 import { TELEGRAM_HISTORY_PAST_BOUNDARY } from '../range/constants.js';
+import { sameHistorySyncRange } from '../range/ranges.js';
 import { floorToTelegramSecond } from '../range/time.js';
 import { materializeTemplatesForChat } from '../target/materialization.js';
 import { isOneShotHistorySyncTarget, projectSyncIntervalsForChat } from './reconciler.js';
 import {
   deleteHistorySyncTarget,
+  isRelativeHistorySyncTarget,
   listHistorySyncTargets,
   listHistorySyncTemplates,
   upsertHistorySyncTargets
 } from '../target/store.js';
 
+export type SyncTargetScope = 'all' | 'relative' | 'relative_and_selected' | 'selected';
+
 export type SyncOptions = {
   chatLoadBatchSize: number;
-  discoverChats?: boolean | undefined;
   messageLimit: number;
   requestDelayMs: number;
   windowDays: number;
 };
 
+export type SyncRunRequest = {
+  discoveredChatIds: ReadonlySet<string>;
+  discoverChats: boolean;
+  fullReconcile: boolean;
+  reason: string;
+  targetScope: SyncTargetScope;
+  targetChatIds?: ReadonlySet<string> | undefined;
+};
+
+type DemandSnapshot = {
+  targets: HistorySyncTarget[];
+  templates: HistorySyncTemplate[];
+};
+
+type MaterializationResult = {
+  chatCount: number;
+  targets: HistorySyncTarget[];
+};
+
 type SyncResult = {
   coveredIntervals: number;
+  deletedTargetIds: string[];
   fetchedMessages: number;
   pages: number;
   remainingIntervals: number;
   reachedBeginning: boolean;
   storedMessages: number;
+};
+
+type SyncRunSummary = {
+  targets: HistorySyncTarget[];
 };
 
 const METRIC_SYNC_STAGE_DURATION = 'history_sync.sync.stage.duration';
@@ -49,79 +78,254 @@ const METRIC_SYNC_LAST_FETCHED_MESSAGES = 'history_sync.sync.last_fetched_messag
 const METRIC_SYNC_LAST_STORED_MESSAGES = 'history_sync.sync.last_stored_messages';
 const METRIC_SYNC_LAST_COVERED_INTERVALS = 'history_sync.sync.last_covered_intervals';
 const METRIC_SYNC_LAST_REMAINING_INTERVALS = 'history_sync.sync.last_remaining_intervals';
+const METRIC_SYNC_LAST_SKIPPED_SECONDS = 'history_sync.sync.last_skipped.unix_seconds';
 const METRIC_SYNC_PAGES = 'history_sync.sync.pages';
 const METRIC_SYNC_FETCHED_MESSAGES = 'history_sync.sync.messages.fetched';
 const METRIC_SYNC_STORED_MESSAGES = 'history_sync.sync.messages.stored';
 const METRIC_SYNC_COVERED_INTERVALS = 'history_sync.sync.covered_intervals';
+const METRIC_SYNC_SKIPPED = 'history_sync.sync.skipped';
 
 export async function runHistorySync(
   database: Database,
   telegram: TelegramHistoryClient,
   events: EventBus,
+  request: SyncRunRequest,
   options: SyncOptions
-): Promise<void> {
+): Promise<SyncRunSummary> {
   const safeOptions = normalizeSyncOptions(options);
   const syncNow = floorToTelegramSecond(new Date());
+  const mode = syncMode(request);
   events.publish('history-sync.sync.started', {
-    now: syncNow.toISOString()
+    mode,
+    now: syncNow.toISOString(),
+    reason: request.reason
   });
 
-  const chats = await timeSyncStage(
-    'list_chats',
+  const demand = await timeSyncStage(
+    'load_demand',
     {
-      'history_sync.chat.load_batch_size': safeOptions.chatLoadBatchSize,
-      'history_sync.discovery.enabled': safeOptions.discoverChats === true
+      'history_sync.sync.mode': mode
     },
-    () =>
-      telegram.listChats({
-        discover: safeOptions.discoverChats === true,
-        loadBatchSize: safeOptions.chatLoadBatchSize
-      })
+    () => loadDemand(database)
   );
-  const targets = await timeSyncStage('materialize_targets', {}, () =>
-    materializeHistorySyncTargets(database, chats, events)
+  if (demand.targets.length === 0 && demand.templates.length === 0) {
+    recordSyncSkipped(syncNow, mode, 'no_demand');
+    events.publish('history-sync.sync.skipped', {
+      mode,
+      reason: request.reason,
+      skipReason: 'no_demand',
+      targets: 0,
+      templates: 0
+    });
+    return {
+      targets: []
+    };
+  }
+
+  const materialized = await materializeTargetsForRequest(
+    database,
+    telegram,
+    events,
+    request,
+    demand,
+    safeOptions
   );
-  const result = await timeSyncStage(
-    'request_coverage',
-    {
-      'history_sync.chat.count': chats.length,
-      'history_sync.sync.window_days': safeOptions.windowDays,
-      'history_sync.target.count': targets.length
-    },
-    () => requestCoverageForTargets(database, telegram, events, targets, syncNow, safeOptions)
-  );
-  recordSyncResult(syncNow, chats.length, targets.length, result);
+  const targets = targetsForCoverage(materialized.targets, request);
+  const result =
+    targets.length === 0
+      ? emptySyncResult()
+      : await timeSyncStage(
+          'request_coverage',
+          {
+            'history_sync.chat.count': uniqueChatCount(targets),
+            'history_sync.sync.mode': mode,
+            'history_sync.sync.window_days': safeOptions.windowDays,
+            'history_sync.target.count': targets.length
+          },
+          () => requestCoverageForTargets(database, telegram, events, targets, syncNow, safeOptions)
+        );
+  const coveredChatCount = uniqueChatCount(targets);
+  const activeTargets = targetsAfterCleanup(materialized.targets, result.deletedTargetIds);
+  recordSyncResult(syncNow, coveredChatCount, targets.length, result);
 
   events.publish('history-sync.sync.completed', {
-    chats: chats.length,
+    chats: coveredChatCount,
     coveredIntervals: result.coveredIntervals,
     fetchedMessages: result.fetchedMessages,
+    mode,
     pages: result.pages,
+    reason: request.reason,
     remainingIntervals: result.remainingIntervals,
     storedMessages: result.storedMessages,
     targets: targets.length
   });
+
+  return {
+    targets: activeTargets
+  };
 }
 
-async function materializeHistorySyncTargets(
+async function loadDemand(database: Database): Promise<DemandSnapshot> {
+  const [templates, targets] = await Promise.all([
+    listHistorySyncTemplates(database),
+    listHistorySyncTargets(database)
+  ]);
+
+  return {
+    targets,
+    templates
+  };
+}
+
+async function materializeTargetsForRequest(
   database: Database,
-  chats: Awaited<ReturnType<TelegramHistoryClient['listChats']>>,
-  events: EventBus
-): Promise<HistorySyncTarget[]> {
-  const templates = await listHistorySyncTemplates(database);
-  const chatIds = new Set(chats.map((chat) => chat.id));
-  let targets = await deleteTargetsForUnlistedChats(
-    database,
-    events,
-    await listHistorySyncTargets(database),
-    chatIds
-  );
-  for (const chat of chats) {
-    targets = materializeTemplatesForChat(templates, chat, targets);
+  telegram: TelegramHistoryClient,
+  events: EventBus,
+  request: SyncRunRequest,
+  demand: DemandSnapshot,
+  options: SyncOptions
+): Promise<MaterializationResult> {
+  if (request.fullReconcile) {
+    const chats = await timeSyncStage(
+      'list_chats',
+      {
+        'history_sync.chat.load_batch_size': options.chatLoadBatchSize,
+        'history_sync.discovery.enabled': request.discoverChats,
+        'history_sync.sync.mode': syncMode(request)
+      },
+      () =>
+        telegram.listChats({
+          discover: request.discoverChats,
+          loadBatchSize: options.chatLoadBatchSize
+        })
+    );
+    const targets = await timeSyncStage(
+      'materialize_targets',
+      {
+        'history_sync.chat.count': chats.length,
+        'history_sync.template.count': demand.templates.length
+      },
+      () => materializeAllTargets(database, events, demand.templates, demand.targets, chats)
+    );
+
+    return {
+      chatCount: chats.length,
+      targets
+    };
   }
 
-  await upsertHistorySyncTargets(database, targets);
-  return targets;
+  if (request.discoveredChatIds.size === 0 || demand.templates.length === 0) {
+    return {
+      chatCount: 0,
+      targets: demand.targets
+    };
+  }
+
+  const chats = await timeSyncStage(
+    'load_discovered_chats',
+    {
+      'history_sync.chat.requested_count': request.discoveredChatIds.size,
+      'history_sync.sync.mode': syncMode(request)
+    },
+    () => listDiscoveredHistoryChats(telegram, request.discoveredChatIds)
+  );
+  const targets = await timeSyncStage(
+    'materialize_targets',
+    {
+      'history_sync.chat.count': chats.length,
+      'history_sync.template.count': demand.templates.length
+    },
+    () => materializeChats(database, demand.templates, demand.targets, chats)
+  );
+
+  return {
+    chatCount: chats.length,
+    targets
+  };
+}
+
+async function materializeAllTargets(
+  database: Database,
+  events: EventBus,
+  templates: HistorySyncTemplate[],
+  targets: HistorySyncTarget[],
+  chats: TelegramChatForHistorySync[]
+): Promise<HistorySyncTarget[]> {
+  const activeTargets = await deleteTargetsForUnlistedChats(
+    database,
+    events,
+    targets,
+    new Set(chats.map((chat) => chat.id))
+  );
+
+  return materializeChats(database, templates, activeTargets, chats);
+}
+
+async function materializeChats(
+  database: Database,
+  templates: HistorySyncTemplate[],
+  targets: HistorySyncTarget[],
+  chats: TelegramChatForHistorySync[]
+): Promise<HistorySyncTarget[]> {
+  let nextTargets = targets;
+  const changedTargets = new Map<string, HistorySyncTarget>();
+  for (const chat of chats) {
+    const previousTargets = nextTargets;
+    nextTargets = materializeTemplatesForChat(templates, chat, nextTargets);
+    for (const target of changedTargetsForChat(previousTargets, nextTargets, chat.id)) {
+      changedTargets.set(target.id, target);
+    }
+  }
+
+  await upsertHistorySyncTargets(database, [...changedTargets.values()]);
+  return nextTargets;
+}
+
+function changedTargetsForChat(
+  previousTargets: HistorySyncTarget[],
+  nextTargets: HistorySyncTarget[],
+  chatId: string
+): HistorySyncTarget[] {
+  const previousTargetsById = new Map(previousTargets.map((target) => [target.id, target]));
+  return nextTargets.filter((target) => {
+    if (target.chatId !== chatId) {
+      return false;
+    }
+
+    return !sameHistorySyncTarget(previousTargetsById.get(target.id), target);
+  });
+}
+
+function sameHistorySyncTarget(
+  previous: HistorySyncTarget | undefined,
+  next: HistorySyncTarget
+): boolean {
+  return (
+    previous?.chatId === next.chatId &&
+    previous.templateId === next.templateId &&
+    sameHistorySyncRange(previous.range, next.range)
+  );
+}
+
+async function listDiscoveredHistoryChats(
+  telegram: TelegramHistoryClient,
+  chatIds: ReadonlySet<string>
+): Promise<TelegramChatForHistorySync[]> {
+  const chats: TelegramChatForHistorySync[] = [];
+  for (const chatId of [...chatIds].sort()) {
+    const facts = await telegram.getChatHistoryFacts({ chatId });
+    const chat = facts.chat;
+    if (chat === null || !isHistorySyncChatType(chat.type)) {
+      continue;
+    }
+
+    chats.push({
+      id: chat.id,
+      title: chat.title,
+      type: chat.type
+    });
+  }
+  return chats;
 }
 
 async function deleteTargetsForUnlistedChats(
@@ -157,14 +361,7 @@ async function requestCoverageForTargets(
   options: SyncOptions
 ): Promise<SyncResult> {
   const chatIds = [...new Set(targets.map((target) => target.chatId))].sort();
-  const result: SyncResult = {
-    coveredIntervals: 0,
-    fetchedMessages: 0,
-    pages: 0,
-    remainingIntervals: 0,
-    reachedBeginning: false,
-    storedMessages: 0
-  };
+  const result = emptySyncResult();
 
   for (const chatId of chatIds) {
     const intervals = projectSyncIntervalsForChat({
@@ -193,13 +390,14 @@ async function requestCoverageForTargets(
       (target) => target.chatId === chatId && isOneShotHistorySyncTarget(target)
     );
     if (oneShotTargets.length > 0) {
-      await timeSyncStage(
+      const deletedTargetIds = await timeSyncStage(
         'cleanup_one_shot_targets',
         {
           'history_sync.target.count': oneShotTargets.length
         },
         () => deleteCompletedOneShotTargets(database, telegram, events, oneShotTargets, chatId, now)
       );
+      result.deletedTargetIds.push(...deletedTargetIds);
     }
   }
 
@@ -229,7 +427,8 @@ async function deleteCompletedOneShotTargets(
   oneShotTargets: HistorySyncTarget[],
   chatId: string,
   now: Date
-): Promise<void> {
+): Promise<string[]> {
+  const deletedTargetIds: string[] = [];
   for (const target of oneShotTargets) {
     const projected = projectSyncIntervalsForChat({
       chatId,
@@ -255,18 +454,37 @@ async function deleteCompletedOneShotTargets(
 
     const deleted = await deleteHistorySyncTarget(database, target.id);
     if (deleted !== undefined) {
+      deletedTargetIds.push(deleted.id);
       events.publish('history-sync.target.auto_deleted', {
         chatId: target.chatId,
         targetId: target.id
       });
     }
   }
+  return deletedTargetIds;
+}
+
+function targetsForCoverage(
+  targets: HistorySyncTarget[],
+  request: SyncRunRequest
+): HistorySyncTarget[] {
+  if (request.fullReconcile || request.targetScope === 'all') {
+    return targets;
+  }
+
+  const chatIds = new Set([...(request.targetChatIds ?? []), ...request.discoveredChatIds]);
+  return targets.filter((target) => {
+    if (includesRelativeTargets(request.targetScope) && isRelativeHistorySyncTarget(target)) {
+      return true;
+    }
+
+    return includesSelectedTargets(request.targetScope) && chatIds.has(target.chatId);
+  });
 }
 
 function normalizeSyncOptions(options: SyncOptions): SyncOptions {
   return {
     chatLoadBatchSize: Math.max(1, options.chatLoadBatchSize),
-    discoverChats: options.discoverChats ?? true,
     messageLimit: Math.min(100, Math.max(1, options.messageLimit)),
     requestDelayMs: Math.max(0, options.requestDelayMs),
     windowDays: Math.max(1, options.windowDays)
@@ -315,4 +533,70 @@ function recordSyncResult(
   incrementTelemetryCounter(METRIC_SYNC_FETCHED_MESSAGES, result.fetchedMessages);
   incrementTelemetryCounter(METRIC_SYNC_STORED_MESSAGES, result.storedMessages);
   incrementTelemetryCounter(METRIC_SYNC_COVERED_INTERVALS, result.coveredIntervals);
+}
+
+function recordSyncSkipped(completedAt: Date, mode: string, skipReason: string): void {
+  setTelemetryGauge(METRIC_SYNC_LAST_SKIPPED_SECONDS, completedAt.getTime() / 1000);
+  incrementTelemetryCounter(METRIC_SYNC_SKIPPED, 1, {
+    'history_sync.skip_reason': skipReason,
+    'history_sync.sync.mode': mode
+  });
+}
+
+function emptySyncResult(): SyncResult {
+  return {
+    coveredIntervals: 0,
+    deletedTargetIds: [],
+    fetchedMessages: 0,
+    pages: 0,
+    remainingIntervals: 0,
+    reachedBeginning: false,
+    storedMessages: 0
+  };
+}
+
+function targetsAfterCleanup(
+  targets: HistorySyncTarget[],
+  deletedTargetIds: readonly string[]
+): HistorySyncTarget[] {
+  if (deletedTargetIds.length === 0) {
+    return targets;
+  }
+  const deleted = new Set(deletedTargetIds);
+  return targets.filter((target) => !deleted.has(target.id));
+}
+
+function syncMode(request: SyncRunRequest): string {
+  if (request.fullReconcile) {
+    return request.discoverChats ? 'startup_full' : 'full_reconcile';
+  }
+  if (request.discoveredChatIds.size > 0) {
+    return 'chat_discovered';
+  }
+  if (request.targetScope === 'relative') {
+    return 'target_relative';
+  }
+  if (request.targetScope === 'all') {
+    return 'target_all';
+  }
+  if (request.targetScope === 'relative_and_selected') {
+    return 'target_mixed';
+  }
+  return 'target_selected';
+}
+
+function uniqueChatCount(targets: HistorySyncTarget[]): number {
+  return new Set(targets.map((target) => target.chatId)).size;
+}
+
+function isHistorySyncChatType(type: string): boolean {
+  return type === 'private' || type === 'secret' || type === 'group' || type === 'channel';
+}
+
+function includesRelativeTargets(scope: SyncTargetScope): boolean {
+  return scope === 'relative' || scope === 'relative_and_selected';
+}
+
+function includesSelectedTargets(scope: SyncTargetScope): boolean {
+  return scope === 'selected' || scope === 'relative_and_selected';
 }

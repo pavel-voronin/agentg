@@ -57,11 +57,12 @@ Telegram publishes:
 - `telegram.login.started`
 - `telegram.login.completed`
 - `telegram.login.failed`
-- `telegram.chat.updated`
+- `telegram.update.chat.discovered`
+- `telegram.update.chat.directory.updated`
 - `telegram.chat_folders.updated`
-- `telegram.message.created`
-- `telegram.message.updated`
-- `telegram.message.deleted`
+- `telegram.update.message.created`
+- `telegram.update.message.updated`
+- `telegram.update.message.deleted`
 - `telegram.user.updated`
 - `telegram.history.coverage.changed`
 - `telegram.tdlib.{method}.started`
@@ -74,6 +75,7 @@ History Sync publishes:
 - `history-sync.sync.accepted`
 - `history-sync.sync.started`
 - `history-sync.sync.completed`
+- `history-sync.sync.skipped`
 - `history-sync.sync.failed`
 - `history-sync.target.upserted`
 - `history-sync.target.deleted`
@@ -87,15 +89,18 @@ module runtime contract, not event-plane state.
 
 `history-sync.sync.requested` is a notification that a sync wake-up was accepted at
 the History Sync boundary. It is not consumed as a NATS command.
+`history-sync.sync.skipped` records a pass that found no local History Sync
+demand and therefore did not call Telegram history or directory procedures.
 
 ## Consumers
 
 History Sync subscribes to Telegram events:
 
-- `telegram.chat.updated` wakes reconciliation because the known chat set may
-  have changed.
-- `telegram.chat.removed` removes concrete targets for chats no longer listed by
-  Telegram.
+- `telegram.update.chat.discovered` carries the discovered chat id in
+  `data.args[0]` and wakes template materialization only for that chat.
+
+History Sync removes concrete targets for chats no longer listed by Telegram
+during explicit full reconciliation, not during every target-only pass.
 
 Gateway subscribes only to `telegram.login.completed` and forwards that event to
 external agent WebSocket clients. All other events remain internal unless a

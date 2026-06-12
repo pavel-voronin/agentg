@@ -27,11 +27,13 @@ import {
   deleteManualHistorySyncTargetFromCommand,
   upsertManualHistorySyncTargetFromCommand
 } from '../target/commands.js';
+import type { TargetState } from '../target/targetState.js';
 
 type Resources = {
   controller: Controller;
   database: Database;
   events: EventBus;
+  targets: TargetState;
   telegram: TelegramHistoryClient;
 };
 
@@ -127,6 +129,7 @@ export function createProcedures(resources: Resources) {
         resources.database,
         deleteTargetInputSchema.parse(input)
       );
+      resources.targets.delete(target.id);
       const response = toTargetResponse(targetRow(target), currentHistorySyncProjectionContext());
 
       resources.events.publish('history-sync.target.deleted', {
@@ -136,7 +139,7 @@ export function createProcedures(resources: Resources) {
       resources.events.publish('history-sync.sync.requested', {
         reason: 'target-deleted'
       });
-      resources.controller.request('target-deleted');
+      resources.controller.request(`target-deleted:${response.chatId}`);
 
       return targetMutationOutputSchema.parse({
         deleted: true,
@@ -169,8 +172,10 @@ export function createProcedures(resources: Resources) {
     async upsertTarget(input: unknown): Promise<TargetMutationOutput> {
       const target = await upsertManualHistorySyncTargetFromCommand(
         resources.database,
-        upsertTargetInputSchema.parse(input)
+        upsertTargetInputSchema.parse(input),
+        resources.targets.targets()
       );
+      resources.targets.upsert(target);
       const response = toTargetResponse(targetRow(target), currentHistorySyncProjectionContext());
 
       resources.events.publish('history-sync.target.upserted', {
@@ -180,7 +185,7 @@ export function createProcedures(resources: Resources) {
       resources.events.publish('history-sync.sync.requested', {
         reason: 'target-upserted'
       });
-      resources.controller.request('target-upserted');
+      resources.controller.request(`target-upserted:${response.chatId}`);
 
       return targetMutationOutputSchema.parse({
         deleted: false,

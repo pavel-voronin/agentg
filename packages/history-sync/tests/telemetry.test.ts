@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Database } from '../src/database/client.js';
 import { historySyncTargets, historySyncTemplates } from '../src/database/schema.js';
 import type { TelegramHistoryClient } from '../src/model/types.js';
+import type { SyncRunRequest } from '../src/sync/executor.js';
 
 const telemetry = vi.hoisted(() => ({
   incrementTelemetryCounter: vi.fn(),
@@ -41,7 +42,6 @@ describe('history sync telemetry', () => {
       createFakeEventBus(),
       {
         chatLoadBatchSize: 100,
-        discoverChats: false,
         messageLimit: 100,
         requestDelayMs: 0,
         windowDays: 30
@@ -66,16 +66,71 @@ describe('history sync telemetry', () => {
     expect(JSON.stringify(telemetry.spans)).not.toContain('secret-chat-id');
   });
 
-  it('records sync stage duration and workload metrics with bounded labels', async () => {
+  it('records no-demand skip without chat listing telemetry', async () => {
     const { runHistorySync } = await import('../src/sync/executor.js');
 
     await runHistorySync(
       createFakeHistorySyncDatabase() as unknown as Database,
       createFakeTelegramHistoryClient(),
       createFakeEventBus(),
+      relativeTargetsRequest(),
       {
         chatLoadBatchSize: 50,
-        discoverChats: true,
+        messageLimit: 100,
+        requestDelayMs: 0,
+        windowDays: 7
+      }
+    );
+
+    const stageSpans = telemetry.spans.filter((span) =>
+      JSON.stringify(span).includes('history_sync.sync.stage.duration')
+    );
+    const stageNames = stageSpans.map(spanName);
+
+    expect(stageNames).toEqual(['history_sync.sync.load_demand']);
+    expect(telemetry.setTelemetryGauge.mock.calls).toEqual([
+      ['history_sync.sync.last_skipped.unix_seconds', expect.any(Number)]
+    ]);
+    expect(telemetry.incrementTelemetryCounter.mock.calls).toEqual([
+      [
+        'history_sync.sync.skipped',
+        1,
+        {
+          'history_sync.skip_reason': 'no_demand',
+          'history_sync.sync.mode': 'target_relative'
+        }
+      ]
+    ]);
+  });
+
+  it('records full reconciliation stages and workload metrics with bounded labels', async () => {
+    const { runHistorySync } = await import('../src/sync/executor.js');
+
+    await runHistorySync(
+      createFakeHistorySyncDatabase({
+        targets: [
+          {
+            id: 'target-1',
+            range: {
+              end: {
+                expression: 'now',
+                kind: 'expression'
+              },
+              start: {
+                expression: 'now-30d',
+                kind: 'expression'
+              }
+            },
+            telegramChatId: 'secret-chat-id',
+            templateId: null
+          }
+        ]
+      }) as unknown as Database,
+      createFakeTelegramHistoryClient(),
+      createFakeEventBus(),
+      fullRequest('startup', true),
+      {
+        chatLoadBatchSize: 50,
         messageLimit: 100,
         requestDelayMs: 0,
         windowDays: 7
@@ -91,6 +146,7 @@ describe('history sync telemetry', () => {
       attributes: {
         'history_sync.chat.load_batch_size': 50,
         'history_sync.discovery.enabled': true,
+        'history_sync.sync.mode': 'startup_full',
         'history_sync.sync.stage': 'list_chats'
       },
       metric: {
@@ -106,9 +162,10 @@ describe('history sync telemetry', () => {
     ).toEqual({
       attributes: {
         'history_sync.chat.count': 1,
+        'history_sync.sync.mode': 'startup_full',
         'history_sync.sync.stage': 'request_coverage',
         'history_sync.sync.window_days': 7,
-        'history_sync.target.count': 0
+        'history_sync.target.count': 1
       },
       metric: {
         attributes: {
@@ -118,6 +175,7 @@ describe('history sync telemetry', () => {
       },
       name: 'history_sync.sync.request_coverage'
     });
+    expect(stageNames).toContain('history_sync.sync.load_demand');
     expect(stageNames).not.toContain('history_sync.sync.cleanup_one_shot_targets');
     for (const span of stageSpans) {
       const metric = (span as { metric?: { attributes?: Record<string, unknown> } }).metric;
@@ -126,7 +184,7 @@ describe('history sync telemetry', () => {
     expect(telemetry.setTelemetryGauge.mock.calls).toEqual([
       ['history_sync.sync.last_completed.unix_seconds', expect.any(Number)],
       ['history_sync.sync.last_chats', 1],
-      ['history_sync.sync.last_targets', 0],
+      ['history_sync.sync.last_targets', 1],
       ['history_sync.sync.last_pages', 0],
       ['history_sync.sync.last_fetched_messages', 0],
       ['history_sync.sync.last_stored_messages', 0],
@@ -148,6 +206,7 @@ describe('history sync telemetry', () => {
 
   it('records coverage work stages without per-chat or interval cardinality attributes', async () => {
     const { runHistorySync } = await import('../src/sync/executor.js');
+    const events = createFakeEventBus();
 
     await runHistorySync(
       createFakeHistorySyncDatabase({
@@ -170,10 +229,10 @@ describe('history sync telemetry', () => {
         ]
       }) as unknown as Database,
       createFakeTelegramHistoryClient(),
-      createFakeEventBus(),
+      events,
+      targetSelectedRequest('target-upserted', 'secret-chat-id'),
       {
         chatLoadBatchSize: 50,
-        discoverChats: true,
         messageLimit: 100,
         requestDelayMs: 0,
         windowDays: 7
@@ -192,6 +251,24 @@ describe('history sync telemetry', () => {
       const metric = (span as { metric?: { attributes?: Record<string, unknown> } }).metric;
       expect(Object.keys(metric?.attributes ?? {})).toEqual(['history_sync.sync.stage']);
     }
+    expect(telemetry.setTelemetryGauge.mock.calls).toContainEqual([
+      'history_sync.sync.last_chats',
+      1
+    ]);
+    const completed = events
+      .published()
+      .find((event) => event.type === 'history-sync.sync.completed');
+    expect(completed?.data).toEqual({
+      chats: 1,
+      coveredIntervals: 0,
+      fetchedMessages: 0,
+      mode: 'target_selected',
+      pages: 0,
+      reason: 'target-upserted',
+      remainingIntervals: 0,
+      storedMessages: 0,
+      targets: 1
+    });
 
     const telemetryPayload = JSON.stringify(stageSpans);
     expect(telemetryPayload).not.toContain('secret-chat-id');
@@ -264,6 +341,37 @@ function createFakeTelegramHistoryClient(): TelegramHistoryClient {
         }
       ])
     )
+  };
+}
+
+function fullRequest(reason: string, discoverChats: boolean): SyncRunRequest {
+  return {
+    discoveredChatIds: new Set<string>(),
+    discoverChats,
+    fullReconcile: true,
+    reason,
+    targetScope: 'all'
+  };
+}
+
+function relativeTargetsRequest(): SyncRunRequest {
+  return {
+    discoveredChatIds: new Set<string>(),
+    discoverChats: false,
+    fullReconcile: false,
+    reason: 'relative-targets',
+    targetScope: 'relative'
+  };
+}
+
+function targetSelectedRequest(reason: string, chatId: string): SyncRunRequest {
+  return {
+    discoveredChatIds: new Set<string>(),
+    discoverChats: false,
+    fullReconcile: false,
+    reason,
+    targetScope: 'selected',
+    targetChatIds: new Set([chatId])
   };
 }
 
