@@ -5,7 +5,7 @@ import type {
   ReadMessage
 } from '../../../src/views/schemas.js';
 
-export type FetchMessagesPageResult = {
+export type GetMessagesResult = {
   messages?: unknown;
   reachedStart?: unknown;
 };

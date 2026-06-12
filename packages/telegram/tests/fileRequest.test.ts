@@ -10,7 +10,10 @@ import type { telegramClient } from '../src/index.js';
 import { requestFileProcedure } from '../src/procedures/requestFile.js';
 import type { ProcedureResources } from '../src/procedures/resources.js';
 
-type TelegramDashboardClient = Pick<ReturnType<typeof telegramClient>, 'fetchPage' | 'requestFile'>;
+type TelegramDashboardClient = Pick<
+  ReturnType<typeof telegramClient>,
+  'getMessages' | 'requestFile'
+>;
 
 describe('Telegram file request', () => {
   it('publishes a queue wake event even when an explicit request finds an existing job', async () => {
@@ -131,8 +134,8 @@ describe('Telegram file request', () => {
       database: existingQueuedJobDatabase(),
       events: eventSink(events),
       telegram: {
-        fetchPage() {
-          return Promise.reject(new Error('fetchPage is not used by this test'));
+        getMessages() {
+          return Promise.reject(new Error('getMessages is not used by this test'));
         },
         requestFile(input: unknown) {
           calls.push({

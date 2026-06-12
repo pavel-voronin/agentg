@@ -59,8 +59,8 @@ datasources:
             value: messaging_operation_type
           - key: telegram.update.type
             value: telegram_update_type
-          - key: telegram.messages_page.stage
-            value: telegram_messages_page_stage
+          - key: telegram.get_messages.stage
+            value: telegram_get_messages_stage
           - key: telegram.message_view.stage
             value: telegram_message_view_stage
           - key: telegram.file.record.stage
@@ -78,8 +78,8 @@ datasources:
             query: 'histogram_quantile(0.95, sum by (le) (rate(db_client_operation_duration_seconds_bucket{$$__tags}[5m])))'
           - name: Telegram update p95
             query: 'histogram_quantile(0.95, sum by (le) (rate(telegram_update_processing_duration_seconds_bucket{$$__tags}[5m])))'
-          - name: Telegram page stage p95
-            query: 'histogram_quantile(0.95, sum by (le) (rate(telegram_messages_page_stage_duration_seconds_bucket{$$__tags}[5m])))'
+          - name: Telegram get messages stage p95
+            query: 'histogram_quantile(0.95, sum by (le) (rate(telegram_get_messages_stage_duration_seconds_bucket{$$__tags}[5m])))'
   - name: Loki
     type: loki
     uid: loki

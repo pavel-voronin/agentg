@@ -1,4 +1,4 @@
-import { parseLimit, timeTelemetrySpan, type EventBus } from '@agentg/framework';
+import type { EventBus } from '@agentg/framework';
 import { and, asc, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
@@ -10,7 +10,6 @@ import {
   telegramChats,
   telegramMessages
 } from '../../src/database/schema.js';
-import { HISTORY_PAST_BOUNDARY, HISTORY_TICK_MS } from '../../src/history/time.js';
 import { chatSearchWhere, readChatSelection, toChatStorageRow } from '../../src/views/chat.js';
 import { readMessageSelection, toReadMessages } from '../../src/views/message.js';
 import { andSql } from '../../src/views/sql.js';
@@ -27,14 +26,10 @@ import {
   fileRequestOutputSchema,
   messageLookupInputSchema,
   messageLookupOutputSchema,
-  messagesPageInputSchema,
-  messagesPageOutputSchema,
+  getMessagesInputSchema,
+  getMessagesOutputSchema,
   type ChatFolder
 } from './models.js';
-
-const MESSAGE_PAGE_LIMIT = 100;
-const MESSAGE_PAGE_MAX_LIMIT = 100;
-const METRIC_MESSAGES_PAGE_STAGE_DURATION = 'telegram.messages_page.stage.duration';
 
 type ChatDirectoryInput = z.infer<typeof chatDirectoryInputSchema>;
 type ChatDirectoryOutput = z.infer<typeof chatDirectoryOutputSchema>;
@@ -42,9 +37,12 @@ type FileRequestInput = z.infer<typeof fileRequestInputSchema>;
 type FileRequestOutput = z.infer<typeof fileRequestOutputSchema>;
 type MessageLookupInput = z.infer<typeof messageLookupInputSchema>;
 type MessageLookupOutput = z.infer<typeof messageLookupOutputSchema>;
-type MessagesPageInput = z.infer<typeof messagesPageInputSchema>;
-type MessagesPageOutput = z.infer<typeof messagesPageOutputSchema>;
-type TelegramDashboardClient = Pick<ReturnType<typeof telegramClient>, 'fetchPage' | 'requestFile'>;
+type GetMessagesInput = z.infer<typeof getMessagesInputSchema>;
+type GetMessagesOutput = z.infer<typeof getMessagesOutputSchema>;
+type TelegramDashboardClient = Pick<
+  ReturnType<typeof telegramClient>,
+  'getMessages' | 'requestFile'
+>;
 
 type Resources = {
   database: Database;
@@ -64,11 +62,11 @@ export function createProcedures(resources: Resources) {
       const output = await runMessage(messageLookupInputSchema.parse(input), resources);
       return messageLookupOutputSchema.parse(output);
     },
-    [TELEGRAM_DASHBOARD_METHODS.messagesPage]: async (
+    [TELEGRAM_DASHBOARD_METHODS.getMessages]: async (
       input: unknown
-    ): Promise<MessagesPageOutput> => {
-      const output = await runMessagesPage(messagesPageInputSchema.parse(input), resources);
-      return messagesPageOutputSchema.parse(output);
+    ): Promise<GetMessagesOutput> => {
+      const output = await runGetMessages(getMessagesInputSchema.parse(input), resources);
+      return getMessagesOutputSchema.parse(output);
     },
     [TELEGRAM_DASHBOARD_METHODS.requestFile]: async (
       input: unknown
@@ -152,109 +150,11 @@ async function runMessage(
   };
 }
 
-async function runMessagesPage(
-  input: MessagesPageInput,
+async function runGetMessages(
+  input: GetMessagesInput,
   resources: Resources
-): Promise<MessagesPageOutput> {
-  const limit = parseLimit(input.limit, MESSAGE_PAGE_LIMIT, MESSAGE_PAGE_MAX_LIMIT);
-  const cursorMessageId = parseOptionalMessageId(input.beforeMessageId);
-  const pageEndAt = await timeMessagesPageStage('cursor', async () =>
-    cursorMessageId === undefined
-      ? ceilToHistorySecond(new Date())
-      : ((await readMessagePageEndAt(input.chatId, input.beforeMessageId, resources)) ??
-        ceilToHistorySecond(new Date()))
-  );
-  const fetchResult = await timeMessagesPageStage('fetch', () =>
-    resources.telegram.fetchPage({
-      chatId: input.chatId,
-      ...(cursorMessageId === undefined ? {} : { cursorMessageId }),
-      endAt: pageEndAt.toISOString(),
-      limit,
-      startAt: HISTORY_PAST_BOUNDARY.toISOString()
-    })
-  );
-  const messages = await timeMessagesPageStage('read', () =>
-    readPersistedMessagesPage(
-      {
-        beforeMessageId: input.beforeMessageId,
-        chatId: input.chatId,
-        limit
-      },
-      resources
-    )
-  );
-
-  const reachedByFetch = fetchResult.kind === 'page' ? fetchResult.reachedBeginning : true;
-
-  return timeMessagesPageStage('assemble', () =>
-    Promise.resolve({
-      messages,
-      reachedStart: reachedByFetch || messages.length < limit
-    })
-  );
-}
-
-function timeMessagesPageStage<T>(stage: string, operation: () => Promise<T>): Promise<T> {
-  const attributes = {
-    'telegram.messages_page.stage': stage
-  };
-  return timeTelemetrySpan(
-    {
-      attributes,
-      metric: {
-        attributes,
-        name: METRIC_MESSAGES_PAGE_STAGE_DURATION
-      },
-      name: `telegram.messages_page.${stage}`
-    },
-    operation
-  );
-}
-
-async function readMessagePageEndAt(
-  chatId: string,
-  messageId: string | undefined,
-  resources: Resources
-): Promise<Date | undefined> {
-  if (messageId === undefined) {
-    return undefined;
-  }
-
-  const [message] = await resources.database
-    .select({
-      messageDate: telegramMessages.date
-    })
-    .from(telegramMessages)
-    .where(and(eq(telegramMessages.chatId, chatId), eq(telegramMessages.id, messageId)))
-    .limit(1);
-
-  return message?.messageDate === null || message?.messageDate === undefined
-    ? undefined
-    : nextHistorySecond(message.messageDate);
-}
-
-async function readPersistedMessagesPage(
-  input: {
-    beforeMessageId: string | undefined;
-    chatId: string;
-    limit: number;
-  },
-  resources: Resources
-) {
-  const before = parseOptionalMessageId(input.beforeMessageId);
-  const rows = await resources.database
-    .select(readMessageSelection())
-    .from(telegramMessages)
-    .where(
-      andSql(
-        eq(telegramMessages.chatId, input.chatId),
-        before === undefined ? undefined : sql`${telegramMessages.id}::bigint < ${before}`
-      )
-    )
-    .orderBy(sql`${telegramMessages.id}::bigint desc`)
-    .limit(input.limit);
-
-  return toReadMessages(resources.database, [...rows].reverse());
+): Promise<GetMessagesOutput> {
+  return resources.telegram.getMessages(input);
 }
 
 async function requestFile(
@@ -262,23 +162,6 @@ async function requestFile(
   resources: Resources
 ): Promise<FileRequestOutput> {
   return resources.telegram.requestFile(input);
-}
-
-function parseOptionalMessageId(value: string | undefined): number | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) ? parsed : undefined;
-}
-
-function nextHistorySecond(date: Date): Date {
-  return new Date(Math.floor(date.getTime() / HISTORY_TICK_MS) * HISTORY_TICK_MS + HISTORY_TICK_MS);
-}
-
-function ceilToHistorySecond(date: Date): Date {
-  return new Date(Math.ceil(date.getTime() / HISTORY_TICK_MS) * HISTORY_TICK_MS);
 }
 
 function chatTypeToTdlibConstructor(type: string): string {

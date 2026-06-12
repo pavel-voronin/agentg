@@ -381,7 +381,7 @@
             "uid": "victoria-metrics"
           },
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (rpc_method, le) (rate(rpc_server_call_duration_seconds_bucket{service_name=\"dashboard-server\", rpc_method=~\"telegram[.]cp[.](chatDirectory|message|messagesPage)\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (rpc_method, le) (rate(rpc_server_call_duration_seconds_bucket{service_name=\"dashboard-server\", rpc_method=~\"telegram[.]dashboard[.](chatDirectory|message|getMessages)\"}[$__rate_interval])))",
           "legendFormat": "{{rpc_method}}"
         },
         {
@@ -390,7 +390,7 @@
             "uid": "victoria-metrics"
           },
           "refId": "B",
-          "expr": "histogram_quantile(0.95, sum by (rpc_method, le) (rate(rpc_client_call_duration_seconds_bucket{service_name=\"dashboard-server\", rpc_method=~\"fetchPage|listChats|getChat|searchMessages|listRecentMessages|countMessagesInIntervals|getHistoryCoverage|getChatHistoryFacts|ensureHistoryCoverage\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (rpc_method, le) (rate(rpc_client_call_duration_seconds_bucket{service_name=\"dashboard-server\", rpc_method=~\"getMessages|listChats|getChat|searchMessages|listRecentMessages|countMessagesInIntervals|getHistoryCoverage|getChatHistoryFacts|ensureHistoryCoverage\"}[$__rate_interval])))",
           "legendFormat": "client {{rpc_method}}"
         }
       ],
@@ -435,11 +435,11 @@
             "uid": "victoria-metrics"
           },
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (telegram_messages_page_stage, le) (rate(telegram_messages_page_stage_duration_seconds_bucket[$__rate_interval])))",
-          "legendFormat": "{{telegram_messages_page_stage}}"
+          "expr": "histogram_quantile(0.95, sum by (telegram_get_messages_stage, le) (rate(telegram_get_messages_stage_duration_seconds_bucket[$__rate_interval])))",
+          "legendFormat": "{{telegram_get_messages_stage}}"
         }
       ],
-      "title": "Messages Page Stage P95",
+      "title": "Get Messages Stage P95",
       "type": "timeseries"
     },
     {
@@ -523,8 +523,8 @@
             "uid": "victoria-metrics"
           },
           "refId": "A",
-          "expr": "sum by (telegram_messages_page_stage) (rate(telegram_messages_page_stage_duration_seconds_count[$__rate_interval]))",
-          "legendFormat": "page {{telegram_messages_page_stage}}"
+          "expr": "sum by (telegram_get_messages_stage) (rate(telegram_get_messages_stage_duration_seconds_count[$__rate_interval]))",
+          "legendFormat": "get messages {{telegram_get_messages_stage}}"
         },
         {
           "datasource": {

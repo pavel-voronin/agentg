@@ -94,13 +94,13 @@ export const messageLookupOutputSchema = z.object({
   message: readMessageSchema.nullable()
 });
 
-export const messagesPageInputSchema = z.object({
+export const getMessagesInputSchema = z.object({
   beforeMessageId: nonEmptyStringSchema.regex(/^[0-9]+$/).optional(),
   chatId: nonEmptyStringSchema,
   limit: positiveIntegerSchema.optional()
 });
 
-export const messagesPageOutputSchema = z.object({
+export const getMessagesOutputSchema = z.object({
   messages: z.array(readMessageSchema),
   reachedStart: z.boolean()
 });

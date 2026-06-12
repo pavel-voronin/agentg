@@ -3,7 +3,7 @@ import { useDashboardHost } from '@agentg/framework/dashboard';
 import type { FileRef } from '../../src/files/types.js';
 import { TELEGRAM_DASHBOARD_METHODS } from '../contracts.js';
 import type {
-  FetchMessagesPageResult,
+  GetMessagesResult,
   GetMessageResult,
   RequestFileResult
 } from './chat-messages/types.js';
@@ -24,7 +24,7 @@ type MessageInput = {
   messageId: string;
 };
 
-type MessagesPageInput = {
+type GetMessagesInput = {
   beforeMessageId?: string | undefined;
   chatId: string;
   limit: number;
@@ -45,8 +45,8 @@ export function useTelegramDashboardApi() {
     message(input: MessageInput): Promise<GetMessageResult> {
       return host.rpc<GetMessageResult>(TELEGRAM_DASHBOARD_METHODS.message, input);
     },
-    messagesPage(input: MessagesPageInput): Promise<FetchMessagesPageResult> {
-      return host.rpc<FetchMessagesPageResult>(TELEGRAM_DASHBOARD_METHODS.messagesPage, input);
+    getMessages(input: GetMessagesInput): Promise<GetMessagesResult> {
+      return host.rpc<GetMessagesResult>(TELEGRAM_DASHBOARD_METHODS.getMessages, input);
     },
     requestFile(input: RequestFileInput): Promise<RequestFileResult> {
       return host.rpc<RequestFileResult>(TELEGRAM_DASHBOARD_METHODS.requestFile, input);

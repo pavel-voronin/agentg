@@ -254,8 +254,8 @@
             "uid": "victoria-metrics"
           },
           "refId": "C",
-          "expr": "histogram_quantile(0.95, sum by (service_name, telegram_messages_page_stage, le) (rate(telegram_messages_page_stage_duration_seconds_bucket{service_name=~\"$service\"}[5m])))",
-          "legendFormat": "messages page {{telegram_messages_page_stage}}"
+          "expr": "histogram_quantile(0.95, sum by (service_name, telegram_get_messages_stage, le) (rate(telegram_get_messages_stage_duration_seconds_bucket{service_name=~\"$service\"}[5m])))",
+          "legendFormat": "get messages {{telegram_get_messages_stage}}"
         },
         {
           "datasource": {

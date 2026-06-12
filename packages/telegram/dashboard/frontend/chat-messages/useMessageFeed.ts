@@ -101,7 +101,7 @@ export function useMessageFeed(options: {
     loadingInitial.value = true;
     lastError.value = null;
     try {
-      const result = await api.messagesPage({
+      const result = await api.getMessages({
         chatId,
         limit: MESSAGE_PAGE_SIZE
       });
@@ -147,7 +147,7 @@ export function useMessageFeed(options: {
     loadingOlder.value = true;
     lastError.value = null;
     try {
-      const result = await api.messagesPage({
+      const result = await api.getMessages({
         beforeMessageId,
         chatId,
         limit: MESSAGE_PAGE_SIZE
