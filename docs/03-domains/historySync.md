@@ -52,11 +52,12 @@ History Sync performs a desired-state loop:
 1. Ask Telegram for listable history chats.
 2. Materialize templates into concrete targets.
 3. Project target ranges to absolute intervals.
-4. Ask Telegram to ensure coverage for a bounded absolute interval.
+4. Ask Telegram to converge local history for a bounded absolute interval.
 
-History Sync does not inspect Telegram coverage to derive missing pages. Telegram
-computes missing intervals from Telegram-owned coverage and owns TDLib cursor
-state for page continuity.
+History Sync does not inspect Telegram coverage to derive missing pages and does
+not choose Telegram fetch, cursor, TDLib, or file reconciliation strategy.
+Telegram computes missing intervals from Telegram-owned coverage and owns all
+page continuity and materialization mechanics.
 
 ## Boundary
 
@@ -73,6 +74,7 @@ History Sync does not own:
 - Telegram history coverage tables
 - TDLib page cursors
 - Telegram coverage convergence decisions
+- Telegram procedure strategy below the domain capability level
 
 ## Invariants
 
@@ -80,5 +82,5 @@ History Sync does not own:
 - Targets are product desired state for one Telegram chat.
 - Telegram history coverage changes only as a byproduct of Telegram fetching or
   receiving messages.
-- History Sync asks Telegram for absolute intervals and does not mutate coverage
-  directly.
+- History Sync asks Telegram for domain-level convergence of absolute intervals
+  and does not mutate coverage directly.

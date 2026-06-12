@@ -1,10 +1,18 @@
-# TDLib Sidecar API
+# TDLib Adapter Boundary
 
-The TDLib sidecar is responsible for Telegram login/session and update collection.
+The TDLib adapter is private to the Telegram module. It is responsible for
+Telegram login/session, update collection, and upstream Telegram operations used
+by Telegram's own domain procedures.
 
 ## Boundary
 
-The sidecar should expose a narrow internal API and should not become a product behavior layer.
+TDLib must not be exposed as a module boundary. Dashboard, Gateway, History Sync,
+and other modules must not call TDLib-shaped operations, choose TDLib methods,
+pass TDLib cursors, or depend on TDLib response shapes.
+
+Consumers call Telegram domain procedures. Telegram then decides internally
+whether it can answer from its own storage, needs to materialize data from TDLib,
+or needs to complete work asynchronously and publish a Telegram-owned event.
 
 ## Responsibilities
 
@@ -13,9 +21,10 @@ The sidecar should expose a narrow internal API and should not become a product 
 - Receive updates.
 - Fetch chat lists.
 - Fetch historical messages.
-- Emit raw updates into ingestion.
+- Feed raw updates into Telegram ingestion.
 - Provide minimal health and status information.
-- Optionally expose a low-level `sendMessage` command.
+- Serve as a private implementation dependency for Telegram-owned domain
+  procedures.
 
 ## Candidate Outputs
 
@@ -33,3 +42,5 @@ The sidecar should expose a narrow internal API and should not become a product 
 
 - No product-level interpretation of messages.
 - No bulk attachment processing.
+- No public module RPC surface.
+- No thin wrappers exposed to other domains.

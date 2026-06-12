@@ -124,8 +124,8 @@ After reconnecting, consumers must rebuild state through these surfaces:
   procedures.
 - Dashboard browser clients: Dashboard WebSocket RPC methods handled by
   Dashboard-owned backend procedures.
-- History Sync: its own Postgres tables plus Telegram read and history-fetch
-  module RPC.
+- History Sync: its own Postgres tables plus Telegram domain procedures for
+  reads and history convergence.
 - Telegram ingestion: TDLib session state and Telegram-shaped Postgres storage.
 - Modules: their owned tables plus domain module RPC reads.
 
@@ -134,8 +134,10 @@ After reconnecting, consumers must rebuild state through these surfaces:
 Internal procedure contracts are owned by the serving module package:
 
 - Telegram owns `@agentg/telegram`, whose package root exports the typed client
-  for its module procedure surface. The Telegram schemas, storage schema,
-  ingestion, normalization, and TDLib plumbing remain package-internal.
+  for its domain procedure surface. The Telegram schemas, storage schema,
+  ingestion, normalization, coverage mechanics, file materialization, and TDLib
+  plumbing remain package-internal. Its public procedures must not expose raw
+  TDLib calls, page fetches, cursors, or lower-level materialization controls.
 - History Sync owns `@agentg/history-sync`, whose package root exports the typed
   client for its module procedure surface. The History Sync schemas, storage
   schema, commands, and domain types remain package-internal.

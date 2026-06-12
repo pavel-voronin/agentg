@@ -80,13 +80,15 @@ services and leaves Docker-owned infrastructure running.
 `npm run dev:telegram` runs the `@agentg/telegram` ingestion package. It owns the
 TDLib session, receives live Telegram updates, writes Telegram-shaped records to
 Postgres, computes Telegram history coverage from fetched and received messages,
-publishes live integration events to NATS, and serves the Telegram history fetch
-and coverage RPC surface used by History Sync.
+publishes live integration events to NATS, and serves Telegram domain procedures.
+TDLib operations, page fetches, cursors, coverage convergence, and file
+materialization remain private implementation details behind those procedures.
 
 `npm run dev:history-sync` runs the `@agentg/history-sync` package. It owns
 history sync templates, concrete chat targets, range projection, and the history sync
-lifecycle. It calls Telegram through the typed `@agentg/telegram` client using
-`TELEGRAM_RPC_URL`.
+lifecycle. It calls Telegram domain procedures through the typed
+`@agentg/telegram` client using `TELEGRAM_RPC_URL`; it does not select TDLib,
+page-fetch, cursor, or file-materialization behavior.
 
 `npm run dev:dashboard-server` runs the server-side Dashboard boundary.
 It serves the browser-facing operator WebSocket on `127.0.0.1:8789`, subscribes

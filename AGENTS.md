@@ -76,6 +76,19 @@
 - Never propose, list, or implement options that mix domain ownership.
 - Before presenting alternatives, discard any option that violates domain
   boundaries. Do not show rejected boundary-violating options for context.
+- Domain public procedures must describe domain capabilities, not internal
+  implementation mechanics. Procedure names, inputs, outputs, and caller
+  choices must not expose lower-level storage, upstream API cursors, raw
+  pagination-fetch, coverage, or worker strategy details owned by the serving
+  domain. Domain-level pagination anchors such as `beforeMessageId` are allowed
+  when they describe the product read model rather than an upstream cursor.
+- TDLib is private to the Telegram domain. Other domains, Dashboard, Gateway,
+  and framework code must not know how to select TDLib-backed operations. If a
+  consumer needs Telegram data or behavior, add or use a Telegram domain
+  procedure that hides TDLib, storage, coverage, and materialization mechanics.
+- A domain may use its own low-level internal helpers, but those helpers must
+  not become the package root client surface unless the exposed operation is
+  still a domain-level product capability.
 - A domain must not reference another domain's content IDs, procedures, events,
   view state, labels, tab names, layout positions, or implementation details.
 - Cross-domain UI composition is allowed only through neutral Dashboard SDK

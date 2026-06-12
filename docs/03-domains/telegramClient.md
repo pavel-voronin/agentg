@@ -21,6 +21,15 @@ AgenTG should be useful as a Telegram client first.
 ## Invariants
 
 - Telegram mechanics should not be flattened into a generic message-feed model.
+- TDLib is an implementation detail of this domain. It must not appear in
+  procedure names, caller choices, Dashboard contracts, History Sync contracts,
+  Gateway contracts, or other module boundaries.
+- Public Telegram procedures expose Telegram domain capabilities. They must not
+  expose raw TDLib calls, page fetches, TDLib cursors, coverage internals, file
+  reconciliation controls, or materialization strategy switches.
+- Consumers ask Telegram for the domain result they need. Telegram decides
+  internally whether the answer can be returned from storage, requires
+  materialization, or should complete asynchronously and publish a domain event.
 - Incoming Telegram updates should be handled by explicit update handlers or
   reported as malformed or unhandled diagnostics.
 - Current state should be reconstructable from Telegram domain tables where
@@ -31,9 +40,14 @@ AgenTG should be useful as a Telegram client first.
 
 The long-term direction is broad Telegram API support, not only the subset needed for initial text message ingestion.
 
-The first implementation can use a narrow operational subset, but the architecture should not block later support for richer Telegram client capabilities.
+The first implementation can use a narrow operational subset, but the
+architecture should not block later support for richer Telegram client
+capabilities.
 
-If TDLib exposes a capability as a straightforward request, the client layer may include a thin wrapper for it. For example, a low-level `sendMessage` wrapper can exist without making sending part of the first product workflow.
+New public procedures should be named and shaped around Telegram product
+semantics, not around TDLib functions. A low-level TDLib operation can exist
+inside the Telegram module only as a private implementation helper behind a
+domain procedure.
 
 ## Non-Responsibilities
 

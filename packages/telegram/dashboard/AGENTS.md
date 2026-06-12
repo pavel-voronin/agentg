@@ -13,5 +13,8 @@
   helpers. Frontend code must not import Node-only runtime, TDLib ingestion,
   file workers, database migrations, or process entrypoints.
 - Do not register Dashboard-only procedures as public module procedures.
+- Dashboard procedures and frontend API wrappers must expose Telegram Dashboard
+  domain behavior, not TDLib, raw history fetches, page cursors, coverage
+  internals, or file materialization controls.
 - Do not put TDLib ingestion, file workers, database migrations, or generic
   framework code here.

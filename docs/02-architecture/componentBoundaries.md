@@ -2,28 +2,29 @@
 
 This document defines the boundaries needed for the first implementation.
 
-## TDLib Sidecar
+## Telegram Module
 
 Owns:
 
 - Telegram login and session state.
 - TDLib local database.
 - Receiving live Telegram updates.
-- Fetching chat lists and historical messages.
-- Exposing a small internal module RPC API for Telegram client commands and reads.
+- Fetching chat lists and historical messages through private TDLib operations.
+- Exposing Telegram domain procedures for Telegram client commands and reads.
 - Handling TDLib inputs through explicit update handlers.
-- Fetching and persisting historical Telegram pages requested by the History Sync
-  Sync domain.
+- Materializing requested Telegram history into Telegram-owned storage.
 - Computing and storing Telegram history coverage from fetched pages and live
   updates.
-- Fetching and persisting operator-requested chat message pages for Control
-  Plane read-through views.
+- Serving Telegram messages, chats, files, and coverage through domain-level
+  reads that hide TDLib, storage, cursor, and materialization mechanics.
 
 Does not own:
 
 - Product-level interpretation of messages.
 - Bulk attachment processing.
 - Long-running data analysis.
+- Exposing TDLib-shaped operations, page cursors, raw history fetch procedures,
+  or other lower-level implementation controls to other domains.
 
 ## History Sync
 
@@ -33,8 +34,8 @@ Owns:
 - Materializing templates into concrete chat targets.
 - Projecting target ranges into bounded absolute intervals.
 - Sync cadence and wake-up policy.
-- Asking Telegram to ensure coverage for absolute intervals through the
-  Telegram internal module RPC surface.
+- Requesting Telegram domain history convergence for bounded absolute
+  intervals.
 - Composing operator read models from History Sync target state and
   Telegram-owned coverage/read state.
 - Publishing history sync and target lifecycle events.
@@ -46,6 +47,8 @@ Does not own:
 - Telegram domain table writes.
 - Telegram history coverage tables or TDLib page cursors.
 - Parsing Telegram storage payloads for History Sync read behavior.
+- Selecting Telegram fetch, cursor, TDLib, file reconciliation, or
+  materialization strategy.
 
 ## Dashboard
 

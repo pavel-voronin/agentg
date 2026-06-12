@@ -43,7 +43,7 @@ The agent-facing integration adds a separate live boundary:
 TDLib sidecar
   -> Postgres
   -> NATS Core live integration events
-  <- module RPC history fetch calls from History Sync
+  <- Telegram domain RPC calls from History Sync
   -> History Sync service
   <- module RPC operator calls from Dashboard server
   -> Dashboard browser UI
@@ -57,6 +57,9 @@ through Telegram domain tables and Telegram history coverage.
 History Sync is a separate process from Telegram ingestion: it owns templates,
 targets, and sync cadence. Telegram ingestion owns TDLib, Telegram-shaped
 persistence, page continuity, and Telegram history coverage.
+TDLib and page continuity stay inside Telegram; other services request Telegram
+domain outcomes and do not select TDLib methods, page cursors, history fetch
+strategy, or file reconciliation strategy.
 Dashboard is a separate operator boundary: the browser UI calls Dashboard
 server, and Dashboard server exposes Dashboard-owned backend procedures that
 call typed module clients. The browser UI is composed from slots: Dashboard owns
