@@ -22,6 +22,8 @@ type TabView = {
 const tabs: TabView[] = [
   { id: 'operations', label: 'Operations' },
   { id: 'telegram', label: 'Telegram' },
+  { id: 'get-messages', label: 'Get Messages' },
+  { id: 'history-reconciler', label: 'History Reconciler' },
   { id: 'files', label: 'Files' },
   { id: 'history-sync', label: 'History Sync' },
   { id: 'updates', label: 'Updates' },
@@ -90,6 +92,32 @@ function selectTab(tabId: TelemetryTabId): void {
         dashboard-uid="agentg-telegram"
         kiosk
         title="Telegram"
+      />
+      <div v-else class="telemetry-page__empty">No Grafana link</div>
+    </section>
+
+    <section v-if="activeTab === 'get-messages'" class="telemetry-page__section">
+      <UiGrafanaDashboard
+        v-if="links"
+        :key="activeViewKey"
+        :base-url="links.grafanaUi"
+        dashboard-slug="telegram-get-messages"
+        dashboard-uid="telegram-get-messages"
+        kiosk
+        title="Get Messages"
+      />
+      <div v-else class="telemetry-page__empty">No Grafana link</div>
+    </section>
+
+    <section v-if="activeTab === 'history-reconciler'" class="telemetry-page__section">
+      <UiGrafanaDashboard
+        v-if="links"
+        :key="activeViewKey"
+        :base-url="links.grafanaUi"
+        dashboard-slug="telegram-history-reconciler"
+        dashboard-uid="telegram-history-reconciler"
+        kiosk
+        title="History Reconciler"
       />
       <div v-else class="telemetry-page__empty">No Grafana link</div>
     </section>

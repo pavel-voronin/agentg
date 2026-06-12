@@ -1,4 +1,4 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, getTableColumns, inArray, sql, type SQL } from 'drizzle-orm';
 
 import type { JsonObject, JsonValue } from '@agentg/framework';
 
@@ -21,13 +21,119 @@ type TelegramMessageReaction = NonNullable<
 type TelegramMessageInteractionInfo = Message['interaction_info'];
 
 export type TelegramMessageFragment = typeof telegramMessages.$inferInsert;
+type TelegramMessageInsertKey = keyof TelegramMessageFragment;
+
+const MESSAGE_UPSERT_COLUMNS = [
+  'authorSignature',
+  'autoDeleteIn',
+  'canBeSaved',
+  'containsUnreadMention',
+  'containsUnreadPollVotes',
+  'content',
+  'date',
+  'editDate',
+  'effectId',
+  'factCheck',
+  'fileSlotsRecordedAt',
+  'forwardInfo',
+  'guestBotCallerId',
+  'hasTimestampedMedia',
+  'importInfo',
+  'interactionInfo',
+  'isChannelPost',
+  'isFromOffline',
+  'isOutgoing',
+  'isPaidStarSuggestedPost',
+  'isPaidTonSuggestedPost',
+  'isPinned',
+  'mediaAlbumId',
+  'paidMessageStarCount',
+  'reactions',
+  'replyMarkup',
+  'replyTo',
+  'restrictionInfo',
+  'schedulingState',
+  'selfDestructIn',
+  'selfDestructType',
+  'senderBoostCount',
+  'senderBusinessBotUserId',
+  'senderId',
+  'senderTag',
+  'sendingState',
+  'suggestedPostInfo',
+  'summaryLanguageCode',
+  'topicId',
+  'unreadReactions',
+  'viaBotUserId'
+] as const satisfies readonly TelegramMessageInsertKey[];
 
 export async function storeMessage(
   database: Database,
   message: Message,
   conflict: StoreMessageConflict = 'update'
 ): Promise<boolean> {
-  const row: typeof telegramMessages.$inferInsert = {
+  const row = telegramMessageRow(message);
+
+  const insert = database.insert(telegramMessages).values(row);
+  const stored =
+    conflict === 'ignore'
+      ? await insert
+          .onConflictDoNothing({
+            target: [telegramMessages.chatId, telegramMessages.id]
+          })
+          .returning({
+            telegramMessageId: telegramMessages.id
+          })
+      : await insert
+          .onConflictDoUpdate({
+            set: row,
+            target: [telegramMessages.chatId, telegramMessages.id]
+          })
+          .returning({
+            telegramMessageId: telegramMessages.id
+          });
+
+  if (stored.length === 0) {
+    return false;
+  }
+
+  return true;
+}
+
+export async function storeMessages(
+  database: Database,
+  messages: Message[],
+  conflict: StoreMessageConflict = 'update'
+): Promise<number> {
+  const rows = uniqueMessageRows(messages);
+  if (rows.length === 0) {
+    return 0;
+  }
+
+  const insert = database.insert(telegramMessages).values(rows);
+  const stored =
+    conflict === 'ignore'
+      ? await insert
+          .onConflictDoNothing({
+            target: [telegramMessages.chatId, telegramMessages.id]
+          })
+          .returning({
+            telegramMessageId: telegramMessages.id
+          })
+      : await insert
+          .onConflictDoUpdate({
+            set: messageUpsertSet(),
+            target: [telegramMessages.chatId, telegramMessages.id]
+          })
+          .returning({
+            telegramMessageId: telegramMessages.id
+          });
+
+  return stored.length;
+}
+
+function telegramMessageRow(message: Message): TelegramMessageFragment {
+  return {
     authorSignature: message.author_signature,
     autoDeleteIn: message.auto_delete_in,
     canBeSaved: message.can_be_saved,
@@ -39,6 +145,7 @@ export async function storeMessage(
     editDate: tdDate(message.edit_date),
     effectId: tdId(message.effect_id),
     factCheck: tdJsonValue(message.fact_check),
+    fileSlotsRecordedAt: null,
     forwardInfo: tdJsonValue(message.forward_info),
     guestBotCallerId: undefined,
     hasTimestampedMedia: message.has_timestamped_media,
@@ -71,31 +178,22 @@ export async function storeMessage(
     unreadReactions: tdJsonValue(message.unread_reactions),
     viaBotUserId: tdId(message.via_bot_user_id)
   };
+}
 
-  const insert = database.insert(telegramMessages).values(row);
-  const stored =
-    conflict === 'ignore'
-      ? await insert
-          .onConflictDoNothing({
-            target: [telegramMessages.chatId, telegramMessages.id]
-          })
-          .returning({
-            telegramMessageId: telegramMessages.id
-          })
-      : await insert
-          .onConflictDoUpdate({
-            set: row,
-            target: [telegramMessages.chatId, telegramMessages.id]
-          })
-          .returning({
-            telegramMessageId: telegramMessages.id
-          });
-
-  if (stored.length === 0) {
-    return false;
+function uniqueMessageRows(messages: Message[]): TelegramMessageFragment[] {
+  const rowsByKey = new Map<string, TelegramMessageFragment>();
+  for (const message of messages) {
+    const row = telegramMessageRow(message);
+    rowsByKey.set(`${row.chatId}:${row.id}`, row);
   }
+  return [...rowsByKey.values()];
+}
 
-  return true;
+function messageUpsertSet(): Record<(typeof MESSAGE_UPSERT_COLUMNS)[number], SQL> {
+  const columns = getTableColumns(telegramMessages);
+  return Object.fromEntries(
+    MESSAGE_UPSERT_COLUMNS.map((key) => [key, sql.raw(`excluded."${columns[key].name}"`)])
+  ) as Record<(typeof MESSAGE_UPSERT_COLUMNS)[number], SQL>;
 }
 
 export async function replaceMessageContent(

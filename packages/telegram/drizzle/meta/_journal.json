@@ -29,6 +29,13 @@
       "when": 1800000003000,
       "tag": "0003_telegram_live_coverage",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1800000004000,
+      "tag": "0004_telegram_message_reconciler",
+      "breakpoints": true
     }
   ]
 }

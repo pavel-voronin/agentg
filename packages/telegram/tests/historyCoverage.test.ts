@@ -162,6 +162,8 @@ function coverageRow(
     ...interval(startAt, endAt),
     coveredAt: provedAt(coveredAt),
     id,
+    ownerKey: `chat:${chatId}`,
+    ownerKind: 'chat',
     telegramChatId: chatId
   };
 }

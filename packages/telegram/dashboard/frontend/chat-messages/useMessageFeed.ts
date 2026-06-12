@@ -33,7 +33,7 @@ import {
   sortMessages,
   upsertMessageFile
 } from './timeline.js';
-import type { MessageTarget } from './types.js';
+import type { GetMessagesResult, MessageTarget } from './types.js';
 import type { MessageScroll } from './useMessageScroll.js';
 
 const MESSAGE_PAGE_SIZE = 100;
@@ -53,6 +53,8 @@ export function useMessageFeed(options: {
   const oldestPageMessageId = ref<string | null>(null);
 
   let loadSequence = 0;
+  let pendingInitial: PendingInitialRequest | null = null;
+  let pendingOlder: PendingOlderRequest | null = null;
   let stopEvents: (() => void) | null = null;
   const fileOwnerVersions = new Map<string, string>();
 
@@ -102,10 +104,25 @@ export function useMessageFeed(options: {
     lastError.value = null;
     try {
       const result = await api.getMessages({
-        chatId,
-        limit: MESSAGE_PAGE_SIZE
+        owner: {
+          chatId,
+          kind: 'chat'
+        },
+        selector: {
+          count: MESSAGE_PAGE_SIZE,
+          kind: 'page'
+        }
       });
       if (sequence !== loadSequence) {
+        return;
+      }
+      const pending = pendingRequestId(result);
+      if (pending !== null) {
+        pendingInitial = {
+          chatId,
+          requestId: pending,
+          sequence
+        };
         return;
       }
       const nextMessages = readMessages(result.messages).filter((message) =>
@@ -122,13 +139,13 @@ export function useMessageFeed(options: {
         lastError.value = errorMessage(error);
       }
     } finally {
-      if (sequence === loadSequence) {
+      if (sequence === loadSequence && pendingInitial === null) {
         loadingInitial.value = false;
       }
     }
   }
 
-  async function loadOlderMessages(): Promise<void> {
+  async function loadOlderMessages(input: OlderLoadInput = {}): Promise<void> {
     const chatId = options.selectedChatId.value;
     const beforeMessageId = oldestPageMessageId.value;
     const root = options.scroll.scrollRoot.value;
@@ -136,22 +153,42 @@ export function useMessageFeed(options: {
       chatId === null ||
       beforeMessageId === null ||
       loadingInitial.value ||
-      loadingOlder.value ||
+      (loadingOlder.value && input.fromPending !== true) ||
       reachedStart.value
     ) {
       return;
     }
 
-    const previousScrollHeight = root?.scrollHeight ?? 0;
-    const previousScrollTop = root?.scrollTop ?? 0;
+    const previousScrollHeight =
+      input.scrollSnapshot?.previousScrollHeight ?? root?.scrollHeight ?? 0;
+    const previousScrollTop = input.scrollSnapshot?.previousScrollTop ?? root?.scrollTop ?? 0;
     loadingOlder.value = true;
     lastError.value = null;
     try {
       const result = await api.getMessages({
-        beforeMessageId,
-        chatId,
-        limit: MESSAGE_PAGE_SIZE
+        owner: {
+          chatId,
+          kind: 'chat'
+        },
+        selector: {
+          beforeMessageId,
+          count: MESSAGE_PAGE_SIZE,
+          kind: 'page'
+        }
       });
+      const pending = pendingRequestId(result);
+      if (pending !== null) {
+        pendingOlder = {
+          beforeMessageId,
+          chatId,
+          requestId: pending,
+          scrollSnapshot: {
+            previousScrollHeight,
+            previousScrollTop
+          }
+        };
+        return;
+      }
       const nextMessages = readMessages(result.messages).filter((message) =>
         messageBelongsToChat(message, chatId)
       );
@@ -167,7 +204,9 @@ export function useMessageFeed(options: {
     } catch (error) {
       lastError.value = errorMessage(error);
     } finally {
-      loadingOlder.value = false;
+      if (pendingOlder === null) {
+        loadingOlder.value = false;
+      }
     }
   }
 
@@ -210,6 +249,15 @@ export function useMessageFeed(options: {
   }
 
   function applyEvent(event: DashboardHostEvent): void {
+    if (event.type === 'telegram.messages.ready') {
+      applyMessagesReadyEvent(event);
+      return;
+    }
+    if (event.type === 'telegram.messages.failed') {
+      applyMessagesFailedEvent(event);
+      return;
+    }
+
     const fileChange = normalizeFileOwnerChangedEvent(event);
     if (fileChange !== null) {
       applyFileOwnerChange(fileChange);
@@ -246,6 +294,49 @@ export function useMessageFeed(options: {
     void nextTick(() => {
       options.scroll.updateScrollDownVisibility();
     });
+  }
+
+  function applyMessagesReadyEvent(event: DashboardHostEvent): void {
+    const requestId = eventRequestId(event);
+    if (requestId === null) {
+      return;
+    }
+
+    if (pendingInitial?.requestId === requestId) {
+      const pending = pendingInitial;
+      pendingInitial = null;
+      void loadInitialMessages(pending.chatId, pending.sequence);
+      return;
+    }
+
+    if (pendingOlder?.requestId === requestId) {
+      const pending = pendingOlder;
+      pendingOlder = null;
+      void loadOlderMessages({
+        fromPending: true,
+        scrollSnapshot: pending.scrollSnapshot
+      });
+    }
+  }
+
+  function applyMessagesFailedEvent(event: DashboardHostEvent): void {
+    const requestId = eventRequestId(event);
+    if (requestId === null) {
+      return;
+    }
+
+    if (pendingInitial?.requestId === requestId) {
+      pendingInitial = null;
+      loadingInitial.value = false;
+      lastError.value = 'Message history request failed.';
+      return;
+    }
+
+    if (pendingOlder?.requestId === requestId) {
+      pendingOlder = null;
+      loadingOlder.value = false;
+      lastError.value = 'Message history request failed.';
+    }
   }
 
   function shouldApplyFileOwnerChange(change: FileOwnerChangedPayload): boolean {
@@ -365,6 +456,8 @@ export function useMessageFeed(options: {
     messages.value = [];
     loadingInitial.value = false;
     loadingOlder.value = false;
+    pendingInitial = null;
+    pendingOlder = null;
     reachedStart.value = false;
     lastError.value = null;
     oldestPageMessageId.value = null;
@@ -381,4 +474,38 @@ export function useMessageFeed(options: {
     requestMediaFile,
     timelineItems
   };
+}
+
+type PendingInitialRequest = {
+  chatId: string;
+  requestId: string;
+  sequence: number;
+};
+
+type PendingOlderRequest = {
+  beforeMessageId: string;
+  chatId: string;
+  requestId: string;
+  scrollSnapshot: ScrollSnapshot;
+};
+
+type ScrollSnapshot = {
+  previousScrollHeight: number;
+  previousScrollTop: number;
+};
+
+type OlderLoadInput = {
+  fromPending?: boolean | undefined;
+  scrollSnapshot?: ScrollSnapshot | undefined;
+};
+
+function pendingRequestId(result: GetMessagesResult): string | null {
+  return result.status === 'pending' && typeof result.requestId === 'string'
+    ? result.requestId
+    : null;
+}
+
+function eventRequestId(event: DashboardHostEvent): string | null {
+  const requestId = asRecord(event.data)?.requestId;
+  return typeof requestId === 'string' && requestId.length > 0 ? requestId : null;
 }

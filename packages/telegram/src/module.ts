@@ -16,6 +16,7 @@ import { listRecentMessagesProcedure } from './procedures/listRecentMessages.js'
 import { getMessagesProcedure } from './procedures/getMessages.js';
 import { requestFileProcedure } from './procedures/requestFile.js';
 import { searchMessagesProcedure } from './procedures/searchMessages.js';
+import { useHistoryReconciler } from './reconciler/runtime.js';
 import { createStatusTracker } from './status/tracker.js';
 import { useTdlib } from './tdlib/index.js';
 
@@ -62,6 +63,18 @@ export const telegramModule = defineModule('telegram', {
         database
       })
     );
+    const reconciler = resource('reconciler', ({ startup }) => {
+      const resource = useHistoryReconciler({
+        database,
+        events,
+        files,
+        tdlib
+      });
+
+      startup(() => resource.start());
+
+      return resource.reconciler;
+    });
     const status = resource('status', () => createStatusTracker(events));
     const account = resource('account', () => createAccountIdentity());
     resource('ingestion', ({ startup }) => {
@@ -84,6 +97,7 @@ export const telegramModule = defineModule('telegram', {
       database,
       events,
       files,
+      reconciler,
       tdlib
     };
 

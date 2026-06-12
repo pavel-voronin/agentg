@@ -1,0 +1,264 @@
+import type { EventBus } from '@agentg/framework';
+import type { message as Message } from 'tdlib-types';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type { Database } from '../../src/database/client.js';
+import type { FileSubsystem } from '../../src/files/index.js';
+import type { GetMessagesInput } from '../../src/procedures/get-messages/contract.js';
+import type { HistoryInterval } from '../../src/history/time.js';
+import type { HistoryJob } from '../../src/reconciler/jobs.js';
+
+const jobs = vi.hoisted(() => ({
+  claimNextHistoryJob: vi.fn(),
+  completeHistoryJob: vi.fn(),
+  deferHistoryJob: vi.fn(),
+  enqueueHistoryJob: vi.fn(),
+  failHistoryJob: vi.fn(),
+  readHistoryReconcilerStats: vi.fn(),
+  releaseHistoryJob: vi.fn()
+}));
+
+const readiness = vi.hoisted(() => ({
+  checkMessagesReadiness: vi.fn()
+}));
+
+const tdlib = vi.hoisted(() => ({
+  fetchOwnerHistoryStep: vi.fn()
+}));
+
+const coverage = vi.hoisted(() => ({
+  writeOwnerCoverage: vi.fn()
+}));
+
+const store = vi.hoisted(() => ({
+  storeMessages: vi.fn()
+}));
+
+vi.mock('@agentg/framework', () => ({
+  createLogger: () => ({
+    error() {
+      return undefined;
+    },
+    info() {
+      return undefined;
+    },
+    warn() {
+      return undefined;
+    }
+  }),
+  logError: (error: unknown) => ({
+    error
+  })
+}));
+
+vi.mock('../../src/reconciler/jobs.js', () => jobs);
+
+vi.mock('../../src/procedures/get-messages/readiness.js', () => readiness);
+
+vi.mock('../../src/reconciler/tdlib.js', () => tdlib);
+
+vi.mock('../../src/reconciler/coverage.js', () => coverage);
+
+vi.mock('../../src/store/message.js', () => store);
+
+vi.mock('../../src/reconciler/telemetry.js', () => ({
+  errorType: () => 'unexpected_error',
+  recordCoverageIntervals: vi.fn(),
+  recordFailure: vi.fn(),
+  recordJobDuration: vi.fn(),
+  recordMessages: vi.fn(),
+  recordPage: vi.fn(),
+  recordStats: vi.fn(),
+  recordTransition: vi.fn(),
+  timeReconcilerSpan: vi.fn(
+    async (_name: string, _attributes: unknown, operation: () => Promise<unknown>) => operation()
+  ),
+  timeReconcilerTick: vi.fn(async (operation: () => Promise<unknown>) => operation())
+}));
+
+import { useHistoryReconciler } from '../../src/reconciler/runtime.js';
+
+describe('Telegram history reconciler runtime', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-12T00:00:00.000Z'));
+    jobs.claimNextHistoryJob.mockReset();
+    jobs.completeHistoryJob.mockReset();
+    jobs.deferHistoryJob.mockReset();
+    jobs.enqueueHistoryJob.mockReset();
+    jobs.failHistoryJob.mockReset();
+    jobs.readHistoryReconcilerStats.mockReset();
+    jobs.releaseHistoryJob.mockReset();
+    readiness.checkMessagesReadiness.mockReset();
+    tdlib.fetchOwnerHistoryStep.mockReset();
+    coverage.writeOwnerCoverage.mockReset();
+    store.storeMessages.mockReset();
+
+    jobs.readHistoryReconcilerStats.mockResolvedValue({
+      oldestJobAgeSeconds: [],
+      statusCounts: []
+    });
+    jobs.releaseHistoryJob.mockResolvedValue(undefined);
+    coverage.writeOwnerCoverage.mockResolvedValue([]);
+    store.storeMessages.mockResolvedValue(1);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('keeps a pending job active after one fetch when selector readiness still fails', async () => {
+    const input: GetMessagesInput = {
+      owner: {
+        chatId: '123',
+        kind: 'chat'
+      },
+      selector: {
+        count: 100,
+        kind: 'page'
+      }
+    };
+    const job = historyJob(input);
+    const interval = historyInterval();
+    const fileSubsystem = fileSubsystemMock();
+    const events = eventBusMock();
+    const database = transactionDatabase();
+
+    jobs.claimNextHistoryJob.mockResolvedValueOnce(job).mockResolvedValueOnce(null);
+    readiness.checkMessagesReadiness
+      .mockResolvedValueOnce({
+        missing: [interval],
+        ready: false
+      })
+      .mockResolvedValueOnce({
+        missing: [interval],
+        ready: false
+      });
+    tdlib.fetchOwnerHistoryStep.mockResolvedValue({
+      coverageInterval: interval,
+      fetchedMessages: [telegramMessage()],
+      reachedBeginning: false
+    });
+
+    const runtime = useHistoryReconciler({
+      database,
+      events,
+      files: fileSubsystem,
+      tdlib: {} as never
+    });
+    const close = await runtime.start();
+    await vi.runAllTimersAsync();
+
+    expect(jobs.releaseHistoryJob).toHaveBeenCalledWith(database, job.requestId);
+    expect(jobs.completeHistoryJob).not.toHaveBeenCalled();
+    expect(events.publish).not.toHaveBeenCalledWith('telegram.messages.ready', expect.anything());
+    expect(fileSubsystem.recordMessageFiles).not.toHaveBeenCalled();
+    expect(fileSubsystem.scheduleMessageSlotMaterialization).toHaveBeenCalledTimes(1);
+    expect(store.storeMessages).toHaveBeenCalledTimes(1);
+    expect(store.storeMessages).toHaveBeenCalledWith(expect.anything(), [telegramMessage()]);
+
+    close();
+  });
+});
+
+function historyJob(input: GetMessagesInput): HistoryJob {
+  return {
+    attemptCount: 1,
+    createdAt: new Date('2026-06-12T00:00:00.000Z'),
+    lockedAt: new Date('2026-06-12T00:00:00.000Z'),
+    nextRunAt: new Date('2026-06-12T00:00:00.000Z'),
+    owner: input.owner,
+    ownerKey: 'chat:123',
+    ownerKind: 'chat',
+    requestId: 'telegram.getMessages;selector=page;owner=chat:123;anchor=latest;count=100',
+    selector: input.selector,
+    status: 'running',
+    updatedAt: new Date('2026-06-12T00:00:00.000Z')
+  };
+}
+
+function transactionDatabase(): Database {
+  return {
+    transaction(operation: (transaction: Database) => Promise<unknown>) {
+      return operation({} as Database);
+    }
+  } as unknown as Database;
+}
+
+function historyInterval(): HistoryInterval {
+  return {
+    endAt: new Date('2026-06-12T00:00:00.000Z'),
+    startAt: new Date('2026-06-11T23:00:00.000Z')
+  };
+}
+
+function telegramMessage(): Message {
+  return {
+    _: 'message',
+    author_signature: '',
+    auto_delete_in: 0,
+    can_be_saved: true,
+    chat_id: 123,
+    contains_unread_mention: false,
+    content: {
+      _: 'messageText',
+      text: {
+        _: 'formattedText',
+        entities: [],
+        text: 'hello'
+      }
+    },
+    date: 1_781_232_000,
+    edit_date: 0,
+    id: 456,
+    import_info: null,
+    interaction_info: null,
+    is_channel_post: false,
+    is_from_offline: false,
+    is_outgoing: false,
+    is_paid_star_suggested_post: false,
+    is_paid_ton_suggested_post: false,
+    is_pinned: false,
+    sender_id: {
+      _: 'messageSenderUser',
+      user_id: 1
+    },
+    sending_state: null,
+    unread_reactions: [],
+    via_bot_user_id: 0
+  } as unknown as Message;
+}
+
+function eventBusMock(): EventBus & { publish: ReturnType<typeof vi.fn> } {
+  const publish = vi.fn();
+  return {
+    publish,
+    start() {
+      return Promise.resolve();
+    },
+    stop() {
+      return Promise.resolve();
+    },
+    subscribe() {
+      return {
+        unsubscribe() {
+          return undefined;
+        }
+      };
+    }
+  };
+}
+
+function fileSubsystemMock(): FileSubsystem & {
+  recordMessageFiles: ReturnType<typeof vi.fn>;
+  scheduleMessageSlotMaterialization: ReturnType<typeof vi.fn>;
+} {
+  return {
+    recordMessageFiles: vi.fn(),
+    scheduleMessageSlotMaterialization: vi.fn()
+  } as unknown as FileSubsystem & {
+    recordMessageFiles: ReturnType<typeof vi.fn>;
+    scheduleMessageSlotMaterialization: ReturnType<typeof vi.fn>;
+  };
+}

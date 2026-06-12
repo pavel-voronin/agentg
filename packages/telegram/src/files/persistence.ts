@@ -1,6 +1,6 @@
 import { and, eq, notInArray, sql } from 'drizzle-orm';
 import type { file } from 'tdlib-types';
-import { timeTelemetrySpan } from '@agentg/framework';
+import { recordTelemetryHistogram } from '@agentg/framework';
 
 import type { Database } from '../database/client.js';
 import {
@@ -119,17 +119,44 @@ function timeFileRecordStage<T>(
     'telegram.file.record.cause': cause,
     'telegram.file.record.stage': stage
   };
-  return timeTelemetrySpan(
-    {
-      attributes,
-      metric: {
-        attributes,
-        name: METRIC_FILE_RECORD_STAGE_DURATION
+  return timeFileRecordMetric(attributes, operation);
+}
+
+async function timeFileRecordMetric<T>(
+  attributes: Record<string, string>,
+  operation: () => Promise<T>
+): Promise<T> {
+  const startedAt = performance.now();
+  try {
+    const result = await operation();
+    recordFileRecordDuration(attributes, startedAt);
+    return result;
+  } catch (error) {
+    recordFileRecordDuration(
+      {
+        ...attributes,
+        'error.type': metricErrorType(error)
       },
-      name: `telegram.file.record.${stage}`
-    },
-    operation
+      startedAt
+    );
+    throw error;
+  }
+}
+
+function recordFileRecordDuration(attributes: Record<string, string>, startedAt: number): void {
+  recordTelemetryHistogram(
+    METRIC_FILE_RECORD_STAGE_DURATION,
+    Math.max(0, performance.now() - startedAt) / 1000,
+    attributes,
+    { unit: 's' }
   );
+}
+
+function metricErrorType(error: unknown): string {
+  if (error instanceof Error && error.name.length > 0) {
+    return error.name;
+  }
+  return typeof error;
 }
 
 function ownerModelLabel(owners: Iterable<FileOwnerKey>): string {

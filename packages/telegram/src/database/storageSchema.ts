@@ -192,6 +192,7 @@ export const telegramMessages = pgTable(
     editDate: timestamp('edit_date', { withTimezone: true }),
     effectId: bigintText('effect_id'),
     factCheck: jsonb('fact_check').$type<JsonValue>(),
+    fileSlotsRecordedAt: timestamp('file_slots_recorded_at', { withTimezone: true }),
     forwardInfo: jsonb('forward_info').$type<JsonValue>(),
     guestBotCallerId: jsonb('guest_bot_caller_id').$type<JsonValue>(),
     hasTimestampedMedia: boolean('has_timestamped_media'),

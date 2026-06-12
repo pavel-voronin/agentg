@@ -14,24 +14,14 @@ vi.mock('@agentg/framework', async (importOriginal) => {
   };
 });
 
-import { listHistoryCoverage } from '../../src/history/coverage.js';
-import { fetchHistoryPage } from '../../src/history/fetch.js';
-import { HISTORY_PAST_BOUNDARY } from '../../src/history/time.js';
-import { getMessagesProcedure } from '../../src/procedures/getMessages.js';
-import type { ProcedureResources } from '../../src/procedures/resources.js';
-import { toReadMessages, type MessageStorageRow } from '../../src/views/message.js';
-
-vi.mock('../../src/history/coverage.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../src/history/coverage.js')>();
+vi.mock('../../src/reconciler/coverage.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/reconciler/coverage.js')>();
   return {
     ...actual,
-    listHistoryCoverage: vi.fn()
+    isOwnerCovered: vi.fn(() => Promise.resolve(true)),
+    missingOwnerCoverageIntervals: vi.fn(() => Promise.resolve([]))
   };
 });
-
-vi.mock('../../src/history/fetch.js', () => ({
-  fetchHistoryPage: vi.fn(() => Promise.resolve(undefined))
-}));
 
 vi.mock('../../src/views/message.js', () => ({
   readMessageSelection: vi.fn(() => ({
@@ -43,19 +33,22 @@ vi.mock('../../src/views/message.js', () => ({
   )
 }));
 
+import { isOwnerCovered, missingOwnerCoverageIntervals } from '../../src/reconciler/coverage.js';
+import { getMessagesProcedure } from '../../src/procedures/getMessages.js';
+import type { ProcedureResources } from '../../src/procedures/resources.js';
+import type { MessageStorageRow } from '../../src/views/message.js';
+import { toReadMessages } from '../../src/views/message.js';
+
 describe('Telegram getMessages procedure', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-05-01T14:00:00.100Z'));
-    vi.mocked(listHistoryCoverage).mockReset();
-    vi.mocked(fetchHistoryPage).mockResolvedValue({
-      fetchedMessages: 0,
-      kind: 'no_messages_before_end',
-      storedMessages: 0
-    });
+    vi.mocked(isOwnerCovered).mockResolvedValue(true);
+    vi.mocked(missingOwnerCoverageIntervals).mockResolvedValue([]);
     vi.mocked(toReadMessages).mockImplementation((_database, messages) =>
       Promise.resolve(messages.map(readMessage))
     );
+    telemetry.timeTelemetrySpan.mockClear();
   });
 
   afterEach(() => {
@@ -63,210 +56,203 @@ describe('Telegram getMessages procedure', () => {
     vi.clearAllMocks();
   });
 
-  it('returns a ready full page only when coverage proves the live top gap', async () => {
+  it('returns a ready page when owner coverage proves the local page', async () => {
     const newest = storedMessage('102', '2026-05-01T13:50:00.000Z');
     const oldest = storedMessage('101', '2026-05-01T13:00:00.000Z');
-    const rows = [newest, oldest];
-    vi.mocked(listHistoryCoverage).mockResolvedValue([
-      coverage('2026-05-01T13:00:01.000Z', '2026-05-01T13:50:01.000Z'),
-      coverage('2026-05-01T13:50:01.000Z', '2026-05-01T14:00:01.000Z')
-    ]);
 
     const output = await procedure({
-      persistedRows: [rows]
+      persistedRows: [[newest, oldest]]
     })({
-      chatId,
-      limit: 2
+      owner: {
+        chatId,
+        kind: 'chat'
+      },
+      selector: {
+        count: 2,
+        kind: 'page'
+      }
     });
 
     expect(output).toEqual({
       messages: [readMessage(oldest), readMessage(newest)],
-      reachedStart: false
+      reachedStart: false,
+      status: 'ready'
     });
-    expect(fetchHistoryPage).not.toHaveBeenCalled();
-    expectStageTelemetry(['resolve_request', 'read_ready']);
-  });
-
-  it('materializes a missing current page with the default maximum limit', async () => {
-    vi.mocked(listHistoryCoverage)
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([
-        coverage(HISTORY_PAST_BOUNDARY.toISOString(), '2026-05-01T14:00:01.000Z')
-      ]);
-
-    const output = await procedure({
-      persistedRows: [[], []]
-    })({
-      chatId,
-      limit: 150
-    });
-
-    expect(output).toEqual({
-      messages: [],
-      reachedStart: true
-    });
-    expect(fetchHistoryPage).toHaveBeenCalledWith(
-      {
-        chatId,
-        endAt: '2026-05-01T14:00:01.000Z',
-        limit: 100,
-        startAt: HISTORY_PAST_BOUNDARY.toISOString()
-      },
-      expect.anything(),
-      { priority: 8 }
-    );
     expect(toReadMessages).toHaveBeenCalledTimes(1);
-    expectStageTelemetry(['resolve_request', 'read_ready', 'materialize', 'read_materialized']);
+    expect(JSON.stringify(telemetry.timeTelemetrySpan.mock.calls)).not.toContain(chatId);
   });
 
-  it('uses the default limit when the request omits a limit', async () => {
-    vi.mocked(listHistoryCoverage)
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([
-        coverage(HISTORY_PAST_BOUNDARY.toISOString(), '2026-05-01T14:00:01.000Z')
-      ]);
-
-    await procedure({
-      persistedRows: [[], []]
-    })({
-      chatId
-    });
-
-    expect(fetchHistoryPage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        limit: 100
-      }),
-      expect.anything(),
-      { priority: 8 }
-    );
-  });
-
-  it('uses the cursor message date as the page end and materializes before that cursor', async () => {
-    vi.mocked(listHistoryCoverage)
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([
-        coverage(HISTORY_PAST_BOUNDARY.toISOString(), '2026-05-01T12:00:01.000Z')
-      ]);
+  it('returns a ready range without reachedStart', async () => {
+    const first = storedMessage('101', '2026-05-01T13:00:00.000Z');
+    const second = storedMessage('102', '2026-05-01T13:50:00.000Z');
 
     const output = await procedure({
-      pageEndRows: [[{ messageDate: new Date('2026-05-01T12:00:00.000Z') }]],
-      persistedRows: [[], []]
+      persistedRows: [[first, second]]
     })({
-      beforeMessageId: '200',
-      chatId,
-      limit: 25
+      owner: {
+        chatId,
+        kind: 'chat'
+      },
+      selector: {
+        endAt: '2026-05-01T14:00:00.000Z',
+        kind: 'range',
+        startAt: '2026-05-01T13:00:00.000Z'
+      }
     });
 
     expect(output).toEqual({
-      messages: [],
-      reachedStart: true
+      messages: [readMessage(first), readMessage(second)],
+      status: 'ready'
     });
-    expect(fetchHistoryPage).toHaveBeenCalledWith(
-      {
-        chatId,
-        cursorMessageId: 200,
-        endAt: '2026-05-01T12:00:01.000Z',
-        limit: 25,
-        startAt: HISTORY_PAST_BOUNDARY.toISOString()
-      },
-      expect.anything(),
-      { priority: 8 }
-    );
+    expect('reachedStart' in output).toBe(false);
   });
 
-  it('rejects a cursor message that is not stored', async () => {
-    vi.mocked(listHistoryCoverage).mockResolvedValue([
-      coverage(HISTORY_PAST_BOUNDARY.toISOString(), '2026-05-01T14:00:01.000Z')
+  it('returns pending without messages when page coverage is missing', async () => {
+    vi.mocked(missingOwnerCoverageIntervals).mockResolvedValue([
+      {
+        endAt: new Date('2026-05-01T14:00:01.000Z'),
+        startAt: new Date('2026-05-01T13:00:01.000Z')
+      }
     ]);
 
-    await expect(
-      procedure({
-        pageEndRows: [[]],
-        persistedRows: [[]]
-      })({
-        beforeMessageId: '200',
+    const reconciler = fakeReconciler('pending_enqueued');
+    const output = await procedure(
+      {
+        persistedRows: [[storedMessage('101', '2026-05-01T13:00:00.000Z')]]
+      },
+      reconciler
+    )({
+      owner: {
         chatId,
-        limit: 25
-      })
-    ).rejects.toThrow('telegram.getMessages cursor message is not available: 200');
-    expect(fetchHistoryPage).not.toHaveBeenCalled();
-  });
-
-  it('rejects an unsafe numeric cursor instead of sending it to materialization', async () => {
-    vi.mocked(listHistoryCoverage)
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([
-        coverage(HISTORY_PAST_BOUNDARY.toISOString(), '2026-05-01T14:00:01.000Z')
-      ]);
-
-    await expect(
-      procedure({
-        persistedRows: [[], []]
-      })({
-        beforeMessageId: '9007199254740992',
-        chatId,
-        limit: 25
-      })
-    ).rejects.toThrow('telegram.getMessages cursor message id is not safe: 9007199254740992');
-    expect(fetchHistoryPage).not.toHaveBeenCalled();
-  });
-
-  it('materializes a same-second full page before returning it', async () => {
-    const row = storedMessage('101', '2026-05-01T12:00:00.000Z');
-    vi.mocked(fetchHistoryPage).mockResolvedValueOnce({
-      crossedStart: false,
-      fetchedMessages: 1,
-      kind: 'page',
-      nextCursorMessageId: 101,
-      oldestFetchedMessageDate: '2026-05-01T12:00:00.000Z',
-      reachedBeginning: false,
-      storedMessages: 1
-    });
-    vi.mocked(listHistoryCoverage).mockResolvedValue([]);
-
-    const output = await procedure({
-      pageEndRows: [[{ messageDate: new Date('2026-05-01T12:00:00.000Z') }]],
-      persistedRows: [[row], [row]]
-    })({
-      beforeMessageId: '200',
-      chatId,
-      limit: 1
+        kind: 'chat'
+      },
+      selector: {
+        count: 1,
+        kind: 'page'
+      }
     });
 
     expect(output).toEqual({
-      messages: [readMessage(row)],
-      reachedStart: false
+      requestId: 'telegram.getMessages;selector=page;owner=chat:123;anchor=latest;count=1',
+      status: 'pending'
     });
-    expect(fetchHistoryPage).toHaveBeenCalledTimes(1);
-    expect(toReadMessages).toHaveBeenCalledTimes(1);
+    expect('messages' in output).toBe(false);
+    expect(reconciler.enqueue).toHaveBeenCalledWith({
+      owner: {
+        chatId,
+        kind: 'chat'
+      },
+      requestId: 'telegram.getMessages;selector=page;owner=chat:123;anchor=latest;count=1',
+      selector: {
+        count: 1,
+        kind: 'page'
+      }
+    });
   });
 
-  it('fails when materialization still leaves the page boundary undated', async () => {
-    vi.mocked(listHistoryCoverage).mockResolvedValue([]);
+  it('returns pending instead of rejecting when a page cursor is not local', async () => {
+    const reconciler = fakeReconciler('pending_coalesced');
+
+    const output = await procedure(
+      {
+        pageEndRows: [[]],
+        persistedRows: [[]]
+      },
+      reconciler
+    )({
+      owner: {
+        chatId,
+        kind: 'chat'
+      },
+      selector: {
+        beforeMessageId: '200',
+        count: 25,
+        kind: 'page'
+      }
+    });
+
+    expect(output).toEqual({
+      requestId: 'telegram.getMessages;selector=page;owner=chat:123;beforeMessageId=200;count=25',
+      status: 'pending'
+    });
+  });
+
+  it('returns the same request id for repeated uncovered selectors', async () => {
+    vi.mocked(isOwnerCovered).mockResolvedValue(false);
+    vi.mocked(missingOwnerCoverageIntervals).mockResolvedValue([
+      {
+        endAt: new Date('2026-02-01T00:00:00.000Z'),
+        startAt: new Date('2026-01-01T00:00:00.000Z')
+      }
+    ]);
+    const reconciler = fakeReconciler('pending_coalesced');
+    const input = {
+      owner: {
+        chatId,
+        kind: 'forumTopic' as const,
+        topicId: '7'
+      },
+      selector: {
+        endAt: '2026-02-01T00:00:00.000Z',
+        kind: 'range' as const,
+        startAt: '2026-01-01T00:00:00.000Z'
+      }
+    };
+    const rpc = procedure({ persistedRows: [[], []] }, reconciler);
+
+    const first = await rpc(input);
+    const second = await rpc(input);
+
+    expect(first).toEqual(second);
+    expect(first).toEqual({
+      requestId:
+        'telegram.getMessages;selector=range;owner=forum-topic:123:7;startAt=2026-01-01T00:00:00.000Z;endAt=2026-02-01T00:00:00.000Z',
+      status: 'pending'
+    });
+  });
+
+  it('does not call TDLib or files directly', async () => {
+    vi.mocked(missingOwnerCoverageIntervals).mockResolvedValue([
+      {
+        endAt: new Date('2026-05-01T14:00:01.000Z'),
+        startAt: new Date('2026-05-01T13:00:01.000Z')
+      }
+    ]);
+    const tdlib = new Proxy(
+      {},
+      {
+        get() {
+          throw new Error('TDLib must not be called by getMessages');
+        }
+      }
+    );
+    const files = new Proxy(
+      {},
+      {
+        get() {
+          throw new Error('Files must not be called by getMessages');
+        }
+      }
+    );
 
     await expect(
       procedure({
-        persistedRows: [[storedMessage('101', null)], [storedMessage('101', null)]]
+        files,
+        persistedRows: [[storedMessage('101', '2026-05-01T13:00:00.000Z')]],
+        tdlib
       })({
-        chatId,
-        limit: 2
+        owner: {
+          chatId,
+          kind: 'chat'
+        },
+        selector: {
+          count: 1,
+          kind: 'page'
+        }
       })
-    ).rejects.toThrow('telegram.getMessages materialized page is not ready');
-    expect(fetchHistoryPage).toHaveBeenCalledTimes(1);
-  });
-
-  it('fails when materialization still leaves the oldest full-page message undated', async () => {
-    vi.mocked(listHistoryCoverage).mockResolvedValue([]);
-
-    await expect(
-      procedure({
-        persistedRows: [[undatedStoredMessage('101')], [undatedStoredMessage('101')]]
-      })({
-        chatId,
-        limit: 1
-      })
-    ).rejects.toThrow('telegram.getMessages materialized page is not ready');
-    expect(fetchHistoryPage).toHaveBeenCalledTimes(1);
+    ).resolves.toMatchObject({
+      status: 'pending'
+    });
   });
 });
 
@@ -277,39 +263,38 @@ type PageEndRow = {
 };
 
 type FakeDatabaseInput = {
+  files?: unknown;
   pageEndRows?: PageEndRow[][] | undefined;
   persistedRows: MessageStorageRow[][];
+  tdlib?: unknown;
 };
 
-function procedure(input: FakeDatabaseInput) {
+function procedure(input: FakeDatabaseInput, reconciler = fakeReconciler('pending_enqueued')) {
   return getMessagesProcedure({
     database: fakeDatabase(input),
     events: {},
-    files: {},
-    tdlib: {}
-  } as ProcedureResources);
+    files: input.files ?? {},
+    reconciler,
+    tdlib: input.tdlib ?? {}
+  } as unknown as ProcedureResources);
 }
 
-function expectStageTelemetry(stages: string[]) {
-  expect(telemetry.timeTelemetrySpan.mock.calls.map(([input]) => input)).toEqual(
-    stages.map((stage) => ({
-      attributes: {
-        'telegram.get_messages.stage': stage
-      },
-      metric: {
-        attributes: {
-          'telegram.get_messages.stage': stage
-        },
-        name: 'telegram.get_messages.stage.duration'
-      },
-      name: `telegram.get_messages.${stage}`
-    }))
-  );
-  expect(JSON.stringify(telemetry.timeTelemetrySpan.mock.calls)).not.toContain(chatId);
+function fakeReconciler(result: 'pending_coalesced' | 'pending_enqueued') {
+  return {
+    enqueue: vi.fn(() => Promise.resolve(result)),
+    getStats: vi.fn()
+  };
 }
 
 function fakeDatabase(input: FakeDatabaseInput): ProcedureResources['database'] {
-  const pageEndRows = [...(input.pageEndRows ?? [])];
+  const pageEndRows = [
+    ...(input.pageEndRows ??
+      input.persistedRows.map((rows) => [
+        {
+          messageDate: newestMessageDate(rows)
+        }
+      ]))
+  ];
   const persistedRows = [...input.persistedRows];
 
   return {
@@ -322,6 +307,13 @@ function fakeDatabase(input: FakeDatabaseInput): ProcedureResources['database'] 
                 return {
                   limit() {
                     return Promise.resolve(pageEndRows.shift() ?? []);
+                  },
+                  orderBy() {
+                    return {
+                      limit() {
+                        return Promise.resolve(pageEndRows.shift() ?? []);
+                      }
+                    };
                   }
                 };
               }
@@ -336,9 +328,13 @@ function fakeDatabase(input: FakeDatabaseInput): ProcedureResources['database'] 
             where() {
               return {
                 orderBy() {
+                  const rows = persistedRows.shift() ?? [];
                   return {
                     limit(limit: number) {
-                      return Promise.resolve((persistedRows.shift() ?? []).slice(0, limit));
+                      return Promise.resolve(rows.slice(0, limit));
+                    },
+                    then(resolve: (rows: MessageStorageRow[]) => unknown) {
+                      return Promise.resolve(rows).then(resolve);
                     }
                   };
                 }
@@ -351,39 +347,32 @@ function fakeDatabase(input: FakeDatabaseInput): ProcedureResources['database'] 
   } as unknown as ProcedureResources['database'];
 }
 
-function coverage(startAt: string, endAt: string) {
-  return {
-    chatId,
-    coveredAt: new Date(endAt),
-    endAt: new Date(endAt),
-    startAt: new Date(startAt)
-  };
+function newestMessageDate(rows: MessageStorageRow[]): Date | null {
+  return (
+    rows
+      .map((row) => row.messageDate)
+      .filter((date): date is Date => date instanceof Date)
+      .sort((left, right) => right.getTime() - left.getTime())[0] ?? null
+  );
 }
 
-function storedMessage(telegramMessageId: string, messageDate: Date | string | null) {
+function storedMessage(messageId: string, messageDate: string | null): MessageStorageRow {
   return {
     contentType: 'messageText',
     deletedAt: null,
     editDate: null,
     isDeleted: false,
     isOutgoing: false,
-    messageDate: typeof messageDate === 'string' ? new Date(messageDate) : messageDate,
+    messageDate: messageDate === null ? null : new Date(messageDate),
     reactions: null,
     replyTo: null,
     senderId: null,
     senderType: null,
     telegramChatId: chatId,
-    telegramMessageId,
-    text: `message-${telegramMessageId}`,
+    telegramMessageId: messageId,
+    text: `message-${messageId}`,
     textEntities: null
   };
-}
-
-function undatedStoredMessage(telegramMessageId: string): MessageStorageRow {
-  const row = storedMessage(telegramMessageId, null) as Omit<MessageStorageRow, 'messageDate'> &
-    Partial<Pick<MessageStorageRow, 'messageDate'>>;
-  delete row.messageDate;
-  return row as MessageStorageRow;
 }
 
 function readMessage(message: MessageStorageRow) {
@@ -397,12 +386,12 @@ function readMessage(message: MessageStorageRow) {
     deletedAt: null,
     editDate: null,
     id: `${message.telegramChatId}:${message.telegramMessageId}`,
-    isDeleted: message.isDeleted,
-    isOutgoing: message.isOutgoing,
+    isDeleted: false,
+    isOutgoing: false,
     media: {
       files: []
     },
-    messageDate: message.messageDate == null ? null : new Date(message.messageDate).toISOString(),
+    messageDate: messageDate(message),
     reactions: [],
     replyTo: null,
     sender: null,
@@ -413,4 +402,11 @@ function readMessage(message: MessageStorageRow) {
     text: message.text,
     textEntities: []
   };
+}
+
+function messageDate(message: MessageStorageRow): string | null {
+  if (message.messageDate instanceof Date) {
+    return message.messageDate.toISOString();
+  }
+  return typeof message.messageDate === 'string' ? message.messageDate : null;
 }

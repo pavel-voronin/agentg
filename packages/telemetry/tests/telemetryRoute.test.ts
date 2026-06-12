@@ -14,6 +14,8 @@ describe('telemetry route', () => {
   it('maps known tab segments to tab ids', () => {
     expect(telemetryTabFromSegment('operations')).toBe('operations');
     expect(telemetryTabFromSegment('telegram')).toBe('telegram');
+    expect(telemetryTabFromSegment('get-messages')).toBe('get-messages');
+    expect(telemetryTabFromSegment('history-reconciler')).toBe('history-reconciler');
     expect(telemetryTabFromSegment('files')).toBe('files');
     expect(telemetryTabFromSegment('history-sync')).toBe('history-sync');
     expect(telemetryTabFromSegment('updates')).toBe('updates');
@@ -30,6 +32,8 @@ describe('telemetry route', () => {
 
   it('uses the tab id as the non-root route segment', () => {
     expect(telemetryRouteSegments('telegram')).toEqual(['telegram']);
+    expect(telemetryRouteSegments('get-messages')).toEqual(['get-messages']);
+    expect(telemetryRouteSegments('history-reconciler')).toEqual(['history-reconciler']);
     expect(telemetryRouteSegments('files')).toEqual(['files']);
     expect(telemetryRouteSegments('history-sync')).toEqual(['history-sync']);
     expect(telemetryRouteSegments('updates')).toEqual(['updates']);

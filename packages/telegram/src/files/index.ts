@@ -7,6 +7,10 @@ import { tdJsonObject } from '../tdlib/value.js';
 import { publishAssetOwnersAndQueue } from './events.js';
 import { runFileGeneration } from './generation.js';
 import {
+  markStoredMessageFileSlotsRecorded,
+  processMessageSlotMaterializationBatch
+} from './messageSlots.js';
+import {
   deleteStoryFileSlots as deleteStorySlots,
   handleFileSnapshot,
   recordFileSlotUpdate
@@ -56,6 +60,7 @@ const logger = createLogger('telegram');
 export type FileSubsystem = {
   getQueueStats(): ReturnType<typeof readFileQueueStats>;
   handleUpdateFile(update: updateFile): Promise<void>;
+  scheduleMessageSlotMaterialization(): void;
   startFileGeneration(update: FileGenerationStartUpdate): void;
   stopFileGeneration(generationId: number | string): Promise<void>;
   recordChatBackgroundFiles(
@@ -228,6 +233,9 @@ export function useFiles(options: FileSubsystemOptions): FileSubsystemRuntime {
 
   const tick = (): Promise<FileDownloadBatchResult> =>
     timeWorkerStage('tick', async () => {
+      const messageSlots = await timeWorkerStage('materialize_message_slots', () =>
+        processMessageSlotMaterializationBatch(options, maxFilesPerTick)
+      );
       const canonicalized = await processCompletedFileBatch(
         options,
         completedFiles,
@@ -241,7 +249,8 @@ export function useFiles(options: FileSubsystemOptions): FileSubsystemRuntime {
       return {
         delayedCount: canonicalized.delayedCount + queued.delayedCount,
         failedCount: canonicalized.failedCount + queued.failedCount,
-        immediateCount: canonicalized.immediateCount + queued.immediateCount,
+        immediateCount:
+          (messageSlots.hasMore ? 1 : 0) + canonicalized.immediateCount + queued.immediateCount,
         processedCount: canonicalized.processedCount + queued.processedCount,
         readyCount: canonicalized.readyCount + queued.readyCount,
         watchdogCount: canonicalized.watchdogCount + queued.watchdogCount
@@ -294,6 +303,9 @@ export function useFiles(options: FileSubsystemOptions): FileSubsystemRuntime {
         }
       }
       await publishAssetOwnersAndQueue(options, changedAssets);
+    },
+    scheduleMessageSlotMaterialization(): void {
+      schedule('slot_enqueue', 0);
     },
     startFileGeneration(update): void {
       const generationId = update.generation_id;
@@ -431,34 +443,46 @@ export function useFiles(options: FileSubsystemOptions): FileSubsystemRuntime {
       );
     },
     async recordMessageContentFiles(update, cause): Promise<void> {
+      const content = tdJsonObject(update.new_content);
       await recordFileSlotsAndWake(
         recordFileSlotUpdate(
           options,
           {
             contentUpdate: {
               chatId: String(update.chat_id),
-              content: tdJsonObject(update.new_content),
+              content,
               messageId: String(update.message_id)
             }
           },
           cause
         )
       );
+      await markStoredMessageFileSlotsRecorded(options.database, {
+        chatId: String(update.chat_id),
+        content,
+        messageId: String(update.message_id)
+      });
     },
     async recordMessageFiles(message, cause): Promise<void> {
+      const content = tdJsonObject(message.content);
       await recordFileSlotsAndWake(
         recordFileSlotUpdate(
           options,
           {
             message: {
               chatId: String(message.chat_id),
-              content: tdJsonObject(message.content),
+              content,
               messageId: String(message.id)
             }
           },
           cause
         )
       );
+      await markStoredMessageFileSlotsRecorded(options.database, {
+        chatId: String(message.chat_id),
+        content,
+        messageId: String(message.id)
+      });
     },
     async recordNotificationGroupFiles(groups, cause): Promise<void> {
       await recordFileSlotsAndWake(

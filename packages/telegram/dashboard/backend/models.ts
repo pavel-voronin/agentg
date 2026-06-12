@@ -6,10 +6,15 @@ import {
   isoDateTimeStringSchema,
   nonEmptyStringSchema,
   nonNegativeIntegerSchema,
-  positiveIntegerSchema,
   readChatSchema,
   readMessageSchema
 } from '../../src/views/schemas.js';
+import {
+  getMessagesInputSchema,
+  getMessagesOutputSchema
+} from '../../src/procedures/get-messages/contract.js';
+
+export { getMessagesInputSchema, getMessagesOutputSchema };
 
 export const chatPlacementSchema = z.discriminatedUnion('kind', [
   z.object({
@@ -92,17 +97,6 @@ export const messageLookupInputSchema = z.object({
 
 export const messageLookupOutputSchema = z.object({
   message: readMessageSchema.nullable()
-});
-
-export const getMessagesInputSchema = z.object({
-  beforeMessageId: nonEmptyStringSchema.regex(/^[0-9]+$/).optional(),
-  chatId: nonEmptyStringSchema,
-  limit: positiveIntegerSchema.optional()
-});
-
-export const getMessagesOutputSchema = z.object({
-  messages: z.array(readMessageSchema),
-  reachedStart: z.boolean()
 });
 
 export const fileRequestInputSchema = z.object({

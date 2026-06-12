@@ -17,6 +17,10 @@ const worker = vi.hoisted(() => ({
   processQueuedFileBatch: vi.fn()
 }));
 
+const messageSlots = vi.hoisted(() => ({
+  processMessageSlotMaterializationBatch: vi.fn()
+}));
+
 const telemetry = vi.hoisted(() => ({
   recordQueueStatsTelemetry: vi.fn(),
   recordWorkerBatchResult: vi.fn(),
@@ -44,6 +48,11 @@ vi.mock('../../src/files/queue.js', () => ({
   processQueuedFileBatch: worker.processQueuedFileBatch
 }));
 
+vi.mock('../../src/files/messageSlots.js', () => ({
+  markStoredMessageFileSlotsRecorded: vi.fn(),
+  processMessageSlotMaterializationBatch: messageSlots.processMessageSlotMaterializationBatch
+}));
+
 vi.mock('../../src/files/telemetry.js', () => ({
   recordQueueStatsTelemetry: telemetry.recordQueueStatsTelemetry,
   recordWorkerBatchResult: telemetry.recordWorkerBatchResult,
@@ -59,6 +68,11 @@ describe('Telegram file subsystem worker scheduling', () => {
     vi.setSystemTime(new Date('2026-06-10T00:00:00.000Z'));
     worker.processCompletedFileBatch.mockResolvedValue(emptyBatchResult);
     worker.processQueuedFileBatch.mockResolvedValue(emptyBatchResult);
+    messageSlots.processMessageSlotMaterializationBatch.mockResolvedValue({
+      hasMore: false,
+      processedCount: 0,
+      queueChanged: false
+    });
   });
 
   afterEach(() => {

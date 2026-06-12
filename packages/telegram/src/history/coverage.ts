@@ -12,6 +12,8 @@ import { normalizeHistoryInterval, HISTORY_TICK_MS, type HistoryInterval } from 
 // TODO(file-size): Split storage reads, live windows, locks, and merge planning.
 export type HistoryCoverageInterval = HistoryInterval & {
   chatId: string;
+  ownerKey?: string;
+  ownerKind?: string;
 };
 
 export type HistoryCoverageSegment = HistoryCoverageInterval & {
@@ -39,8 +41,10 @@ type HistoryCoverageStorageRow = {
   coveredAt: Date;
   endAt: Date;
   id: number;
+  ownerKey: string;
+  ownerKind: string;
   startAt: Date;
-  telegramChatId: string;
+  telegramChatId: string | null;
 };
 
 const coverageLocks = new Map<string, Promise<void>>();
@@ -74,20 +78,24 @@ export async function listHistoryCoverage(
       .select({
         coveredAt: telegramHistoryCoverage.coveredAt,
         endAt: telegramHistoryCoverage.endAt,
+        ownerKey: telegramHistoryCoverage.ownerKey,
+        ownerKind: telegramHistoryCoverage.ownerKind,
         startAt: telegramHistoryCoverage.startAt,
         telegramChatId: telegramHistoryCoverage.telegramChatId
       })
       .from(telegramHistoryCoverage)
-      .where(eq(telegramHistoryCoverage.telegramChatId, chatId))
+      .where(eq(telegramHistoryCoverage.ownerKey, chatOwnerKey(chatId)))
       .orderBy(asc(telegramHistoryCoverage.startAt)),
     listHistoryLiveCoverage(database, chatId)
   ]);
 
   return normalizeCoverageSegments([
     ...rows.map((row) => ({
-      chatId: row.telegramChatId,
+      chatId: row.telegramChatId ?? chatId,
       coveredAt: row.coveredAt,
       endAt: row.endAt,
+      ownerKey: row.ownerKey,
+      ownerKind: row.ownerKind,
       startAt: row.startAt
     })),
     ...liveSegments
@@ -216,6 +224,8 @@ async function listHistoryLiveCoverage(
       chatId,
       coveredAt: row.endAt,
       endAt: row.endAt,
+      ownerKey: chatOwnerKey(chatId),
+      ownerKind: 'chat',
       startAt: maxDate(row.startAt, liveChat.eligibleFrom)
     }))
     .filter((segment) => segment.startAt < segment.endAt);
@@ -240,7 +250,7 @@ export async function addHistoryCoverageBatch(
   }
 
   await withHistoryCoverageLocks(
-    uniqueSortedStrings(coverageSegments.map((row) => row.chatId)),
+    uniqueSortedStrings(coverageSegments.map(coverageOwnerKey)),
     async () =>
       database.transaction(async (transaction) => {
         await writeHistoryCoverageInTransaction(transaction, coverageSegments);
@@ -277,19 +287,19 @@ export function normalizeCoverageWriteInput(
 export function normalizeCoverageSegments(
   segments: HistoryCoverageSegment[]
 ): HistoryCoverageSegment[] {
-  const byChat = groupBy(segments, (segment) => segment.chatId);
-  return [...byChat.entries()]
+  const byOwner = groupBy(segments, coverageOwnerKey);
+  return [...byOwner.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
-    .flatMap(([chatId, chatSegments]) => mergeCoverageSegmentsForChat(chatId, chatSegments));
+    .flatMap(([, ownerSegments]) => mergeCoverageSegmentsForOwner(ownerSegments));
 }
 
 function normalizeCoverageWriteSegments(
   segments: HistoryCoverageWriteSegment[]
 ): HistoryCoverageWriteSegment[] {
-  const byChat = groupBy(segments, (segment) => segment.chatId);
-  return [...byChat.entries()]
+  const byOwner = groupBy(segments, coverageOwnerKey);
+  return [...byOwner.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
-    .flatMap(([chatId, chatSegments]) => mergeCoverageWriteSegmentsForChat(chatId, chatSegments));
+    .flatMap(([, ownerSegments]) => mergeCoverageWriteSegmentsForOwner(ownerSegments));
 }
 
 export function subtractHistoryIntervals(
@@ -366,42 +376,48 @@ async function mergeOperationalCoverageInTransaction(
   database: Database,
   coverageSegments: HistoryCoverageWriteSegment[]
 ): Promise<void> {
-  const intervalsByChat = groupBy(coverageSegments, (segment) => segment.chatId);
+  const intervalsByOwner = groupBy(coverageSegments, coverageOwnerKey);
 
-  for (const [chatId, chatSegments] of intervalsByChat.entries()) {
+  for (const [ownerKey, ownerSegments] of intervalsByOwner.entries()) {
     const searchStartAt = new Date(
-      minDateFromList(chatSegments.map((segment) => segment.startAt)).getTime() - HISTORY_TICK_MS
+      minDateFromList(ownerSegments.map((segment) => segment.startAt)).getTime() - HISTORY_TICK_MS
     );
     const searchEndAt = new Date(
-      maxDateFromList(chatSegments.map((segment) => segment.endAt)).getTime() + HISTORY_TICK_MS
+      maxDateFromList(ownerSegments.map((segment) => segment.endAt)).getTime() + HISTORY_TICK_MS
     );
     const overlappingRows = await database
       .select({
         coveredAt: telegramHistoryCoverage.coveredAt,
         endAt: telegramHistoryCoverage.endAt,
         id: telegramHistoryCoverage.id,
+        ownerKey: telegramHistoryCoverage.ownerKey,
+        ownerKind: telegramHistoryCoverage.ownerKind,
         startAt: telegramHistoryCoverage.startAt,
         telegramChatId: telegramHistoryCoverage.telegramChatId
       })
       .from(telegramHistoryCoverage)
       .where(
         and(
-          eq(telegramHistoryCoverage.telegramChatId, chatId),
+          eq(telegramHistoryCoverage.ownerKey, ownerKey),
           lte(telegramHistoryCoverage.startAt, searchEndAt),
           gte(telegramHistoryCoverage.endAt, searchStartAt)
         )
       );
     const mergedSegments = normalizeCoverageSegments([
       ...overlappingRows.map((row) => ({
-        chatId: row.telegramChatId,
+        chatId: row.telegramChatId ?? ownerSegments[0]?.chatId ?? '',
         coveredAt: row.coveredAt,
         endAt: row.endAt,
+        ownerKey: row.ownerKey,
+        ownerKind: row.ownerKind,
         startAt: row.startAt
       })),
-      ...chatSegments.map((segment) => ({
-        chatId,
+      ...ownerSegments.map((segment) => ({
+        chatId: segment.chatId,
         coveredAt: segment.provedAt,
         endAt: segment.endAt,
+        ownerKey: coverageOwnerKey(segment),
+        ownerKind: coverageOwnerKind(segment),
         startAt: segment.startAt
       }))
     ]);
@@ -462,6 +478,8 @@ async function updateCoverageRows(
       .set({
         coveredAt: update.segment.coveredAt,
         endAt: update.segment.endAt,
+        ownerKey: coverageOwnerKey(update.segment),
+        ownerKind: coverageOwnerKind(update.segment),
         startAt: update.segment.startAt,
         telegramChatId: update.segment.chatId,
         updatedAt: sql`now()`
@@ -490,6 +508,8 @@ async function insertCoverageSegments(
         values.map((segment) => ({
           coveredAt: segment.coveredAt,
           endAt: segment.endAt,
+          ownerKey: coverageOwnerKey(segment),
+          ownerKind: coverageOwnerKind(segment),
           startAt: segment.startAt,
           telegramChatId: segment.chatId,
           updatedAt: sql`now()`
@@ -499,8 +519,7 @@ async function insertCoverageSegments(
   }
 }
 
-function mergeCoverageSegmentsForChat(
-  chatId: string,
+function mergeCoverageSegmentsForOwner(
   segments: HistoryCoverageSegment[]
 ): HistoryCoverageSegment[] {
   const sorted = segments
@@ -512,7 +531,7 @@ function mergeCoverageSegmentsForChat(
   for (const segment of sorted) {
     const last = merged.at(-1);
     if (last === undefined || segment.startAt.getTime() > last.endAt.getTime() + HISTORY_TICK_MS) {
-      merged.push({ ...segment, chatId });
+      merged.push({ ...segment });
       continue;
     }
 
@@ -527,8 +546,7 @@ function mergeCoverageSegmentsForChat(
   return merged;
 }
 
-function mergeCoverageWriteSegmentsForChat(
-  chatId: string,
+function mergeCoverageWriteSegmentsForOwner(
   segments: HistoryCoverageWriteSegment[]
 ): HistoryCoverageWriteSegment[] {
   const sorted = segments
@@ -544,7 +562,7 @@ function mergeCoverageWriteSegmentsForChat(
       segment.startAt > last.endAt ||
       segment.provedAt.getTime() !== last.provedAt.getTime()
     ) {
-      merged.push({ ...segment, chatId });
+      merged.push({ ...segment });
       continue;
     }
 
@@ -597,9 +615,23 @@ function coverageRowMatchesSegment(
 ): boolean {
   return (
     row.telegramChatId === segment.chatId &&
+    row.ownerKey === coverageOwnerKey(segment) &&
+    row.ownerKind === coverageOwnerKind(segment) &&
     row.startAt.getTime() === segment.startAt.getTime() &&
     row.endAt.getTime() === segment.endAt.getTime()
   );
+}
+
+function chatOwnerKey(chatId: string): string {
+  return `chat:${chatId}`;
+}
+
+function coverageOwnerKey(segment: HistoryCoverageInterval): string {
+  return segment.ownerKey ?? chatOwnerKey(segment.chatId);
+}
+
+function coverageOwnerKind(segment: HistoryCoverageInterval): string {
+  return segment.ownerKind ?? 'chat';
 }
 
 function minDate(first: Date, second: Date): Date {

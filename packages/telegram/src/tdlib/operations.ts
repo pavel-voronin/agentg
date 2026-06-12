@@ -136,6 +136,132 @@ export function createOperations(deps: OperationDeps) {
         options
       ) as Promise<Message>;
     },
+    getDirectMessagesChatTopicHistory(
+      input: {
+        chatId: number;
+        fromMessageId: number;
+        limit: number;
+        offset: number;
+        topicId: number;
+      },
+      options?: InvokeOptions
+    ): Promise<Messages> {
+      return invoke(
+        deps,
+        {
+          _: 'getDirectMessagesChatTopicHistory',
+          chat_id: input.chatId,
+          from_message_id: input.fromMessageId,
+          limit: input.limit,
+          offset: input.offset,
+          topic_id: input.topicId
+        },
+        options
+      ) as Promise<Messages>;
+    },
+    getDirectMessagesChatTopicMessageByDate(
+      input: {
+        chatId: number;
+        date: number;
+        topicId: number;
+      },
+      options?: InvokeOptions
+    ): Promise<Message> {
+      return invoke(
+        deps,
+        {
+          _: 'getDirectMessagesChatTopicMessageByDate',
+          chat_id: input.chatId,
+          date: input.date,
+          topic_id: input.topicId
+        },
+        options
+      ) as Promise<Message>;
+    },
+    getForumTopicHistory(
+      input: {
+        chatId: number;
+        forumTopicId: number;
+        fromMessageId: number;
+        limit: number;
+        offset: number;
+      },
+      options?: InvokeOptions
+    ): Promise<Messages> {
+      return invoke(
+        deps,
+        {
+          _: 'getForumTopicHistory',
+          chat_id: input.chatId,
+          forum_topic_id: input.forumTopicId,
+          from_message_id: input.fromMessageId,
+          limit: input.limit,
+          offset: input.offset
+        },
+        options
+      ) as Promise<Messages>;
+    },
+    getMessageThreadHistory(
+      input: {
+        chatId: number;
+        fromMessageId: number;
+        limit: number;
+        messageId: number;
+        offset: number;
+      },
+      options?: InvokeOptions
+    ): Promise<Messages> {
+      return invoke(
+        deps,
+        {
+          _: 'getMessageThreadHistory',
+          chat_id: input.chatId,
+          from_message_id: input.fromMessageId,
+          limit: input.limit,
+          message_id: input.messageId,
+          offset: input.offset
+        },
+        options
+      ) as Promise<Messages>;
+    },
+    getSavedMessagesTopicHistory(
+      input: {
+        fromMessageId: number;
+        limit: number;
+        offset: number;
+        topicId: number;
+      },
+      options?: InvokeOptions
+    ): Promise<Messages> {
+      return invoke(
+        deps,
+        {
+          _: 'getSavedMessagesTopicHistory',
+          from_message_id: input.fromMessageId,
+          limit: input.limit,
+          offset: input.offset,
+          saved_messages_topic_id: input.topicId
+        },
+        options
+      ) as Promise<Messages>;
+    },
+    getSavedMessagesTopicMessageByDate(
+      input: {
+        date: number;
+        topicId: number;
+      },
+      options?: InvokeOptions
+    ): Promise<Message> {
+      return invoke(
+        deps,
+        {
+          _: 'getSavedMessagesTopicMessageByDate',
+          date: input.date,
+          saved_messages_topic_id: input.topicId
+        },
+        options
+      ) as Promise<Message>;
+    },
     getChats(
       input: {
         chatList: ChatList$Input;

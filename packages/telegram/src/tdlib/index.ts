@@ -130,6 +130,24 @@ export function useTdlib(options: TdlibOptions): TdlibRuntime {
     getChatMessageByDate(input, invokeOptions) {
       return readyOperations().getChatMessageByDate(input, invokeOptions);
     },
+    getDirectMessagesChatTopicHistory(input, invokeOptions) {
+      return readyOperations().getDirectMessagesChatTopicHistory(input, invokeOptions);
+    },
+    getDirectMessagesChatTopicMessageByDate(input, invokeOptions) {
+      return readyOperations().getDirectMessagesChatTopicMessageByDate(input, invokeOptions);
+    },
+    getForumTopicHistory(input, invokeOptions) {
+      return readyOperations().getForumTopicHistory(input, invokeOptions);
+    },
+    getMessageThreadHistory(input, invokeOptions) {
+      return readyOperations().getMessageThreadHistory(input, invokeOptions);
+    },
+    getSavedMessagesTopicHistory(input, invokeOptions) {
+      return readyOperations().getSavedMessagesTopicHistory(input, invokeOptions);
+    },
+    getSavedMessagesTopicMessageByDate(input, invokeOptions) {
+      return readyOperations().getSavedMessagesTopicMessageByDate(input, invokeOptions);
+    },
     getChats(input, invokeOptions) {
       return readyOperations().getChats(input, invokeOptions);
     },

@@ -49,6 +49,7 @@ type WorkerStage =
   | 'claim_batch'
   | 'dispatch_tdlib'
   | 'inspect_tdlib'
+  | 'materialize_message_slots'
   | 'publish_changes'
   | 'reconcile_stale'
   | 'tick';

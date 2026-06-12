@@ -8,6 +8,8 @@ import type {
 export type GetMessagesResult = {
   messages?: unknown;
   reachedStart?: unknown;
+  requestId?: unknown;
+  status?: unknown;
 };
 
 export type GetMessageResult = {

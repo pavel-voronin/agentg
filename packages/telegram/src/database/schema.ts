@@ -6,11 +6,14 @@ import {
   foreignKey,
   index,
   integer,
+  jsonb,
   pgTable,
   primaryKey,
   text,
   timestamp
 } from 'drizzle-orm/pg-core';
+
+import type { JsonValue } from '@agentg/framework';
 
 export * from './storageSchema.js';
 
@@ -21,12 +24,38 @@ export const telegramHistoryCoverage = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     endAt: timestamp('end_at', { withTimezone: true }).notNull(),
     id: bigserial('id', { mode: 'number' }).primaryKey(),
+    ownerKey: text('owner_key').notNull(),
+    ownerKind: text('owner_kind').notNull(),
     startAt: timestamp('start_at', { withTimezone: true }).notNull(),
-    telegramChatId: text('telegram_chat_id').notNull(),
+    telegramChatId: text('telegram_chat_id'),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
   },
   (table) => [
-    index('telegram_history_coverage_chat_interval_idx').on(table.telegramChatId, table.startAt)
+    index('telegram_history_coverage_chat_interval_idx').on(table.telegramChatId, table.startAt),
+    index('telegram_history_coverage_owner_interval_idx').on(table.ownerKey, table.startAt)
+  ]
+);
+
+export const telegramHistoryReconcilerJobs = pgTable(
+  'telegram_history_reconciler_jobs',
+  {
+    attemptCount: integer('attempt_count').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    lastFailureReason: text('last_failure_reason'),
+    lockedAt: timestamp('locked_at', { withTimezone: true }),
+    nextRunAt: timestamp('next_run_at', { withTimezone: true }).notNull(),
+    owner: jsonb('owner').$type<JsonValue>().notNull(),
+    ownerKey: text('owner_key').notNull(),
+    ownerKind: text('owner_kind').notNull(),
+    requestId: text('request_id').primaryKey(),
+    selector: jsonb('selector').$type<JsonValue>().notNull(),
+    selectorKind: text('selector_kind').notNull(),
+    status: text('status').notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => [
+    index('telegram_history_reconciler_jobs_status_next_idx').on(table.status, table.nextRunAt),
+    index('telegram_history_reconciler_jobs_owner_idx').on(table.ownerKey)
   ]
 );
 

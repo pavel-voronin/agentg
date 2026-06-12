@@ -1,6 +1,7 @@
 import { useDashboardHost } from '@agentg/framework/dashboard';
 
 import type { FileRef } from '../../src/files/types.js';
+import type { GetMessagesInput } from '../../src/procedures/get-messages/contract.js';
 import { TELEGRAM_DASHBOARD_METHODS } from '../contracts.js';
 import type {
   GetMessagesResult,
@@ -22,12 +23,6 @@ type ChatDirectoryInput = {
 type MessageInput = {
   chatId: string;
   messageId: string;
-};
-
-type GetMessagesInput = {
-  beforeMessageId?: string | undefined;
-  chatId: string;
-  limit: number;
 };
 
 type RequestFileInput = {

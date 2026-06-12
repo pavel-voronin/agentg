@@ -1,14 +1,24 @@
 import type { SQL } from 'drizzle-orm';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import type { file } from 'tdlib-types';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { recordTelemetryHistogram } from '@agentg/framework';
 
 import type { Database } from '../src/database/client.js';
 import { ACTIVE_NOTIFICATION_MODEL } from '../src/model/refs.js';
 import { handleFileSnapshot, recordFileSlotUpdate } from '../src/files/persistence.js';
 import type { FileSubsystemOptions } from '../src/files/runtime.js';
 
+vi.mock('@agentg/framework', () => ({
+  recordTelemetryHistogram: vi.fn()
+}));
+
 describe('Telegram file persistence', () => {
+  beforeEach(() => {
+    vi.mocked(recordTelemetryHistogram).mockClear();
+  });
+
   it('matches progress file snapshots by asset key, TDLib file id, and byte progress', async () => {
     const captured: { snapshotCondition?: SQL } = {};
     const database = snapshotDatabase((condition) => {
@@ -102,6 +112,33 @@ describe('Telegram file persistence', () => {
     const query = new PgDialect().sqlToQuery(condition);
     expect(query.sql).toContain('"telegram_file_slots"."owner_model" = $1');
     expect(query.params).toEqual([ACTIVE_NOTIFICATION_MODEL]);
+  });
+
+  it('records file slot stages as aggregate metrics', async () => {
+    await recordFileSlotUpdate(
+      fileSlotUpdateOptions(() => undefined),
+      {
+        notificationGroups: {
+          groups: []
+        }
+      },
+      'live_update',
+      undefined,
+      {
+        pruneStaleActiveNotificationSlots: true
+      }
+    );
+
+    expect(recordTelemetryHistogram).toHaveBeenCalledWith(
+      'telegram.file.record.stage.duration',
+      expect.any(Number),
+      {
+        'telegram.file.owner_model': 'telegram.active_notification',
+        'telegram.file.record.cause': 'live_update',
+        'telegram.file.record.stage': 'prune_stale_slots'
+      },
+      { unit: 's' }
+    );
   });
 });
 

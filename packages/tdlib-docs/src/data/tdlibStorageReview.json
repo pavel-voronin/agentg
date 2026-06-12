@@ -5786,6 +5786,17 @@
           "sourceFields": ["Message.message.fact_check", "Update.updateMessageFactCheck.fact_check"]
         },
         {
+          "id": "telegram_messages.file_slots_recorded_at",
+          "name": "file_slots_recorded_at",
+          "notes": [
+            "Local FileSubsystem marker. Null means stored Message.content still needs asynchronous file-slot materialization; non-null means the stored content version was scanned for file slots."
+          ],
+          "nullable": true,
+          "pgType": "timestamp with time zone",
+          "role": "data",
+          "sourceFields": ["Message.message.content"]
+        },
+        {
           "id": "telegram_messages.suggested_post_info",
           "name": "suggested_post_info",
           "notes": ["SuggestedPostInfo is stored as embedded JSONB."],

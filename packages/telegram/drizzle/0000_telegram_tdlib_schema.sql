@@ -126,6 +126,7 @@ CREATE TABLE "telegram_messages" (
   "edit_date" timestamp with time zone,
   "effect_id" bigint,
   "fact_check" jsonb,
+  "file_slots_recorded_at" timestamp with time zone,
   "forward_info" jsonb,
   "guest_bot_caller_id" jsonb,
   "has_timestamped_media" boolean,
