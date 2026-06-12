@@ -720,9 +720,13 @@ Changes to the subsystem must keep tests for:
 - generation URL validation and abort handling;
 - owner event payload shape and Dashboard application;
 - queue event payload shape;
-- Files dashboard route identity;
-- Files dashboard current RPC procedure filters;
 - bounded telemetry labels.
+
+Do not require dedicated regression tests for static Grafana dashboard JSON,
+dashboard panels, or tiles. Dashboard-only edits should stay lightweight: review
+the PromQL, links, and operator text directly, and validate JSON syntax when
+needed. Tests belong on executable behavior, telemetry emission/classification,
+and browser code that applies live events.
 
 The scoped verification command for Telegram file subsystem changes is:
 
@@ -736,8 +740,7 @@ Changes that touch Dashboard shell or shared Dashboard serving must also run:
 npm run check:dashboard
 ```
 
-Changes that touch provisioned Grafana dashboards or telemetry package tests
-must run:
+Changes that touch telemetry package code or telemetry package tests must run:
 
 ```text
 npm run check:telemetry
@@ -767,5 +770,6 @@ npm run check
   paths.
 - Observability must answer state, progress, latency, failure, and freshness
   questions without relying on high-cardinality metric labels.
-- Current docs, tests, dashboards, and implementation must move together. A
-  mismatch between them is a defect.
+- Current docs, dashboards, and implementation must agree. Tests must cover the
+  executable behavior and telemetry contracts that make the dashboard truthful,
+  but static dashboard and tile composition does not need its own test suite.

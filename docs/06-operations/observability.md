@@ -147,6 +147,12 @@ The telemetry page is a thin read and navigation surface:
 - The Postgres dashboard is backed by postgres_exporter metrics and app-level
   `db.client.operation.duration` metrics.
 
+Do not add dedicated regression tests for static Grafana dashboard JSON, panel
+layout, or tiles. Treat provisioned dashboards as reviewed configuration: keep
+their PromQL, links, titles, and operator text clear, and validate JSON syntax
+when needed. Put tests on telemetry emitters, bounded labels, backend links, and
+browser behavior, not on every dashboard tile.
+
 Dashboard does not subscribe to telemetry report events and does not run a
 background report refresh loop. Further reads happen only during initialization
 or an explicit refresh action.
