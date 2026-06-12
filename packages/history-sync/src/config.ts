@@ -1,8 +1,10 @@
 import { defineConfig, number, string, type ConfigOf } from '@agentg/framework';
 
+const databaseUrl = string('DATABASE_URL');
+
 export const readConfig = defineConfig({
   chatLoadBatchSize: number('HISTORY_SYNC_CHAT_LOAD_BATCH_SIZE').default(100),
-  databaseUrl: string('DATABASE_URL'),
+  databaseUrl,
   host: string('HOST').optional(),
   messageLimit: number('HISTORY_SYNC_MESSAGE_LIMIT').default(100),
   natsUrl: string('NATS_URL'),
@@ -14,3 +16,7 @@ export const readConfig = defineConfig({
 });
 
 export type Config = ConfigOf<typeof readConfig>;
+
+export const readDatabaseConfig = defineConfig({
+  databaseUrl
+});

@@ -1,10 +1,10 @@
 import { createLogger, logError } from '@agentg/framework';
 
-import { readConfig } from '../config.js';
+import { readDatabaseConfig } from '../config.js';
 
 import { createDatabase } from './client.js';
 
-const config = readConfig(process.env);
+const config = readDatabaseConfig(process.env);
 const database = createDatabase(config.databaseUrl);
 const logger = createLogger('history-sync');
 

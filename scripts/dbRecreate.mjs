@@ -52,7 +52,10 @@ try {
   await client.end();
 }
 
-await runChecked('npm', ['run', 'db:migrate']);
+await runChecked('npm', ['run', 'db:migrate'], {
+  ...process.env,
+  DATABASE_URL: databaseUrl
+});
 console.log(
   JSON.stringify({
     database: targetDatabase,
@@ -82,8 +85,9 @@ async function createDatabaseExtensions(url) {
   }
 }
 
-function runChecked(command, args) {
+function runChecked(command, args, env) {
   const child = spawn(command, args, {
+    env,
     stdio: 'inherit'
   });
 
