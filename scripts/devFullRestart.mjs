@@ -9,6 +9,7 @@ import net from 'node:net';
 const processComposeArgs = ['-U', '-u', '.tmp/process-compose.sock'];
 const composeProfiles = ['telemetry', 'container-client', 'dashboard'];
 const localEnv = readLocalEnv();
+const localHost = '127.0.0.1';
 const appProcesses = ['telegram', 'history-sync', 'gateway', 'dashboard-server', 'dashboard'];
 const setupProcesses = ['infra-up', 'db-migrate', 'telegram-files-ready'];
 const telemetryEnabled = enabled(configValue('AGENTG_TELEMETRY', '1'));
@@ -29,30 +30,30 @@ const expectedInfraServices = [
       ]
     : [])
 ];
-const productPorts = [
-  ['telegram', 8702],
-  ['history-sync', 8704],
-  ['gateway', 8787],
-  ['dashboard-server', 8789],
-  ['dashboard', 8788]
+const productEndpoints = [
+  endpoint('telegram', 'http', 8702),
+  endpoint('history-sync', 'http', 8704),
+  endpoint('gateway', 'http', 8787),
+  endpoint('dashboard-server', 'http', 8789),
+  endpoint('dashboard', 'http', 8788)
 ];
-const infraPorts = [
-  ['postgres', 5432],
-  ['nats', 4222],
-  ['nats-monitor', 8222],
-  ['telegram-files', portFromConfig('TELEGRAM_FILES_PORT', 8790)],
+const infraEndpoints = [
+  endpoint('postgres', 'postgres', 5432),
+  endpoint('nats', 'nats', 4222),
+  endpoint('nats-monitor', 'http', 8222),
+  endpoint('telegram-files', 'http', portFromConfig('TELEGRAM_FILES_PORT', 8790)),
   ...(telemetryEnabled
     ? [
-        ['otel-collector-grpc', 4317],
-        ['otel-collector-http', 4318],
-        ['victoria-metrics', 8428],
-        ['jaeger', 16686],
-        ['loki', 3100],
-        ['grafana', 3000]
+        endpoint('otel-collector-grpc', 'grpc', 4317),
+        endpoint('otel-collector-http', 'http', 4318),
+        endpoint('victoria-metrics', 'http', 8428),
+        endpoint('jaeger', 'http', 16686),
+        endpoint('loki', 'http', 3100),
+        endpoint('grafana', 'http', 3000)
       ]
     : [])
 ];
-const allPorts = [...productPorts, ...infraPorts];
+const serviceEndpoints = [...productEndpoints, ...infraEndpoints];
 
 try {
   console.log('dev:full-restart: stopping');
@@ -71,8 +72,9 @@ try {
   await waitUntil('TCP ports', checkPorts, 60_000);
 
   console.log(
-    `dev:full-restart: ok (services ${appProcesses.length}/${appProcesses.length}, infra ${expectedInfraServices.length}/${expectedInfraServices.length}, ports ${allPorts.length}/${allPorts.length})`
+    `dev:full-restart: ok (services ${appProcesses.length}/${appProcesses.length}, infra ${expectedInfraServices.length}/${expectedInfraServices.length}, ports ${serviceEndpoints.length}/${serviceEndpoints.length})`
   );
+  printServiceEndpoints();
 } catch (error) {
   console.error('dev:full-restart: failed');
   console.error(error instanceof Error ? error.message : String(error));
@@ -173,10 +175,9 @@ async function checkDockerInfrastructure() {
 
 async function checkPorts() {
   const checks = await Promise.all(
-    allPorts.map(async ([name, port]) => ({
-      name,
-      port,
-      open: await canConnect(port)
+    serviceEndpoints.map(async (entry) => ({
+      ...entry,
+      open: await canConnect(entry.port)
     }))
   );
   const closed = checks.filter((entry) => !entry.open);
@@ -337,6 +338,26 @@ function describeProcess(entry) {
 
 function describeContainer(entry) {
   return `${entry.Service} state=${entry.State} health=${entry.Health || '-'} exit=${entry.ExitCode}`;
+}
+
+function printServiceEndpoints() {
+  console.log('dev:full-restart: endpoints');
+  for (const entry of serviceEndpoints) {
+    console.log(`  ${entry.name} ${formatEndpoint(entry)}`);
+  }
+}
+
+function endpoint(name, protocol, port) {
+  return {
+    name,
+    protocol,
+    host: localHost,
+    port
+  };
+}
+
+function formatEndpoint(entry) {
+  return `${entry.protocol}://${entry.host}:${entry.port}`;
 }
 
 function sleep(ms) {
