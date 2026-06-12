@@ -120,7 +120,7 @@ export async function fetchHistoryPage(
   const endAt = requireDate(request.endAt, 'telegram.history.fetch_page requires endAt');
   const limit = parseLimit(request.limit, TELEGRAM_ENSURE_HISTORY_DEFAULT_LIMIT, 100);
   let cursorMessageId = optionalMessageId(request.cursorMessageId);
-  let remainingEndAt = endAt;
+  const remainingEndAt = endAt;
 
   if (cursorMessageId === undefined) {
     const anchor = await getLastMessageNoLaterThan(chatId, endAt, resources, {
@@ -162,10 +162,6 @@ export async function fetchHistoryPage(
         kind: 'anchor_before_start',
         storedMessages: 0
       };
-    }
-
-    if (anchorDate !== undefined && anchorDate < remainingEndAt) {
-      remainingEndAt = nextTdlibSecond(anchorDate);
     }
 
     cursorMessageId = anchorMessageId;
@@ -527,11 +523,6 @@ function checkpointCoveredStartAt(
   const oldestFetchedSecond = floorToHistorySecond(checkpoint.oldestFetchedMessageDate);
   const nextUnprovenEndAt = new Date(oldestFetchedSecond.getTime() + HISTORY_TICK_MS);
   return nextUnprovenEndAt < remainingEndAt ? nextUnprovenEndAt : undefined;
-}
-
-function nextTdlibSecond(date: Date): Date {
-  const second = floorToHistorySecond(date);
-  return new Date(second.getTime() + HISTORY_TICK_MS);
 }
 
 function intervalToResponse(interval: HistoryInterval): { endAt: string; startAt: string } {
