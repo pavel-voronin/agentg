@@ -343,6 +343,7 @@ function assetStatsSelect() {
           failedCount: 0,
           knownCount: 1,
           readyCount: 0,
+          readyDownloadedBytes: 0,
           totalCount: 1
         }
       ]);

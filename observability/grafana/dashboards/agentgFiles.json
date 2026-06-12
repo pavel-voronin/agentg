@@ -22,48 +22,6 @@
   ],
   "panels": [
     {
-      "collapsed": true,
-      "datasource": {
-        "type": "prometheus",
-        "uid": "victoria-metrics"
-      },
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 0
-      },
-      "id": 1,
-      "panels": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "victoria-metrics"
-          },
-          "fieldConfig": {
-            "defaults": {},
-            "overrides": []
-          },
-          "gridPos": {
-            "h": 3,
-            "w": 24,
-            "x": 0,
-            "y": 1
-          },
-          "id": 2,
-          "options": {
-            "content": "This dashboard is the x-ray for Telegram file handling. Read it top to bottom: first check the red-flag indicators, then inspect backlog and bytes, then worker flow, latency, discovery, dependencies, and traces. Empty latency graphs mean no matching file activity in the selected window; top stat panels keep missing file telemetry visible as No telemetry. Each file-related metric family has exactly one owner section here and a plain-language entry in Metric Meanings.",
-            "mode": "markdown"
-          },
-          "pluginVersion": "12.3.0",
-          "title": "Operator Contract",
-          "type": "text"
-        }
-      ],
-      "title": "How To Read",
-      "type": "row"
-    },
-    {
       "collapsed": false,
       "datasource": {
         "type": "prometheus",
@@ -73,7 +31,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 1
+        "y": 0
       },
       "id": 3,
       "panels": [],
@@ -114,9 +72,9 @@
       },
       "gridPos": {
         "h": 5,
-        "w": 3,
+        "w": 6,
         "x": 0,
-        "y": 2
+        "y": 1
       },
       "id": 4,
       "options": {
@@ -153,7 +111,7 @@
         "type": "prometheus",
         "uid": "victoria-metrics"
       },
-      "description": "Current number of durable file assets in failed state. This should stay at zero in a healthy run; non-zero means files need retry or root-cause inspection.",
+      "description": "Current durable file assets failed for operator-dangerous reasons: unknown, TDLib paths outside source roots, stale retry limit, storage I/O, or missing TDLib file id. This is the first-screen red flag and the alert source for file failures.",
       "fieldConfig": {
         "defaults": {
           "decimals": 0,
@@ -176,7 +134,7 @@
           "links": [
             {
               "targetBlank": false,
-              "title": "Inspect failed assets",
+              "title": "Inspect dangerous failures",
               "url": "/d/agentg-files/files?orgId=1&from=${__from}&to=${__to}&viewPanel=44"
             }
           ]
@@ -185,9 +143,9 @@
       },
       "gridPos": {
         "h": 5,
-        "w": 3,
-        "x": 3,
-        "y": 2
+        "w": 6,
+        "x": 6,
+        "y": 1
       },
       "id": 5,
       "options": {
@@ -210,13 +168,80 @@
             "type": "prometheus",
             "uid": "victoria-metrics"
           },
-          "expr": "sum(telegram_file_queue_assets{service_name=\"telegram\", telegram_file_asset_status=\"failed\"})",
+          "expr": "sum(telegram_file_queue_failures{service_name=\"telegram\", telegram_file_failure_reason=~\"unknown|tdlib_path_outside_source_roots|stale_retry_limit|storage_io|missing_tdlib_file_id\"})",
           "instant": true,
-          "legendFormat": "failed",
+          "legendFormat": "dangerous",
           "refId": "A"
         }
       ],
-      "title": "Failed Assets",
+      "title": "Dangerous Failed",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoria-metrics"
+      },
+      "description": "Current durable file assets where Telegram or TDLib says media is unavailable: Not Found, File not found, Message not found, or Message has no specified file. This is expected remote-data loss from the operator perspective; watch volume and product impact, but do not page on this tile.",
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "mappings": [],
+          "noValue": "No telemetry",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short",
+          "links": [
+            {
+              "targetBlank": false,
+              "title": "Inspect unavailable media",
+              "url": "/d/agentg-files/files?orgId=1&from=${__from}&to=${__to}&viewPanel=44"
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 12,
+        "y": 1
+      },
+      "id": 48,
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "expr": "sum(telegram_file_queue_failures{service_name=\"telegram\", telegram_file_failure_reason=\"not_found\"})",
+          "instant": true,
+          "legendFormat": "not_found",
+          "refId": "A"
+        }
+      ],
+      "title": "Unavailable Media",
       "type": "stat"
     },
     {
@@ -249,9 +274,9 @@
       },
       "gridPos": {
         "h": 5,
-        "w": 3,
-        "x": 6,
-        "y": 2
+        "w": 5,
+        "x": 0,
+        "y": 6
       },
       "id": 6,
       "options": {
@@ -302,7 +327,7 @@
                 "value": null
               },
               {
-                "color": "red",
+                "color": "yellow",
                 "value": 0.001
               }
             ]
@@ -313,9 +338,9 @@
       },
       "gridPos": {
         "h": 5,
-        "w": 3,
-        "x": 9,
-        "y": 2
+        "w": 4,
+        "x": 5,
+        "y": 6
       },
       "id": 7,
       "options": {
@@ -381,9 +406,9 @@
       },
       "gridPos": {
         "h": 5,
-        "w": 3,
-        "x": 12,
-        "y": 2
+        "w": 5,
+        "x": 9,
+        "y": 6
       },
       "id": 8,
       "options": {
@@ -420,74 +445,6 @@
         "type": "prometheus",
         "uid": "victoria-metrics"
       },
-      "description": "Rate of stale downloading jobs reconciled by the watchdog. Non-zero means TDLib completion/update events did not finish the job on the first path.",
-      "fieldConfig": {
-        "defaults": {
-          "decimals": 3,
-          "mappings": [],
-          "noValue": "No telemetry",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 0.001
-              },
-              {
-                "color": "red",
-                "value": 1
-              }
-            ]
-          },
-          "unit": "ops"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 5,
-        "w": 3,
-        "x": 15,
-        "y": 2
-      },
-      "id": 9,
-      "options": {
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": ["lastNotNull"],
-          "fields": "",
-          "values": false
-        },
-        "showPercentChange": false,
-        "textMode": "auto",
-        "wideLayout": true
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "victoria-metrics"
-          },
-          "expr": "sum(rate(telegram_file_worker_jobs_total{telegram_file_worker_job_source=\"stale\"}[$__rate_interval])) or (0 * sum(telegram_file_queue_jobs{service_name=\"telegram\"}))",
-          "instant": true,
-          "legendFormat": "stale/s",
-          "refId": "A"
-        }
-      ],
-      "title": "Stale Recovery Rate",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "victoria-metrics"
-      },
       "description": "Current number of downloading jobs older than the worker claim timeout. Any non-zero value means TDLib handoff or completion events are not closing jobs on time.",
       "fieldConfig": {
         "defaults": {
@@ -517,9 +474,9 @@
       },
       "gridPos": {
         "h": 5,
-        "w": 3,
-        "x": 18,
-        "y": 2
+        "w": 5,
+        "x": 14,
+        "y": 6
       },
       "id": 38,
       "options": {
@@ -585,9 +542,9 @@
       },
       "gridPos": {
         "h": 5,
-        "w": 3,
-        "x": 21,
-        "y": 2
+        "w": 5,
+        "x": 19,
+        "y": 6
       },
       "id": 39,
       "options": {
@@ -629,7 +586,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 7
+        "y": 11
       },
       "id": 43,
       "panels": [],
@@ -641,7 +598,7 @@
         "type": "prometheus",
         "uid": "victoria-metrics"
       },
-      "description": "Current failed durable assets grouped by bounded failure reason. This is the first stop after the red Failed Assets tile: not_found points to unavailable Telegram media, stale_retry_limit points to worker/TDLib completion trouble, storage_io points to local canonicalization/storage, and unknown needs log or trace inspection.",
+      "description": "Current failed durable assets grouped by bounded failure reason. This is the first stop after the red Dangerous Failed tile: not_found points to unavailable Telegram media, stale_retry_limit points to worker/TDLib completion trouble, tdlib_path_outside_source_roots points to TDLib local paths outside the configured source roots, storage_io points to local canonicalization/storage, and unknown is an immediate-response red flag that needs log or trace inspection before the incident is closed.",
       "fieldConfig": {
         "defaults": {
           "unit": "short"
@@ -652,7 +609,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 8
+        "y": 12
       },
       "id": 44,
       "options": {
@@ -717,7 +674,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 8
+        "y": 12
       },
       "id": 45,
       "options": {
@@ -759,7 +716,7 @@
         "h": 6,
         "w": 24,
         "x": 0,
-        "y": 16
+        "y": 20
       },
       "id": 46,
       "options": {
@@ -768,7 +725,7 @@
           "showLineNumbers": false,
           "showMiniMap": false
         },
-        "content": "Use `Failure Logs` for assetKey, raw error message, and trace_id. Use `Recent File Worker Traces` for the worker path around reconcile, claim, dispatch, and publish stages.\n\n| Reason | Operator decision |\n|---|---|\n| `not_found` | Telegram or TDLib says the media is unavailable. Treat as remote-data loss unless the same source later emits a new file id. |\n| `stale_retry_limit` | The worker handed work to TDLib and did not observe completion after retry recovery. Inspect worker traces, TDLib queue pressure, and updateFile flow. |\n| `missing_tdlib_file_id` | Stored asset cannot be downloaded because the TDLib file id is absent. Treat as a persistence or extraction bug. |\n| `storage_io` | Download reached local canonicalization/storage and failed on filesystem I/O. Inspect file server volume and permissions. |\n| `unknown` | The raw error did not match a known operational class. Inspect Loki logs and recent file worker traces. |",
+        "content": "Use `Failure Logs` for assetKey, raw error message, and trace_id. Use `Recent File Worker Traces` for the worker path around reconcile, claim, dispatch, and publish stages.\n\n| Reason | Operator decision |\n|---|---|\n| `not_found` | Telegram or TDLib says the media is unavailable: `Not Found`, `File not found`, `Message not found`, or `Message has no specified file`. Treat as remote-data loss unless the same source later emits a new file id. |\n| `stale_retry_limit` | The worker handed work to TDLib and did not observe completion after retry recovery. Inspect worker traces, TDLib queue pressure, and updateFile flow. |\n| `missing_tdlib_file_id` | Stored asset cannot be downloaded because the TDLib file id is absent. Treat as a persistence or extraction bug. |\n| `storage_io` | Download reached local canonicalization/storage and failed on filesystem I/O. Inspect file server volume and permissions. |\n| `unknown` | Immediate-response red flag. The raw error did not match a known operational class; inspect Loki logs and recent file worker traces before closing the incident. |",
         "mode": "markdown"
       },
       "pluginVersion": "13.0.2",
@@ -789,7 +746,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 22
+        "y": 26
       },
       "id": 47,
       "links": [
@@ -841,7 +798,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 22
+        "y": 26
       },
       "id": 35,
       "options": {
@@ -891,12 +848,72 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 30
+        "y": 34
       },
       "id": 11,
       "panels": [],
       "title": "Backlog And Bytes",
       "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "victoria-metrics"
+      },
+      "description": "Total downloaded byte size for durable ready file assets. This is completed/canonicalized media volume, not active queue progress.",
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "mappings": [],
+          "noValue": "No telemetry",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 18,
+        "y": 1
+      },
+      "id": 49,
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "expr": "max(telegram_file_assets_downloaded_bytes{service_name=\"telegram\"})",
+          "instant": true,
+          "legendFormat": "downloaded",
+          "refId": "A"
+        }
+      ],
+      "title": "Downloaded Volume",
+      "type": "stat"
     },
     {
       "datasource": {
@@ -914,7 +931,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 31
+        "y": 35
       },
       "id": 12,
       "options": {
@@ -959,7 +976,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 31
+        "y": 35
       },
       "id": 13,
       "options": {
@@ -1004,7 +1021,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 39
+        "y": 43
       },
       "id": 14,
       "options": {
@@ -1049,7 +1066,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 39
+        "y": 43
       },
       "id": 15,
       "options": {
@@ -1088,7 +1105,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 47
+        "y": 51
       },
       "id": 16,
       "panels": [],
@@ -1111,7 +1128,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 48
+        "y": 52
       },
       "id": 17,
       "options": {
@@ -1156,7 +1173,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 48
+        "y": 52
       },
       "id": 18,
       "options": {
@@ -1201,7 +1218,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 56
+        "y": 60
       },
       "id": 19,
       "options": {
@@ -1246,7 +1263,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 56
+        "y": 60
       },
       "id": 20,
       "options": {
@@ -1285,7 +1302,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 64
+        "y": 68
       },
       "id": 21,
       "panels": [],
@@ -1308,7 +1325,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 65
+        "y": 69
       },
       "id": 22,
       "options": {
@@ -1353,7 +1370,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 65
+        "y": 69
       },
       "id": 23,
       "options": {
@@ -1392,7 +1409,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 73
+        "y": 77
       },
       "id": 40,
       "panels": [],
@@ -1415,7 +1432,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 74
+        "y": 78
       },
       "id": 41,
       "options": {
@@ -1460,7 +1477,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 74
+        "y": 78
       },
       "id": 42,
       "options": {
@@ -1499,7 +1516,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 82
+        "y": 86
       },
       "id": 24,
       "panels": [],
@@ -1522,7 +1539,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 83
+        "y": 87
       },
       "id": 25,
       "options": {
@@ -1567,7 +1584,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 83
+        "y": 87
       },
       "id": 26,
       "options": {
@@ -1612,7 +1629,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 91
+        "y": 95
       },
       "id": 27,
       "options": {
@@ -1657,7 +1674,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 91
+        "y": 95
       },
       "id": 28,
       "options": {
@@ -1702,7 +1719,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 99
+        "y": 103
       },
       "id": 29,
       "options": {
@@ -1747,7 +1764,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 99
+        "y": 103
       },
       "id": 36,
       "options": {
@@ -1794,7 +1811,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 107
+        "y": 111
       },
       "id": 37,
       "options": {
@@ -1841,7 +1858,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 107
+        "y": 111
       },
       "id": 30,
       "options": {
@@ -1880,7 +1897,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 115
+        "y": 119
       },
       "id": 31,
       "panels": [
@@ -1901,7 +1918,7 @@
           },
           "id": 33,
           "options": {
-            "content": "| Metric family | Where it lives | What it answers | Bad sign |\n|---|---|---|---|\n| `telegram.file.queue.assets` | Current State, Backlog And Bytes | How many durable file assets are known, ready, or failed. | `failed > 0` or `known` grows while jobs do not move. |\n| `telegram.file.queue.failures` | Failed Assets Triage | How many failed durable assets exist by bounded failure reason. | Any non-zero reason count needs retry or root-cause inspection. |\n| `telegram.file.queue.jobs` | Current State, Backlog And Bytes | How many download jobs are queued or already handed to TDLib. | `queued` grows or `downloading` stays high without ready/failed outcomes. |\n| `telegram.file.queue.stale_downloading` | Current State | How many downloading jobs are older than the worker claim timeout. | Any non-zero value means the stale watchdog is needed to recover active work. |\n| `telegram.file.queue.oldest_downloading_age` | Current State | Age in seconds of the oldest downloading job. | Values above the claim timeout mean TDLib progress or worker reconciliation is late. |\n| `telegram.file.queue.bytes` | Backlog And Bytes | Known downloaded, remaining, and total bytes for active jobs. | Remaining bytes grows while worker job rate is flat. |\n| `telegram.file.queue.unknown_remaining` | Backlog And Bytes | Active jobs whose size is unknown, so byte panels undercount backlog. | High value means the byte x-ray is incomplete. |\n| `telegram.file.generation.outcomes` | File Generation | Whether TDLib URL generation completed, failed, or was aborted. | `failed blocked_url` means SSRF protection rejected a target; other failures mean fetch/write trouble. |\n| `telegram.file.generation.duration` | File Generation | Time spent fetching a generated file URL and writing it to TDLib destination storage. | High p95 means generation fetch or filesystem writes are slow. |\n| `telegram.file.worker.wake` | Worker Flow | Why the worker was scheduled. | `file_download_defer` or `failure_backoff` dominates. |\n| `telegram.file.worker.jobs` | Current State, Worker Flow | What happened to jobs after the worker touched them. | `failed` or `stale` dominates `ready`. |\n| `telegram.file.worker.stage.duration` | Current State, Worker Flow | How often each worker stage runs and where worker time is spent. | High `dispatch_tdlib`, `canonicalize_completed`, or `publish_changes`. |\n| `telegram.file.record.stage.duration` | File Discovery And Record Path | Time spent discovering, materializing, pruning, and publishing file slots before downloads exist. | High `replace_slots` or `publish_changes`. |\n| `rpc.server.call.duration` filtered to `telegram.dashboard.requestFile` | Boundaries And Storage | Manual file request rate and latency. | High `requestFile` points to enqueue, policy, or DB pressure. |\n| `db.client.operation.duration` filtered to file tables | Boundaries And Storage | DB load and latency from file queue, asset, slot, and TDLib file tables. | High rate with high p95 means file storage is the DB pressure source. |\n| `messaging.client.operation.duration` filtered to `telegram.files.*` | Boundaries And Storage | Rate and latency of publishing file queue/owner state changes. | High p95 means state changes are slow before subscribers see them. |\n| `messaging.process.duration` filtered to `telegram.files.*` | Boundaries And Storage | Rate and latency of subscribers applying file queue/owner events. | Send rate without process rate, or high process p95. |",
+            "content": "| Metric family | Where it lives | What it answers | Bad sign |\n|---|---|---|---|\n| `telegram.file.queue.assets` | Current State, Backlog And Bytes | How many durable file assets are known, ready, or failed. | Dangerous failed reasons > 0, or `known` grows while jobs do not move. |\n| `telegram.file.assets.downloaded_bytes` | Backlog And Bytes | Total downloaded byte size for durable ready file assets. | Sudden drops mean ready asset state was reset or telemetry source is wrong. |\n| `telegram.file.queue.failures` | Failed Assets Triage | How many failed durable assets exist by bounded failure reason. | `unknown`, `tdlib_path_outside_source_roots`, `stale_retry_limit`, `storage_io`, or `missing_tdlib_file_id` > 0 needs immediate response; `not_found` is expected unavailable remote media. |\n| `telegram.file.queue.jobs` | Current State, Backlog And Bytes | How many download jobs are queued or already handed to TDLib. | `queued` grows or `downloading` stays high without ready/failed outcomes. |\n| `telegram.file.queue.stale_downloading` | Current State | How many downloading jobs are older than the worker claim timeout. | Any non-zero value means the stale watchdog is needed to recover active work. |\n| `telegram.file.queue.oldest_downloading_age` | Current State | Age in seconds of the oldest downloading job. | Values above the claim timeout mean TDLib progress or worker reconciliation is late. |\n| `telegram.file.queue.bytes` | Backlog And Bytes | Known downloaded, remaining, and total bytes for active jobs. | Remaining bytes grows while worker job rate is flat. |\n| `telegram.file.queue.unknown_remaining` | Backlog And Bytes | Active jobs whose size is unknown, so byte panels undercount backlog. | High value means the byte x-ray is incomplete. |\n| `telegram.file.generation.outcomes` | File Generation | Whether TDLib URL generation completed, failed, or was aborted. | `failed blocked_url` means SSRF protection rejected a target; other failures mean fetch/write trouble. |\n| `telegram.file.generation.duration` | File Generation | Time spent fetching a generated file URL and writing it to TDLib destination storage. | High p95 means generation fetch or filesystem writes are slow. |\n| `telegram.file.worker.wake` | Worker Flow | Why the worker was scheduled. | `file_download_defer` or `failure_backoff` dominates. |\n| `telegram.file.worker.jobs` | Current State, Worker Flow | What happened to jobs after the worker touched them. | `failed` or `stale` dominates `ready`; check Failed Assets Triage to decide whether failed is dangerous or expected unavailable media. |\n| `telegram.file.worker.stage.duration` | Current State, Worker Flow | How often each worker stage runs and where worker time is spent. | High `dispatch_tdlib`, `canonicalize_completed`, or `publish_changes`. |\n| `telegram.file.record.stage.duration` | File Discovery And Record Path | Time spent discovering, materializing, pruning, and publishing file slots before downloads exist. | High `replace_slots` or `publish_changes`. |\n| `rpc.server.call.duration` filtered to `telegram.dashboard.requestFile` | Boundaries And Storage | Manual file request rate and latency. | High `requestFile` points to enqueue, policy, or DB pressure. |\n| `db.client.operation.duration` filtered to file tables | Boundaries And Storage | DB load and latency from file queue, asset, slot, and TDLib file tables. | High rate with high p95 means file storage is the DB pressure source. |\n| `messaging.client.operation.duration` filtered to `telegram.files.*` | Boundaries And Storage | Rate and latency of publishing file queue/owner state changes. | High p95 means state changes are slow before subscribers see them. |\n| `messaging.process.duration` filtered to `telegram.files.*` | Boundaries And Storage | Rate and latency of subscribers applying file queue/owner events. | Send rate without process rate, or high process p95. |",
             "mode": "markdown"
           },
           "pluginVersion": "12.3.0",

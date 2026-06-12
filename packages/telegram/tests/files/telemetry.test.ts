@@ -26,7 +26,7 @@ import {
   recordWorkerWake,
   timeFileGeneration,
   timeWorkerStage
-} from './telemetry.js';
+} from '../../src/files/telemetry.js';
 
 describe('Telegram file telemetry', () => {
   afterEach(() => {
@@ -44,6 +44,7 @@ describe('Telegram file telemetry', () => {
         { count: 2, reason: 'not_found' },
         { count: 0, reason: 'stale_retry_limit' },
         { count: 0, reason: 'storage_io' },
+        { count: 4, reason: 'tdlib_path_outside_source_roots' },
         { count: 0, reason: 'unknown' }
       ],
       knownCount: 5,
@@ -53,6 +54,7 @@ describe('Telegram file telemetry', () => {
       oldestDownloadingAgeSeconds: 17,
       queuedCount: 7,
       readyCount: 11,
+      readyDownloadedBytes: 123456,
       staleDownloadingCount: 19,
       unknownRemainingCount: 13
     });
@@ -61,6 +63,7 @@ describe('Telegram file telemetry', () => {
       ['telegram.file.queue.assets', 5, { 'telegram.file.asset.status': 'known' }],
       ['telegram.file.queue.assets', 11, { 'telegram.file.asset.status': 'ready' }],
       ['telegram.file.queue.assets', 3, { 'telegram.file.asset.status': 'failed' }],
+      ['telegram.file.assets.downloaded_bytes', 123456],
       [
         'telegram.file.queue.failures',
         1,
@@ -69,6 +72,11 @@ describe('Telegram file telemetry', () => {
       ['telegram.file.queue.failures', 2, { 'telegram.file.failure.reason': 'not_found' }],
       ['telegram.file.queue.failures', 0, { 'telegram.file.failure.reason': 'stale_retry_limit' }],
       ['telegram.file.queue.failures', 0, { 'telegram.file.failure.reason': 'storage_io' }],
+      [
+        'telegram.file.queue.failures',
+        4,
+        { 'telegram.file.failure.reason': 'tdlib_path_outside_source_roots' }
+      ],
       ['telegram.file.queue.failures', 0, { 'telegram.file.failure.reason': 'unknown' }],
       ['telegram.file.queue.jobs', 7, { 'telegram.file.job.status': 'queued' }],
       ['telegram.file.queue.jobs', 2, { 'telegram.file.job.status': 'downloading' }],

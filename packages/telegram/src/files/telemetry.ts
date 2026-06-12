@@ -13,13 +13,20 @@ type QueueStatsTelemetry = {
   oldestDownloadingAgeSeconds: number;
   queuedCount: number;
   readyCount: number;
+  readyDownloadedBytes: number;
   staleDownloadingCount: number;
   unknownRemainingCount: number;
 };
 
 type FailureReasonCount = {
   count: number;
-  reason: 'missing_tdlib_file_id' | 'not_found' | 'stale_retry_limit' | 'storage_io' | 'unknown';
+  reason:
+    | 'missing_tdlib_file_id'
+    | 'not_found'
+    | 'stale_retry_limit'
+    | 'storage_io'
+    | 'tdlib_path_outside_source_roots'
+    | 'unknown';
 };
 
 export type WorkerWakeReason =
@@ -59,6 +66,7 @@ export type FileGenerationFailureReason =
 type FileGenerationOutcome = 'aborted' | 'completed' | 'failed';
 
 const METRIC_QUEUE_ASSETS = 'telegram.file.queue.assets';
+const METRIC_ASSETS_DOWNLOADED_BYTES = 'telegram.file.assets.downloaded_bytes';
 const METRIC_QUEUE_BYTES = 'telegram.file.queue.bytes';
 const METRIC_QUEUE_FAILURES = 'telegram.file.queue.failures';
 const METRIC_QUEUE_JOBS = 'telegram.file.queue.jobs';
@@ -81,6 +89,7 @@ export function recordQueueStatsTelemetry(stats: QueueStatsTelemetry): void {
   setTelemetryGauge(METRIC_QUEUE_ASSETS, stats.failedCount, {
     'telegram.file.asset.status': 'failed'
   });
+  setTelemetryGauge(METRIC_ASSETS_DOWNLOADED_BYTES, stats.readyDownloadedBytes);
   for (const reason of stats.failureReasonCounts) {
     setTelemetryGauge(METRIC_QUEUE_FAILURES, reason.count, {
       'telegram.file.failure.reason': reason.reason

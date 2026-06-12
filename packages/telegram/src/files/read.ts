@@ -51,6 +51,7 @@ type FileQueueStats = {
   oldestDownloadingAgeSeconds: number;
   queuedCount: number;
   readyCount: number;
+  readyDownloadedBytes: number;
   remainingCount: number;
   staleDownloadingCount: number;
   totalCount: number;
@@ -62,6 +63,7 @@ type FailureReason =
   | 'not_found'
   | 'stale_retry_limit'
   | 'storage_io'
+  | 'tdlib_path_outside_source_roots'
   | 'unknown';
 
 type FailureReasonCount = {
@@ -100,8 +102,16 @@ const FAILURE_REASONS = [
   'not_found',
   'stale_retry_limit',
   'storage_io',
+  'tdlib_path_outside_source_roots',
   'unknown'
 ] as const satisfies readonly FailureReason[];
+
+const TDLIB_PATH_OUTSIDE_SOURCE_ROOTS_ERROR =
+  'Telegram TDLib local file path is outside the configured%';
+const TDLIB_NOT_FOUND_ERROR = 'Not Found';
+const TDLIB_FILE_NOT_FOUND_ERROR = 'File not found';
+const TDLIB_MESSAGE_NOT_FOUND_ERROR = 'Message not found';
+const TDLIB_MESSAGE_HAS_NO_SPECIFIED_FILE_ERROR = 'Message has no specified file';
 
 export async function readFileOwnersForAsset(
   database: Database,
@@ -141,12 +151,14 @@ export async function readFileQueueStats(database: Database): Promise<FileQueueS
       failedCount: sql<number>`count(*) filter (where ${telegramFileAssets.status} = ${'failed'})::int`,
       knownCount: sql<number>`count(*) filter (where ${telegramFileAssets.status} = ${'known'})::int`,
       missingTdlibFileIdFailureCount: sql<number>`count(*) filter (where ${telegramFileAssets.status} = ${'failed'} and ${telegramFileAssets.downloadError} like ${'Telegram file asset has no TDLib file id%'})::int`,
-      notFoundFailureCount: sql<number>`count(*) filter (where ${telegramFileAssets.status} = ${'failed'} and ${telegramFileAssets.downloadError} = ${'Not Found'})::int`,
+      notFoundFailureCount: sql<number>`count(*) filter (where ${telegramFileAssets.status} = ${'failed'} and ${telegramFileAssets.downloadError} in (${TDLIB_NOT_FOUND_ERROR}, ${TDLIB_FILE_NOT_FOUND_ERROR}, ${TDLIB_MESSAGE_NOT_FOUND_ERROR}, ${TDLIB_MESSAGE_HAS_NO_SPECIFIED_FILE_ERROR}))::int`,
       readyCount: sql<number>`count(*) filter (where ${telegramFileAssets.status} = ${'ready'})::int`,
+      readyDownloadedBytes: sql<number>`coalesce(sum(coalesce(${telegramFileAssets.downloadedByteSize}, 0)) filter (where ${telegramFileAssets.status} = ${'ready'}), 0)::float8`,
       staleRetryLimitFailureCount: sql<number>`count(*) filter (where ${telegramFileAssets.status} = ${'failed'} and ${telegramFileAssets.downloadError} like ${'Telegram file download stale retry limit reached%'})::int`,
       storageIoFailureCount: sql<number>`count(*) filter (where ${telegramFileAssets.status} = ${'failed'} and (${telegramFileAssets.downloadError} like ${'ENOENT%'} or ${telegramFileAssets.downloadError} like ${'EACCES%'} or ${telegramFileAssets.downloadError} like ${'EPERM%'}))::int`,
+      tdlibPathOutsideSourceRootsFailureCount: sql<number>`count(*) filter (where ${telegramFileAssets.status} = ${'failed'} and ${telegramFileAssets.downloadError} like ${TDLIB_PATH_OUTSIDE_SOURCE_ROOTS_ERROR})::int`,
       totalCount: sql<number>`count(*)::int`,
-      unknownFailureCount: sql<number>`count(*) filter (where ${telegramFileAssets.status} = ${'failed'} and (${telegramFileAssets.downloadError} is null or (${telegramFileAssets.downloadError} <> ${'Not Found'} and ${telegramFileAssets.downloadError} not like ${'Telegram file asset has no TDLib file id%'} and ${telegramFileAssets.downloadError} not like ${'Telegram file download stale retry limit reached%'} and ${telegramFileAssets.downloadError} not like ${'ENOENT%'} and ${telegramFileAssets.downloadError} not like ${'EACCES%'} and ${telegramFileAssets.downloadError} not like ${'EPERM%'})))::int`
+      unknownFailureCount: sql<number>`count(*) filter (where ${telegramFileAssets.status} = ${'failed'} and (${telegramFileAssets.downloadError} is null or (${telegramFileAssets.downloadError} not in (${TDLIB_NOT_FOUND_ERROR}, ${TDLIB_FILE_NOT_FOUND_ERROR}, ${TDLIB_MESSAGE_NOT_FOUND_ERROR}, ${TDLIB_MESSAGE_HAS_NO_SPECIFIED_FILE_ERROR}) and ${telegramFileAssets.downloadError} not like ${'Telegram file asset has no TDLib file id%'} and ${telegramFileAssets.downloadError} not like ${'Telegram file download stale retry limit reached%'} and ${telegramFileAssets.downloadError} not like ${TDLIB_PATH_OUTSIDE_SOURCE_ROOTS_ERROR} and ${telegramFileAssets.downloadError} not like ${'ENOENT%'} and ${telegramFileAssets.downloadError} not like ${'EACCES%'} and ${telegramFileAssets.downloadError} not like ${'EPERM%'})))::int`
     })
     .from(telegramFileAssets);
   const [jobRow] = await database
@@ -180,6 +192,7 @@ export async function readFileQueueStats(database: Database): Promise<FileQueueS
     oldestDownloadingAgeSeconds: aggregateNumber(jobRow?.oldestDownloadingAgeSeconds),
     queuedCount,
     readyCount: aggregateNumber(assetRow?.readyCount),
+    readyDownloadedBytes: aggregateNumber(assetRow?.readyDownloadedBytes),
     remainingCount: queuedCount + downloadingCount,
     staleDownloadingCount: aggregateNumber(jobRow?.staleDownloadingCount),
     totalCount: aggregateNumber(assetRow?.totalCount),
@@ -194,6 +207,7 @@ function failureReasonCounts(
         notFoundFailureCount: number;
         staleRetryLimitFailureCount: number;
         storageIoFailureCount: number;
+        tdlibPathOutsideSourceRootsFailureCount: number;
         unknownFailureCount: number;
       }
     | undefined
@@ -203,6 +217,7 @@ function failureReasonCounts(
     not_found: aggregateNumber(row?.notFoundFailureCount),
     stale_retry_limit: aggregateNumber(row?.staleRetryLimitFailureCount),
     storage_io: aggregateNumber(row?.storageIoFailureCount),
+    tdlib_path_outside_source_roots: aggregateNumber(row?.tdlibPathOutsideSourceRootsFailureCount),
     unknown: aggregateNumber(row?.unknownFailureCount)
   } satisfies Record<FailureReason, number>;
   return FAILURE_REASONS.map((reason) => ({
