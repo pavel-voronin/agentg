@@ -65,9 +65,18 @@
           "expr": "time() - history_sync_sync_last_completed_unix_seconds",
           "legendFormat": "age",
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "expr": "time() - history_sync_sync_last_skipped_unix_seconds",
+          "legendFormat": "last skipped age",
+          "refId": "B"
         }
       ],
-      "title": "Last Completed Age",
+      "title": "Last Sync Ages",
       "type": "stat"
     },
     {
@@ -210,6 +219,15 @@
           "expr": "sum(rate(history_sync_sync_covered_intervals_total[$__rate_interval])) or vector(0)",
           "legendFormat": "covered intervals",
           "refId": "D"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "victoria-metrics"
+          },
+          "expr": "sum by (history_sync_skip_reason, history_sync_sync_mode) (rate(history_sync_sync_skipped_total[$__rate_interval])) or vector(0)",
+          "legendFormat": "skipped {{history_sync_sync_mode}} {{history_sync_skip_reason}}",
+          "refId": "E"
         }
       ],
       "title": "Work Throughput",
