@@ -51,6 +51,12 @@
   Tailwind utility lists, unscoped component styles, ordinary CSS declarations,
   and domain-level global CSS imports are forbidden.
 
+## Skill Usage
+
+- For non-trivial architecture, product, refactoring, reliability, security, or
+  agent-workflow tasks, use `$methodology-library` before planning. Do not use it
+  for simple mechanical edits.
+
 ## Dashboard Procedure Calls
 
 - Dashboard must not call procedures after initialization unless there is
