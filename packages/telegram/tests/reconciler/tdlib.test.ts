@@ -10,6 +10,7 @@ describe('Telegram history reconciler TDLib adapter', () => {
   it('does not prove owner beginning from a non-empty initial zero cursor page', async () => {
     const getForumTopicHistory = vi.fn(() =>
       Promise.resolve({
+        total_count: 200,
         messages: [
           message(200, '2026-06-11T23:59:00.000Z'),
           message(199, '2026-06-11T23:58:00.000Z')
@@ -57,6 +58,7 @@ describe('Telegram history reconciler TDLib adapter', () => {
   it('limits non-local beforeMessageId coverage to the returned anchor message date', async () => {
     const getChatHistory = vi.fn(() =>
       Promise.resolve({
+        total_count: 500,
         messages: [
           message(200, '2026-05-01T13:00:00.000Z'),
           message(199, '2026-05-01T12:59:00.000Z')
@@ -99,6 +101,37 @@ describe('Telegram history reconciler TDLib adapter', () => {
       endAt: new Date('2026-05-01T13:00:01.000Z'),
       startAt: new Date('2026-05-01T12:59:01.000Z')
     });
+  });
+
+  it('does not prove beginning from an anchor-only cursor page', async () => {
+    const getChatHistory = vi.fn(() =>
+      Promise.resolve({
+        total_count: 500,
+        messages: [message(200, '2026-05-01T13:00:00.000Z')]
+      })
+    );
+
+    const result = await fetchOwnerHistoryStep({
+      database: historyDatabase({
+        pageRows: []
+      }),
+      interval: interval('2013-08-14T00:00:00.000Z', '2026-05-01T14:00:01.000Z'),
+      owner: {
+        chatId: '123',
+        kind: 'chat'
+      },
+      selector: {
+        beforeMessageId: '200',
+        count: 100,
+        kind: 'page'
+      },
+      tdlib: {
+        getChatHistory
+      } as unknown as Operations
+    });
+
+    expect(result.reachedBeginning).toBe(false);
+    expect(result.coverageInterval).toBeUndefined();
   });
 });
 

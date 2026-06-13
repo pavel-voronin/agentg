@@ -1,5 +1,5 @@
 import { and, asc, eq, sql } from 'drizzle-orm';
-import type { message as Message } from 'tdlib-types';
+import type { message as Message, messages as Messages } from 'tdlib-types';
 
 import type { Database } from '../database/client.js';
 import { telegramMessages } from '../database/schema.js';
@@ -14,7 +14,7 @@ import { readPageRows } from '../procedures/get-messages/read.js';
 import type { Operations } from '../tdlib/operations.js';
 import { priorities } from '../tdlib/priority.js';
 import { tdDate, tdIdNumber } from '../tdlib/value.js';
-import { ownerMessageCondition, parseTdlibInt53 } from './owner.js';
+import { ownerMessageCondition, parseTdlibInt32, parseTdlibInt53 } from './owner.js';
 
 export type HistoryFetchStep = {
   coverageInterval?: HistoryInterval | undefined;
@@ -64,8 +64,9 @@ export async function fetchOwnerHistoryStep(input: {
   const fetchedMessages = history.messages.filter(isFetchedMessage);
   const coverageEndAt = cursorCoverageEndAt(cursor, fetchedMessages);
   if (fetchedMessages.length === 0) {
+    const reachedBeginning = hasTdlibBeginningProof(history, cursor, fetchedMessages);
     return {
-      ...(coverageEndAt === undefined
+      ...(coverageEndAt === undefined || !reachedBeginning
         ? {}
         : {
             coverageInterval: {
@@ -74,15 +75,12 @@ export async function fetchOwnerHistoryStep(input: {
             }
           }),
       fetchedMessages: [],
-      reachedBeginning: coverageEndAt !== undefined
+      reachedBeginning
     };
   }
 
   const oldestDate = oldestMessageDate(fetchedMessages);
-  const reachedBeginning =
-    coverageEndAt !== undefined &&
-    cursor.canPageProveBeginning &&
-    oldestMessageIdOlderThan(fetchedMessages, cursor.fromMessageId) === undefined;
+  const reachedBeginning = hasTdlibBeginningProof(history, cursor, fetchedMessages);
   const crossedStart = fetchedMessages.some((message) => {
     const date = tdMessageDate(message);
     return date !== undefined && date < interval.startAt;
@@ -182,7 +180,11 @@ async function resolveCursor(
   };
 }
 
-async function fetchOwnerHistory(tdlib: Operations, owner: MessageOwner, fromMessageId: number) {
+async function fetchOwnerHistory(
+  tdlib: Operations,
+  owner: MessageOwner,
+  fromMessageId: number
+): Promise<Messages> {
   switch (owner.kind) {
     case 'chat':
       return tdlib.getChatHistory(
@@ -199,7 +201,7 @@ async function fetchOwnerHistory(tdlib: Operations, owner: MessageOwner, fromMes
       return tdlib.getForumTopicHistory(
         {
           chatId: parseTdlibInt53(owner.chatId, 'chatId'),
-          forumTopicId: parseTdlibInt53(owner.topicId, 'topicId'),
+          forumTopicId: parseTdlibInt32(owner.topicId, 'topicId'),
           fromMessageId,
           limit: PRIVATE_PAGE_SIZE,
           offset: 0
@@ -420,6 +422,26 @@ function oldestMessageIdOlderThan(
     .filter((id): id is number => id !== undefined && id < cursorMessageId);
 
   return ids.length === 0 ? undefined : Math.min(...ids);
+}
+
+function hasTdlibBeginningProof(
+  history: Messages,
+  cursor: Extract<HistoryCursor, { kind: 'cursor' }>,
+  messages: Message[]
+): boolean {
+  if (!cursor.canPageProveBeginning) {
+    return false;
+  }
+  if (history.total_count === 0) {
+    return messages.length === 0;
+  }
+  if (history.total_count > history.messages.length) {
+    return false;
+  }
+  return (
+    cursor.fromMessageId === 0 ||
+    oldestMessageIdOlderThan(messages, cursor.fromMessageId) !== undefined
+  );
 }
 
 function nextHistorySecond(date: Date): Date {

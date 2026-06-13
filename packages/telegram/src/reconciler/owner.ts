@@ -110,6 +110,14 @@ export function parseTdlibInt53(value: string, label: string): number {
   return parsed;
 }
 
+export function parseTdlibInt32(value: string, label: string): number {
+  const parsed = parseTdlibInt53(value, label);
+  if (parsed < -2_147_483_648 || parsed > 2_147_483_647) {
+    throw new Error(`${label} must be a TDLib int32 decimal string: ${value}`);
+  }
+  return parsed;
+}
+
 function topicTypeCondition(type: string): SQL {
   return sql`${telegramMessages.topicId}->>'_' = ${type}`;
 }

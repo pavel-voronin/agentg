@@ -127,6 +127,7 @@ describe('Telegram getMessages procedure', () => {
 
   it('keeps an empty latest page pending until coverage proves empty history', async () => {
     const reconciler = fakeReconciler('pending_enqueued');
+    vi.mocked(isOwnerCovered).mockResolvedValue(false);
 
     const output = await procedure(
       {

@@ -186,7 +186,6 @@ export async function claimNextHistoryJob(
   const [claimed] = await database
     .update(telegramHistoryReconcilerJobs)
     .set({
-      attemptCount: sql`${telegramHistoryReconcilerJobs.attemptCount} + 1`,
       lastFailureReason: null,
       lockedAt: now,
       status: 'running',
@@ -224,6 +223,7 @@ export async function releaseHistoryJob(
   await database
     .update(telegramHistoryReconcilerJobs)
     .set({
+      attemptCount: 0,
       lockedAt: null,
       nextRunAt: now,
       status: 'queued',
@@ -242,6 +242,7 @@ export async function deferHistoryJob(
   await database
     .update(telegramHistoryReconcilerJobs)
     .set({
+      attemptCount: sql`${telegramHistoryReconcilerJobs.attemptCount} + 1`,
       lockedAt: null,
       nextRunAt: input.nextRunAt,
       status: 'deferred',
@@ -308,6 +309,19 @@ export async function readHistoryReconcilerStats(
     oldestJobAgeSeconds: [...oldest.values()],
     statusCounts: [...counts.values()]
   };
+}
+
+export async function readNextHistoryJobRunAt(database: Database): Promise<Date | undefined> {
+  const [row] = await database
+    .select({
+      nextRunAt: telegramHistoryReconcilerJobs.nextRunAt
+    })
+    .from(telegramHistoryReconcilerJobs)
+    .where(inArray(telegramHistoryReconcilerJobs.status, ['queued', 'deferred']))
+    .orderBy(asc(telegramHistoryReconcilerJobs.nextRunAt))
+    .limit(1);
+
+  return row?.nextRunAt;
 }
 
 function parseJob(row: {

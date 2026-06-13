@@ -10,7 +10,13 @@ const idSchema = z
   .string()
   .trim()
   .regex(/^-?[0-9]+$/)
-  .refine((value) => Number.isSafeInteger(Number(value)));
+  .refine((value) => Number.isSafeInteger(Number(value)))
+  .transform((value) => String(Number(value)));
+
+const int32IdSchema = idSchema.refine((value) => {
+  const parsed = Number(value);
+  return parsed >= -2_147_483_648 && parsed <= 2_147_483_647;
+});
 
 export const messageOwnerSchema = z.discriminatedUnion('kind', [
   z.object({
@@ -20,7 +26,7 @@ export const messageOwnerSchema = z.discriminatedUnion('kind', [
   z.object({
     chatId: idSchema,
     kind: z.literal('forumTopic'),
-    topicId: idSchema
+    topicId: int32IdSchema
   }),
   z.object({
     chatId: idSchema,

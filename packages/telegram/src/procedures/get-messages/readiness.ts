@@ -5,11 +5,7 @@ import {
   normalizeHistoryInterval,
   type HistoryInterval
 } from '../../history/time.js';
-import {
-  isOwnerCovered,
-  listOwnerCoverage,
-  missingOwnerCoverageIntervals
-} from '../../reconciler/coverage.js';
+import { isOwnerCovered, missingOwnerCoverageIntervals } from '../../reconciler/coverage.js';
 import type { MessageStorageRow } from '../../views/message.js';
 import type { GetMessagesInput, MessageSelector } from './contract.js';
 import { readPageEndAt, readPageRows, readRangeRows } from './read.js';
@@ -233,12 +229,7 @@ async function hasEmptyLatestPageCoverage(
   database: Database,
   owner: GetMessagesInput['owner']
 ): Promise<boolean> {
-  const coverage = await listOwnerCoverage(database, owner);
-  return coverage.some(
-    (segment) =>
-      segment.startAt.getTime() <= HISTORY_PAST_BOUNDARY.getTime() &&
-      segment.endAt.getTime() > segment.startAt.getTime()
-  );
+  return isOwnerCovered(database, owner, openPastInterval(new Date(Date.now() - HISTORY_TICK_MS)));
 }
 
 function openPastInterval(endAt = new Date()): HistoryInterval {

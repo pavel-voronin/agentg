@@ -1,8 +1,10 @@
+import { sql } from 'drizzle-orm';
 import {
   boolean,
   customType,
   doublePrecision,
   foreignKey,
+  index,
   integer,
   jsonb,
   pgTable,
@@ -230,7 +232,28 @@ export const telegramMessages = pgTable(
     primaryKey({
       columns: [table.chatId, table.id],
       name: 'telegram_messages_pk'
-    })
+    }),
+    index('telegram_messages_chat_date_idx').on(table.chatId, table.date),
+    index('telegram_messages_date_idx').on(table.date),
+    index('telegram_messages_forum_topic_date_idx').on(
+      table.chatId,
+      sql.raw('"topic_id"->>\'forum_topic_id\''),
+      sql.raw('"date"')
+    ),
+    index('telegram_messages_direct_topic_date_idx').on(
+      table.chatId,
+      sql.raw('"topic_id"->>\'direct_messages_chat_topic_id\''),
+      sql.raw('"date"')
+    ),
+    index('telegram_messages_saved_topic_date_idx').on(
+      sql.raw('"topic_id"->>\'saved_messages_topic_id\''),
+      sql.raw('"date"')
+    ),
+    index('telegram_messages_thread_date_idx').on(
+      table.chatId,
+      sql.raw('"topic_id"->>\'message_thread_id\''),
+      sql.raw('"date"')
+    )
   ]
 );
 

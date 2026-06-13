@@ -22,6 +22,7 @@ vi.mock('@agentg/framework', async (importOriginal) => {
 
 import {
   recordGetMessagesRequest,
+  errorType,
   recordJobDuration,
   recordStats,
   timeReconcilerSpan
@@ -126,6 +127,24 @@ describe('Telegram history reconciler telemetry', () => {
     );
   });
 
+  it('records skipped covered jobs as their own terminal duration result', () => {
+    recordJobDuration({
+      ownerKind: 'chat',
+      result: 'skipped_covered',
+      seconds: 0.03
+    });
+
+    expect(telemetry.recordTelemetryHistogram).toHaveBeenCalledWith(
+      'telegram.history.reconciler.job.duration',
+      0.03,
+      {
+        'owner.kind': 'chat',
+        result: 'skipped_covered'
+      },
+      { unit: 's' }
+    );
+  });
+
   it('wraps stage spans with stable low-cardinality names', async () => {
     await expect(
       timeReconcilerSpan(
@@ -182,10 +201,17 @@ describe('Telegram history reconciler telemetry', () => {
       'telegram.history.reconciler.stage.duration',
       expect.any(Number),
       {
-        'error.type': 'tdlib_error',
+        'error.type': 'tdlib_unavailable',
         stage: 'tdlib_fetch'
       },
       { unit: 's' }
     );
+  });
+
+  it('classifies transient failures by reconciler stage', () => {
+    expect(errorType(new Error('NATS publish failed'), 'publish')).toBe('event_publish_error');
+    expect(errorType(new Error('write failed'), 'persist')).toBe('storage_error');
+    expect(errorType(new Error('request timed out'), 'tdlib_fetch')).toBe('timeout');
+    expect(errorType(new Error('TDLib unavailable'), 'tdlib_fetch')).toBe('tdlib_unavailable');
   });
 });

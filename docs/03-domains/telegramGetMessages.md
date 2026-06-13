@@ -9,9 +9,9 @@ Consumers ask Telegram for messages. They must not know whether Telegram answers
 from local storage, live coverage, durable coverage, a history fill job, TDLib,
 topic-specific TDLib procedures, or file queues.
 
-This document is the source of truth for the next implementation. It replaces
-the current direction where `getMessages` synchronously performs history
-materialization before returning.
+This document is the source of truth for the current implementation.
+`getMessages` returns either ready local messages or a pending request id for
+asynchronous HistoryReconciler completion.
 
 ## Goals
 
@@ -667,7 +667,7 @@ Allowed label values:
 - `message.result = fetched | stored`
 - `page.result = fetched | empty`
 - `coverage.result = written | already_covered`
-- `error.type = coverage_write_error | invalid_job | storage_error | tdlib_error | tdlib_unavailable | timeout | unexpected_error`
+- `error.type = coverage_write_error | event_publish_error | invalid_job | storage_error | tdlib_error | tdlib_unavailable | timeout | unexpected_error`
 
 There is no separate `telegram.history.reconciler.jobs.processed` metric. Job
 throughput comes from the `_count` series of
@@ -865,23 +865,20 @@ Test layout:
 ```text
 packages/telegram/tests/procedures/getMessages.test.ts
 packages/telegram/tests/procedures/get-messages/contract.test.ts
-packages/telegram/tests/procedures/get-messages/procedure.test.ts
 packages/telegram/tests/procedures/get-messages/read.test.ts
 packages/telegram/tests/procedures/get-messages/readiness.test.ts
 packages/telegram/tests/procedures/get-messages/requestId.test.ts
-packages/telegram/tests/procedures/get-messages/enqueue.test.ts
 
-packages/telegram/tests/reconciler/coverage.test.ts
 packages/telegram/tests/reconciler/jobs.test.ts
 packages/telegram/tests/reconciler/owner.test.ts
 packages/telegram/tests/reconciler/runtime.test.ts
 packages/telegram/tests/reconciler/tdlib.test.ts
 packages/telegram/tests/reconciler/telemetry.test.ts
+
+packages/telegram/tests/store/message.test.ts
 ```
 
-## Tests Before Implementation
-
-Write contract tests before changing the implementation.
+## Test Coverage
 
 ### `getMessages`
 
@@ -963,9 +960,9 @@ Write contract tests before changing the implementation.
   after `src`.
 - New tests are not added under `packages/telegram/src`.
 
-## Implementation Checks
+## Verification Checklist
 
-Before implementation, verify these concrete facts in code:
+Keep these concrete facts true in code:
 
 - Live coverage is still a strict readiness guarantee.
 - Coverage storage and subtraction are owner-scoped, not only chat-scoped.
@@ -981,12 +978,3 @@ Before implementation, verify these concrete facts in code:
 - Existing event stream is enough for Dashboard to update pending/request state
   from `telegram.messages.ready` and `telegram.messages.failed` without
   procedure calls from broad event handlers.
-
-## Migration Notes
-
-This design changes the current `getMessages` response shape.
-
-Current synchronous materialization must be removed from `getMessages`.
-
-No compatibility path should be kept. Update Dashboard callers and tests to the
-new `ready | pending` contract in the same implementation.

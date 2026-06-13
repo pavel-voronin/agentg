@@ -14,6 +14,7 @@ const jobs = vi.hoisted(() => ({
   deferHistoryJob: vi.fn(),
   enqueueHistoryJob: vi.fn(),
   failHistoryJob: vi.fn(),
+  readNextHistoryJobRunAt: vi.fn(),
   readHistoryReconcilerStats: vi.fn(),
   releaseHistoryJob: vi.fn()
 }));
@@ -62,7 +63,9 @@ vi.mock('../../src/reconciler/coverage.js', () => coverage);
 vi.mock('../../src/store/message.js', () => store);
 
 vi.mock('../../src/reconciler/telemetry.js', () => ({
-  errorType: () => 'unexpected_error',
+  errorType: vi.fn((_error: unknown, stage?: string) =>
+    stage === 'publish' ? 'event_publish_error' : 'unexpected_error'
+  ),
   recordCoverageIntervals: vi.fn(),
   recordFailure: vi.fn(),
   recordJobDuration: vi.fn(),
@@ -87,6 +90,7 @@ describe('Telegram history reconciler runtime', () => {
     jobs.deferHistoryJob.mockReset();
     jobs.enqueueHistoryJob.mockReset();
     jobs.failHistoryJob.mockReset();
+    jobs.readNextHistoryJobRunAt.mockReset();
     jobs.readHistoryReconcilerStats.mockReset();
     jobs.releaseHistoryJob.mockReset();
     readiness.checkMessagesReadiness.mockReset();
@@ -98,6 +102,7 @@ describe('Telegram history reconciler runtime', () => {
       oldestJobAgeSeconds: [],
       statusCounts: []
     });
+    jobs.readNextHistoryJobRunAt.mockResolvedValue(undefined);
     jobs.releaseHistoryJob.mockResolvedValue(undefined);
     coverage.writeOwnerCoverage.mockResolvedValue([]);
     store.storeMessages.mockResolvedValue(1);
@@ -119,7 +124,10 @@ describe('Telegram history reconciler runtime', () => {
         kind: 'page'
       }
     };
-    const job = historyJob(input);
+    const job = {
+      ...historyJob(input),
+      attemptCount: 0
+    };
     const interval = historyInterval();
     const fileSubsystem = fileSubsystemMock();
     const events = eventBusMock();
@@ -157,6 +165,128 @@ describe('Telegram history reconciler runtime', () => {
     expect(fileSubsystem.scheduleMessageSlotMaterialization).toHaveBeenCalledTimes(1);
     expect(store.storeMessages).toHaveBeenCalledTimes(1);
     expect(store.storeMessages).toHaveBeenCalledWith(expect.anything(), [telegramMessage()]);
+
+    close();
+  });
+
+  it('publishes ready before deleting the durable job', async () => {
+    const order: string[] = [];
+    const input: GetMessagesInput = {
+      owner: {
+        chatId: '123',
+        kind: 'chat'
+      },
+      selector: {
+        count: 100,
+        kind: 'page'
+      }
+    };
+    const job = {
+      ...historyJob(input),
+      attemptCount: 0
+    };
+    const database = transactionDatabase();
+    const events = eventBusMock();
+    events.publish.mockImplementation((type: string) => {
+      if (type === 'telegram.messages.ready') {
+        order.push('publish-ready');
+      }
+    });
+    jobs.completeHistoryJob.mockImplementation(() => {
+      order.push('complete-job');
+      return Promise.resolve();
+    });
+    jobs.claimNextHistoryJob.mockResolvedValueOnce(job).mockResolvedValueOnce(null);
+    readiness.checkMessagesReadiness.mockResolvedValue({
+      ready: true,
+      rows: {
+        messages: [],
+        reachedStart: true,
+        selectorKind: 'page'
+      }
+    });
+
+    const runtime = useHistoryReconciler({
+      database,
+      events,
+      files: fileSubsystemMock(),
+      tdlib: {} as never
+    });
+    const close = await runtime.start();
+    await vi.runAllTimersAsync();
+
+    expect(order).toEqual(['publish-ready', 'complete-job']);
+
+    close();
+  });
+
+  it('does not delete a ready job when ready event publish fails', async () => {
+    const input: GetMessagesInput = {
+      owner: {
+        chatId: '123',
+        kind: 'chat'
+      },
+      selector: {
+        count: 100,
+        kind: 'page'
+      }
+    };
+    const job = {
+      ...historyJob(input),
+      attemptCount: 0
+    };
+    const database = transactionDatabase();
+    const events = eventBusMock();
+    events.publish.mockImplementation((type: string) => {
+      if (type === 'telegram.messages.ready') {
+        throw new Error('event bus closed');
+      }
+    });
+    jobs.claimNextHistoryJob.mockResolvedValueOnce(job).mockResolvedValueOnce(null);
+    readiness.checkMessagesReadiness.mockResolvedValue({
+      ready: true,
+      rows: {
+        messages: [],
+        reachedStart: true,
+        selectorKind: 'page'
+      }
+    });
+
+    const runtime = useHistoryReconciler({
+      database,
+      events,
+      files: fileSubsystemMock(),
+      tdlib: {} as never
+    });
+    const close = await runtime.start();
+    await vi.runAllTimersAsync();
+
+    expect(jobs.completeHistoryJob).not.toHaveBeenCalled();
+    expect(jobs.deferHistoryJob).toHaveBeenCalledWith(database, {
+      nextRunAt: new Date('2026-06-12T00:00:30.000Z'),
+      requestId: job.requestId
+    });
+
+    close();
+  });
+
+  it('schedules the next deferred job wakeup after a restart tick finds no claimable job', async () => {
+    const nextRunAt = new Date('2026-06-12T00:00:30.000Z');
+    jobs.claimNextHistoryJob.mockResolvedValue(null);
+    jobs.readNextHistoryJobRunAt.mockResolvedValueOnce(nextRunAt).mockResolvedValue(undefined);
+
+    const runtime = useHistoryReconciler({
+      database: transactionDatabase(),
+      events: eventBusMock(),
+      files: fileSubsystemMock(),
+      tdlib: {} as never
+    });
+    const close = await runtime.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(jobs.claimNextHistoryJob).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(jobs.claimNextHistoryJob).toHaveBeenCalledTimes(2);
 
     close();
   });

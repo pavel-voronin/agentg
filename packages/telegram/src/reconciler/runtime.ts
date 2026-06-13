@@ -18,6 +18,7 @@ import {
   deferHistoryJob,
   enqueueHistoryJob,
   failHistoryJob,
+  readNextHistoryJobRunAt,
   readHistoryReconcilerStats,
   releaseHistoryJob,
   type EnqueueResult,
@@ -112,6 +113,7 @@ export function useHistoryReconciler(options: Options): HistoryReconcilerRuntime
       );
       if (job === null) {
         await recordCurrentStats();
+        await scheduleNextActiveJob();
         return false;
       }
 
@@ -169,6 +171,7 @@ export function useHistoryReconciler(options: Options): HistoryReconcilerRuntime
       );
       if (firstReadiness.ready) {
         recordCoverageIntervals('already_covered', 1);
+        stage = 'publish';
         await completeAndPublish(job, 'skipped_covered', startedAt);
         return;
       }
@@ -225,6 +228,7 @@ export function useHistoryReconciler(options: Options): HistoryReconcilerRuntime
         () => checkMessagesReadiness(options.database, input)
       );
       if (secondReadiness.ready) {
+        stage = 'publish';
         await completeAndPublish(job, 'completed', startedAt);
         return;
       }
@@ -232,7 +236,7 @@ export function useHistoryReconciler(options: Options): HistoryReconcilerRuntime
       await releaseHistoryJob(options.database, job.requestId);
       publishQueueChanged();
     } catch (failure) {
-      const type = errorType(failure);
+      const type = errorType(failure, stage);
       if (shouldDefer(job, type)) {
         await defer(job, stage, type, failure);
         return;
@@ -246,7 +250,6 @@ export function useHistoryReconciler(options: Options): HistoryReconcilerRuntime
     transition: 'completed' | 'skipped_covered',
     startedAt: number
   ): Promise<void> {
-    await completeHistoryJob(options.database, job.requestId);
     await timeReconcilerSpan(
       'telegram.history.reconciler.publish',
       { 'owner.kind': normalizeMessageOwner(job.owner).kind, stage: 'publish' },
@@ -259,10 +262,11 @@ export function useHistoryReconciler(options: Options): HistoryReconcilerRuntime
         return Promise.resolve();
       }
     );
+    await completeHistoryJob(options.database, job.requestId);
     recordTransition(transition);
     recordJobDuration({
       ownerKind: normalizeMessageOwner(job.owner).kind,
-      result: 'completed',
+      result: transition,
       seconds: secondsSince(startedAt)
     });
     logger.info(
@@ -284,23 +288,23 @@ export function useHistoryReconciler(options: Options): HistoryReconcilerRuntime
     failure: unknown,
     startedAt: number
   ): Promise<void> {
+    recordFailure(stage, type);
+    options.events.publish('telegram.messages.failed', {
+      owner: job.owner,
+      reason: type,
+      requestId: job.requestId,
+      selector: job.selector
+    });
     await failHistoryJob(options.database, {
       reason: type,
       requestId: job.requestId
     });
-    recordFailure(stage, type);
     recordTransition('failed');
     recordJobDuration({
       errorType: type,
       ownerKind: normalizeMessageOwner(job.owner).kind,
       result: 'failed',
       seconds: secondsSince(startedAt)
-    });
-    options.events.publish('telegram.messages.failed', {
-      owner: job.owner,
-      reason: type,
-      requestId: job.requestId,
-      selector: job.selector
     });
     logger.error(
       {
@@ -321,7 +325,8 @@ export function useHistoryReconciler(options: Options): HistoryReconcilerRuntime
     type: ErrorType,
     failure: unknown
   ): Promise<void> {
-    const delayMs = nextDeferDelayMs(job.attemptCount);
+    const nextAttemptCount = job.attemptCount + 1;
+    const delayMs = nextDeferDelayMs(nextAttemptCount);
     const nextRunAt = new Date(Date.now() + delayMs);
     await deferHistoryJob(options.database, {
       nextRunAt,
@@ -331,7 +336,7 @@ export function useHistoryReconciler(options: Options): HistoryReconcilerRuntime
     recordTransition('deferred');
     logger.warn(
       {
-        attemptCount: job.attemptCount,
+        attemptCount: nextAttemptCount,
         event: 'telegram.history_reconciler.job_deferred',
         nextRunAt: nextRunAt.toISOString(),
         ownerKey: job.ownerKey,
@@ -345,13 +350,30 @@ export function useHistoryReconciler(options: Options): HistoryReconcilerRuntime
     schedule(delayMs);
   }
 
+  async function scheduleNextActiveJob(): Promise<void> {
+    const nextRunAt = await readNextHistoryJobRunAt(options.database);
+    if (nextRunAt !== undefined) {
+      schedule(nextRunAt.getTime() - Date.now());
+    }
+  }
+
   async function recordCurrentStats(): Promise<void> {
     const stats = await readHistoryReconcilerStats(options.database);
     recordStats(stats);
   }
 
   function publishQueueChanged(): void {
-    options.events.publish(QUEUE_CHANGED_EVENT);
+    try {
+      options.events.publish(QUEUE_CHANGED_EVENT);
+    } catch (failure) {
+      logger.warn(
+        {
+          event: 'telegram.history_reconciler.queue_changed_publish_failed',
+          ...logError(failure)
+        },
+        'telegram history reconciler queue change publish failed'
+      );
+    }
   }
 
   function close(): undefined {
@@ -436,6 +458,7 @@ function shouldDefer(job: HistoryJob, type: ErrorType): boolean {
 function isTransientErrorType(type: ErrorType): boolean {
   return (
     type === 'coverage_write_error' ||
+    type === 'event_publish_error' ||
     type === 'storage_error' ||
     type === 'tdlib_error' ||
     type === 'tdlib_unavailable' ||

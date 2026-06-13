@@ -34,7 +34,6 @@ const MESSAGE_UPSERT_COLUMNS = [
   'editDate',
   'effectId',
   'factCheck',
-  'fileSlotsRecordedAt',
   'forwardInfo',
   'guestBotCallerId',
   'hasTimestampedMedia',
@@ -86,7 +85,7 @@ export async function storeMessage(
           })
       : await insert
           .onConflictDoUpdate({
-            set: row,
+            set: messageUpsertSet(),
             target: [telegramMessages.chatId, telegramMessages.id]
           })
           .returning({
@@ -189,11 +188,18 @@ function uniqueMessageRows(messages: Message[]): TelegramMessageFragment[] {
   return [...rowsByKey.values()];
 }
 
-function messageUpsertSet(): Record<(typeof MESSAGE_UPSERT_COLUMNS)[number], SQL> {
+function messageUpsertSet(): Record<
+  (typeof MESSAGE_UPSERT_COLUMNS)[number] | 'fileSlotsRecordedAt',
+  SQL
+> {
   const columns = getTableColumns(telegramMessages);
-  return Object.fromEntries(
+  const set = Object.fromEntries(
     MESSAGE_UPSERT_COLUMNS.map((key) => [key, sql.raw(`excluded."${columns[key].name}"`)])
   ) as Record<(typeof MESSAGE_UPSERT_COLUMNS)[number], SQL>;
+  return {
+    ...set,
+    fileSlotsRecordedAt: fileSlotsRecordedAtAfterContentUpsert()
+  };
 }
 
 export async function replaceMessageContent(
@@ -205,11 +211,13 @@ export async function replaceMessageContent(
     .values({
       chatId: String(update.chat_id),
       content: tdJsonObject(update.new_content),
+      fileSlotsRecordedAt: null,
       id: String(update.message_id)
     })
     .onConflictDoUpdate({
       set: {
-        content: tdJsonObject(update.new_content)
+        content: sql.raw(`excluded."${getTableColumns(telegramMessages).content.name}"`),
+        fileSlotsRecordedAt: fileSlotsRecordedAtAfterContentUpsert()
       },
       target: [telegramMessages.chatId, telegramMessages.id]
     });
@@ -223,9 +231,24 @@ export async function upsertTelegramMessageFragment(
     .insert(telegramMessages)
     .values(row)
     .onConflictDoUpdate({
-      set: row,
+      set: telegramMessageFragmentUpdateSet(row),
       target: [telegramMessages.chatId, telegramMessages.id]
     });
+}
+
+function telegramMessageFragmentUpdateSet(row: TelegramMessageFragment) {
+  if (row.content === undefined) {
+    return row;
+  }
+  return {
+    ...row,
+    fileSlotsRecordedAt: fileSlotsRecordedAtAfterContentUpsert()
+  };
+}
+
+function fileSlotsRecordedAtAfterContentUpsert(): SQL {
+  const columns = getTableColumns(telegramMessages);
+  return sql`case when ${telegramMessages.content} is distinct from ${sql.raw(`excluded."${columns.content.name}"`)} then null else ${telegramMessages.fileSlotsRecordedAt} end`;
 }
 
 export async function patchOpenedMessageContent(

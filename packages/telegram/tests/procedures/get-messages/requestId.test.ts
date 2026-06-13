@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { getMessagesInputSchema } from '../../../src/procedures/get-messages/contract.js';
 import { getMessagesRequestId } from '../../../src/procedures/get-messages/requestId.js';
 
 describe('Telegram getMessages request id', () => {
@@ -67,5 +68,23 @@ describe('Telegram getMessages request id', () => {
         }
       })
     ).toContain('owner=saved-messages-topic:42');
+  });
+
+  it('uses canonical ids from the public contract parser', () => {
+    expect(
+      getMessagesRequestId(
+        getMessagesInputSchema.parse({
+          owner: {
+            chatId: '00123',
+            kind: 'chat'
+          },
+          selector: {
+            beforeMessageId: '000456',
+            count: 100,
+            kind: 'page'
+          }
+        })
+      )
+    ).toBe('telegram.getMessages;selector=page;owner=chat:123;beforeMessageId=456;count=100');
   });
 });

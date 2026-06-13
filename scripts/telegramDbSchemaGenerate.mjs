@@ -73,6 +73,9 @@ function parseReviewTable(table) {
   const foreignKeys = requiredArray(table.foreignKeys, `${name}.foreignKeys`).map((foreignKey) =>
     parseReviewForeignKey(name, foreignKey)
   );
+  const indexes = requiredArray(table.indexes, `${name}.indexes`).map((index) =>
+    parseReviewIndex(name, index)
+  );
   const primaryKey = requiredArray(table.primaryKey, `${name}.primaryKey`).map((columnId) =>
     requiredString(columnId, `${name}.primaryKey[]`)
   );
@@ -80,6 +83,7 @@ function parseReviewTable(table) {
   return {
     columns,
     foreignKeys,
+    indexes,
     name,
     primaryKey
   };
@@ -99,6 +103,14 @@ function parseReviewColumn(tableName, column) {
     name,
     nullable: column.nullable === true,
     pgType
+  };
+}
+
+function parseReviewIndex(tableName, index) {
+  return {
+    columns: optionalStringArray(index.columns, `${tableName}.indexes.columns`),
+    expressions: optionalStringArray(index.expressions, `${tableName}.indexes.expressions`),
+    id: requiredString(index.id, `${tableName}.indexes.id`)
   };
 }
 
@@ -146,6 +158,7 @@ function validateTables(tables) {
     for (const foreignKey of table.foreignKeys) {
       validateForeignKey(table, foreignKey, tablesByName);
     }
+    validateIndexes(table);
   }
 }
 
@@ -165,6 +178,25 @@ function validateTableColumns(table) {
     }
     columnNames.add(column.name);
     columnIds.add(column.id);
+  }
+}
+
+function validateIndexes(table) {
+  const columnIds = new Set(table.columns.map((column) => column.id));
+  const indexIds = new Set();
+  for (const index of table.indexes) {
+    if (indexIds.has(index.id)) {
+      throw new Error(`Duplicate index id: ${index.id}`);
+    }
+    indexIds.add(index.id);
+    if (index.columns.length === 0 && index.expressions.length === 0) {
+      throw new Error(`Index has no columns or expressions: ${index.id}`);
+    }
+    for (const columnId of index.columns) {
+      if (!columnIds.has(columnId)) {
+        throw new Error(`Index references unknown column: ${index.id}.${columnId}`);
+      }
+    }
   }
 }
 
@@ -242,7 +274,8 @@ function referencedTableNames(table) {
 
 function renderDrizzleSchema(inputTables) {
   const chunks = [
-    `import { boolean, customType, doublePrecision, foreignKey, integer, jsonb, pgTable, primaryKey, text, timestamp } from 'drizzle-orm/pg-core';`,
+    `import { sql } from 'drizzle-orm';`,
+    `import { boolean, customType, doublePrecision, foreignKey, index, integer, jsonb, pgTable, primaryKey, text, timestamp } from 'drizzle-orm/pg-core';`,
     '',
     `type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };`,
     '',
@@ -317,6 +350,9 @@ function renderTableConfig(table, context) {
   )) {
     lines.push(foreignKeyConfig);
   }
+  for (const indexConfig of table.indexes.map((index) => renderIndexConfig(table, index))) {
+    lines.push(indexConfig);
+  }
 
   return lines;
 }
@@ -328,6 +364,17 @@ function renderPrimaryKeyConfig(table) {
     `      name: '${table.name}_pk'`,
     `    })`
   ].join('\n');
+}
+
+function renderIndexConfig(table, index) {
+  return `    index('${index.id}').on(${renderIndexParts(table, index).join(', ')})`;
+}
+
+function renderIndexParts(table, index) {
+  return [
+    ...index.columns.map((columnId) => `table.${columnPropertyName(table, columnId)}`),
+    ...index.expressions.map((expression) => `sql.raw(${JSON.stringify(expression)})`)
+  ];
 }
 
 function renderForeignKeyConfig(table, foreignKey, context) {
@@ -392,7 +439,12 @@ function columnBuilder(column) {
 }
 
 function renderSqlMigration(inputTables) {
-  return `${inputTables.map(renderCreateTableSql).join('\n\n--> statement-breakpoint\n\n')}\n`;
+  return `${inputTables
+    .flatMap((table) => [
+      renderCreateTableSql(table),
+      ...table.indexes.map((index) => renderIndexSql(table, index))
+    ])
+    .join('\n\n--> statement-breakpoint\n\n')}\n`;
 }
 
 function renderCreateTableSql(table) {
@@ -411,6 +463,17 @@ function renderCreateTableSql(table) {
     [...columnLines, ...constraintLines].join(',\n'),
     `);`
   ].join('\n');
+}
+
+function renderIndexSql(table, index) {
+  return `CREATE INDEX ${quoteIdent(index.id)} ON ${quoteIdent(table.name)} (${renderIndexSqlParts(table, index).join(', ')});`;
+}
+
+function renderIndexSqlParts(table, index) {
+  return [
+    ...index.columns.map((columnId) => quoteIdent(columnNameFromId(table, columnId))),
+    ...index.expressions.map((expression) => `(${expression})`)
+  ];
 }
 
 function renderPrimaryKeySql(table) {
@@ -486,6 +549,13 @@ function requiredString(value, label) {
     throw new Error(`TDLib storage review field must be a non-empty string: ${label}`);
   }
   return value;
+}
+
+function optionalStringArray(value, label) {
+  if (value === undefined) {
+    return [];
+  }
+  return requiredArray(value, label).map((item) => requiredString(item, `${label}[]`));
 }
 
 function optionalForeignKeyAction(value, label) {

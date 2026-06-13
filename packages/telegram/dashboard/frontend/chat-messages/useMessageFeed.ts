@@ -56,6 +56,7 @@ export function useMessageFeed(options: {
   let pendingInitial: PendingInitialRequest | null = null;
   let pendingOlder: PendingOlderRequest | null = null;
   let stopEvents: (() => void) | null = null;
+  let stopChatWatch: (() => void) | null = null;
   const fileOwnerVersions = new Map<string, string>();
 
   const sortedMessages = computed(() => sortMessages(messages.value));
@@ -78,23 +79,24 @@ export function useMessageFeed(options: {
       : 'No local messages yet.'
   );
 
-  watch(
-    options.selectedChatId,
-    (chatId) => {
-      const sequence = ++loadSequence;
-      resetMessages();
-      if (chatId !== null) {
-        void loadInitialMessages(chatId, sequence);
-      }
-    },
-    { immediate: true }
-  );
-
   onMounted(() => {
     stopEvents = host.subscribeEvents(applyEvent);
+    stopChatWatch = watch(
+      options.selectedChatId,
+      (chatId) => {
+        const sequence = ++loadSequence;
+        resetMessages();
+        if (chatId !== null) {
+          void loadInitialMessages(chatId, sequence);
+        }
+      },
+      { immediate: true }
+    );
   });
 
   onBeforeUnmount(() => {
+    stopChatWatch?.();
+    stopChatWatch = null;
     stopEvents?.();
     stopEvents = null;
   });
@@ -328,14 +330,14 @@ export function useMessageFeed(options: {
     if (pendingInitial?.requestId === requestId) {
       pendingInitial = null;
       loadingInitial.value = false;
-      lastError.value = 'Message history request failed.';
+      lastError.value = messagesFailedEventMessage(event);
       return;
     }
 
     if (pendingOlder?.requestId === requestId) {
       pendingOlder = null;
       loadingOlder.value = false;
-      lastError.value = 'Message history request failed.';
+      lastError.value = messagesFailedEventMessage(event);
     }
   }
 
@@ -508,4 +510,11 @@ function pendingRequestId(result: GetMessagesResult): string | null {
 function eventRequestId(event: DashboardHostEvent): string | null {
   const requestId = asRecord(event.data)?.requestId;
   return typeof requestId === 'string' && requestId.length > 0 ? requestId : null;
+}
+
+function messagesFailedEventMessage(event: DashboardHostEvent): string {
+  const reason = asRecord(event.data)?.reason;
+  return typeof reason === 'string' && reason.trim().length > 0
+    ? `Message history request failed: ${reason}`
+    : 'Message history request failed.';
 }

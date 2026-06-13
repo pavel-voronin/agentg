@@ -360,7 +360,7 @@
             "type": "prometheus",
             "uid": "victoria-metrics"
           },
-          "expr": "max(telegram_history_reconciler_oldest_job_age{service_name=\"telegram\"})",
+          "expr": "max(telegram_history_reconciler_oldest_job_age{service_name=\"telegram\", job_status=~\"queued|running|deferred\"})",
           "instant": true,
           "legendFormat": "oldest",
           "refId": "A"
@@ -427,13 +427,13 @@
             "type": "prometheus",
             "uid": "victoria-metrics"
           },
-          "expr": "time() - max(telegram_history_reconciler_last_transition_seconds{service_name=\"telegram\", transition=\"completed\"})",
+          "expr": "time() - max(telegram_history_reconciler_last_transition_seconds{service_name=\"telegram\", transition=~\"completed|skipped_covered\"})",
           "instant": true,
-          "legendFormat": "last completed",
+          "legendFormat": "last ready completion",
           "refId": "A"
         }
       ],
-      "title": "Last Completed Age",
+      "title": "Last Ready Completion Age",
       "type": "stat"
     },
     {

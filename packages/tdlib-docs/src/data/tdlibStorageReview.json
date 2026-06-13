@@ -5887,7 +5887,36 @@
         }
       ],
       "foreignKeys": [],
-      "indexes": [],
+      "indexes": [
+        {
+          "columns": ["telegram_messages.chat_id", "telegram_messages.date"],
+          "id": "telegram_messages_chat_date_idx"
+        },
+        {
+          "columns": ["telegram_messages.date"],
+          "id": "telegram_messages_date_idx"
+        },
+        {
+          "columns": ["telegram_messages.chat_id"],
+          "expressions": ["\"topic_id\"->>'forum_topic_id'", "\"date\""],
+          "id": "telegram_messages_forum_topic_date_idx"
+        },
+        {
+          "columns": ["telegram_messages.chat_id"],
+          "expressions": ["\"topic_id\"->>'direct_messages_chat_topic_id'", "\"date\""],
+          "id": "telegram_messages_direct_topic_date_idx"
+        },
+        {
+          "columns": [],
+          "expressions": ["\"topic_id\"->>'saved_messages_topic_id'", "\"date\""],
+          "id": "telegram_messages_saved_topic_date_idx"
+        },
+        {
+          "columns": ["telegram_messages.chat_id"],
+          "expressions": ["\"topic_id\"->>'message_thread_id'", "\"date\""],
+          "id": "telegram_messages_thread_date_idx"
+        }
+      ],
       "indirectSourceTypes": [
         "Address",
         "AlternativeVideo",

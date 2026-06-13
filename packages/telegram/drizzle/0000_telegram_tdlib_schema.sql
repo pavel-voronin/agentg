@@ -164,6 +164,30 @@ CREATE TABLE "telegram_messages" (
 
 --> statement-breakpoint
 
+CREATE INDEX "telegram_messages_chat_date_idx" ON "telegram_messages" ("chat_id", "date");
+
+--> statement-breakpoint
+
+CREATE INDEX "telegram_messages_date_idx" ON "telegram_messages" ("date");
+
+--> statement-breakpoint
+
+CREATE INDEX "telegram_messages_forum_topic_date_idx" ON "telegram_messages" ("chat_id", ("topic_id"->>'forum_topic_id'), ("date"));
+
+--> statement-breakpoint
+
+CREATE INDEX "telegram_messages_direct_topic_date_idx" ON "telegram_messages" ("chat_id", ("topic_id"->>'direct_messages_chat_topic_id'), ("date"));
+
+--> statement-breakpoint
+
+CREATE INDEX "telegram_messages_saved_topic_date_idx" ON "telegram_messages" (("topic_id"->>'saved_messages_topic_id'), ("date"));
+
+--> statement-breakpoint
+
+CREATE INDEX "telegram_messages_thread_date_idx" ON "telegram_messages" ("chat_id", ("topic_id"->>'message_thread_id'), ("date"));
+
+--> statement-breakpoint
+
 CREATE TABLE "telegram_business_messages" (
   "connection_id" text NOT NULL,
   "message_chat_id" bigint NOT NULL,

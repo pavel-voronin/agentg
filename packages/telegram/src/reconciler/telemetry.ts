@@ -14,6 +14,7 @@ export type Transition = 'completed' | 'deferred' | 'failed' | 'skipped_covered'
 export type Stage = 'claim' | 'coverage_check' | 'persist' | 'publish' | 'tdlib_fetch';
 export type ErrorType =
   | 'coverage_write_error'
+  | 'event_publish_error'
   | 'invalid_job'
   | 'storage_error'
   | 'tdlib_error'
@@ -77,7 +78,7 @@ export function recordTransition(transition: Transition): void {
 export function recordJobDuration(input: {
   errorType?: ErrorType | undefined;
   ownerKind: string;
-  result: 'completed' | 'failed';
+  result: 'completed' | 'failed' | 'skipped_covered';
   seconds: number;
 }): void {
   recordTelemetryHistogram(
@@ -137,7 +138,11 @@ export async function timeReconcilerSpan<T>(
     recordStageDuration(attributes.stage, secondsSince(startedAt));
     return result;
   } catch (error) {
-    recordStageDuration(attributes.stage, secondsSince(startedAt), errorType(error));
+    recordStageDuration(
+      attributes.stage,
+      secondsSince(startedAt),
+      errorType(error, attributes.stage)
+    );
     throw error;
   }
 }
@@ -151,17 +156,42 @@ export function timeReconcilerTick<T>(operation: () => Promise<T>): Promise<T> {
   );
 }
 
-export function errorType(error: unknown): ErrorType {
+export function errorType(error: unknown, stage?: Stage): ErrorType {
+  if (error instanceof Error && error.message.includes('invalid')) {
+    return 'invalid_job';
+  }
+  if (stage === 'publish') {
+    return 'event_publish_error';
+  }
+  if (stage === 'persist') {
+    return 'storage_error';
+  }
+  if (isTimeoutError(error)) {
+    return 'timeout';
+  }
+  if (isUnavailableError(error)) {
+    return 'tdlib_unavailable';
+  }
+  if (stage === 'tdlib_fetch') {
+    return 'tdlib_error';
+  }
   if (error instanceof Error && error.message.includes('TDLib')) {
     return 'tdlib_error';
   }
   if (error instanceof Error && error.message.includes('coverage')) {
     return 'coverage_write_error';
   }
-  if (error instanceof Error && error.message.includes('invalid')) {
-    return 'invalid_job';
-  }
   return 'unexpected_error';
+}
+
+function isTimeoutError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /\btimeout\b/i.test(message) || /\btimed out\b/i.test(message);
+}
+
+function isUnavailableError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /ECONNREFUSED|ECONNRESET|unavailable|not ready|closed/i.test(message);
 }
 
 export function jobStatusValues(): JobStatus[] {
