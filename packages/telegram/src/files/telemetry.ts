@@ -11,6 +11,7 @@ type QueueStatsTelemetry = {
   knownRemainingBytes: number;
   knownTotalBytes: number;
   oldestDownloadingAgeSeconds: number;
+  oldestDownloadingUnixSeconds: number;
   queuedCount: number;
   readyCount: number;
   readyDownloadedBytes: number;
@@ -71,7 +72,8 @@ const METRIC_ASSETS_DOWNLOADED_BYTES = 'telegram.file.assets.downloaded_bytes';
 const METRIC_QUEUE_BYTES = 'telegram.file.queue.bytes';
 const METRIC_QUEUE_FAILURES = 'telegram.file.queue.failures';
 const METRIC_QUEUE_JOBS = 'telegram.file.queue.jobs';
-const METRIC_QUEUE_OLDEST_DOWNLOADING_AGE = 'telegram.file.queue.oldest_downloading_age';
+const METRIC_QUEUE_OLDEST_DOWNLOADING_UNIX_SECONDS =
+  'telegram.file.queue.oldest_downloading_unix_seconds';
 const METRIC_QUEUE_STALE_DOWNLOADING = 'telegram.file.queue.stale_downloading';
 const METRIC_QUEUE_UNKNOWN_REMAINING = 'telegram.file.queue.unknown_remaining';
 const METRIC_GENERATION_DURATION = 'telegram.file.generation.duration';
@@ -102,7 +104,10 @@ export function recordQueueStatsTelemetry(stats: QueueStatsTelemetry): void {
   setTelemetryGauge(METRIC_QUEUE_JOBS, stats.downloadingCount, {
     'telegram.file.job.status': 'downloading'
   });
-  setTelemetryGauge(METRIC_QUEUE_OLDEST_DOWNLOADING_AGE, stats.oldestDownloadingAgeSeconds);
+  setTelemetryGauge(
+    METRIC_QUEUE_OLDEST_DOWNLOADING_UNIX_SECONDS,
+    stats.oldestDownloadingUnixSeconds
+  );
   setTelemetryGauge(METRIC_QUEUE_STALE_DOWNLOADING, stats.staleDownloadingCount);
   setTelemetryGauge(METRIC_QUEUE_BYTES, stats.knownDownloadedBytes, {
     'telegram.file.queue.bytes.kind': 'downloaded'

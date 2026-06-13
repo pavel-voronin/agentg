@@ -368,6 +368,7 @@ function jobStatsSelect() {
                   knownRemainingBytes: 100,
                   knownTotalBytes: 100,
                   oldestDownloadingAgeSeconds: 0,
+                  oldestDownloadingUnixSeconds: 0,
                   queuedCount: 1,
                   staleDownloadingCount: 0,
                   unknownRemainingCount: 0

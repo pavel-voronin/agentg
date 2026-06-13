@@ -49,6 +49,7 @@ type FileQueueStats = {
   knownRemainingBytes: number;
   knownTotalBytes: number;
   oldestDownloadingAgeSeconds: number;
+  oldestDownloadingUnixSeconds: number;
   queuedCount: number;
   readyCount: number;
   readyDownloadedBytes: number;
@@ -168,6 +169,7 @@ export async function readFileQueueStats(database: Database): Promise<FileQueueS
       knownRemainingBytes: sql<number>`coalesce(sum(greatest(coalesce(${telegramFileAssets.byteSize}, 0) - coalesce(${telegramFileAssets.downloadedByteSize}, 0), 0)) filter (where ${telegramFileAssets.byteSize} is not null), 0)::float8`,
       knownTotalBytes: sql<number>`coalesce(sum(${telegramFileAssets.byteSize}) filter (where ${telegramFileAssets.byteSize} is not null), 0)::float8`,
       oldestDownloadingAgeSeconds: sql<number>`coalesce(extract(epoch from now() - (min(coalesce(${telegramFileDownloadJobs.claimedAt}, ${telegramFileDownloadJobs.updatedAt})) filter (where ${telegramFileDownloadJobs.status} = ${'downloading'}))), 0)::float8`,
+      oldestDownloadingUnixSeconds: sql<number>`coalesce(extract(epoch from (min(coalesce(${telegramFileDownloadJobs.claimedAt}, ${telegramFileDownloadJobs.updatedAt})) filter (where ${telegramFileDownloadJobs.status} = ${'downloading'}))), 0)::float8`,
       queuedCount: sql<number>`count(*) filter (where ${telegramFileDownloadJobs.status} = ${'queued'})::int`,
       staleDownloadingCount: sql<number>`count(*) filter (where ${telegramFileDownloadJobs.status} = ${'downloading'} and coalesce(${telegramFileDownloadJobs.claimedAt}, ${telegramFileDownloadJobs.updatedAt}) < now() - (${DEFAULT_WORKER_DOWNLOAD_CLAIM_TIMEOUT_MS} * interval '1 millisecond'))::int`,
       unknownRemainingCount: sql<number>`count(*) filter (where ${telegramFileAssets.byteSize} is null)::int`
@@ -190,6 +192,7 @@ export async function readFileQueueStats(database: Database): Promise<FileQueueS
     knownRemainingBytes: aggregateNumber(jobRow?.knownRemainingBytes),
     knownTotalBytes: aggregateNumber(jobRow?.knownTotalBytes),
     oldestDownloadingAgeSeconds: aggregateNumber(jobRow?.oldestDownloadingAgeSeconds),
+    oldestDownloadingUnixSeconds: aggregateNumber(jobRow?.oldestDownloadingUnixSeconds),
     queuedCount,
     readyCount: aggregateNumber(assetRow?.readyCount),
     readyDownloadedBytes: aggregateNumber(assetRow?.readyDownloadedBytes),

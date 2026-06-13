@@ -222,6 +222,7 @@ function fileQueueStatsDatabase(
                       knownRemainingBytes: 0,
                       knownTotalBytes: 0,
                       oldestDownloadingAgeSeconds: 0,
+                      oldestDownloadingUnixSeconds: 0,
                       queuedCount: 0,
                       staleDownloadingCount: 0,
                       unknownRemainingCount: 0

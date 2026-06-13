@@ -1,8 +1,11 @@
 x-agentg-telemetry-environment: &agentg-telemetry-environment
   AGENTG_TELEMETRY: ${AGENTG_TELEMETRY:-0}
+  OTEL_BLRP_SCHEDULE_DELAY: ${OTEL_BLRP_SCHEDULE_DELAY:-1000}
+  OTEL_BSP_SCHEDULE_DELAY: ${OTEL_BSP_SCHEDULE_DELAY:-1000}
   OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: http://otel-collector:4318/v1/logs
   OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: http://otel-collector:4318/v1/metrics
   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
+  OTEL_METRIC_EXPORT_INTERVAL: ${OTEL_METRIC_EXPORT_INTERVAL:-1000}
   GRAFANA_URL: http://127.0.0.1:3000
   JAEGER_UI_URL: http://127.0.0.1:16686
   VICTORIA_METRICS_URL: http://127.0.0.1:8428
@@ -335,6 +338,7 @@ services:
     command:
       - '-opentelemetry.usePrometheusNaming'
       - '-promscrape.config=/etc/victoria-metrics/scrapeConfig.yml'
+      - '-search.latencyOffset=1s'
     tmpfs:
       - /victoria-metrics-data
     ports:
@@ -373,6 +377,7 @@ services:
       GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: 'false'
       GF_ANALYTICS_CHECK_FOR_UPDATES: 'false'
       GF_ANALYTICS_REPORTING_ENABLED: 'false'
+      GF_DASHBOARDS_MIN_REFRESH_INTERVAL: 1s
       GF_PLUGINS_PREINSTALL_AUTO_UPDATE: 'false'
       GF_PLUGINS_PREINSTALL_DISABLED: 'true'
       GF_SECURITY_ALLOW_EMBEDDING: 'true'

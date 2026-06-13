@@ -32,10 +32,22 @@ Runtime defaults:
   `http://127.0.0.1:4318/v1/metrics`
 - traces OTLP HTTP endpoint:
   `http://127.0.0.1:4318/v1/traces`
+- app metric export interval:
+  `OTEL_METRIC_EXPORT_INTERVAL=1000`
+- trace batch schedule delay:
+  `OTEL_BSP_SCHEDULE_DELAY=1000`
+- log batch schedule delay:
+  `OTEL_BLRP_SCHEDULE_DELAY=1000`
 
 The Collector forwards metrics to
 `http://victoria-metrics:8428/opentelemetry/v1/metrics` and traces to
 `http://jaeger:4318/v1/traces`.
+
+VictoriaMetrics scrapes the local NATS and Postgres exporters every second and
+uses `-search.latencyOffset=1s` so instant queries do not keep the upstream
+default query delay. Grafana dashboards keep a five-second default auto-refresh,
+and the provisioned refresh picker includes a one-second option for live
+debugging.
 
 `npm run dev` starts local module processes through Process Compose. The
 `process-compose.yaml` environment defaults `AGENTG_TELEMETRY` to enabled and

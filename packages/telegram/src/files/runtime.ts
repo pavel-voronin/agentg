@@ -108,7 +108,7 @@ export const DEFAULT_WORKER_FILE_DOWNLOAD_DEFER_MS = 1000;
 export const DEFAULT_WORKER_DOWNLOAD_CLAIM_TIMEOUT_MS = 5 * 60 * 1000;
 export const DEFAULT_WORKER_MAX_CONCURRENT_DOWNLOADS = 2;
 export const DEFAULT_WORKER_MAX_FILES_PER_TICK = 4;
-export const DEFAULT_WORKER_STALE_CHECK_MS = 5 * 60 * 1000;
+export const DEFAULT_WORKER_STALE_CHECK_MS = 1000;
 export const CANONICAL_FILES_DIR = 'agentg-media';
 
 export function shouldDeferFileDownloads(tdlib: Tdlib): boolean {

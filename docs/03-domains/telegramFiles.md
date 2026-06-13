@@ -630,7 +630,7 @@ Required metric families:
 - `telegram.file.queue.assets`
 - `telegram.file.queue.failures`
 - `telegram.file.queue.jobs`
-- `telegram.file.queue.oldest_downloading_age`
+- `telegram.file.queue.oldest_downloading_unix_seconds`
 - `telegram.file.queue.stale_downloading`
 - `telegram.file.queue.bytes`
 - `telegram.file.queue.unknown_remaining`
@@ -661,8 +661,9 @@ but logs must not become the only place where normal operating state is visible.
 The Files dashboard must show:
 
 - red-flag top row for queued backlog, failed assets, backlog without worker
-  ticks, failure rate, defer rate, stale recovery, oldest downloading age, and
-  stale downloading count;
+  ticks, failure rate, defer rate, stale recovery, oldest downloading age
+  derived from `telegram.file.queue.oldest_downloading_unix_seconds`, and stale
+  downloading count;
 - backlog and bytes panels;
 - worker wake, job outcome, and stage panels;
 - generation outcome and duration panels;

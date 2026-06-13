@@ -65,8 +65,8 @@ export type TelemetrySpan = {
 };
 
 const DISABLED_VALUES = new Set(['0', 'false', 'no', 'off']);
+const DEFAULT_EXPORT_DELAY_MS = 1_000;
 const DEFAULT_LOGS_ENDPOINT = 'http://127.0.0.1:4318/v1/logs';
-const DEFAULT_METRIC_EXPORT_INTERVAL_MS = 15_000;
 const DEFAULT_TRACES_ENDPOINT = 'http://127.0.0.1:4318/v1/traces';
 const DEFAULT_METRICS_ENDPOINT = 'http://127.0.0.1:4318/v1/metrics';
 const DURATION_BUCKETS_SECONDS = [
@@ -114,7 +114,10 @@ export function startTelemetryRuntime(serviceName: string): () => Promise<undefi
       new BatchLogRecordProcessor(
         new OTLPLogExporter({
           url: telemetryEndpoint('OTEL_EXPORTER_OTLP_LOGS_ENDPOINT', DEFAULT_LOGS_ENDPOINT)
-        })
+        }),
+        {
+          scheduledDelayMillis: logExportDelayMs()
+        }
       )
     ],
     resource
@@ -419,7 +422,15 @@ function attributesKey(attributes: TelemetryAttributes): string {
 function metricExportIntervalMs(): number {
   const configured = Number(process.env.OTEL_METRIC_EXPORT_INTERVAL);
   if (!Number.isFinite(configured) || configured <= 0) {
-    return DEFAULT_METRIC_EXPORT_INTERVAL_MS;
+    return DEFAULT_EXPORT_DELAY_MS;
+  }
+  return Math.round(configured);
+}
+
+function logExportDelayMs(): number {
+  const configured = Number(process.env.OTEL_BLRP_SCHEDULE_DELAY);
+  if (!Number.isFinite(configured) || configured <= 0) {
+    return DEFAULT_EXPORT_DELAY_MS;
   }
   return Math.round(configured);
 }

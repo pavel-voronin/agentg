@@ -900,6 +900,7 @@ function fileJobStatsSelect() {
                   knownRemainingBytes: 1024,
                   knownTotalBytes: 1024,
                   oldestDownloadingAgeSeconds: 301,
+                  oldestDownloadingUnixSeconds: 1781324154,
                   queuedCount: 0,
                   staleDownloadingCount: 1,
                   unknownRemainingCount: 0
