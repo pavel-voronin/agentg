@@ -22,6 +22,19 @@ export type HistoryFetchStep = {
   reachedBeginning: boolean;
 };
 
+type HistoryCursor =
+  | {
+      canPageProveBeginning: boolean;
+      coverageEndAt?: Date | undefined;
+      coverageEndMessageId?: number | undefined;
+      fromMessageId: number;
+      kind: 'cursor';
+    }
+  | {
+      interval: HistoryInterval;
+      kind: 'covered';
+    };
+
 const PRIVATE_PAGE_SIZE = 100;
 
 export async function fetchOwnerHistoryStep(input: {
@@ -49,19 +62,26 @@ export async function fetchOwnerHistoryStep(input: {
 
   const history = await fetchOwnerHistory(input.tdlib, input.owner, cursor.fromMessageId);
   const fetchedMessages = history.messages.filter(isFetchedMessage);
+  const coverageEndAt = cursorCoverageEndAt(cursor, fetchedMessages);
   if (fetchedMessages.length === 0) {
     return {
-      coverageInterval: {
-        endAt: interval.endAt,
-        startAt: HISTORY_PAST_BOUNDARY
-      },
+      ...(coverageEndAt === undefined
+        ? {}
+        : {
+            coverageInterval: {
+              endAt: coverageEndAt,
+              startAt: HISTORY_PAST_BOUNDARY
+            }
+          }),
       fetchedMessages: [],
-      reachedBeginning: true
+      reachedBeginning: coverageEndAt !== undefined
     };
   }
 
   const oldestDate = oldestMessageDate(fetchedMessages);
   const reachedBeginning =
+    coverageEndAt !== undefined &&
+    cursor.canPageProveBeginning &&
     oldestMessageIdOlderThan(fetchedMessages, cursor.fromMessageId) === undefined;
   const crossedStart = fetchedMessages.some((message) => {
     const date = tdMessageDate(message);
@@ -75,11 +95,13 @@ export async function fetchOwnerHistoryStep(input: {
   });
 
   return {
-    ...(coveredStartAt === undefined || coveredStartAt >= interval.endAt
+    ...(coverageEndAt === undefined ||
+    coveredStartAt === undefined ||
+    coveredStartAt >= coverageEndAt
       ? {}
       : {
           coverageInterval: {
-            endAt: interval.endAt,
+            endAt: coverageEndAt,
             startAt: coveredStartAt
           }
         }),
@@ -94,26 +116,21 @@ async function resolveCursor(
   owner: MessageOwner,
   selector: MessageSelector,
   interval: HistoryInterval
-): Promise<
-  | {
-      fromMessageId: number;
-      kind: 'cursor';
-    }
-  | {
-      interval: HistoryInterval;
-      kind: 'covered';
-    }
-> {
+): Promise<HistoryCursor> {
   if (selector.kind === 'page') {
     const localOldest = await readOldestPageMessageId(database, owner, selector);
     if (localOldest !== undefined) {
       return {
+        canPageProveBeginning: true,
+        coverageEndAt: interval.endAt,
         fromMessageId: localOldest,
         kind: 'cursor'
       };
     }
     if (selector.beforeMessageId !== undefined) {
       return {
+        canPageProveBeginning: true,
+        coverageEndMessageId: parseTdlibInt53(selector.beforeMessageId, 'beforeMessageId'),
         fromMessageId: parseTdlibInt53(selector.beforeMessageId, 'beforeMessageId'),
         kind: 'cursor'
       };
@@ -123,6 +140,8 @@ async function resolveCursor(
   const localOldest = await readOldestKnownMessageId(database, owner);
   if (localOldest !== undefined && !ownerHasDateAnchor(owner)) {
     return {
+      canPageProveBeginning: true,
+      coverageEndAt: interval.endAt,
       fromMessageId: localOldest,
       kind: 'cursor'
     };
@@ -138,6 +157,8 @@ async function resolveCursor(
       };
     }
     return {
+      canPageProveBeginning: true,
+      coverageEndAt: interval.endAt,
       fromMessageId: anchor.messageId,
       kind: 'cursor'
     };
@@ -154,6 +175,8 @@ async function resolveCursor(
   }
 
   return {
+    canPageProveBeginning: localOldest !== undefined,
+    coverageEndAt: interval.endAt,
     fromMessageId: localOldest ?? 0,
     kind: 'cursor'
   };
@@ -350,6 +373,22 @@ function coveredStart(input: {
   return new Date(oldestSecond.getTime() + HISTORY_TICK_MS);
 }
 
+function cursorCoverageEndAt(
+  cursor: Extract<HistoryCursor, { kind: 'cursor' }>,
+  messages: Message[]
+) {
+  if (cursor.coverageEndAt !== undefined) {
+    return cursor.coverageEndAt;
+  }
+  if (cursor.coverageEndMessageId === undefined) {
+    return undefined;
+  }
+
+  const anchor = messages.find((message) => tdMessageId(message) === cursor.coverageEndMessageId);
+  const anchorDate = tdMessageDate(anchor);
+  return anchorDate === undefined ? undefined : nextHistorySecond(anchorDate);
+}
+
 function messageChatCondition(owner: MessageOwner) {
   return owner.kind === 'savedMessagesTopic'
     ? undefined
@@ -381,6 +420,11 @@ function oldestMessageIdOlderThan(
     .filter((id): id is number => id !== undefined && id < cursorMessageId);
 
   return ids.length === 0 ? undefined : Math.min(...ids);
+}
+
+function nextHistorySecond(date: Date): Date {
+  const second = new Date(Math.floor(date.getTime() / HISTORY_TICK_MS) * HISTORY_TICK_MS);
+  return new Date(second.getTime() + HISTORY_TICK_MS);
 }
 
 function isFetchedMessage(value: Message | null): value is Message {

@@ -438,6 +438,12 @@ policy owns `attemptCount`, `nextRunAt`, `lockedAt`, and terminal failure.
 A failed row must not make `getMessages` return `pending` forever without
 requeueing or rejecting the selector.
 
+The target deployment has exactly one active `HistoryReconciler` runner. This is
+an architectural constraint, not an optimization target. Concurrent multi-runner
+execution is out of scope for `getMessages`, and durable job claiming may rely
+on the single-runner invariant. Running more than one reconciler runner against
+the same database is an invalid deployment.
+
 It owns:
 
 - Accepting `HistoryFillRequest` jobs.

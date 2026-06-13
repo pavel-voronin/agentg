@@ -116,6 +116,22 @@ function checkPageReadiness(
       return { missing: [openPastInterval()], ready: false };
     }
 
+    if (messages.length === 0) {
+      const interval = openPastInterval(pageEndAt);
+      const coverage = await missingOwnerCoverageIntervals(database, input.owner, [interval]);
+      if (coverage.length > 0) {
+        return { missing: coverage, ready: false };
+      }
+      return {
+        ready: true,
+        rows: {
+          messages: [],
+          reachedStart: true,
+          selectorKind: 'page'
+        }
+      };
+    }
+
     const readiness = pageReadiness(messages, input.selector, pageEndAt);
     if (readiness === undefined) {
       return { missing: [openPastInterval(pageEndAt)], ready: false };

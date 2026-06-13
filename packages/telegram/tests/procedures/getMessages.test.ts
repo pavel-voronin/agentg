@@ -152,6 +152,41 @@ describe('Telegram getMessages procedure', () => {
     expect(reconciler.enqueue).toHaveBeenCalledTimes(1);
   });
 
+  it('returns a ready empty page before an anchor when coverage proves owner beginning', async () => {
+    const reconciler = fakeReconciler('pending_enqueued');
+
+    const output = await procedure(
+      {
+        pageEndRows: [
+          [
+            {
+              messageDate: new Date('2026-05-01T13:00:00.000Z')
+            }
+          ]
+        ],
+        persistedRows: [[]]
+      },
+      reconciler
+    )({
+      owner: {
+        chatId,
+        kind: 'chat'
+      },
+      selector: {
+        beforeMessageId: '200',
+        count: 100,
+        kind: 'page'
+      }
+    });
+
+    expect(output).toEqual({
+      messages: [],
+      reachedStart: true,
+      status: 'ready'
+    });
+    expect(reconciler.enqueue).not.toHaveBeenCalled();
+  });
+
   it('returns a ready range without reachedStart', async () => {
     const first = storedMessage('101', '2026-05-01T13:00:00.000Z');
     const second = storedMessage('102', '2026-05-01T13:50:00.000Z');
