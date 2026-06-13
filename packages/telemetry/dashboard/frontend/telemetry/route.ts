@@ -4,19 +4,19 @@ export type TelemetryTabId =
   | 'history-reconciler'
   | 'history-sync'
   | 'nats'
-  | 'operations'
+  | 'overview'
   | 'postgres'
   | 'telegram'
   | 'updates';
 
-const defaultTab: TelemetryTabId = 'operations';
+const defaultTab: TelemetryTabId = 'overview';
 const tabs = new Set<TelemetryTabId>([
   'files',
   'get-messages',
   'history-reconciler',
   'history-sync',
   'nats',
-  'operations',
+  'overview',
   'postgres',
   'telegram',
   'updates'

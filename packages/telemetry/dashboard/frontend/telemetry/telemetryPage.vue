@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import {
   slotRoute,
   UiGrafanaDashboard,
@@ -20,7 +20,7 @@ type TabView = {
 };
 
 const tabs: TabView[] = [
-  { id: 'operations', label: 'Operations' },
+  { id: 'overview', label: 'Overview' },
   { id: 'telegram', label: 'Telegram' },
   { id: 'get-messages', label: 'Get Messages' },
   { id: 'history-reconciler', label: 'History Reconciler' },
@@ -37,14 +37,22 @@ const { links, error, loadLinks } = useLinks();
 const reloadVersion = ref(0);
 const activeViewKey = computed(() => `${activeTab.value ?? 'unknown'}:${reloadVersion.value}`);
 
-onMounted(() => {
-  void loadLinks();
-});
+watch(
+  activeTab,
+  (tab) => {
+    if (tab !== null && tab !== 'overview') {
+      void loadLinks();
+    }
+  },
+  { immediate: true }
+);
 
 function selectTab(tabId: TelemetryTabId): void {
   if (activeTab.value === tabId) {
     reloadVersion.value += 1;
-    void loadLinks();
+    if (tabId !== 'overview') {
+      void loadLinks();
+    }
     return;
   }
 
@@ -70,18 +78,7 @@ function selectTab(tabId: TelemetryTabId): void {
 
     <div v-if="error" class="telemetry-page__error">{{ error }}</div>
 
-    <section v-if="activeTab === 'operations'" class="telemetry-page__section">
-      <UiGrafanaDashboard
-        v-if="links"
-        :key="activeViewKey"
-        :base-url="links.grafanaUi"
-        dashboard-slug="agentg-operations"
-        dashboard-uid="agentg-operations"
-        kiosk
-        title="Operations"
-      />
-      <div v-else class="telemetry-page__empty">No Grafana link</div>
-    </section>
+    <section v-if="activeTab === 'overview'" class="telemetry-page__section"></section>
 
     <section v-if="activeTab === 'telegram'" class="telemetry-page__section">
       <UiGrafanaDashboard

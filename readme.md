@@ -65,8 +65,6 @@ After `npm run dev:status` shows `dashboard` as healthy, open:
 Development observability UIs:
 
 - Jaeger traces: [http://127.0.0.1:16686/](http://127.0.0.1:16686/)
-- Grafana operations dashboard:
-  [http://127.0.0.1:3000/d/agentg-operations/agentg-operations](http://127.0.0.1:3000/d/agentg-operations/agentg-operations)
 - Grafana TDLib updates dashboard:
   [http://127.0.0.1:3000/d/agentg-tdlib-updates/agentg-tdlib-updates](http://127.0.0.1:3000/d/agentg-tdlib-updates/agentg-tdlib-updates)
 - Grafana Postgres dashboard:
