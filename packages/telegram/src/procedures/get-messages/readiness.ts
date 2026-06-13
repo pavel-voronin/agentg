@@ -5,7 +5,11 @@ import {
   normalizeHistoryInterval,
   type HistoryInterval
 } from '../../history/time.js';
-import { isOwnerCovered, missingOwnerCoverageIntervals } from '../../reconciler/coverage.js';
+import {
+  isOwnerCovered,
+  listOwnerCoverage,
+  missingOwnerCoverageIntervals
+} from '../../reconciler/coverage.js';
 import type { MessageStorageRow } from '../../views/message.js';
 import type { GetMessagesInput, MessageSelector } from './contract.js';
 import { readPageEndAt, readPageRows, readRangeRows } from './read.js';
@@ -95,6 +99,20 @@ function checkPageReadiness(
     readPageEndAt(database, input.owner, input.selector.beforeMessageId)
   ]).then(async ([messages, pageEndAt]) => {
     if (pageEndAt === undefined) {
+      if (
+        input.selector.beforeMessageId === undefined &&
+        messages.length === 0 &&
+        (await hasEmptyLatestPageCoverage(database, input.owner))
+      ) {
+        return {
+          ready: true,
+          rows: {
+            messages: [],
+            reachedStart: true,
+            selectorKind: 'page'
+          }
+        };
+      }
       return { missing: [openPastInterval()], ready: false };
     }
 
@@ -192,7 +210,19 @@ function pageReadiness(
 
 function hasDatedPageBoundary(messages: MessageStorageRow[]): boolean {
   const newest = messages[messages.length - 1];
-  return newest?.messageDate !== null;
+  return newest?.messageDate !== null && newest?.messageDate !== undefined;
+}
+
+async function hasEmptyLatestPageCoverage(
+  database: Database,
+  owner: GetMessagesInput['owner']
+): Promise<boolean> {
+  const coverage = await listOwnerCoverage(database, owner);
+  return coverage.some(
+    (segment) =>
+      segment.startAt.getTime() <= HISTORY_PAST_BOUNDARY.getTime() &&
+      segment.endAt.getTime() > segment.startAt.getTime()
+  );
 }
 
 function openPastInterval(endAt = new Date()): HistoryInterval {

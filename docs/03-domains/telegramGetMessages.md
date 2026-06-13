@@ -197,6 +197,11 @@ history second. It is not wall-clock `now`. Otherwise a deterministic
 request for one second and the next read could immediately see a new coverage
 gap for the next second.
 
+When the owner has no local messages, owner-scoped coverage from
+`HISTORY_PAST_BOUNDARY` is the proof for an empty latest page. In that case
+`getMessages` returns `ready` with `messages: []` and `reachedStart: true`.
+Without that coverage proof, the same request returns `pending`.
+
 ### RangeSelector
 
 Synchronization, export, analytics, and maintenance flows use `RangeSelector`.
@@ -875,6 +880,8 @@ Write contract tests before changing the implementation.
 ### `getMessages`
 
 - Covered `PageSelector` returns `ready`.
+- Covered empty latest `PageSelector` returns `ready` with `messages: []` and
+  `reachedStart: true`.
 - Covered `RangeSelector` returns `ready`.
 - Page `ready` includes `reachedStart`.
 - Range `ready` does not include `reachedStart`.

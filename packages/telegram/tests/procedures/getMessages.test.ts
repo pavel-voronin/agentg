@@ -19,6 +19,7 @@ vi.mock('../../src/reconciler/coverage.js', async (importOriginal) => {
   return {
     ...actual,
     isOwnerCovered: vi.fn(() => Promise.resolve(true)),
+    listOwnerCoverage: vi.fn(() => Promise.resolve([])),
     missingOwnerCoverageIntervals: vi.fn(() => Promise.resolve([]))
   };
 });
@@ -33,7 +34,11 @@ vi.mock('../../src/views/message.js', () => ({
   )
 }));
 
-import { isOwnerCovered, missingOwnerCoverageIntervals } from '../../src/reconciler/coverage.js';
+import {
+  isOwnerCovered,
+  listOwnerCoverage,
+  missingOwnerCoverageIntervals
+} from '../../src/reconciler/coverage.js';
 import { getMessagesProcedure } from '../../src/procedures/getMessages.js';
 import type { ProcedureResources } from '../../src/procedures/resources.js';
 import type { MessageStorageRow } from '../../src/views/message.js';
@@ -44,6 +49,7 @@ describe('Telegram getMessages procedure', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-05-01T14:00:00.100Z'));
     vi.mocked(isOwnerCovered).mockResolvedValue(true);
+    vi.mocked(listOwnerCoverage).mockResolvedValue([]);
     vi.mocked(missingOwnerCoverageIntervals).mockResolvedValue([]);
     vi.mocked(toReadMessages).mockImplementation((_database, messages) =>
       Promise.resolve(messages.map(readMessage))
@@ -80,6 +86,70 @@ describe('Telegram getMessages procedure', () => {
     });
     expect(toReadMessages).toHaveBeenCalledTimes(1);
     expect(JSON.stringify(telemetry.timeTelemetrySpan.mock.calls)).not.toContain(chatId);
+  });
+
+  it('returns a ready empty latest page when owner coverage proves empty history', async () => {
+    const reconciler = fakeReconciler('pending_enqueued');
+    vi.mocked(listOwnerCoverage).mockResolvedValue([
+      {
+        coveredAt: new Date('2026-05-01T14:00:01.000Z'),
+        endAt: new Date('2026-05-01T14:00:01.000Z'),
+        ownerKey: 'chat:123',
+        ownerKind: 'chat',
+        startAt: new Date('2013-08-14T00:00:00.000Z')
+      }
+    ]);
+
+    const output = await procedure(
+      {
+        pageEndRows: [[]],
+        persistedRows: [[]]
+      },
+      reconciler
+    )({
+      owner: {
+        chatId,
+        kind: 'chat'
+      },
+      selector: {
+        count: 100,
+        kind: 'page'
+      }
+    });
+
+    expect(output).toEqual({
+      messages: [],
+      reachedStart: true,
+      status: 'ready'
+    });
+    expect(reconciler.enqueue).not.toHaveBeenCalled();
+  });
+
+  it('keeps an empty latest page pending until coverage proves empty history', async () => {
+    const reconciler = fakeReconciler('pending_enqueued');
+
+    const output = await procedure(
+      {
+        pageEndRows: [[]],
+        persistedRows: [[]]
+      },
+      reconciler
+    )({
+      owner: {
+        chatId,
+        kind: 'chat'
+      },
+      selector: {
+        count: 100,
+        kind: 'page'
+      }
+    });
+
+    expect(output).toEqual({
+      requestId: 'telegram.getMessages;selector=page;owner=chat:123;anchor=latest;count=100',
+      status: 'pending'
+    });
+    expect(reconciler.enqueue).toHaveBeenCalledTimes(1);
   });
 
   it('returns a ready range without reachedStart', async () => {
