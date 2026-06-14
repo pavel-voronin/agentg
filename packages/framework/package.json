@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./dashboard": "./src/dashboard/index.ts"
+    "./dashboard": "./src/dashboard/index.ts",
+    "./policies": "./src/policies/index.ts"
   },
   "scripts": {
     "test": "vitest run",
@@ -27,7 +28,8 @@
     "nats": "^2.29.3",
     "pg": "8.20.0",
     "pino": "^10.3.1",
-    "vue": "^3.5.33"
+    "vue": "^3.5.33",
+    "zod": "^4.4.1"
   },
   "devDependencies": {
     "@types/node": "24.10.0",

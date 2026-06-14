@@ -1,5 +1,9 @@
 import type { EventBus, EventBusFactory } from './events/eventBus.js';
 import { createLogger, logError } from './log.js';
+import { createLivePolicyValue } from './policies/live.js';
+import type { PolicyClientFactory } from './policies/client.js';
+import type { PolicyDefinition } from './policies/definition.js';
+import type { PolicyResolvedValue } from './policies/resolvers.js';
 import type { ProcedureServer, RpcFactory } from './rpc/rpc.js';
 import { startTelemetryRuntime } from './telemetry/recorder.js';
 import type { MaybePromise, ProcedureMap } from './types.js';
@@ -51,6 +55,7 @@ export type ModuleCreateOptions<TConfig> = {
 
 export type ModuleConnect = {
   events: EventBusFactory;
+  policies?: PolicyClientFactory;
   rpc: RpcFactory;
 };
 
@@ -75,6 +80,9 @@ type ModuleSetup<TConfig = unknown> = {
   background: (name: string, start: ModuleProcess['start']) => void;
   resource: <T>(name: string, create: (resource: ResourceSetup) => T) => T;
   startup: (name: string, start: ModuleProcess['start']) => void;
+  usePolicy: <TSpec, TValue extends PolicyResolvedValue>(
+    definition: PolicyDefinition<TSpec, TValue>
+  ) => () => Readonly<TValue>;
 };
 
 export function defineModule<TConfig, TProcedures extends ProcedureMap>(
@@ -99,11 +107,31 @@ function createModuleApp<TConfig>(
   const startupProcesses: ModuleProcess[] = [];
   const events = options.connect.events();
   const logger = createLogger(name);
+  const policyClient = options.connect.policies?.();
   let running = false;
   let runningBackgroundProcesses: RunningProcess[] = [];
   let runningProcedureServer: ProcedureServer | undefined;
   let runningStartupProcesses: RunningProcess[] = [];
   let runningTelemetryRuntime: StopProcess | undefined;
+
+  function usePolicy<TSpec, TValue extends PolicyResolvedValue>(
+    definition: PolicyDefinition<TSpec, TValue>
+  ): () => Readonly<TValue> {
+    if (policyClient === undefined) {
+      throw new Error(
+        `Module ${name} uses policy ${definition.kind}, but connect.policies is not configured`
+      );
+    }
+    const live = createLivePolicyValue({
+      client: policyClient,
+      definition,
+      events,
+      logger,
+      moduleName: name
+    });
+    pushProcess(startupProcesses, `policy.${definition.kind}`, () => live.start());
+    return () => live.read();
+  }
 
   const moduleSetup: ModuleSetup<TConfig> = {
     config: options.config,
@@ -152,7 +180,8 @@ function createModuleApp<TConfig>(
     },
     startup(startupName, start) {
       pushProcess(startupProcesses, startupName, start);
-    }
+    },
+    usePolicy
   };
 
   const procedures = setup(moduleSetup);
