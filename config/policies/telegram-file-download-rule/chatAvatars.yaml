@@ -1,0 +1,13 @@
+apiVersion: agentg.dev/v1
+kind: TelegramFileDownloadRule
+metadata:
+  name: chatAvatars
+  labels:
+    subsystem: files
+spec:
+  name: chat avatars
+  causes:
+    - initialization
+    - live_update
+  mediaKind: avatar
+  maxBytes: null

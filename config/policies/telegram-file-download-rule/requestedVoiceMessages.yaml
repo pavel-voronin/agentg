@@ -1,0 +1,12 @@
+apiVersion: agentg.dev/v1
+kind: TelegramFileDownloadRule
+metadata:
+  name: requestedVoiceMessages
+  labels:
+    subsystem: files
+spec:
+  name: requested voice messages
+  causes:
+    - explicit_request
+  mediaKind: voice
+  maxBytes: null

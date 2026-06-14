@@ -1,0 +1,12 @@
+apiVersion: agentg.dev/v1
+kind: TelegramFileDownloadRule
+metadata:
+  name: requestedVideos
+  labels:
+    subsystem: files
+spec:
+  name: requested videos
+  causes:
+    - explicit_request
+  mediaKind: video
+  maxBytes: null

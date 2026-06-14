@@ -1,0 +1,13 @@
+apiVersion: agentg.dev/v1
+kind: TelegramFileDownloadRule
+metadata:
+  name: videosUpToFiveMegabytes
+  labels:
+    subsystem: files
+spec:
+  name: videos up to 5 MB
+  causes:
+    - live_update
+    - operator_page
+  mediaKind: video
+  maxBytes: 5242880

@@ -1,0 +1,13 @@
+apiVersion: agentg.dev/v1
+kind: TelegramFileDownloadRule
+metadata:
+  name: thumbnailsUpToOneMegabyte
+  labels:
+    subsystem: files
+spec:
+  name: media thumbnails up to 1 MB
+  causes:
+    - live_update
+    - operator_page
+  mediaKind: thumbnail
+  maxBytes: 1048576

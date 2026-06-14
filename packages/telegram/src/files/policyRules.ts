@@ -9,12 +9,15 @@ export type MediaDownloadPolicyRule = {
   name: string;
 };
 
-export type MediaDownloadPolicyCause =
-  | 'explicit_request'
-  | 'history_fetch'
-  | 'initialization'
-  | 'live_update'
-  | 'operator_page';
+export const mediaDownloadPolicyCauses = [
+  'explicit_request',
+  'history_fetch',
+  'initialization',
+  'live_update',
+  'operator_page'
+] as const;
+
+export type MediaDownloadPolicyCause = (typeof mediaDownloadPolicyCauses)[number];
 
 export const automaticDownloadPolicyRules = [
   {

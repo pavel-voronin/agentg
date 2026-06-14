@@ -1,0 +1,12 @@
+apiVersion: agentg.dev/v1
+kind: TelegramFileDownloadRule
+metadata:
+  name: requestedDocuments
+  labels:
+    subsystem: files
+spec:
+  name: requested documents
+  causes:
+    - explicit_request
+  mediaKind: document
+  maxBytes: null

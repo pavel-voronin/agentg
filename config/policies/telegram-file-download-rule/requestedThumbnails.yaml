@@ -1,0 +1,12 @@
+apiVersion: agentg.dev/v1
+kind: TelegramFileDownloadRule
+metadata:
+  name: requestedThumbnails
+  labels:
+    subsystem: files
+spec:
+  name: requested thumbnails
+  causes:
+    - explicit_request
+  mediaKind: thumbnail
+  maxBytes: null
