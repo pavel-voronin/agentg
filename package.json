@@ -8,6 +8,7 @@
     "packages/gateway",
     "packages/telemetry",
     "packages/dashboard",
+    "packages/policies",
     "packages/telegram",
     "packages/tdlib-docs",
     "packages/history-sync",
@@ -51,16 +52,18 @@
     "typecheck": "npm --workspaces --if-present run typecheck",
     "tdlib:docs:generate": "node scripts/tdlibExplorerSchemaGenerate.mjs",
     "tdlib:docs:build": "npm run tdlib:docs:generate && npm --workspace @agentg/tdlib-docs run build",
+    "policies:generate": "node scripts/policyCatalogGenerate.mjs",
     "source:audit": "node scripts/sourceAudit.mjs",
     "module-boundary:audit": "node scripts/moduleBoundaryAudit.mjs",
     "check:framework": "npm --workspace @agentg/framework run typecheck && npm --workspace @agentg/framework run test && eslint packages/framework && prettier --check packages/framework",
     "check:gateway": "npm --workspace @agentg/gateway run typecheck && npm --workspace @agentg/gateway run test && eslint packages/gateway && prettier --check packages/gateway",
     "check:telemetry": "npm --workspace @agentg/telemetry run typecheck && npm --workspace @agentg/telemetry --if-present run test && eslint packages/telemetry && prettier --check packages/telemetry",
     "check:dashboard": "npm --workspace @agentg/dashboard run typecheck && npm --workspace @agentg/dashboard --if-present run test && eslint packages/dashboard && prettier --check packages/dashboard",
+    "check:policies": "npm run policies:generate && npm --workspace @agentg/policies run typecheck && npm --workspace @agentg/policies --if-present run test && eslint packages/policies && prettier --check packages/policies",
     "check:telegram": "npm --workspace @agentg/telegram run typecheck && npm --workspace @agentg/telegram --if-present run test && eslint packages/telegram && prettier --check packages/telegram",
     "check:history-sync": "npm --workspace @agentg/history-sync run typecheck && npm --workspace @agentg/history-sync --if-present run test && eslint packages/history-sync && prettier --check packages/history-sync",
-    "check:modules": "npm run module-boundary:audit && npm run check:framework && npm run check:gateway && npm run check:telemetry && npm run check:dashboard && npm run check:telegram && npm run check:history-sync",
-    "check": "npm run typecheck && npm run lint && npm run source:audit && npm run format:check && npm run test"
+    "check:modules": "npm run module-boundary:audit && npm run check:framework && npm run check:gateway && npm run check:telemetry && npm run check:dashboard && npm run check:policies && npm run check:telegram && npm run check:history-sync",
+    "check": "npm run policies:generate && npm run typecheck && npm run lint && npm run source:audit && npm run format:check && npm run test"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
