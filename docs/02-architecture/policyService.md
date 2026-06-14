@@ -3,8 +3,8 @@
 ## Назначение
 
 `policies` дает агенту единый API для изменения активных деклараций поведения, а
-модулям дает `usePolicy(...)`, который возвращает текущее тело политики без
-metadata, YAML, RPC, подписок и файловых путей.
+модулям дает `usePolicy(...)`, который возвращает getter текущего тела политики
+без metadata, YAML, RPC, подписок и файловых путей.
 
 Политики являются infrastructure capability framework-а. Они не являются доменом
 Telegram, History Sync, Dashboard или другого модуля.
@@ -36,7 +36,8 @@ Telegram, History Sync, Dashboard или другого модуля.
   framework source.
 - Resolve: выполняется server-side до записи в store.
 - Consumption: модуль читает только policy value через `usePolicy(...)`.
-- Runtime value: `usePolicy(...)` возвращает stable readonly top-level Proxy.
+- Runtime value: `usePolicy(...)` возвращает stable getter актуального readonly
+  snapshot.
 - Empty store: active set `[]` передается в resolver.
 - Endpoint: API управления меняет instances, API исполнения отдает готовое value.
 
@@ -58,7 +59,7 @@ Telegram, History Sync, Dashboard или другого модуля.
 @agentg/framework/policies
   definePolicy(...)
   usePolicy(...)
-  resolver strategies
+  resolver helpers
   createPolicyServer(...)
   createPolicyClient(...)
 
@@ -95,7 +96,8 @@ Root exports остаются минимальными. Policy helpers не ра
 текущий объект или массив, с которым можно работать как с обычным TypeScript.
 
 Решение: policy server хранит и валидирует instances, собирает итоговое policy
-value, а `usePolicy(definition)` возвращает это value consuming module-у.
+value, а `usePolicy(definition)` возвращает consuming module-у getter этого
+value.
 
 ## Как это работает
 
@@ -111,9 +113,10 @@ value, а `usePolicy(definition)` возвращает это value consuming mo
 8. Policy server выполняет resolver для всего active set.
 9. Если validation или resolver завершились ошибкой, документ не сохраняется.
 10. Если новое policy value построено, server сохраняет документ и публикует
-   `policies.instances.changed`.
+    `policies.instances.changed`.
 11. `usePolicy(definition)` получает событие и refetches готовое policy value.
-12. Код модуля читает объект или массив, который вернул `usePolicy`.
+12. Код модуля вызывает getter и читает объект или массив, который вернул
+    resolver.
 
 Мета документа не попадает в consuming module: он уже выбрал конкретную policy
 definition.
@@ -125,7 +128,7 @@ Definition живет в модуле, который владеет смысл�
 ```ts
 // packages/foobar/policies/policies.ts
 import { z } from 'zod';
-import { collectSpecs, definePolicy, recordBy } from '@agentg/framework/policies';
+import { collectSpecs, definePolicy } from '@agentg/framework/policies';
 
 export const foobarRulesPolicy = definePolicy({
   id: 'foobar.rules',
@@ -178,13 +181,15 @@ catalog diagnostics и form cache invalidation.
 `spec` — `zod`-форма тела YAML-документа. Из нее берется validation и
 TypeScript-тип `Spec`.
 
-`resolve` — resolver strategy, которая строит итоговое policy value из массива
-валидных `spec`.
+`resolve` — plain function, которая строит итоговое policy value из массива
+валидных `spec`. Тип policy value выводится из return type этой функции.
+TypeScript требует top-level object/array, а runtime framework проверяет, что
+результат является JSON-safe object/array.
 
 Policy entrypoint должен быть pure: без database, events, TDLib, module setup,
 RPC clients и других side effects.
 
-## Resolver strategies
+## Resolver helpers
 
 Resolver — это функция сборки итогового policy value из всех active `spec`
 одного `kind`.
@@ -192,19 +197,19 @@ Resolver — это функция сборки итогового policy value 
 Если `resolve` не задан, framework применяет resolver по умолчанию:
 
 ```ts
-resolve: collectSpecs()
+resolve: collectSpecs();
 ```
 
 `collectSpecs` возвращает все `spec` в детерминированном порядке. Базовый порядок
 задает infrastructure по `metadata.name`. Если политике нужен приоритет, он
 должен быть полем `spec`, а не `metadata`.
 
-Стартовые стратегии:
+Стартовые helpers являются обычными resolver functions:
 
 ```ts
-collectSpecs()
-recordBy((spec) => spec.key)
-singleSpec({ empty: emptySpec })
+collectSpecs();
+recordBy((spec) => spec.key);
+singleSpec({ empty: emptySpec });
 ```
 
 `recordBy` отклоняет duplicate key как resolver error. `singleSpec` возвращает
@@ -283,18 +288,18 @@ resolver.
 
 ## Policy value
 
-Policy value — это то, что возвращает `usePolicy`.
+Policy value — это то, что возвращает getter из `usePolicy`.
 
 Для `foobarRulesPolicy` с default resolver:
 
 ```ts
-const rules = usePolicy(foobarRulesPolicy);
+const getRules = usePolicy(foobarRulesPolicy);
 ```
 
-`rules` типизирован как live-массив:
+`getRules` типизирован как getter:
 
 ```ts
-readonly {
+() => readonly {
   target: string;
   mode: 'enabled' | 'disabled';
   limit: number | null;
@@ -304,13 +309,13 @@ readonly {
 Для `foobarSettingsPolicy` с custom resolver:
 
 ```ts
-const settings = usePolicy(foobarSettingsPolicy);
+const getSettings = usePolicy(foobarSettingsPolicy);
 ```
 
-`settings` типизирован как объект:
+`getSettings` типизирован как getter:
 
 ```ts
-Readonly<Record<string, string>>
+() => Readonly<Record<string, string>>;
 ```
 
 Доменный код не получает `apiVersion`, `kind`, `metadata`, `moduleId` или
@@ -361,7 +366,13 @@ getPolicyValue(input: { kind: string }): PolicyValue;
 ### Wire-типы
 
 ```ts
-type JsonValue = null | boolean | number | string | readonly JsonValue[] | { readonly [key: string]: JsonValue };
+type JsonValue =
+  | null
+  | boolean
+  | number
+  | string
+  | readonly JsonValue[]
+  | { readonly [key: string]: JsonValue };
 type PolicyValue = readonly JsonValue[] | { readonly [key: string]: JsonValue };
 
 type PolicyIdentity = { kind: string; name: string };
@@ -449,13 +460,13 @@ export const foobarModule = defineModule('foobar', {
   config: readConfig,
 
   setup({ resource, usePolicy }) {
-    const rules = usePolicy(foobarRulesPolicy);
-    const settings = usePolicy(foobarSettingsPolicy);
+    const getRules = usePolicy(foobarRulesPolicy);
+    const getSettings = usePolicy(foobarSettingsPolicy);
 
     const foobar = resource('foobar', () =>
       createFoobar({
-        rules,
-        settings
+        getRules,
+        getSettings
       })
     );
 
@@ -471,41 +482,40 @@ export const foobarModule = defineModule('foobar', {
 ```ts
 // packages/foobar/src/foobar.ts
 type FoobarOptions = {
-  rules: readonly FoobarRuleSpec[];
-  settings: Readonly<Record<string, string>>;
+  getRules: () => readonly FoobarRuleSpec[];
+  getSettings: () => Readonly<Record<string, string>>;
 };
 
 export function createFoobar(options: FoobarOptions) {
   return {
     modeFor(target: string): 'enabled' | 'disabled' {
-      return options.rules.find((rule) => rule.target === target)?.mode ?? 'disabled';
+      return options.getRules().find((rule) => rule.target === target)?.mode ?? 'disabled';
     },
 
     setting(key: string): string | undefined {
-      return options.settings[key];
+      return options.getSettings()[key];
     }
   };
 }
 ```
 
-`usePolicy` возвращает live value: внешний объект стабилен, но его чтение всегда
-идет в текущее policy value. После update следующий доступ к `rules` или
-`settings` видит новые данные.
+`usePolicy` возвращает live getter: сама функция стабильна, а каждый вызов
+читает актуальный policy snapshot. После update следующий вызов `getRules()` или
+`getSettings()` видит новые данные.
 
-Первый срез поддерживает только object/array policy values. `usePolicy` возвращает
-stable readonly top-level Proxy. Ссылки, сохраненные на nested objects/items,
-являются snapshot; чтобы увидеть update, код читает значение заново от top-level
-policy value. Попытка mutation через proxy запрещена.
+Первый срез поддерживает только object/array policy values. Сохраненный результат
+вызова getter является snapshot; чтобы увидеть update, код вызывает getter
+заново. Snapshot readonly, runtime mutation отклоняется через frozen value.
 
 Контракт `usePolicy(definition)`:
 
-- возвращает значение типа `PolicyValueOf<typeof definition>`;
+- возвращает getter типа `() => PolicyValueOf<typeof definition>`;
 - при omitted `resolve` этот тип соответствует результату `collectSpecs()`;
 - до успешного startup чтение значения бросает ошибку разработки;
 - регистрирует startup process во framework module setup;
 - на startup делает `getPolicyValue({ kind })`;
 - на update заново делает `getPolicyValue({ kind })`;
-- атомарно заменяет live value;
+- атомарно заменяет latest snapshot;
 - при update/refetch error оставляет last-good value и логирует ошибку;
 - не пересчитывает уже запущенные jobs.
 
@@ -525,7 +535,7 @@ type PolicyInstancesChanged = {
 
 1. игнорирует событие с чужим `kind`;
 2. делает `getPolicyValue({ kind: definition.kind })`;
-3. атомарно заменяет live value.
+3. атомарно заменяет latest snapshot.
 
 Если refetch завершился ошибкой, `usePolicy` оставляет last-good value, логирует
 ошибку и не валит consumer после успешного startup. Event bus не является source
@@ -604,15 +614,15 @@ Catalog invariants:
 - Изменение политики влияет только на новые операции.
 - Невалидное обновление не меняет активное policy value.
 - Логи фиксируют успешные и отклоненные изменения.
-- Mutations одного `kind` выполняются последовательно.
+- Mutations выполняются последовательно.
 
 ## Первый срез реализации
 
 1. Добавить `packages/framework/src/policies/**`: `definePolicy`, resolver
-   strategies, `createPolicyServer`, `createPolicyClient`, `usePolicy`
+   helpers, `createPolicyServer`, `createPolicyClient`, `usePolicy`
    integration.
-2. Добавить `packages/policies`: endpoint wire types, procedures, composition
-   entrypoint и generated catalog.
+2. Добавить `packages/policies`: endpoint process, composition entrypoint и
+   generated catalog.
 3. Сделать файловый `PolicyStore`.
 4. Сделать build-time generator для `packages/*/policies/policies.ts`.
 5. Добавить `@agentg/framework/policies` subpath export.
@@ -624,7 +634,7 @@ Catalog invariants:
 
 - invalid YAML/spec не меняет active instances;
 - resolver error не меняет active instances;
-- non-JSON policy value отклоняется как resolver error;
+- non-JSON policy value отклоняется как `non_json_value`;
 - duplicate identity валит startup policy server;
 - duplicate `definition.id` или `definition.kind` валит generation/startup;
 - path/identity mismatch валит startup file adapter;
@@ -637,8 +647,9 @@ Catalog invariants:
 - `getPolicyValue({ kind })` возвращает resolved policy value;
 - event содержит только `{ kind, moduleId }`;
 - `usePolicy(definition)` refetches policy value по событию;
-- `usePolicy(definition)` возвращает `PolicyValueOf<typeof definition>`;
-- `usePolicy(definition)` сохраняет identity top-level proxy после update;
+- `usePolicy(definition)` возвращает getter `() => PolicyValueOf<typeof definition>`;
+- `usePolicy(definition)` сохраняет identity getter после update;
+- getter возвращает latest snapshot после update;
 - refetch failure сохраняет last-good value;
 - foreign event ignored;
 - omitted `resolve` использует `collectSpecs()`;
