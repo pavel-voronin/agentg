@@ -1,59 +1,62 @@
-# Контракт сервиса политик
+# Policy Service Contract
 
-## Назначение
+## Purpose
 
-`policies` дает агенту единый API для изменения активных деклараций поведения, а
-модулям дает `usePolicy(...)`, который возвращает getter текущего тела политики
-без metadata, YAML, RPC, подписок и файловых путей.
+`policies` gives the external agent/operator edge one API for changing active
+behavior declarations. Modules get `usePolicy(...)`, which returns a getter for
+the current policy body without metadata, YAML, RPC, subscriptions, or file
+paths.
 
-Политики являются infrastructure capability framework-а. Они не являются доменом
-Telegram, History Sync, Dashboard или другого модуля.
+Policies are a framework infrastructure capability. They are not part of the
+Telegram, History Sync, Dashboard, or any other domain module.
 
-## Цель
+## Goal
 
-Сделать центральный механизм политик, который:
+Build a central policy mechanism that:
 
-- хранит активные YAML instances;
-- валидирует `spec` через `zod`-формы, объявленные в модулях;
-- собирает итоговое policy value через resolver;
-- уведомляет работающие модули об изменении policy value;
-- скрывает от доменного кода storage, YAML parsing, RPC и events;
-- дает разработчику простую поверхность: `definePolicy(...)` и
-  `usePolicy(...)`.
+- stores active YAML instances;
+- validates `spec` with `zod` forms declared by modules;
+- resolves all active instances into a policy value;
+- notifies running modules when a policy value changes;
+- hides storage, YAML parsing, RPC, and events from domain code;
+- gives developers a small surface: `definePolicy(...)` and `usePolicy(...)`.
 
-## Не цели
+## Non-goals
 
-- Не строить аудит-хранилище изменений. На первом этапе достаточно логов.
-- Не вводить метрики и Dashboard до стабилизации контракта.
-- Не делать DB-хранилище первым срезом.
-- Не делать API политик внутри каждого доменного модуля.
-- Не применять изменения к уже запущенным jobs.
+- Do not build an audit storage for changes. Logs are enough for the first
+  slice.
+- Do not add metrics or Dashboard UI before the contract stabilizes.
+- Do not use a database store as the first storage adapter.
+- Do not add policy APIs inside domain modules.
+- Do not apply policy changes to already running jobs.
 
-## Принятые решения
+## Decisions
 
-- Source of truth: YAML instances в `PolicyStore`.
-- Catalog: generated catalog принадлежит endpoint composition layer, не
+- Source of truth: YAML instances in `PolicyStore`.
+- Catalog: the generated catalog belongs to the endpoint composition layer, not
   framework source.
-- Resolve: выполняется server-side до записи в store.
-- Consumption: модуль читает только policy value через `usePolicy(...)`.
-- Runtime value: `usePolicy(...)` возвращает stable getter актуального readonly
-  snapshot.
-- Empty store: active set `[]` передается в resolver.
-- Endpoint: API управления меняет instances, API исполнения отдает готовое value.
+- Resolve: policy values are resolved server-side before store writes.
+- Consumption: modules read only policy values through `usePolicy(...)`.
+- Runtime value: `usePolicy(...)` returns a stable getter for the current
+  readonly snapshot.
+- Empty store: active set `[]` is passed into the resolver.
+- Endpoint: the control API changes instances, and the execution API returns
+  resolved values.
 
-## Инварианты
+## Invariants
 
-- Raw YAML существует только на границе store/endpoint input; после parsing
-  система работает с `PolicyDocument`.
-- Resolver получает только валидные `spec`, без `metadata`.
-- `metadata` используется для identity, поиска, порядка и управления.
-- Store mutation происходит только после успешной validation и resolver.
-- Consuming module получает только policy value.
-- Policy value должен быть JSON-serializable plain object/array.
+- Raw YAML exists only at the store/endpoint input boundary. After parsing, the
+  system works with `PolicyDocument`.
+- Resolvers receive only valid `spec` values, without `metadata`.
+- `metadata` is used for identity, search, ordering, and control-plane
+  operations.
+- Store mutation happens only after successful validation and resolve.
+- Consuming modules receive only policy values.
+- Policy values must be JSON-serializable top-level plain objects or arrays.
 
 ## Ownership
 
-Клиентская и серверная реализация политик живет во framework.
+Client and server implementation for policies lives in the framework.
 
 ```text
 @agentg/framework/policies
@@ -71,61 +74,63 @@ Telegram, History Sync, Dashboard или другого модуля.
   file store adapter
 ```
 
-`@agentg/policies` не является доменным модулем и не содержит module DX. Он
-существует только как endpoint process, composition entrypoint и adapter
-хранилища. Generic contract, wire-типы, procedure names, client/server живут во
-framework; endpoint process вызывает framework как factory.
+`@agentg/policies` is not a domain module and does not contain module DX. It
+exists only as the endpoint process, composition entrypoint, and storage adapter.
+The generic contract, wire types, procedure names, client, and server live in
+the framework; the endpoint process calls the framework factory.
 
-Generated catalog не живет внутри framework source, если он импортирует module
-policy entrypoints. Catalog принадлежит composition layer:
+The generated catalog must not live inside framework source if it imports module
+policy entrypoints. The catalog belongs to the composition layer:
 
 ```ts
 createPolicyServer({ catalog, store });
 ```
 
-Модули импортируют policy DX из framework subpath:
+Modules import policy DX from the framework subpath:
 
 ```ts
 import { collectSpecs, definePolicy, recordBy } from '@agentg/framework/policies';
 ```
 
-Root exports остаются минимальными. Policy helpers не расширяют package root без
-текущего внешнего consumer-а.
+Root exports stay minimal. Policy helpers must not widen the package root unless
+there is a current external consumer that needs that public entrypoint.
 
-## Главное противоречие
+## Core Tension
 
-Агенту нужны маленькие независимые YAML-декларации, но коду модуля нужен простой
-текущий объект или массив, с которым можно работать как с обычным TypeScript.
+The external agent needs small independent YAML declarations, while module code
+needs a simple current object or array that behaves like normal TypeScript data.
 
-Решение: policy server хранит и валидирует instances, собирает итоговое policy
-value, а `usePolicy(definition)` возвращает consuming module-у getter этого
-value.
+The policy server stores and validates instances, resolves them into the final
+policy value, and `usePolicy(definition)` returns a getter for that value to the
+consuming module.
 
-## Как это работает
+## How It Works
 
-1. Модуль объявляет `definePolicy(...)`: `kind`, `moduleId`, `version`,
-   `zod`-форму `spec` и resolver.
-2. Build-time catalog собирает definitions из модулей.
-3. Composition layer запускает endpoint и передает catalog во framework:
-   `createPolicyServer({ catalog, store })`.
-4. Агент через единый endpoint создает, обновляет или удаляет YAML instance.
-5. Policy server находит definition по `kind`.
-6. Policy server валидирует `spec` измененного документа.
-7. Policy server строит новый active set для этого `kind`.
-8. Policy server выполняет resolver для всего active set.
-9. Если validation или resolver завершились ошибкой, документ не сохраняется.
-10. Если новое policy value построено, server сохраняет документ и публикует
-    `policies.instances.changed`.
-11. `usePolicy(definition)` получает событие и refetches готовое policy value.
-12. Код модуля вызывает getter и читает объект или массив, который вернул
+1. A module declares `definePolicy(...)`: `kind`, `moduleId`, `version`, a `zod`
+   `spec` form, and an optional resolver.
+2. The build-time catalog collects definitions from modules.
+3. The composition layer starts the endpoint and passes the catalog into the
+   framework: `createPolicyServer({ catalog, store })`.
+4. The external agent/operator edge creates, updates, or deletes a YAML instance
+   through the single policy endpoint.
+5. The policy server finds the definition by `kind`.
+6. The policy server validates the changed document `spec`.
+7. The policy server builds the next active set for this `kind`.
+8. The policy server runs the resolver for the whole active set.
+9. If validation or resolve fails, the document is not saved.
+10. If a new policy value is resolved, the server stores the document and
+    publishes `policies.instances.changed`.
+11. `usePolicy(definition)` receives the event and refetches the resolved policy
+    value.
+12. Module code calls the getter and reads the object or array returned by the
     resolver.
 
-Мета документа не попадает в consuming module: он уже выбрал конкретную policy
-definition.
+Document metadata does not reach the consuming module: the module has already
+selected a concrete policy definition.
 
 ## PolicyDefinition
 
-Definition живет в модуле, который владеет смыслом политики.
+The definition lives in the module that owns the meaning of the policy.
 
 ```ts
 // packages/foobar/policies/policies.ts
@@ -166,47 +171,48 @@ export const foobarSettingsPolicy = definePolicy({
 export const policies = [foobarRulesPolicy, foobarSettingsPolicy] as const;
 ```
 
-### Поля definition
+### Definition Fields
 
-`id` — стабильный developer-facing id definition. Нужен для catalog, диагностики,
-form metadata и уникальности definition. Это не identity YAML instance.
+`id` is the stable developer-facing definition id. It is used for the catalog,
+diagnostics, form metadata, and definition uniqueness. It is not a YAML instance
+identity.
 
-`kind` — тип policy-документа. По нему YAML instance связывается с definition.
-Это главный ключ выбора validator/resolver.
+`kind` is the policy document type. YAML instances use it to bind to a
+`PolicyDefinition`. It is the primary key for validator and resolver selection.
 
-`moduleId` — владелец смысла политики. Нужен для discovery, фильтрации,
-ownership и event routing. Это не доменный API модуля.
+`moduleId` is the owner of the policy meaning. It is used for discovery,
+filtering, ownership, and event routing. It is not a domain API for that module.
 
-`version` — версия контракта `spec` и resolver для этого `kind`. Нужна для
-catalog diagnostics и form cache invalidation.
+`version` is the contract version for this `kind`'s `spec` and resolver. It is
+used for catalog diagnostics and form cache invalidation.
 
-`spec` — `zod`-форма тела YAML-документа. Из нее берется validation и
-TypeScript-тип `Spec`.
+`spec` is the `zod` form for the YAML document body. It provides validation and
+the TypeScript `Spec` type.
 
-`resolve` — plain function, которая строит итоговое policy value из массива
-валидных `spec`. Тип policy value выводится из return type этой функции.
-TypeScript требует top-level object/array, а runtime framework проверяет, что
-результат является JSON-safe object/array.
+`resolve` is a plain function that builds the final policy value from all valid
+`spec` values. The policy value type is inferred from its return type.
+TypeScript requires a top-level object or array, and the framework checks at
+runtime that the result is JSON-safe.
 
-Policy entrypoint должен быть pure: без database, events, TDLib, module setup,
-RPC clients и других side effects.
+The policy entrypoint must be pure: no database, events, TDLib, module setup,
+RPC clients, or other side effects.
 
-## Resolver helpers
+## Resolver Helpers
 
-Resolver — это функция сборки итогового policy value из всех active `spec`
-одного `kind`.
+A resolver builds the final policy value from all active `spec` values of one
+`kind`.
 
-Если `resolve` не задан, framework применяет resolver по умолчанию:
+If `resolve` is omitted, the framework uses the default resolver:
 
 ```ts
 resolve: collectSpecs();
 ```
 
-`collectSpecs` возвращает все `spec` в детерминированном порядке. Базовый порядок
-задает infrastructure по `metadata.name`. Если политике нужен приоритет, он
-должен быть полем `spec`, а не `metadata`.
+`collectSpecs` returns all `spec` values in deterministic order. Infrastructure
+defines the base order by `metadata.name`. If a policy needs priority, priority
+must be a `spec` field, not `metadata`.
 
-Стартовые helpers являются обычными resolver functions:
+The initial helpers are plain resolver functions:
 
 ```ts
 collectSpecs();
@@ -214,11 +220,11 @@ recordBy((spec) => spec.key);
 singleSpec({ empty: emptySpec });
 ```
 
-`recordBy` отклоняет duplicate key как resolver error. `singleSpec` возвращает
-единственный `spec`, использует `empty` при `[]` и отклоняет больше одного
-instance как resolver error.
+`recordBy` rejects duplicate keys as resolver errors. `singleSpec` returns the
+only `spec`, uses `empty` for `[]`, and rejects more than one instance as a
+resolver error.
 
-Можно написать custom resolver:
+Custom resolvers are allowed:
 
 ```ts
 resolve(specs) {
@@ -226,23 +232,25 @@ resolve(specs) {
 }
 ```
 
-Generic YAML merge запрещен. Каждый `kind` сам задает семантику объединения
-через resolver.
+Generic YAML merge is forbidden. Each `kind` owns its own composition semantics
+through its resolver.
 
-Resolver выполняется на стороне policy server. Это значит:
+The resolver runs on the policy server. This means:
 
-- невалидная композиция не попадает в store;
-- `setInstance` честно отвечает агенту, применима политика или нет;
-- все consumers получают одно и то же policy value;
-- `usePolicy` остается live-cache adapter;
-- resolver обязан быть pure и deterministic.
+- invalid composition never reaches the store;
+- `setInstance` gives the external agent an honest answer about whether the
+  policy is applicable;
+- all consumers receive the same policy value;
+- `usePolicy` remains a live-cache adapter;
+- the resolver must be pure and deterministic.
 
-Если модулю нужен богатый helper, он строит его у себя поверх plain policy value.
+If a module needs a richer helper, it builds that helper locally on top of the
+plain policy value.
 
 ## PolicyInstance
 
-Один активный YAML-документ. Это не журнал намерений, а текущее декларативное
-состояние.
+One active YAML document. It is not an intention log; it is the current
+declarative state.
 
 ```yaml
 apiVersion: agentg.dev/v1
@@ -257,48 +265,48 @@ spec:
   limit: 10
 ```
 
-### Поля instance
+### Instance Fields
 
-`apiVersion` — версия envelope-формата policy document. Это не версия доменного
-`spec`. Первый контракт: `agentg.dev/v1`.
+`apiVersion` is the envelope format version for the policy document. It is not
+the domain `spec` version. The first contract is `agentg.dev/v1`.
 
-`kind` — выбирает `PolicyDefinition`. Значение должно совпасть с
-`definition.kind`.
+`kind` selects the `PolicyDefinition`. The value must match `definition.kind`.
 
-`metadata` — служебная оболочка для хранения и управления. В `usePolicy` она не
-попадает.
+`metadata` is the service envelope for storage and control-plane operations. It
+does not reach `usePolicy`.
 
-`metadata.name` — имя instance внутри `kind`. Вместе с `kind` образует identity:
-`kind + metadata.name`.
+`metadata.name` is the instance name inside `kind`. Together with `kind`, it
+forms identity: `kind + metadata.name`.
 
-`metadata.labels` — управленческая таксономия для поиска, фильтрации и UI. В
-policy value она не попадает.
+`metadata.labels` is the control-plane taxonomy for search, filtering, and UI.
+It does not reach the policy value.
 
-Labels являются `Record<string, string>`. Ключи должны быть camelCase, значения
-должны быть непустыми строками.
+Labels are `Record<string, string>`. Keys must be camelCase, and values must be
+non-empty strings.
 
-`spec` — тело политики. Оно валидируется через `definition.spec` и передается в
-resolver.
+`spec` is the policy body. It is validated with `definition.spec` and passed
+into the resolver.
 
-Правила identity:
+Identity rules:
 
-- `kind + metadata.name` должен быть уникален во всем store;
-- `metadata.name` должен быть camelCase stem, совместимый с именем файла;
-- file adapter хранит документ по canonical path, выведенному из identity;
-- mismatch между path и identity при старте является ошибкой store;
-- duplicate identity при старте является ошибкой store.
+- `kind + metadata.name` must be unique in the whole store;
+- `metadata.name` must be a camelCase stem compatible with a file name;
+- the file adapter stores the document at the canonical path derived from
+  identity;
+- path/identity mismatch at startup is a store error;
+- duplicate identity at startup is a store error.
 
-## Policy value
+## Policy Value
 
-Policy value — это то, что возвращает getter из `usePolicy`.
+Policy value is what the `usePolicy` getter returns.
 
-Для `foobarRulesPolicy` с default resolver:
+For `foobarRulesPolicy` with the default resolver:
 
 ```ts
 const getRules = usePolicy(foobarRulesPolicy);
 ```
 
-`getRules` типизирован как getter:
+`getRules` is typed as:
 
 ```ts
 () => readonly {
@@ -308,37 +316,44 @@ const getRules = usePolicy(foobarRulesPolicy);
 }[]
 ```
 
-Для `foobarSettingsPolicy` с custom resolver:
+For `foobarSettingsPolicy` with a custom resolver:
 
 ```ts
 const getSettings = usePolicy(foobarSettingsPolicy);
 ```
 
-`getSettings` типизирован как getter:
+`getSettings` is typed as:
 
 ```ts
 () => Readonly<Record<string, string>>;
 ```
 
-Доменный код не получает `apiVersion`, `kind`, `metadata`, `moduleId` или
-`policyId`, потому что он уже работает внутри конкретной политики.
+Domain code does not receive `apiVersion`, `kind`, `metadata`, `moduleId`, or
+`policyId`, because it is already operating inside a concrete policy.
 
-Пустой валидный store является допустимым состоянием:
+An empty valid store is a valid state:
 
-- `collectSpecs()` возвращает пустой readonly-массив;
-- custom resolver получает `[]`;
-- если policy не может работать без instance, custom resolver обязан явно
-  бросить ошибку на `[]`.
+- `collectSpecs()` returns an empty readonly array;
+- custom resolvers receive `[]`;
+- if a policy cannot operate without an instance, the custom resolver must throw
+  explicitly for `[]`.
 
 ## Endpoint API
 
-Generic endpoint contract описан во `@agentg/framework/policies`.
-`@agentg/policies` поднимает этот контракт как отдельный infrastructure
-endpoint. API управления предназначен для agent/operator edge. API исполнения
-предназначен для framework policy client. Доменные модули не вызывают endpoint
-напрямую.
+The generic endpoint contract is defined in `@agentg/framework/policies`.
+`@agentg/policies` exposes that contract as an infrastructure endpoint.
 
-### API управления
+There are two distinct surfaces:
+
+- control API: called only by the external agent/operator edge to manage policy
+  instances;
+- execution API: called by the framework policy client to read resolved policy
+  values for modules.
+
+Domain modules do not call the policy endpoint directly and never edit their
+own policies.
+
+### Control API
 
 ```ts
 listPolicyKinds(): readonly PolicyKindDescriptor[];
@@ -348,26 +363,26 @@ setInstance(input: { document: PolicyDocument }): PolicyMutationResult;
 deleteInstance(input: PolicyIdentity): PolicyMutationResult;
 ```
 
-`listPolicyKinds()` возвращает `kind`, `moduleId`, `version`, `id` и `form`. Он не
-возвращает resolver или module-local типы.
+`listPolicyKinds()` returns `kind`, `moduleId`, `version`, `id`, and `form`. It
+does not return resolver functions or module-local types.
 
-`setInstance` валидирует документ через `spec`, строит новый active set,
-выполняет resolver и только после этого сохраняет документ. `deleteInstance`
-делает то же самое для active set без удаляемого документа.
+`setInstance` validates the document with `spec`, builds the next active set,
+runs the resolver, and only then stores the document. `deleteInstance` does the
+same for the active set without the deleted document.
 
-`setInstance` и `deleteInstance` в первом срезе являются single-instance
-операциями; batch update не входит в первый контракт.
+`setInstance` and `deleteInstance` are single-instance operations in the first
+slice. Batch update is not part of the first contract.
 
-### API исполнения
+### Execution API
 
 ```ts
 getPolicyValue(input: { kind: string }): PolicyValue;
 ```
 
-`getPolicyValue({ kind })` возвращает готовое policy value для framework
+`getPolicyValue({ kind })` returns the resolved policy value for framework
 `usePolicy(...)`.
 
-### Wire-типы
+### Wire Types
 
 ```ts
 type JsonValue =
@@ -430,31 +445,32 @@ type PolicyMutationResult =
     };
 ```
 
-`PolicyMutationResult` является прямым результатом команды, а не compatibility
-envelope. Transport/protocol failures остаются RPC errors; ожидаемые отказы
-policy contract возвращаются как `status: 'rejected'`.
+`PolicyMutationResult` is the direct command result, not a compatibility
+envelope. Transport/protocol failures stay RPC errors; expected policy contract
+rejections return `status: 'rejected'`.
 
-## Failure model
+## Failure Model
 
-- Invalid mutation возвращает `status: 'rejected'` и не меняет store.
-- Transport/protocol failures возвращаются как RPC errors.
-- Policy server до открытия endpoint загружает store, валидирует instances и
-  строит policy value для каждого known `kind`.
-- Startup policy server падает при unreadable file, invalid YAML, unknown kind,
-  invalid spec, resolver error, duplicate identity или path/identity mismatch.
-- Startup consumer не падает из-за отсутствия instances.
-- Startup consumer падает при недоступном endpoint или ошибке `getPolicyValue`.
-- После успешного startup `usePolicy` сохраняет last-good value при refetch
+- Invalid mutation returns `status: 'rejected'` and does not change the store.
+- Transport/protocol failures return RPC errors.
+- Before opening the endpoint, the policy server loads the store, validates
+  instances, and resolves the policy value for every known `kind`.
+- Policy server startup fails on unreadable file, invalid YAML, unknown kind,
+  invalid spec, resolver error, duplicate identity, or path/identity mismatch.
+- Consumer startup does not fail because there are no initial instances.
+- Consumer startup fails when the endpoint is unavailable or `getPolicyValue`
+  fails.
+- After successful startup, `usePolicy` keeps the last-good value on refetch
   failure.
-- Event publish failure не откатывает уже примененный store write; результат
-  остается `applied`, ошибка пишется в лог, consumers обновятся после следующего
-  успешного события или рестарта.
+- Event publish failure does not roll back an already applied store write. The
+  result stays `applied`, the error is logged, and consumers refresh after the
+  next successful event or restart.
 
-## API потребления внутри модуля
+## Module Consumption API
 
-Модуль получает текущее тело политики через `usePolicy(definition)`.
-Доменный код не создает `policiesClient`, не подписывается на events, не читает
-YAML и не выполняет resolver.
+A module receives the current policy body through `usePolicy(definition)`.
+Domain code does not create `policiesClient`, does not subscribe to events, does
+not read YAML, and does not run the resolver.
 
 ```ts
 // packages/foobar/src/module.ts
@@ -481,7 +497,7 @@ export const foobarModule = defineModule('foobar', {
 });
 ```
 
-В доменном коде это выглядит как обычный объект или массив:
+In domain code, the value looks like a normal object or array:
 
 ```ts
 // packages/foobar/src/foobar.ts
@@ -503,30 +519,29 @@ export function createFoobar(options: FoobarOptions) {
 }
 ```
 
-`usePolicy` возвращает live getter: сама функция стабильна, а каждый вызов
-читает актуальный policy snapshot. После update следующий вызов `getRules()` или
-`getSettings()` видит новые данные.
+`usePolicy` returns a live getter: the function identity is stable, and every
+call reads the current policy snapshot. After an update, the next `getRules()`
+or `getSettings()` call sees new data.
 
-Первый срез поддерживает только object/array policy values. Сохраненный результат
-вызова getter является snapshot; чтобы увидеть update, код вызывает getter
-заново. Snapshot readonly, runtime mutation отклоняется через frozen value.
+The first slice supports only object/array policy values. A saved getter result
+is a snapshot; call the getter again to observe an update. Snapshots are
+readonly, and runtime mutation is rejected through frozen values.
 
-Контракт `usePolicy(definition)`:
+`usePolicy(definition)` contract:
 
-- возвращает getter типа `() => PolicyValueOf<typeof definition>`;
-- при omitted `resolve` этот тип соответствует результату `collectSpecs()`;
-- до успешного startup чтение значения бросает ошибку разработки;
-- регистрирует startup process во framework module setup;
-- на startup делает `getPolicyValue({ kind })`;
-- на update заново делает `getPolicyValue({ kind })`;
-- атомарно заменяет latest snapshot;
-- при update/refetch error оставляет last-good value и логирует ошибку;
-- не пересчитывает уже запущенные jobs.
+- returns a getter of type `() => PolicyValueOf<typeof definition>`;
+- with omitted `resolve`, that type matches the result of `collectSpecs()`;
+- reading before successful startup throws a development error;
+- registers a startup process in framework module setup;
+- calls `getPolicyValue({ kind })` on startup;
+- calls `getPolicyValue({ kind })` again on update;
+- atomically replaces the latest snapshot;
+- keeps the last-good value and logs on update/refetch error;
+- does not recompute already running jobs.
 
-## Доставка обновлений
+## Update Delivery
 
-Событие `policies.instances.changed` не содержит сами instances и не содержит
-policy value.
+`policies.instances.changed` does not contain the instances or the policy value.
 
 ```ts
 type PolicyInstancesChanged = {
@@ -535,28 +550,28 @@ type PolicyInstancesChanged = {
 };
 ```
 
-`usePolicy(definition)` на событие:
+On this event, `usePolicy(definition)`:
 
-1. игнорирует событие с чужим `kind`;
-2. делает `getPolicyValue({ kind: definition.kind })`;
-3. атомарно заменяет latest snapshot.
+1. ignores events for another `kind`;
+2. calls `getPolicyValue({ kind: definition.kind })`;
+3. atomically replaces the latest snapshot.
 
-Если refetch завершился ошибкой, `usePolicy` оставляет last-good value, логирует
-ошибку и не валит consumer после успешного startup. Event bus не является source
-of truth. После рестарта модуль всегда получает актуальное policy value через
-endpoint.
+If refetch fails, `usePolicy` keeps the last-good value, logs the error, and
+does not fail the consumer after successful startup. The event bus is not the
+source of truth. After restart, the module always gets the current policy value
+from the endpoint.
 
 ## PolicyStore
 
-Устойчивое хранилище экземпляров. Первый adapter — файловый:
+Persistent instance storage. The first adapter is file-based:
 
 ```text
 config/policies/foobar-rule/alphaEnabled.yaml
 config/policies/foobar-rule/betaDisabled.yaml
 ```
 
-Файловая структура нужна только человеку и adapter-у. API должен запрашивать по
-`kind`, `moduleId`, `metadata.name`, `labels`, а не по пути.
+The file structure is for humans and the adapter only. APIs must query by
+`kind`, `moduleId`, `metadata.name`, and `labels`, not by path.
 
 Adapter contract:
 
@@ -568,17 +583,18 @@ type PolicyStore = {
 };
 ```
 
-Файловый adapter:
+The file adapter:
 
-- пишет только canonical path;
-- заменяет файл атомарно через temp-файл в той же директории и rename;
-- чистит незавершенные temp-файлы на старте;
-- удаляет по identity, а не по произвольному path;
-- не открывает path-based API наружу.
+- writes only the canonical path;
+- replaces files atomically through a temp file in the same directory and
+  rename;
+- cleans unfinished temp files on startup;
+- deletes by identity, not by arbitrary path;
+- does not expose a path-based API.
 
-## Discovery definitions
+## Discovery Definitions
 
-Definitions объявляются в модулях:
+Definitions are declared in modules:
 
 ```text
 packages/telegram/policies/policies.ts
@@ -586,17 +602,18 @@ packages/history-sync/policies/policies.ts
 packages/foobar/policies/policies.ts
 ```
 
-Catalog генерируется build-time из `packages/*/policies/policies.ts`.
-Generated catalog принадлежит composition layer:
+The catalog is generated at build time from `packages/*/policies/policies.ts`.
+The generated catalog belongs to the composition layer:
 
 ```text
 packages/policies/src/generated/policyCatalog.ts
 ```
 
-Generated catalog не редактируется вручную. Он импортирует только policy
-entrypoints, не package root доменных модулей и не module runtime/resources.
+Generated catalog files are not edited by hand. The catalog imports only policy
+entrypoints, not package roots of domain modules and not module runtime or
+resources.
 
-Composition layer запускает endpoint:
+The composition layer starts the endpoint:
 
 ```ts
 createPolicyServer({ catalog, store });
@@ -604,71 +621,153 @@ createPolicyServer({ catalog, store });
 
 Catalog invariants:
 
-- `definition.id` должен быть глобально уникален;
-- `definition.kind` должен быть глобально уникален;
-- duplicate definitions валят policy server construction/startup.
+- `definition.id` must be globally unique;
+- `definition.kind` must be globally unique;
+- duplicate definitions fail policy server construction/startup.
 
-## Первый потребитель
+## How to Add a New Policy
 
-Первый потребитель — Telegram files: policy value заменяет зашитые таблицы
-правил, а защитные проверки и правила выбора поведения остаются в доменном коде.
+This is a runbook for the executor that introduces a new policy into an
+existing module.
 
-## Правила применения
+1. Find the domain decision that is currently hardcoded and must become
+   configurable. The policy must affect only new operations; do not reconnect
+   already running work.
+2. Create or update `packages/<module>/policies/policies.ts`.
+3. Declare `definePolicy(...)`:
+   - `id`: stable developer-facing id, for example `foobar.rules`;
+   - `kind`: UpperCamelCase document kind, for example `FoobarRule`;
+   - `moduleId`: kebab-case id of the owning module;
+   - `version`: `spec` contract version;
+   - `spec`: `zod` form for the YAML document body;
+   - `resolve`: pure resolver if default `collectSpecs()` is not enough.
+4. Export the definition and the `policies` array from that file:
 
-- Изменение политики влияет только на новые операции.
-- Невалидное обновление не меняет активное policy value.
-- Логи фиксируют успешные и отклоненные изменения.
-- Mutations выполняются последовательно.
+```ts
+export const foobarRulesPolicy = definePolicy({
+  id: 'foobar.rules',
+  kind: 'FoobarRule',
+  moduleId: 'foobar',
+  spec: foobarRuleSpec,
+  version: 1
+});
 
-## Первый срез реализации
+export const policies = [foobarRulesPolicy] as const;
+```
 
-1. Добавить `packages/framework/src/policies/**`: `definePolicy`, resolver
-   helpers, `createPolicyServer`, `createPolicyClient`, `usePolicy`
-   integration.
-2. Добавить `packages/policies`: endpoint process, composition entrypoint и
+5. Add initial YAML instances to `config/policies/<kebab-kind>/<name>.yaml`. For
+   `FoobarRule`, the canonical directory is `config/policies/foobar-rule`.
+   `metadata.name` must match the file name without `.yaml`.
+
+```yaml
+apiVersion: agentg.dev/v1
+kind: FoobarRule
+metadata:
+  name: alphaEnabled
+  labels:
+    area: demo
+spec:
+  target: alpha
+  mode: enabled
+```
+
+6. Run `npm run policies:generate`. Do not edit the generated catalog by hand.
+7. In module setup, get a getter through `usePolicy(definition)` and pass it
+   into the domain resource/service:
+
+```ts
+setup({ resource, usePolicy }) {
+  const getRules = usePolicy(foobarRulesPolicy);
+
+  const foobar = resource('foobar', () =>
+    createFoobar({
+      getRules
+    })
+  );
+
+  return {
+    getFoobar: getFoobarProcedure({ foobar })
+  };
+}
+```
+
+8. In domain code, read only the getter. Do not create `policiesClient`, do not
+   subscribe to policy events manually, do not read YAML, and do not run the
+   resolver in the consuming module.
+9. For live updates, the external agent/operator edge calls the policy endpoint
+   control API: `setInstance` or `deleteInstance`. Domain modules must not call
+   these procedures. Manual YAML edits are startup input and are picked up on
+   the next policy endpoint start.
+10. Add tests:
+    - resolver rejects conflicting or invalidly composed specs;
+    - consumer behavior is driven through the getter;
+    - initial YAML instance passes catalog/store startup when new config is
+      added.
+11. Verify the slice:
+    - `npm run policies:generate`;
+    - `npm run check:policies`;
+    - `npm run check:<module>` for the consuming module;
+    - `npm run check:modules` before full integration.
+
+## First Consumer
+
+The first consumer is Telegram files: policy value replaces hardcoded rule
+tables, while safety checks and behavior selection rules stay in domain code.
+
+## Application Rules
+
+- Policy changes affect only new operations.
+- Invalid updates do not change the active policy value.
+- Logs record applied and rejected changes.
+- Mutations run sequentially.
+
+## First Implementation Slice
+
+1. Add `packages/framework/src/policies/**`: `definePolicy`, resolver helpers,
+   `createPolicyServer`, `createPolicyClient`, and `usePolicy` integration.
+2. Add `packages/policies`: endpoint process, composition entrypoint, and
    generated catalog.
-3. Сделать файловый `PolicyStore`.
-4. Сделать build-time generator для `packages/*/policies/policies.ts`.
-5. Добавить `@agentg/framework/policies` subpath export.
-6. Добавить `usePolicy(definition)` в framework module setup.
-7. Перенести первые зашитые правила в YAML instances.
-8. Подключить `usePolicy(...)` в первом consuming module.
+3. Implement file-based `PolicyStore`.
+4. Add the build-time generator for `packages/*/policies/policies.ts`.
+5. Add `@agentg/framework/policies` subpath export.
+6. Add `usePolicy(definition)` to framework module setup.
+7. Move the first hardcoded rules into YAML instances.
+8. Connect `usePolicy(...)` in the first consuming module.
 
-## Тестовый контракт
+## Test Contract
 
-- invalid YAML/spec не меняет active instances;
-- resolver error не меняет active instances;
-- non-JSON policy value отклоняется как `non_json_value`;
-- duplicate identity валит startup policy server;
-- duplicate `definition.id` или `definition.kind` валит policy server
+- invalid YAML/spec does not change active instances;
+- resolver error does not change active instances;
+- non-JSON policy value is rejected as `non_json_value`;
+- duplicate identity fails policy server startup;
+- duplicate `definition.id` or `definition.kind` fails policy server
   construction/startup;
-- path/identity mismatch валит startup file adapter;
-- `setInstance` и `deleteInstance` при ожидаемом отказе возвращают
-  `status: 'rejected'` со structured `PolicyError`;
-- read procedures при invalid input или unknown kind возвращают RPC/contract
-  error;
-- `setInstance` валидирует spec и resolver перед записью;
-- `deleteInstance` валидирует resolver перед удалением;
-- rejected mutation возвращает `status: 'rejected'` и не меняет store;
-- `setInstance` пишет canonical path атомарно;
-- `listInstances({ kind })` возвращает валидные active instances;
-- `getPolicyValue({ kind })` возвращает resolved policy value;
-- event содержит только `{ kind, moduleId }`;
-- `usePolicy(definition)` refetches policy value по событию;
-- `usePolicy(definition)` возвращает getter `() => PolicyValueOf<typeof definition>`;
-- `usePolicy(definition)` сохраняет identity getter после update;
-- getter возвращает latest snapshot после update;
-- refetch failure сохраняет last-good value;
-- foreign event ignored;
-- omitted `resolve` использует `collectSpecs()`;
-- empty store дает пустой массив для `collectSpecs()`;
-- empty store вызывает custom resolver с `[]`;
-- `recordBy` отклоняет duplicate key;
-- `singleSpec` отклоняет больше одного instance;
-- чтение policy value до успешного startup бросает ошибку разработки;
-- startup consumer не падает без initial instances;
-- отсутствие policies endpoint-а валит startup/configuration;
-- доменный код не создает `policiesClient` и не подписывается на policy events
-  вручную;
-- consuming module не парсит YAML, не знает файловые пути и не выполняет
-  resolver.
+- path/identity mismatch fails the startup file adapter;
+- `setInstance` and `deleteInstance` return `status: 'rejected'` with
+  structured `PolicyError` for expected rejections;
+- read procedures return RPC/contract errors for invalid input or unknown kind;
+- `setInstance` validates spec and resolver before write;
+- `deleteInstance` validates resolver before delete;
+- rejected mutation returns `status: 'rejected'` and does not change the store;
+- `setInstance` writes the canonical path atomically;
+- `listInstances({ kind })` returns valid active instances;
+- `getPolicyValue({ kind })` returns resolved policy value;
+- event contains only `{ kind, moduleId }`;
+- `usePolicy(definition)` refetches policy value on event;
+- `usePolicy(definition)` returns getter `() => PolicyValueOf<typeof definition>`;
+- `usePolicy(definition)` keeps getter identity after update;
+- getter returns latest snapshot after update;
+- refetch failure keeps last-good value;
+- foreign event is ignored;
+- omitted `resolve` uses `collectSpecs()`;
+- empty store gives an empty array for `collectSpecs()`;
+- empty store calls custom resolver with `[]`;
+- `recordBy` rejects duplicate key;
+- `singleSpec` rejects more than one instance;
+- reading policy value before successful startup throws a development error;
+- consumer startup does not fail without initial instances;
+- missing policies endpoint fails startup/configuration;
+- domain code does not create `policiesClient` and does not subscribe to policy
+  events manually;
+- consuming module does not parse YAML, does not know file paths, and does not
+  run the resolver.
