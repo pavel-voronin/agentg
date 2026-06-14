@@ -721,18 +721,26 @@ tables, while safety checks and behavior selection rules stay in domain code.
 - Logs record applied and rejected changes.
 - Mutations run sequentially.
 
-## First Implementation Slice
+## Implementation Ownership
 
-1. Add `packages/framework/src/policies/**`: `definePolicy`, resolver helpers,
-   `createPolicyServer`, `createPolicyClient`, and `usePolicy` integration.
-2. Add `packages/policies`: endpoint process, composition entrypoint, and
-   generated catalog.
-3. Implement file-based `PolicyStore`.
-4. Add the build-time generator for `packages/*/policies/policies.ts`.
-5. Add `@agentg/framework/policies` subpath export.
-6. Add `usePolicy(definition)` to framework module setup.
-7. Move the first hardcoded rules into YAML instances.
-8. Connect `usePolicy(...)` in the first consuming module.
+- `packages/framework/src/policies/**` owns the generic policy contract:
+  `definePolicy`, resolver helpers, wire types, `createPolicyServer`,
+  `createPolicyClient`, and live value handling for `usePolicy`.
+- `@agentg/framework/policies` is the public framework subpath for policy DX and
+  infrastructure primitives. Package roots stay minimal.
+- `packages/policies` owns the infrastructure endpoint process. It composes the
+  generated catalog, file store adapter, event bus, and framework policy server.
+- `packages/policies/src/store.ts` owns the file-based `PolicyStore` adapter for
+  `config/policies/**`.
+- `packages/policies/src/generated/policyCatalog.ts` is generated from
+  `packages/*/policies/policies.ts` and must not be edited by hand.
+- `packages/<module>/policies/policies.ts` owns module policy definitions. It
+  must not import module runtime/resources or create side effects.
+- Consuming modules call `usePolicy(definition)` from module setup and pass the
+  returned getter into domain resources. Domain code reads the getter and never
+  calls the policy endpoint directly.
+- Initial Telegram file download rules are stored as YAML instances and consumed
+  through the Telegram files resource.
 
 ## Test Contract
 
