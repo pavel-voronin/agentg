@@ -43,6 +43,28 @@ x-agentg-rpc-healthcheck: &agentg-rpc-healthcheck
   start_period: 5s
 
 services:
+  policies:
+    profiles:
+      - container-client
+      - dashboard
+    build:
+      context: .
+      target: runtime
+    command: ['npm', 'run', 'dev:policies']
+    depends_on:
+      nats:
+        condition: service_started
+    environment:
+      <<: *agentg-telemetry-environment
+      NATS_URL: nats://nats:4222
+      POLICY_CONFIG_DIR: /app/config/policies
+      HOST: 0.0.0.0
+      PORT: 8080
+    volumes:
+      - ./config/policies:/app/config/policies
+    restart: 'no'
+    healthcheck: *agentg-rpc-healthcheck
+
   telegram:
     profiles:
       - container-client
@@ -53,12 +75,15 @@ services:
     depends_on:
       nats:
         condition: service_started
+      policies:
+        condition: service_healthy
       postgres:
         condition: service_healthy
     environment:
       <<: *agentg-telemetry-environment
       DATABASE_URL: postgres://agentg:agentg@postgres:5432/agentg
       NATS_URL: nats://nats:4222
+      POLICIES_RPC_URL: http://policies:8080
       HOST: 0.0.0.0
       PORT: 8080
       TELEGRAM_API_ID: ${TELEGRAM_API_ID:-}

@@ -10,7 +10,15 @@ if (includeTelegram) {
 }
 
 const compose = ['docker', 'compose', ...profiles.flatMap((profile) => ['--profile', profile])];
-const services = ['postgres', 'nats', 'telegram', 'history-sync', 'gateway', 'dashboard'];
+const services = [
+  'postgres',
+  'nats',
+  'policies',
+  'telegram',
+  'history-sync',
+  'gateway',
+  'dashboard'
+];
 
 try {
   run(['up', '-d', 'postgres', 'nats', '--quiet-pull']);
@@ -165,6 +173,28 @@ async function websocketRpc(url, method, params) {
 }
 
 const dashboardResponse = await fetchUntilReady('http://127.0.0.1:8080/healthz', 'dashboard', [200]);
+const policyKinds = await callProcedureUntilReady(
+  'http://policies:8080',
+  'policies RPC',
+  'listPolicyKinds',
+  undefined
+);
+if (!policyKinds.some((kind) => kind.kind === 'TelegramFileDownloadRule')) {
+  throw new Error('policies smoke expected TelegramFileDownloadRule kind');
+}
+
+const downloadRules = await callProcedureUntilReady(
+  'http://policies:8080',
+  'policies RPC',
+  'getPolicyValue',
+  {
+    kind: 'TelegramFileDownloadRule'
+  }
+);
+if (!Array.isArray(downloadRules) || downloadRules.length === 0) {
+  throw new Error('policies smoke expected non-empty TelegramFileDownloadRule value');
+}
+
 const telegramChat = await callProcedureUntilReady('http://telegram:8080', 'telegram RPC', 'getChat', {
   chatId: '0'
 });
@@ -206,6 +236,10 @@ console.log(
       },
       historySync: {
         chat: historyState.chat
+      },
+      policies: {
+        downloadRules: downloadRules.length,
+        kinds: policyKinds.length
       },
       telegram: {
         chat: telegramChat.chat

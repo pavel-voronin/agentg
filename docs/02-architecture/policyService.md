@@ -60,19 +60,21 @@ Telegram, History Sync, Dashboard или другого модуля.
   definePolicy(...)
   usePolicy(...)
   resolver helpers
+  policy procedure names
+  policy wire types
   createPolicyServer(...)
   createPolicyClient(...)
 
 @agentg/policies
-  infrastructure endpoint contract
-  endpoint procedure names
-  endpoint wire types
   endpoint process composition
+  generated catalog integration
+  file store adapter
 ```
 
 `@agentg/policies` не является доменным модулем и не содержит module DX. Он
-существует только как endpoint boundary и composition entrypoint. Реализация
-client/server живет во framework; endpoint process вызывает ее как factory.
+существует только как endpoint process, composition entrypoint и adapter
+хранилища. Generic contract, wire-типы, procedure names, client/server живут во
+framework; endpoint process вызывает framework как factory.
 
 Generated catalog не живет внутри framework source, если он импортирует module
 policy entrypoints. Catalog принадлежит composition layer:
@@ -330,9 +332,11 @@ const getSettings = usePolicy(foobarSettingsPolicy);
 
 ## Endpoint API
 
-Endpoint package `@agentg/policies` описывает контракт обмена. API управления
-предназначен для agent/operator edge. API исполнения предназначен для framework
-policy client. Доменные модули не вызывают endpoint напрямую.
+Generic endpoint contract описан во `@agentg/framework/policies`.
+`@agentg/policies` поднимает этот контракт как отдельный infrastructure
+endpoint. API управления предназначен для agent/operator edge. API исполнения
+предназначен для framework policy client. Доменные модули не вызывают endpoint
+напрямую.
 
 ### API управления
 
@@ -558,9 +562,9 @@ Adapter contract:
 
 ```ts
 type PolicyStore = {
-  loadAll(): Promise<readonly PolicyInstanceDocument[]>;
-  set(document: PolicyInstanceDocument): Promise<void>;
-  delete(identity: PolicyInstanceIdentity): Promise<void>;
+  loadAll(): Promise<readonly PolicyDocument[]>;
+  set(document: PolicyDocument): Promise<void>;
+  delete(identity: PolicyIdentity): Promise<void>;
 };
 ```
 
@@ -602,7 +606,7 @@ Catalog invariants:
 
 - `definition.id` должен быть глобально уникален;
 - `definition.kind` должен быть глобально уникален;
-- duplicate definitions валят generation/startup.
+- duplicate definitions валят policy server construction/startup.
 
 ## Первый потребитель
 
@@ -636,9 +640,13 @@ Catalog invariants:
 - resolver error не меняет active instances;
 - non-JSON policy value отклоняется как `non_json_value`;
 - duplicate identity валит startup policy server;
-- duplicate `definition.id` или `definition.kind` валит generation/startup;
+- duplicate `definition.id` или `definition.kind` валит policy server
+  construction/startup;
 - path/identity mismatch валит startup file adapter;
-- endpoint wire types возвращают structured `PolicyError`;
+- `setInstance` и `deleteInstance` при ожидаемом отказе возвращают
+  `status: 'rejected'` со structured `PolicyError`;
+- read procedures при invalid input или unknown kind возвращают RPC/contract
+  error;
 - `setInstance` валидирует spec и resolver перед записью;
 - `deleteInstance` валидирует resolver перед удалением;
 - rejected mutation возвращает `status: 'rejected'` и не меняет store;
