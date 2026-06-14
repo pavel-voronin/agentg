@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SQL } from 'drizzle-orm';
 import { PgDialect } from 'drizzle-orm/pg-core';
+import type { Message, file } from 'tdlib-types';
 
 const logs = vi.hoisted(() => [] as Record<string, unknown>[]);
 const logMessages = vi.hoisted(() => [] as string[]);
@@ -34,7 +35,8 @@ vi.mock('@agentg/framework', () => ({
     logContext: attributes
   }),
   setTelemetryGauge: telemetry.setTelemetryGauge,
-  timeTelemetrySpan: (_options: unknown, operation: () => Promise<unknown>) => operation()
+  timeTelemetrySpan: (_options: unknown, operation: () => Promise<unknown>) => operation(),
+  toJsonValue: (value: unknown) => value
 }));
 
 import {
@@ -410,6 +412,175 @@ describe('Telegram file download worker', () => {
     );
   });
 
+  it('refreshes message-owned stale TDLib pointers before dispatch', async () => {
+    const deleted = { count: 0 };
+    const updates: Record<string, unknown>[] = [];
+    const tdlib = {
+      addFileToDownloads: vi.fn().mockResolvedValue(undefined),
+      downloadFile: vi.fn(),
+      getFile: vi.fn(),
+      getMessage: vi.fn().mockResolvedValue(
+        messageWithPhoto({
+          chatId: -10042,
+          file: tdlibFile({
+            id: 2,
+            uniqueId: 'asset-a'
+          }),
+          messageId: 777
+        })
+      ),
+      getQueueStats() {
+        return {
+          highestPendingPriority: null,
+          pendingCount: 0,
+          runningCount: 0
+        };
+      }
+    };
+
+    const result = await processQueuedFileBatch(
+      workerOptions({
+        database: queuedPointerMismatchDatabase({
+          deleted,
+          row: messageDownloadRow({
+            assetKey: 'telegram:asset-a',
+            remoteUniqueId: 'asset-b'
+          }),
+          updates
+        }),
+        tdlib
+      }),
+      {
+        maxConcurrentDownloads: 1,
+        maxFilesPerTick: 1
+      }
+    );
+
+    expect(result).toEqual({
+      delayedCount: 0,
+      failedCount: 0,
+      immediateCount: 1,
+      processedCount: 1,
+      readyCount: 0,
+      watchdogCount: 1
+    });
+    expect(tdlib.getMessage).toHaveBeenCalledWith(
+      {
+        chatId: -10042,
+        messageId: 777
+      },
+      {
+        priority: 16
+      }
+    );
+    expect(tdlib.addFileToDownloads).toHaveBeenCalledWith(
+      {
+        chatId: -10042,
+        fileId: 2,
+        messageId: 777,
+        priority: 16
+      },
+      {
+        priority: 16
+      }
+    );
+    expect(tdlib.downloadFile).not.toHaveBeenCalled();
+    expect(deleted.count).toBe(0);
+    expect(updates).toEqual([
+      expect.objectContaining({
+        lastError: null,
+        status: 'downloading'
+      }),
+      expect.objectContaining({
+        lastError: null,
+        status: 'downloading'
+      })
+    ]);
+    expect(telemetry.incrementTelemetryCounter).toHaveBeenCalledWith(
+      'telegram.file.worker.recovery.outcomes',
+      1,
+      {
+        'telegram.file.transport': 'message',
+        'telegram.file.worker.recovery.outcome': 'refreshed'
+      }
+    );
+  });
+
+  it('fails non-message stale TDLib pointers without dispatching TDLib downloads', async () => {
+    const deleted = { count: 0 };
+    const updates: Record<string, unknown>[] = [];
+    const tdlib = {
+      addFileToDownloads: vi.fn(),
+      downloadFile: vi.fn(),
+      getFile: vi.fn(),
+      getMessage: vi.fn(),
+      getQueueStats() {
+        return {
+          highestPendingPriority: null,
+          pendingCount: 0,
+          runningCount: 0
+        };
+      }
+    };
+
+    const result = await processQueuedFileBatch(
+      workerOptions({
+        database: queuedPointerMismatchDatabase({
+          deleted,
+          row: {
+            ...downloadRow(),
+            assetKey: 'telegram:asset-a',
+            remoteUniqueId: 'asset-b'
+          },
+          updates
+        }),
+        tdlib
+      }),
+      {
+        maxConcurrentDownloads: 1,
+        maxFilesPerTick: 1
+      }
+    );
+
+    expect(result).toEqual({
+      delayedCount: 0,
+      failedCount: 1,
+      immediateCount: 1,
+      processedCount: 1,
+      readyCount: 0,
+      watchdogCount: 0
+    });
+    expect(tdlib.getMessage).not.toHaveBeenCalled();
+    expect(tdlib.getFile).not.toHaveBeenCalled();
+    expect(tdlib.downloadFile).not.toHaveBeenCalled();
+    expect(tdlib.addFileToDownloads).not.toHaveBeenCalled();
+    expect(deleted.count).toBe(1);
+    expect(updates).toEqual([
+      expect.objectContaining({
+        lastError: null,
+        status: 'downloading'
+      }),
+      expect.objectContaining({
+        status: 'failed'
+      })
+    ]);
+    const failureUpdate = updates[1];
+    if (failureUpdate === undefined) {
+      throw new Error('Expected failed update');
+    }
+    expect(String(failureUpdate.downloadError)).toContain(
+      'Telegram file asset TDLib pointer is stale'
+    );
+    expect(telemetry.incrementTelemetryCounter).toHaveBeenCalledWith(
+      'telegram.file.worker.recovery.outcomes',
+      1,
+      {
+        'telegram.file.transport': 'file',
+        'telegram.file.worker.recovery.outcome': 'unsupported_owner'
+      }
+    );
+  });
+
   it('fails completed files whose TDLib local path resolves outside the files directory', async () => {
     const filesDirectory = await mkdtemp(join(tmpdir(), 'agentg-td-files-'));
     const outsideDirectory = await mkdtemp(join(tmpdir(), 'agentg-outside-file-'));
@@ -566,9 +737,29 @@ function downloadRow(): FileDownloadRow {
     ownerId: null,
     ownerModel: null,
     priority: 16,
+    remoteUniqueId: null,
     slotKey: null,
     transport: {
       kind: 'file'
+    }
+  };
+}
+
+function messageDownloadRow(input: {
+  assetKey: string;
+  remoteUniqueId: string | null;
+}): FileDownloadRow {
+  return {
+    ...downloadRow(),
+    assetKey: input.assetKey,
+    ownerId: '-10042:777',
+    ownerModel: 'telegram.message',
+    remoteUniqueId: input.remoteUniqueId,
+    slotKey: 'content.photo.0',
+    transport: {
+      chatId: -10042,
+      kind: 'message',
+      messageId: 777
     }
   };
 }
@@ -598,6 +789,115 @@ function workerOptions(input: { database: Database; tdlib: unknown }): FileSubsy
     tdlibSourceDirectories: ['/tmp/agentg-test-files'],
     tdlib: input.tdlib
   } as unknown as FileSubsystemOptions;
+}
+
+function queuedPointerMismatchDatabase(input: {
+  deleted: { count: number };
+  row: FileDownloadRow;
+  updates: Record<string, unknown>[];
+}): Database {
+  let currentRow = input.row;
+  let firstStatsRead = false;
+  let firstJobStatsRead = false;
+  let ownerRowsRead = false;
+  let refreshed = false;
+  let refreshedRowRead = false;
+  let secondStatsRead = false;
+  let selectCount = 0;
+  return {
+    delete() {
+      return {
+        where() {
+          input.deleted.count += 1;
+          return Promise.resolve([]);
+        }
+      };
+    },
+    insert() {
+      return {
+        values(values: Record<string, unknown>) {
+          if (typeof values.tdlibFileId === 'number' && typeof values.remoteUniqueId === 'string') {
+            refreshed = true;
+            currentRow = {
+              ...currentRow,
+              latestTdlibFileId: values.tdlibFileId,
+              remoteUniqueId: values.remoteUniqueId
+            };
+          }
+          return {
+            onConflictDoUpdate() {
+              return {
+                returning() {
+                  if (Object.hasOwn(values, 'assetKey') && Object.hasOwn(values, 'status')) {
+                    return Promise.resolve([
+                      {
+                        assetKey: values.assetKey,
+                        downloadError: null,
+                        status: 'known'
+                      }
+                    ]);
+                  }
+                  return Promise.resolve([{ slotKey: values.slotKey }]);
+                }
+              };
+            }
+          };
+        }
+      };
+    },
+    select() {
+      selectCount += 1;
+      if (selectCount === 1) {
+        return staleAssetKeySelect([]);
+      }
+      if (selectCount === 2) {
+        return queuedAssetKeySelect(currentRow.assetKey);
+      }
+      if (selectCount === 3) {
+        return downloadRowSelect(currentRow);
+      }
+      if (refreshed && !refreshedRowRead) {
+        refreshedRowRead = true;
+        return downloadRowSelect(currentRow);
+      }
+      if (!firstStatsRead) {
+        firstStatsRead = true;
+        return fileAssetStatsSelect();
+      }
+      if (!firstJobStatsRead) {
+        firstJobStatsRead = true;
+        return fileJobStatsSelect();
+      }
+      if (!ownerRowsRead) {
+        ownerRowsRead = true;
+        return ownerRowsSelect();
+      }
+      if (!secondStatsRead) {
+        secondStatsRead = true;
+        return fileAssetStatsSelect();
+      }
+      return fileJobStatsSelect();
+    },
+    update() {
+      return {
+        set(values: Record<string, unknown>) {
+          input.updates.push(values);
+          return {
+            where() {
+              return {
+                returning() {
+                  return Promise.resolve([{ assetKey: currentRow.assetKey }]);
+                },
+                then(resolve: (value: unknown[]) => void) {
+                  resolve([]);
+                }
+              };
+            }
+          };
+        }
+      };
+    }
+  } as unknown as Database;
 }
 
 function idleTdlib() {
@@ -815,7 +1115,27 @@ function staleAssetKeySelect(assetKeys = ['asset-a']) {
   };
 }
 
-function staleDownloadRowSelect(attempts: number) {
+function queuedAssetKeySelect(assetKey: string) {
+  return {
+    from() {
+      return {
+        where() {
+          return {
+            orderBy() {
+              return {
+                limit() {
+                  return Promise.resolve([{ assetKey }]);
+                }
+              };
+            }
+          };
+        }
+      };
+    }
+  };
+}
+
+function downloadRowSelect(row: FileDownloadRow) {
   return {
     from() {
       return {
@@ -823,27 +1143,32 @@ function staleDownloadRowSelect(attempts: number) {
           return {
             leftJoin() {
               return {
-                where() {
+                leftJoin() {
                   return {
-                    orderBy() {
+                    where() {
                       return {
-                        limit() {
-                          return Promise.resolve([
-                            {
-                              assetKey: 'asset-a',
-                              attempts,
-                              byteSize: 1024,
-                              downloadedByteSize: 0,
-                              fileName: 'file.jpg',
-                              latestTdlibFileId: 1,
-                              mediaKind: 'photo',
-                              mimeType: 'image/jpeg',
-                              ownerId: null,
-                              ownerModel: null,
-                              priority: 16,
-                              slotKey: null
+                        orderBy() {
+                          return {
+                            limit() {
+                              return Promise.resolve([
+                                {
+                                  assetKey: row.assetKey,
+                                  attempts: row.attempts,
+                                  byteSize: row.byteSize,
+                                  downloadedByteSize: row.downloadedByteSize,
+                                  fileName: row.fileName,
+                                  latestTdlibFileId: row.latestTdlibFileId,
+                                  mediaKind: row.mediaKind,
+                                  mimeType: row.mimeType,
+                                  ownerId: row.ownerId,
+                                  ownerModel: row.ownerModel,
+                                  priority: row.priority,
+                                  remoteUniqueId: row.remoteUniqueId,
+                                  slotKey: row.slotKey
+                                }
+                              ]);
                             }
-                          ]);
+                          };
                         }
                       };
                     }
@@ -856,6 +1181,13 @@ function staleDownloadRowSelect(attempts: number) {
       };
     }
   };
+}
+
+function staleDownloadRowSelect(attempts: number) {
+  return downloadRowSelect({
+    ...downloadRow(),
+    attempts
+  });
 }
 
 function ownerRowsSelect() {
@@ -934,5 +1266,58 @@ function emptyQueuedSelect() {
         }
       };
     }
+  };
+}
+
+function messageWithPhoto(input: { chatId: number; file: file; messageId: number }): Message {
+  return {
+    _: 'message',
+    chat_id: input.chatId,
+    content: {
+      _: 'messagePhoto',
+      photo: {
+        _: 'photo',
+        has_stickers: false,
+        minithumbnail: null,
+        sizes: [
+          {
+            _: 'photoSize',
+            height: 100,
+            photo: input.file,
+            type: 'x',
+            width: 100
+          }
+        ]
+      }
+    },
+    id: input.messageId
+  } as unknown as Message;
+}
+
+function tdlibFile(input: { id: number; uniqueId: string }): file {
+  return {
+    _: 'file',
+    expected_size: 100,
+    id: input.id,
+    local: {
+      _: 'localFile',
+      can_be_deleted: true,
+      can_be_downloaded: true,
+      download_offset: 0,
+      downloaded_prefix_size: 0,
+      downloaded_size: 0,
+      is_downloading_active: false,
+      is_downloading_completed: false,
+      path: ''
+    },
+    remote: {
+      _: 'remoteFile',
+      id: `remote-${input.uniqueId}`,
+      is_uploading_active: false,
+      is_uploading_completed: true,
+      unique_id: input.uniqueId,
+      uploaded_size: 0
+    },
+    size: 100
   };
 }

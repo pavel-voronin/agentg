@@ -121,6 +121,9 @@ export function useTdlib(options: TdlibOptions): TdlibRuntime {
     getFile(input, invokeOptions) {
       return readyOperations().getFile(input, invokeOptions);
     },
+    getMessage(input, invokeOptions) {
+      return readyOperations().getMessage(input, invokeOptions);
+    },
     getMe(invokeOptions) {
       return readyOperations().getMe(invokeOptions);
     },

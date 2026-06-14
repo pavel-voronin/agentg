@@ -24,6 +24,7 @@ type FailureReasonCount = {
   reason:
     | 'missing_tdlib_file_id'
     | 'not_found'
+    | 'stale_tdlib_pointer'
     | 'stale_retry_limit'
     | 'storage_io'
     | 'tdlib_path_outside_source_roots'
@@ -52,8 +53,17 @@ type WorkerStage =
   | 'inspect_tdlib'
   | 'materialize_message_slots'
   | 'publish_changes'
+  | 'recover_message_slot'
   | 'reconcile_stale'
+  | 'validate_tdlib_pointer'
   | 'tick';
+
+type WorkerRecoveryOutcome =
+  | 'asset_changed'
+  | 'message_unavailable'
+  | 'refreshed'
+  | 'slot_missing'
+  | 'unsupported_owner';
 
 export type FileGenerationFailureReason =
   | 'blocked_url'
@@ -79,6 +89,7 @@ const METRIC_QUEUE_UNKNOWN_REMAINING = 'telegram.file.queue.unknown_remaining';
 const METRIC_GENERATION_DURATION = 'telegram.file.generation.duration';
 const METRIC_GENERATION_OUTCOMES = 'telegram.file.generation.outcomes';
 const METRIC_WORKER_JOBS = 'telegram.file.worker.jobs';
+const METRIC_WORKER_RECOVERY_OUTCOMES = 'telegram.file.worker.recovery.outcomes';
 const METRIC_WORKER_STAGE_DURATION = 'telegram.file.worker.stage.duration';
 const METRIC_WORKER_WAKE = 'telegram.file.worker.wake';
 
@@ -170,6 +181,16 @@ export function recordWorkerBatchResult(
   recordWorkerJobs(source, 'ready', result.readyCount);
   recordWorkerJobs(source, 'failed', result.failedCount);
   recordWorkerJobs(source, 'downloading', result.watchdogCount);
+}
+
+export function recordWorkerRecoveryOutcome(
+  outcome: WorkerRecoveryOutcome,
+  transport: string
+): void {
+  incrementTelemetryCounter(METRIC_WORKER_RECOVERY_OUTCOMES, 1, {
+    'telegram.file.transport': transport,
+    'telegram.file.worker.recovery.outcome': outcome
+  });
 }
 
 export function timeWorkerStage<T>(stage: WorkerStage, operation: () => Promise<T>) {

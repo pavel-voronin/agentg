@@ -93,6 +93,23 @@ export function createOperations(deps: OperationDeps) {
     getFile(input: { fileId: number }, options?: InvokeOptions): Promise<File> {
       return invoke(deps, { _: 'getFile', file_id: input.fileId }, options) as Promise<File>;
     },
+    getMessage(
+      input: {
+        chatId: number;
+        messageId: number;
+      },
+      options?: InvokeOptions
+    ): Promise<Message> {
+      return invoke(
+        deps,
+        {
+          _: 'getMessage',
+          chat_id: input.chatId,
+          message_id: input.messageId
+        },
+        options
+      ) as Promise<Message>;
+    },
     getMe(options?: InvokeOptions): Promise<User> {
       return invoke(deps, { _: 'getMe' }, options) as Promise<User>;
     },

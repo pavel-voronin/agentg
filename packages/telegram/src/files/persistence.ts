@@ -50,6 +50,56 @@ type FileSlotUpdateOptions = {
   pruneStaleActiveNotificationSlots?: boolean;
 };
 
+export async function refreshMessageFileSlot(
+  database: Database,
+  input: {
+    assetKey: string;
+    chatId: string;
+    content: NonNullable<FileSlotUpdate['message']>['content'];
+    messageId: string;
+    slotKey: string;
+  }
+): Promise<
+  | { kind: 'asset_changed'; assetKey: string }
+  | { kind: 'refreshed'; tdlibFileId: number }
+  | { kind: 'slot_missing' }
+> {
+  const message =
+    input.content === undefined
+      ? {
+          chatId: input.chatId,
+          messageId: input.messageId
+        }
+      : {
+          chatId: input.chatId,
+          content: input.content,
+          messageId: input.messageId
+        };
+  const slot = extractFileSlots({
+    message
+  }).find((candidate) => candidate.slotKey === input.slotKey);
+
+  if (slot === undefined) {
+    return { kind: 'slot_missing' };
+  }
+
+  const assetKey = fileAssetKey(slot.file);
+  if (assetKey !== input.assetKey) {
+    return {
+      assetKey,
+      kind: 'asset_changed'
+    };
+  }
+
+  await upsertTdlibFile(database, slot.file);
+  await upsertFileAsset(database, slot, assetKey);
+  await upsertFileSlot(database, slot, assetKey);
+  return {
+    kind: 'refreshed',
+    tdlibFileId: slot.tdlibFileId
+  };
+}
+
 export async function deleteStoryFileSlots(
   database: Database,
   input: { posterChatId: string; storyId: number }
@@ -551,6 +601,18 @@ async function upsertExtractedSlot(
     );
   }
 
+  const ownerChanged = await upsertFileSlot(database, slot, assetKey);
+  return {
+    ownerChanged,
+    queueChanged
+  };
+}
+
+async function upsertFileSlot(
+  database: Database,
+  slot: ExtractedFileSlot,
+  assetKey: string
+): Promise<boolean> {
   const upserted = await database
     .insert(telegramFileSlots)
     .values({
@@ -589,10 +651,7 @@ async function upsertExtractedSlot(
       slotKey: telegramFileSlots.slotKey
     });
 
-  return {
-    ownerChanged: upserted.length === 1,
-    queueChanged
-  };
+  return upserted.length === 1;
 }
 
 async function upsertTdlibFile(database: Database, file: file): Promise<void> {

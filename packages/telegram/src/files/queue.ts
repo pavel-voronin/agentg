@@ -6,19 +6,20 @@ import { pipeline } from 'node:stream/promises';
 
 import { createLogger, logContext, logError } from '@agentg/framework';
 import { and, eq, sql } from 'drizzle-orm';
-import type { file } from 'tdlib-types';
+import type { Message, file } from 'tdlib-types';
 
 import type { Database } from '../database/client.js';
 import {
   telegramFileAssets,
   telegramFileDownloadJobs,
-  telegramFileSlots
+  telegramFileSlots,
+  telegramTdlibFiles
 } from '../database/schema.js';
 import { MESSAGE_MODEL, messageModelParts } from '../model/refs.js';
 import { assertPriority, priorities } from '../tdlib/priority.js';
-import { tdFileOrUndefined } from '../tdlib/value.js';
+import { tdFileOrUndefined, tdJsonObject } from '../tdlib/value.js';
 import { publishAssetOwnersAndQueue, publishFileQueueUpdated } from './events.js';
-import { handleFileSnapshot } from './persistence.js';
+import { handleFileSnapshot, refreshMessageFileSlot } from './persistence.js';
 import type {
   CompletedFileAsset,
   FileDownloadBatchResult,
@@ -38,7 +39,12 @@ import {
   positiveInteger,
   shouldDeferFileDownloads
 } from './runtime.js';
-import { recordWorkerBatchResult, recordWorkerJobs, timeWorkerStage } from './telemetry.js';
+import {
+  recordWorkerBatchResult,
+  recordWorkerJobs,
+  recordWorkerRecoveryOutcome,
+  timeWorkerStage
+} from './telemetry.js';
 
 const MAX_STALE_DOWNLOAD_ATTEMPTS = 3;
 const logger = createLogger('telegram');
@@ -171,26 +177,29 @@ async function processClaimedFile(
   row: FileDownloadRow
 ): Promise<FileDownloadResult> {
   try {
+    const downloadRow = await timeWorkerStage('validate_tdlib_pointer', () =>
+      resolveDownloadRow(options, row)
+    );
     const file = await timeWorkerStage('dispatch_tdlib', () =>
-      dispatchTdlibFileDownload(options, row)
+      dispatchTdlibFileDownload(options, downloadRow)
     );
     const completedFile = completedFileAssetFromTdlibFile(file);
     if (completedFile !== null) {
       await timeWorkerStage('canonicalize_completed', () =>
         canonicalizeCompletedFile(options, {
           ...completedFile,
-          assetKey: row.assetKey
+          assetKey: downloadRow.assetKey
         })
       );
       return {
-        assetKey: row.assetKey,
+        assetKey: downloadRow.assetKey,
         failed: false,
         ready: true
       };
     }
-    await markFileDownloadDispatched(options.database, row.assetKey);
+    await markFileDownloadDispatched(options.database, downloadRow.assetKey);
     return {
-      assetKey: row.assetKey,
+      assetKey: downloadRow.assetKey,
       failed: false,
       ready: false
     };
@@ -275,43 +284,46 @@ async function reconcileStaleFileDownload(
   row: FileDownloadRow
 ): Promise<FileDownloadResult> {
   try {
-    const file = await timeWorkerStage('inspect_tdlib', () => getTdlibFile(options, row));
+    const downloadRow = await timeWorkerStage('validate_tdlib_pointer', () =>
+      resolveDownloadRow(options, row)
+    );
+    const file = await timeWorkerStage('inspect_tdlib', () => getTdlibFile(options, downloadRow));
     const completedFile = completedFileAssetFromTdlibFile(file);
     if (completedFile !== null) {
       await timeWorkerStage('canonicalize_completed', () =>
         canonicalizeCompletedFile(options, {
           ...completedFile,
-          assetKey: row.assetKey
+          assetKey: downloadRow.assetKey
         })
       );
       return {
-        assetKey: row.assetKey,
+        assetKey: downloadRow.assetKey,
         failed: false,
         ready: true
       };
     }
     if (file !== undefined) {
       const changedAssets = await handleFileSnapshot(options.database, file);
-      if (changedAssets.includes(row.assetKey)) {
-        await refreshFileDownloadClaim(options.database, row.assetKey);
+      if (changedAssets.includes(downloadRow.assetKey)) {
+        await refreshFileDownloadClaim(options.database, downloadRow.assetKey);
         return {
-          assetKey: row.assetKey,
+          assetKey: downloadRow.assetKey,
           failed: false,
           ready: false
         };
       }
     }
-    if (row.attempts >= MAX_STALE_DOWNLOAD_ATTEMPTS) {
-      logStaleFileDownloadDecision('retry_limit', row, file);
+    if (downloadRow.attempts >= MAX_STALE_DOWNLOAD_ATTEMPTS) {
+      logStaleFileDownloadDecision('retry_limit', downloadRow, file);
       throw new Error(
-        `Telegram file download stale retry limit reached after ${String(row.attempts)} attempts`
+        `Telegram file download stale retry limit reached after ${String(downloadRow.attempts)} attempts`
       );
     }
-    await timeWorkerStage('dispatch_tdlib', () => dispatchTdlibFileDownload(options, row));
-    await markFileDownloadRedispatched(options.database, row.assetKey);
-    logStaleFileDownloadDecision('redispatched', row, file);
+    await timeWorkerStage('dispatch_tdlib', () => dispatchTdlibFileDownload(options, downloadRow));
+    await markFileDownloadRedispatched(options.database, downloadRow.assetKey);
+    logStaleFileDownloadDecision('redispatched', downloadRow, file);
     return {
-      assetKey: row.assetKey,
+      assetKey: downloadRow.assetKey,
       failed: false,
       ready: false
     };
@@ -370,6 +382,103 @@ async function dispatchTdlibFileDownload(
     },
     { priority: row.priority }
   );
+}
+
+async function resolveDownloadRow(
+  options: FileSubsystemOptions,
+  row: FileDownloadRow
+): Promise<FileDownloadRow> {
+  const expectedRemoteUniqueId = assetRemoteUniqueId(row.assetKey);
+  if (expectedRemoteUniqueId === null || row.remoteUniqueId === expectedRemoteUniqueId) {
+    return row;
+  }
+
+  if (row.transport.kind !== 'message') {
+    recordWorkerRecoveryOutcome('unsupported_owner', row.transport.kind);
+    throw stalePointerError(
+      row,
+      expectedRemoteUniqueId,
+      'non-message assets need owner-specific recovery'
+    );
+  }
+
+  const messageRow = {
+    ...row,
+    transport: row.transport
+  };
+  return timeWorkerStage('recover_message_slot', () =>
+    recoverMessageDownloadRow(options, messageRow, expectedRemoteUniqueId)
+  );
+}
+
+async function recoverMessageDownloadRow(
+  options: FileSubsystemOptions,
+  row: FileDownloadRow & { transport: Extract<FileDownloadTransport, { kind: 'message' }> },
+  expectedRemoteUniqueId: string
+): Promise<FileDownloadRow> {
+  if (row.slotKey === null) {
+    recordWorkerRecoveryOutcome('slot_missing', row.transport.kind);
+    throw stalePointerError(row, expectedRemoteUniqueId, 'message asset has no slot key');
+  }
+
+  const message = await readMessageForRecovery(options, row, expectedRemoteUniqueId);
+  const result = await refreshMessageFileSlot(options.database, {
+    assetKey: row.assetKey,
+    chatId: String(row.transport.chatId),
+    content: tdJsonObject(message.content),
+    messageId: String(row.transport.messageId),
+    slotKey: row.slotKey
+  });
+
+  if (result.kind === 'slot_missing') {
+    recordWorkerRecoveryOutcome('slot_missing', row.transport.kind);
+    throw stalePointerError(
+      row,
+      expectedRemoteUniqueId,
+      'message no longer contains the file slot'
+    );
+  }
+  if (result.kind === 'asset_changed') {
+    recordWorkerRecoveryOutcome('asset_changed', row.transport.kind);
+    throw stalePointerError(
+      row,
+      expectedRemoteUniqueId,
+      `message slot now points at ${result.assetKey}`
+    );
+  }
+
+  const refreshed = await readFileDownloadRow(options.database, row.assetKey);
+  if (refreshed?.remoteUniqueId !== expectedRemoteUniqueId) {
+    recordWorkerRecoveryOutcome('slot_missing', row.transport.kind);
+    throw stalePointerError(
+      row,
+      expectedRemoteUniqueId,
+      'message slot refresh did not update the asset pointer'
+    );
+  }
+  recordWorkerRecoveryOutcome('refreshed', row.transport.kind);
+  return refreshed;
+}
+
+async function readMessageForRecovery(
+  options: FileSubsystemOptions,
+  row: FileDownloadRow & { transport: Extract<FileDownloadTransport, { kind: 'message' }> },
+  expectedRemoteUniqueId: string
+): Promise<Message> {
+  try {
+    return await options.tdlib.getMessage(
+      {
+        chatId: row.transport.chatId,
+        messageId: row.transport.messageId
+      },
+      {
+        priority: assertPriority(row.priority)
+      }
+    );
+  } catch (error) {
+    recordWorkerRecoveryOutcome('message_unavailable', row.transport.kind);
+    throw stalePointerError(row, expectedRemoteUniqueId, errorMessage(error));
+  }
 }
 
 export function fileDownloadRequest(row: FileDownloadRow): FileDownloadRequest {
@@ -495,12 +604,17 @@ async function readFileDownloadRow(
       ownerId: telegramFileSlots.ownerId,
       ownerModel: telegramFileSlots.ownerModel,
       priority: telegramFileDownloadJobs.priority,
+      remoteUniqueId: telegramTdlibFiles.remoteUniqueId,
       slotKey: telegramFileSlots.slotKey
     })
     .from(telegramFileDownloadJobs)
     .innerJoin(
       telegramFileAssets,
       eq(telegramFileAssets.assetKey, telegramFileDownloadJobs.assetKey)
+    )
+    .leftJoin(
+      telegramTdlibFiles,
+      eq(telegramTdlibFiles.tdlibFileId, telegramFileAssets.latestTdlibFileId)
     )
     .leftJoin(telegramFileSlots, eq(telegramFileSlots.assetKey, telegramFileDownloadJobs.assetKey))
     .where(eq(telegramFileAssets.assetKey, assetKey))
@@ -526,6 +640,7 @@ async function readFileDownloadRow(
         ownerId: row.ownerId,
         ownerModel: row.ownerModel,
         priority: row.priority,
+        remoteUniqueId: row.remoteUniqueId,
         slotKey: row.slotKey,
         transport: fileDownloadTransport(row.ownerModel, row.ownerId)
       };
@@ -976,6 +1091,7 @@ function fileDownloadRowLogFields(row: FileDownloadRow) {
     ownerId: row.ownerId,
     ownerModel: row.ownerModel,
     priority: row.priority,
+    remoteUniqueId: row.remoteUniqueId,
     slotKey: row.slotKey,
     transport: row.transport.kind
   };
@@ -1006,4 +1122,32 @@ function tdlibFileSnapshotLogFields(file: file | undefined) {
 function isTdlibMissingFileError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   return message.includes("Can't find file");
+}
+
+function assetRemoteUniqueId(assetKey: string): string | null {
+  const prefix = 'telegram:';
+  return assetKey.startsWith(prefix) && assetKey.length > prefix.length
+    ? assetKey.slice(prefix.length)
+    : null;
+}
+
+function stalePointerError(
+  row: FileDownloadRow,
+  expectedRemoteUniqueId: string,
+  reason: string
+): Error {
+  return new Error(
+    [
+      'Telegram file asset TDLib pointer is stale',
+      `asset=${row.assetKey}`,
+      `expectedRemoteUniqueId=${expectedRemoteUniqueId}`,
+      `currentRemoteUniqueId=${row.remoteUniqueId ?? '-'}`,
+      `tdlibFileId=${String(row.latestTdlibFileId ?? '-')}`,
+      `reason=${reason}`
+    ].join(' ')
+  );
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

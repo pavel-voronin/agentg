@@ -42,6 +42,7 @@ export type FileDownloadRow = {
   ownerId: string | null;
   ownerModel: string | null;
   priority: number;
+  remoteUniqueId: string | null;
   slotKey: string | null;
   transport: FileDownloadTransport;
 };
