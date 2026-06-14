@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { extractFileSlots, type FileSlotUpdate } from '../src/files/extractor.js';
 import { decideFilePolicy } from '../src/files/policy.js';
+import type { MediaDownloadPolicyRule } from '../src/files/policyRules.js';
 
 describe('Telegram file extraction', () => {
   it('extracts chat avatar slots from chat photos', () => {
@@ -172,6 +173,7 @@ describe('Telegram file policy', () => {
       decideFilePolicy({
         cause: 'live_update',
         current: null,
+        rules: defaultDownloadRules,
         slot: photo,
         sourceFingerprint: 'photo'
       }).action
@@ -180,6 +182,7 @@ describe('Telegram file policy', () => {
       decideFilePolicy({
         cause: 'live_update',
         current: null,
+        rules: defaultDownloadRules,
         slot: video,
         sourceFingerprint: 'video'
       }).action
@@ -212,6 +215,7 @@ describe('Telegram file policy', () => {
       decideFilePolicy({
         cause: 'operator_page',
         current: null,
+        rules: defaultDownloadRules,
         slot: voice,
         sourceFingerprint: 'voice'
       }).action
@@ -220,6 +224,7 @@ describe('Telegram file policy', () => {
       decideFilePolicy({
         cause: 'explicit_request',
         current: null,
+        rules: defaultDownloadRules,
         slot: voice,
         sourceFingerprint: 'voice'
       }).action
@@ -257,6 +262,7 @@ describe('Telegram file policy', () => {
       decideFilePolicy({
         cause: 'live_update',
         current: null,
+        rules: defaultDownloadRules,
         slot: photo,
         sourceFingerprint: 'large-photo'
       }).action
@@ -265,6 +271,7 @@ describe('Telegram file policy', () => {
       decideFilePolicy({
         cause: 'explicit_request',
         current: null,
+        rules: defaultDownloadRules,
         slot: photo,
         sourceFingerprint: 'large-photo'
       }).action
@@ -304,6 +311,7 @@ describe('Telegram file policy', () => {
       decideFilePolicy({
         cause: 'live_update',
         current: null,
+        rules: defaultDownloadRules,
         slot: photo,
         sourceFingerprint: 'unknown-photo'
       }).action
@@ -342,6 +350,7 @@ describe('Telegram file policy', () => {
       decideFilePolicy({
         cause: 'history_fetch',
         current: null,
+        rules: defaultDownloadRules,
         slot: photo,
         sourceFingerprint: 'history-photo'
       }).action
@@ -384,6 +393,7 @@ describe('Telegram file policy', () => {
           sourceFingerprint: 'photo-asset',
           status: 'failed'
         },
+        rules: defaultDownloadRules,
         slot: photo,
         sourceFingerprint: 'photo-asset'
       }).action
@@ -396,6 +406,7 @@ describe('Telegram file policy', () => {
           sourceFingerprint: 'photo-asset',
           status: 'failed'
         },
+        rules: defaultDownloadRules,
         slot: photo,
         sourceFingerprint: 'photo-asset'
       }).action
@@ -438,12 +449,76 @@ describe('Telegram file policy', () => {
           sourceFingerprint: 'photo-asset',
           status: 'failed'
         },
+        rules: defaultDownloadRules,
         slot: photo,
         sourceFingerprint: 'photo-asset'
       }).action
     ).toBe('enqueue');
   });
 });
+
+const defaultDownloadRules = [
+  {
+    causes: ['initialization', 'live_update'],
+    maxBytes: null,
+    mediaKind: 'avatar',
+    name: 'chat avatars'
+  },
+  {
+    causes: ['live_update', 'operator_page'],
+    maxBytes: 1024 * 1024,
+    mediaKind: 'photo',
+    name: 'photos up to 1 MB'
+  },
+  {
+    causes: ['live_update', 'operator_page'],
+    maxBytes: 1024 * 1024,
+    mediaKind: 'thumbnail',
+    name: 'media thumbnails up to 1 MB'
+  },
+  {
+    causes: ['live_update', 'operator_page'],
+    maxBytes: 5 * 1024 * 1024,
+    mediaKind: 'video',
+    name: 'videos up to 5 MB'
+  },
+  {
+    causes: ['live_update', 'operator_page'],
+    maxBytes: 5 * 1024 * 1024,
+    mediaKind: 'voice',
+    name: 'voice messages up to 5 MB'
+  },
+  {
+    causes: ['explicit_request'],
+    maxBytes: 100 * 1024 * 1024,
+    mediaKind: 'photo',
+    name: 'requested photos up to 100 MB'
+  },
+  {
+    causes: ['explicit_request'],
+    maxBytes: null,
+    mediaKind: 'thumbnail',
+    name: 'requested thumbnails'
+  },
+  {
+    causes: ['explicit_request'],
+    maxBytes: null,
+    mediaKind: 'video',
+    name: 'requested videos'
+  },
+  {
+    causes: ['explicit_request'],
+    maxBytes: null,
+    mediaKind: 'document',
+    name: 'requested documents'
+  },
+  {
+    causes: ['explicit_request'],
+    maxBytes: null,
+    mediaKind: 'voice',
+    name: 'requested voice messages'
+  }
+] as const satisfies readonly MediaDownloadPolicyRule[];
 
 function chatSlotUpdate(input: unknown): FileSlotUpdate {
   const update = input as {

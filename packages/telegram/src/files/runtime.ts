@@ -6,6 +6,7 @@ import type { Database } from '../database/client.js';
 import { priorities } from '../tdlib/priority.js';
 import type { Tdlib } from '../tdlib/index.js';
 import type { FilePolicyDecision } from './policy.js';
+import type { MediaDownloadPolicyRule } from './policyRules.js';
 import type { FileRef } from './types.js';
 
 export type FileSubsystemOptions = {
@@ -16,6 +17,7 @@ export type FileSubsystemOptions = {
   filesDirectory: string;
   generationDownloadTimeoutMs?: number;
   generationMaxBytes?: number;
+  getDownloadRules: () => readonly MediaDownloadPolicyRule[];
   maxConcurrentDownloads?: number;
   maxFilesPerTick?: number;
   staleCheckMs?: number;

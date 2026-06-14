@@ -199,6 +199,9 @@ function fileSlotUpdateOptions(
       }
     },
     filesDirectory: '/tmp/agentg-test-files',
+    getDownloadRules() {
+      return [];
+    },
     tdlib: {
       getQueueStats() {
         return {

@@ -32,6 +32,7 @@ import { extractFileSlots, type FileSlotUpdate } from './extractor.js';
 import { publishFileOwnersUpdated, publishFileQueueUpdated } from './events.js';
 import { ownerKey } from './read.js';
 import { decideFilePolicy, type MediaDownloadPolicyCause } from './policy.js';
+import type { MediaDownloadPolicyRule } from './policyRules.js';
 import {
   completedFileAssetFromTdlibFile,
   type FileAssetStatus,
@@ -85,8 +86,21 @@ export async function recordFileSlotUpdate(
     );
     const result = await timeFileRecordStage('replace_slots', cause, owner.ownerModel, () =>
       scope === undefined
-        ? replaceOwnerFileSlots(options.database, owner, ownerSlots, cause)
-        : replaceOwnerFileSlotsInScope(options.database, owner, ownerSlots, cause, scope)
+        ? replaceOwnerFileSlots(
+            options.database,
+            options.getDownloadRules(),
+            owner,
+            ownerSlots,
+            cause
+          )
+        : replaceOwnerFileSlotsInScope(
+            options.database,
+            options.getDownloadRules(),
+            owner,
+            ownerSlots,
+            cause,
+            scope
+          )
     );
     if (result.ownerChanged) {
       changedOwners.set(ownerKey(owner), owner);
@@ -378,6 +392,7 @@ async function deleteStaleActiveNotificationFileSlots(
 
 async function replaceOwnerFileSlots(
   database: Database,
+  rules: readonly MediaDownloadPolicyRule[],
   owner: FileOwnerKey,
   slots: ExtractedFileSlot[],
   cause: MediaDownloadPolicyCause
@@ -430,7 +445,7 @@ async function replaceOwnerFileSlots(
   let queueChanged = false;
 
   for (const slot of slots) {
-    const changedSlot = await upsertExtractedSlot(database, slot, cause);
+    const changedSlot = await upsertExtractedSlot(database, rules, slot, cause);
     ownerChanged ||= changedSlot.ownerChanged || !currentSlotKeys.has(slot.slotKey);
     queueChanged ||= changedSlot.queueChanged;
   }
@@ -440,6 +455,7 @@ async function replaceOwnerFileSlots(
 
 async function replaceOwnerFileSlotsInScope(
   database: Database,
+  rules: readonly MediaDownloadPolicyRule[],
   owner: FileOwnerKey,
   slots: ExtractedFileSlot[],
   cause: MediaDownloadPolicyCause,
@@ -497,7 +513,7 @@ async function replaceOwnerFileSlotsInScope(
   let queueChanged = false;
 
   for (const slot of slots) {
-    const changedSlot = await upsertExtractedSlot(database, slot, cause);
+    const changedSlot = await upsertExtractedSlot(database, rules, slot, cause);
     ownerChanged ||= changedSlot.ownerChanged || !currentSlotKeys.has(slot.slotKey);
     queueChanged ||= changedSlot.queueChanged;
   }
@@ -507,6 +523,7 @@ async function replaceOwnerFileSlotsInScope(
 
 async function upsertExtractedSlot(
   database: Database,
+  rules: readonly MediaDownloadPolicyRule[],
   slot: ExtractedFileSlot,
   cause: MediaDownloadPolicyCause
 ): Promise<{ ownerChanged: boolean; queueChanged: boolean }> {
@@ -520,6 +537,7 @@ async function upsertExtractedSlot(
       sourceFingerprint: assetKey,
       status: asset.status
     },
+    rules,
     slot,
     sourceFingerprint: assetKey
   });

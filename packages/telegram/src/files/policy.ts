@@ -1,9 +1,4 @@
-import {
-  automaticDownloadPolicyRules,
-  explicitDownloadPolicyRules,
-  type MediaDownloadPolicyCause,
-  type MediaDownloadPolicyRule
-} from './policyRules.js';
+import type { MediaDownloadPolicyCause, MediaDownloadPolicyRule } from './policyRules.js';
 import type { ExtractedFileSlot } from './types.js';
 
 type FilePolicyInput = {
@@ -13,6 +8,7 @@ type FilePolicyInput = {
     sourceFingerprint: string;
     status: string;
   } | null;
+  rules: readonly MediaDownloadPolicyRule[];
   slot: Pick<ExtractedFileSlot, 'byteSize' | 'mediaKind'>;
   sourceFingerprint: string;
 };
@@ -55,9 +51,7 @@ export function decideFilePolicy(input: FilePolicyInput): FilePolicyDecision {
     };
   }
 
-  const rules =
-    input.cause === 'explicit_request' ? explicitDownloadPolicyRules : automaticDownloadPolicyRules;
-  const rule = rules.find((candidate) => ruleMatches(candidate, input));
+  const rule = input.rules.find((candidate) => ruleMatches(candidate, input));
 
   if (rule === undefined) {
     return {

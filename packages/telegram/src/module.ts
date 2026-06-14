@@ -1,5 +1,6 @@
 import { defineModule } from '@agentg/framework';
 
+import { fileDownloadRulesPolicy } from '../policies/policies.js';
 import { createAccountIdentity } from './account/index.js';
 import { readConfig } from './config.js';
 import { createDatabase } from './database/client.js';
@@ -22,7 +23,8 @@ import { useTdlib } from './tdlib/index.js';
 
 export const telegramModule = defineModule('telegram', {
   config: readConfig,
-  setup({ config, events, resource }) {
+  setup({ config, events, resource, usePolicy }) {
+    const getDownloadRules = usePolicy(fileDownloadRulesPolicy);
     const database = resource('database', ({ startup }) => {
       const resource = createDatabase(config.databaseUrl);
 
@@ -50,6 +52,7 @@ export const telegramModule = defineModule('telegram', {
         database,
         events,
         filesDirectory: config.tdlibFilesDirectory,
+        getDownloadRules,
         tdlibSourceDirectories: [config.tdlibFilesDirectory, config.tdlibDatabaseDirectory],
         tdlib
       });

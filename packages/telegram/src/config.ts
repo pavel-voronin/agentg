@@ -10,6 +10,7 @@ export const readConfig = defineConfig({
   // TODO: Revisit whether ingestion needs configurable update concurrency at all.
   ingestionUpdateConcurrency: number('TELEGRAM_INGESTION_UPDATE_CONCURRENCY').default(10),
   natsUrl: string('NATS_URL'),
+  policiesRpcUrl: string('POLICIES_RPC_URL'),
   port: number('PORT').default(8702),
   tdlibDatabaseDirectory: string('TDLIB_DATABASE_DIR').default('./td-data/database'),
   tdlibFilesDirectory: string('TDLIB_FILES_DIR').default('./td-data/files')

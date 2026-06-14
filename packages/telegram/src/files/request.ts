@@ -17,7 +17,10 @@ import { readFileRef } from './read.js';
 import type { FileRequestResult, FileSubsystemOptions } from './runtime.js';
 import type { FileOwner } from './types.js';
 
-type RequestFileSlotOptions = Pick<FileSubsystemOptions, 'database' | 'events'>;
+type RequestFileSlotOptions = Pick<
+  FileSubsystemOptions,
+  'database' | 'events' | 'getDownloadRules'
+>;
 
 type RequestFileSlotRow = {
   assetKey: string;
@@ -50,6 +53,7 @@ export async function requestFileSlot(
       sourceFingerprint: row.assetKey,
       status: row.jobStatus ?? row.assetStatus
     },
+    rules: options.getDownloadRules(),
     slot: {
       byteSize: row.byteSize,
       mediaKind: assertMediaKind(row.mediaKind)

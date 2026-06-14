@@ -1,4 +1,5 @@
 import { createLogger, httpRpc, logError, nats } from '@agentg/framework';
+import { createPolicyClient } from '@agentg/framework/policies';
 
 import { readConfig } from './config.js';
 import { telegramModule } from './module.js';
@@ -9,6 +10,7 @@ const app = telegramModule({
   config,
   connect: {
     events: nats(config.natsUrl),
+    policies: () => createPolicyClient({ url: config.policiesRpcUrl }),
     rpc: httpRpc(
       config.host === undefined
         ? { port: config.port, service: 'telegram' }

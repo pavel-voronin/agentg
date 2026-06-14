@@ -4,6 +4,7 @@ import type { Database } from '../src/database/client.js';
 import { chatRef } from '../src/model/refs.js';
 import { createProcedures } from '../dashboard/backend/procedures.js';
 import { requestFileSlot } from '../src/files/request.js';
+import type { MediaDownloadPolicyRule } from '../src/files/policyRules.js';
 import type { FileSubsystemOptions } from '../src/files/runtime.js';
 import type { FileOwner } from '../src/files/types.js';
 import type { telegramClient } from '../src/index.js';
@@ -189,6 +190,9 @@ function requestOptions(input: {
       }
     },
     filesDirectory: '/tmp/agentg-test-files',
+    getDownloadRules() {
+      return requestDownloadRules;
+    },
     tdlib: {
       getQueueStats() {
         return {
@@ -200,6 +204,15 @@ function requestOptions(input: {
     }
   } as unknown as FileSubsystemOptions;
 }
+
+const requestDownloadRules = [
+  {
+    causes: ['explicit_request'],
+    maxBytes: 100 * 1024 * 1024,
+    mediaKind: 'photo',
+    name: 'requested photos up to 100 MB'
+  }
+] as const satisfies readonly MediaDownloadPolicyRule[];
 
 function procedureResources(events: { data?: unknown; type: string }[]): ProcedureResources {
   return {
