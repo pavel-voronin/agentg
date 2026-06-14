@@ -5,9 +5,8 @@
   violations, failed checks, risky assumptions, and any workaround before or
   when presenting the change.
 - Use conventional commits.
-- Use only these commit scopes: `project`, `infra`, `telegram`, `history-sync`,
-  `gateway`, `dashboard`, `extensions`, `storage`, `rpc`, and
-  `events`.
+- Use only these commit scopes: `project`, `infra`, `telegram`, `gateway`,
+  `dashboard`, `extensions`, `storage`, `rpc`, and `events`.
 - Project-owned directories must use kebab-case. Project-owned file names must
   use camelCase stems; `.test`, `.config`, and `.d` are allowed only as
   technical suffixes after the camelCase stem. The only allowed exceptions are

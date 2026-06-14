@@ -4,7 +4,7 @@ AgenTG is a pre-alpha Telegram client runtime for a personal agent.
 
 It runs as a local developer stack: Telegram ingestion, Postgres, NATS,
 OpenTelemetry Collector, VictoriaMetrics, Jaeger, Grafana, NATS and Postgres
-exporters, history sync, gateway, and the Dashboard UI.
+exporters, gateway, and the Dashboard UI.
 
 ## Requirements
 
@@ -53,10 +53,9 @@ npm run dev
 
 This command starts Postgres, NATS, OpenTelemetry Collector, VictoriaMetrics,
 Jaeger, Grafana, and the NATS and Postgres exporters through Docker Compose,
-runs database migrations, and starts the Telegram runtime, history sync,
-gateway, Dashboard server, and the Vite Dashboard app through Process
-Compose in detached mode. The Dashboard server owns the Telemetry page
-backend procedures.
+runs database migrations, and starts the Telegram runtime, gateway, Dashboard
+server, and the Vite Dashboard app through Process Compose in detached mode. The
+Dashboard server owns the Telemetry page backend procedures.
 
 After `npm run dev:status` shows `dashboard` as healthy, open:
 
@@ -119,8 +118,8 @@ AGENTG_TELEMETRY=1 docker compose --profile telemetry --profile container-client
 ```
 
 This starts Postgres, NATS, OpenTelemetry Collector, VictoriaMetrics, Jaeger,
-Grafana, the NATS exporter, the Postgres exporter, Telegram ingestion,
-History Sync, Gateway, and Dashboard. Open:
+Grafana, the NATS exporter, the Postgres exporter, Telegram ingestion, Gateway,
+and Dashboard. Open:
 
 [http://127.0.0.1:8788/](http://127.0.0.1:8788/)
 

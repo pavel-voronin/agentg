@@ -26,30 +26,6 @@ Does not own:
 - Exposing TDLib-shaped operations, page cursors, raw history fetch procedures,
   or other lower-level implementation controls to other domains.
 
-## History Sync
-
-Owns:
-
-- History Sync templates and concrete chat targets.
-- Materializing templates into concrete chat targets.
-- Projecting target ranges into bounded absolute intervals.
-- Sync cadence and wake-up policy.
-- Requesting Telegram domain history convergence for bounded absolute
-  intervals.
-- Composing operator read models from History Sync target state and
-  Telegram-owned coverage/read state.
-- Publishing history sync and target lifecycle events.
-
-Does not own:
-
-- Telegram login, sessions, or TDLib state.
-- Telegram message normalization or Telegram-shaped current-state writes.
-- Telegram domain table writes.
-- Telegram history coverage tables or TDLib page cursors.
-- Parsing Telegram storage payloads for History Sync read behavior.
-- Selecting Telegram fetch, cursor, TDLib, file reconciliation, or
-  materialization strategy.
-
 ## Dashboard
 
 Owns:
@@ -63,7 +39,7 @@ Does not own:
 
 - Agent-facing API compatibility.
 - Domain Dashboard content components, view models, or UI state.
-- History Sync target writes or Telegram history coverage writes.
+- Telegram history coverage writes.
 - Telegram login, sessions, TDLib state, or Telegram-shaped persistence.
 
 ## Dashboard SDK
@@ -92,7 +68,7 @@ Does not own:
 
 - Operator UI traffic.
 - Internal orchestration between domains.
-- History Sync target writes or Telegram history coverage writes.
+- Telegram history coverage writes.
 - Module-owned module RPC implementation.
 
 ## Trusted Modules

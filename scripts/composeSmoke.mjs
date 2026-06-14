@@ -10,15 +10,7 @@ if (includeTelegram) {
 }
 
 const compose = ['docker', 'compose', ...profiles.flatMap((profile) => ['--profile', profile])];
-const services = [
-  'postgres',
-  'nats',
-  'policies',
-  'telegram',
-  'history-sync',
-  'gateway',
-  'dashboard'
-];
+const services = ['postgres', 'nats', 'policies', 'telegram', 'gateway', 'dashboard'];
 
 try {
   run(['up', '-d', 'postgres', 'nats', '--quiet-pull']);
@@ -129,49 +121,6 @@ async function callProcedureUntilReady(url, service, procedure, input, attempts 
   throw new Error(service + ' did not become ready: ' + (lastError instanceof Error ? lastError.message : String(lastError)));
 }
 
-async function websocketRpcUntilReady(url, service, method, params, attempts = 30) {
-  let lastError;
-  for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    try {
-      return await websocketRpc(url, method, params);
-    } catch (error) {
-      lastError = error;
-    }
-    await sleep(2_000);
-  }
-
-  throw new Error(service + ' did not become ready: ' + (lastError instanceof Error ? lastError.message : String(lastError)));
-}
-
-async function websocketRpc(url, method, params) {
-  const { WebSocket } = await import('ws');
-  return new Promise((resolve, reject) => {
-    const socket = new WebSocket(url);
-    const timeout = setTimeout(() => {
-      socket.close();
-      reject(new Error(method + ' timed out'));
-    }, 5_000);
-
-    socket.once('open', () => {
-      socket.send(JSON.stringify({ id: 'compose-smoke', method, params }));
-    });
-    socket.once('message', (data) => {
-      clearTimeout(timeout);
-      socket.close();
-      const response = JSON.parse(data.toString());
-      if (response.error !== undefined) {
-        reject(new Error(response.error.message));
-        return;
-      }
-      resolve(response.result);
-    });
-    socket.once('error', (error) => {
-      clearTimeout(timeout);
-      reject(error);
-    });
-  });
-}
-
 const dashboardResponse = await fetchUntilReady('http://127.0.0.1:8080/healthz', 'dashboard', [200]);
 const policyKinds = await callProcedureUntilReady(
   'http://policies:8080',
@@ -202,30 +151,6 @@ if (telegramChat.chat !== null) {
   throw new Error('telegram smoke expected missing chat to return null');
 }
 
-const historyState = await callProcedureUntilReady(
-  'http://history-sync:8080',
-  'history-sync RPC',
-  'getChatHistorySyncState',
-  {
-    chatId: '0'
-  }
-);
-if (historyState.chat !== null) {
-  throw new Error('history-sync smoke expected missing chat to return null');
-}
-
-const dashboardState = await websocketRpcUntilReady(
-  'ws://127.0.0.1:8080/ws',
-  'dashboard RPC',
-  'history-sync.dashboard.getChatHistorySyncState',
-  {
-    chatId: '0'
-  }
-);
-if (dashboardState.chat !== null) {
-  throw new Error('dashboard smoke expected missing history-sync chat to return null');
-}
-
 console.log(
   JSON.stringify(
     {
@@ -233,9 +158,6 @@ console.log(
       dashboard: {
         contentType: dashboardResponse.headers.get('content-type'),
         status: dashboardResponse.status
-      },
-      historySync: {
-        chat: historyState.chat
       },
       policies: {
         downloadRules: downloadRules.length,

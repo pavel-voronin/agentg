@@ -65,8 +65,8 @@ describe('gateway server', () => {
       await expect(request(client, 'telegram.searchMessages', {})).rejects.toThrow(
         'Unknown method: telegram.searchMessages'
       );
-      await expect(request(client, 'history-sync.getChatHistorySyncState', {})).rejects.toThrow(
-        'Unknown method: history-sync.getChatHistorySyncState'
+      await expect(request(client, 'files.request', {})).rejects.toThrow(
+        'Unknown method: files.request'
       );
       await expect(request(client, 'capabilities.list', {})).rejects.toThrow(
         'Unknown method: capabilities.list'

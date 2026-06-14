@@ -8,7 +8,7 @@ the current policy body without metadata, YAML, RPC, subscriptions, or file
 paths.
 
 Policies are a framework infrastructure capability. They are not part of the
-Telegram, History Sync, Dashboard, or any other domain module.
+Telegram, Dashboard, or any other domain module.
 
 ## Goal
 
@@ -598,7 +598,6 @@ Definitions are declared in modules:
 
 ```text
 packages/telegram/policies/policies.ts
-packages/history-sync/policies/policies.ts
 packages/foobar/policies/policies.ts
 ```
 

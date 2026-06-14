@@ -66,7 +66,7 @@ export async function listHistoryChatIds(database: Database): Promise<string[]> 
     .from(telegramChats)
     .orderBy(asc(telegramChats.id));
 
-  return rows.filter((row) => isHistorySyncChatType(row.type)).map((row) => row.telegramChatId);
+  return rows.filter((row) => isHistoryCoverageChatType(row.type)).map((row) => row.telegramChatId);
 }
 
 export async function listHistoryCoverage(
@@ -702,6 +702,6 @@ function uniqueSortedStrings(values: string[]): string[] {
   return [...new Set(values)].sort();
 }
 
-function isHistorySyncChatType(type: string): boolean {
+function isHistoryCoverageChatType(type: string): boolean {
   return type === 'private' || type === 'secret' || type === 'group' || type === 'channel';
 }

@@ -2,7 +2,6 @@ export type TelemetryTabId =
   | 'files'
   | 'get-messages'
   | 'history-reconciler'
-  | 'history-sync'
   | 'nats'
   | 'overview'
   | 'postgres'
@@ -14,7 +13,6 @@ const tabs = new Set<TelemetryTabId>([
   'files',
   'get-messages',
   'history-reconciler',
-  'history-sync',
   'nats',
   'overview',
   'postgres',

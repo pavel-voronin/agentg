@@ -29,7 +29,8 @@ Telegram domain tables.
   reads without replaying TDLib payloads.
 - Historical fetch results and live updates should both be able to paint history coverage.
 - New Telegram messages should become visible in Postgres shortly after they appear in the user's normal Telegram client.
-- Historical sync should follow concrete chat targets managed by the history sync domain.
+- Historical materialization should follow Telegram-owned read and coverage
+  rules.
 - Attachment payloads should not be required for initial bulk ingestion; attachment metadata is enough until a later pipeline requests the payload.
 
 ## Open Questions

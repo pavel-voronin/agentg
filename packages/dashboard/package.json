@@ -14,7 +14,6 @@
   },
   "dependencies": {
     "@agentg/framework": "file:../framework",
-    "@agentg/history-sync": "file:../history-sync",
     "@agentg/telegram": "file:../telegram",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/semantic-conventions": "^1.41.1",

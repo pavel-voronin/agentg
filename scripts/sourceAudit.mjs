@@ -323,13 +323,12 @@ function isCurrentModuleWorkspace(workspace) {
     workspace === 'packages/gateway' ||
     workspace === 'packages/telemetry' ||
     workspace === 'packages/dashboard' ||
-    workspace === 'packages/telegram' ||
-    workspace === 'packages/history-sync'
+    workspace === 'packages/telegram'
   );
 }
 
 function auditDashboardSdkHasNoDomainKnowledge(files) {
-  const forbiddenTokens = ['telegram.', 'history-sync.', 'dashboard.', '@agentg/telegram'];
+  const forbiddenTokens = ['telegram.', 'dashboard.', '@agentg/telegram'];
 
   for (const file of files) {
     const rel = toRel(file);
@@ -368,10 +367,7 @@ function auditTelegramDateStorageContract() {
     failures.push('Telegram generated migration must store TDLib message date as timestamptz');
   }
 
-  for (const rel of [
-    'packages/telegram/src/store/message.ts',
-    'packages/telegram/src/history/messageCounts.ts'
-  ]) {
+  for (const rel of ['packages/telegram/src/store/message.ts']) {
     const source = readFileSync(join(root, rel), 'utf8');
     if (/getTime\(\)\s*\/\s*1000/.test(source)) {
       failures.push(`Telegram message storage must keep Date values as timestamptz: ${rel}`);
@@ -385,7 +381,6 @@ function auditDashboardEventDateContract(files) {
     if (
       !rel.startsWith('packages/dashboard/src/') &&
       !rel.startsWith('packages/dashboard-sdk/src/') &&
-      !rel.startsWith('packages/history-sync/dashboard/') &&
       !rel.startsWith('packages/telegram/dashboard/')
     ) {
       continue;
@@ -610,7 +605,6 @@ function auditScopedVueComponentStyles(vueFiles, sourceFiles) {
   const auditedPrefixes = [
     'packages/dashboard/src/',
     'packages/dashboard-sdk/src/',
-    'packages/history-sync/dashboard/',
     'packages/telegram/dashboard/'
   ];
 
@@ -977,7 +971,6 @@ function ignoredDirectory(directory) {
     rel === 'packages/gateway' ||
     rel === 'packages/dashboard' ||
     rel === 'packages/telegram' ||
-    rel === 'packages/history-sync' ||
     rel === 'td-data' ||
     rel.endsWith('/node_modules') ||
     rel.endsWith('/.claude') ||
@@ -991,7 +984,6 @@ function ignoredDirectory(directory) {
     rel.endsWith('/packages/gateway') ||
     rel.endsWith('/packages/dashboard') ||
     rel.endsWith('/packages/telegram') ||
-    rel.endsWith('/packages/history-sync') ||
     rel.endsWith('/td-data') ||
     rel === '.git' ||
     rel.endsWith('/.git')
@@ -1013,7 +1005,6 @@ function ignored(file) {
     rel.includes('/packages/gateway/') ||
     rel.includes('/packages/dashboard/') ||
     rel.includes('/packages/telegram/') ||
-    rel.includes('/packages/history-sync/') ||
     rel.includes('/td-data/') ||
     rel.startsWith('node_modules/') ||
     rel.startsWith('.claude/') ||
@@ -1027,7 +1018,6 @@ function ignored(file) {
     rel.startsWith('packages/gateway/') ||
     rel.startsWith('packages/dashboard/') ||
     rel.startsWith('packages/telegram/') ||
-    rel.startsWith('packages/history-sync/') ||
     rel.startsWith('td-data/')
   );
 }

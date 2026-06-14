@@ -6,9 +6,9 @@ by Telegram's own domain procedures.
 
 ## Boundary
 
-TDLib must not be exposed as a module boundary. Dashboard, Gateway, History Sync,
-and other modules must not call TDLib-shaped operations, choose TDLib methods,
-pass TDLib cursors, or depend on TDLib response shapes.
+TDLib must not be exposed as a module boundary. Dashboard, Gateway, and other
+modules must not call TDLib-shaped operations, choose TDLib methods, pass TDLib
+cursors, or depend on TDLib response shapes.
 
 Consumers call Telegram domain procedures. Telegram then decides internally
 whether it can answer from its own storage, needs to materialize data from TDLib,

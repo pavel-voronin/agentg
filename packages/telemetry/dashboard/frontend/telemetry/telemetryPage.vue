@@ -25,7 +25,6 @@ const tabs: TabView[] = [
   { id: 'get-messages', label: 'Get Messages' },
   { id: 'history-reconciler', label: 'History Reconciler' },
   { id: 'files', label: 'Files' },
-  { id: 'history-sync', label: 'History Sync' },
   { id: 'updates', label: 'Updates' },
   { id: 'postgres', label: 'Postgres' },
   { id: 'nats', label: 'NATS' }
@@ -128,19 +127,6 @@ function selectTab(tabId: TelemetryTabId): void {
         dashboard-uid="agentg-files"
         kiosk
         title="Files"
-      />
-      <div v-else class="telemetry-page__empty">No Grafana link</div>
-    </section>
-
-    <section v-if="activeTab === 'history-sync'" class="telemetry-page__section">
-      <UiGrafanaDashboard
-        v-if="links"
-        :key="activeViewKey"
-        :base-url="links.grafanaUi"
-        dashboard-slug="agentg-history-sync"
-        dashboard-uid="agentg-history-sync"
-        kiosk
-        title="History Sync"
       />
       <div v-else class="telemetry-page__empty">No Grafana link</div>
     </section>

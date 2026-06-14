@@ -69,38 +69,13 @@ Telegram publishes:
 - `telegram.tdlib.{method}.completed`
 - `telegram.tdlib.{method}.failed`
 
-History Sync publishes:
-
-- `history-sync.sync.requested`
-- `history-sync.sync.accepted`
-- `history-sync.sync.started`
-- `history-sync.sync.completed`
-- `history-sync.sync.skipped`
-- `history-sync.sync.failed`
-- `history-sync.target.upserted`
-- `history-sync.target.deleted`
-- `history-sync.target.auto_deleted`
-
 Internal RPC calls are telemetry signals, not NATS facts. The HTTP RPC transport
 records client and server spans and duration metrics. Modules publish NATS facts
 explicitly when a domain state transition matters to other consumers.
 Internal RPC transport, protocol, and domain procedure failures are part of the
 module runtime contract, not event-plane state.
 
-`history-sync.sync.requested` is a notification that a sync wake-up was accepted at
-the History Sync boundary. It is not consumed as a NATS command.
-`history-sync.sync.skipped` records a pass that found no local History Sync
-demand and therefore did not call Telegram history or directory procedures.
-
 ## Consumers
-
-History Sync subscribes to Telegram events:
-
-- `telegram.update.chat.discovered` carries the discovered chat id in
-  `data.args[0]` and wakes template materialization only for that chat.
-
-History Sync removes concrete targets for chats no longer listed by Telegram
-during explicit full reconciliation, not during every target-only pass.
 
 Gateway subscribes only to `telegram.login.completed` and forwards that event to
 external agent WebSocket clients. All other events remain internal unless a
@@ -124,8 +99,6 @@ After reconnecting, consumers must rebuild state through these surfaces:
   procedures.
 - Dashboard browser clients: Dashboard WebSocket RPC methods handled by
   Dashboard-owned backend procedures.
-- History Sync: its own Postgres tables plus Telegram domain procedures for
-  reads and history convergence.
 - Telegram ingestion: TDLib session state and Telegram-shaped Postgres storage.
 - Modules: their owned tables plus domain module RPC reads.
 
@@ -138,9 +111,6 @@ Internal procedure contracts are owned by the serving module package:
   ingestion, normalization, coverage mechanics, file materialization, and TDLib
   plumbing remain package-internal. Its public procedures must not expose raw
   TDLib calls, page fetches, cursors, or lower-level materialization controls.
-- History Sync owns `@agentg/history-sync`, whose package root exports the typed
-  client for its module procedure surface. The History Sync schemas, storage
-  schema, commands, and domain types remain package-internal.
 - Modules own package-local procedure contracts. Module schemas, storage schema,
   registrations, and runtime remain package-internal.
 
@@ -151,13 +121,3 @@ directly.
 
 There is no shared internal procedure contracts package. Cross-cutting module
 runtime helpers live in `@agentg/framework`.
-
-## Removed Command Subjects
-
-These subjects are intentionally removed:
-
-- `history-sync.target.upsert.requested`
-- `history-sync.target.delete.requested`
-
-Target changes now go through History Sync's module-owned procedures. History Sync
-publishes `history-sync.target.upserted` and `history-sync.target.deleted` after the write.

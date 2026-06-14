@@ -9,7 +9,6 @@ Retention policy is not final yet.
 - Keep modeled TDLib diagnostics only when they are bounded and useful for
   repair.
 - Keep current message state as long as the user wants Telegram memory.
-- Keep History Sync targets long enough to preserve desired coverage policy.
 - Keep Telegram history coverage long enough to resume coverage convergence
   safely.
 

@@ -9,8 +9,7 @@ const packageDirs = [
   'packages/gateway',
   'packages/telemetry',
   'packages/dashboard',
-  'packages/telegram',
-  'packages/history-sync'
+  'packages/telegram'
 ];
 const failures = [];
 

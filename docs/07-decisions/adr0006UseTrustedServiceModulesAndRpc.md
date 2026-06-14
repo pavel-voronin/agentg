@@ -108,10 +108,9 @@ internal services they consume.
 
 Core service order is explicit in Process Compose and Docker Compose. RPC
 consumers start after the consumed service is healthy: Telegram is healthy
-before History Sync and Gateway, and Telegram plus History Sync are healthy
-before Dashboard server. Dashboard does not depend on Gateway. Trusted modules
-that add product behavior use the same supervisor-owned ordering and address
-model.
+before Gateway and Dashboard server. Dashboard does not depend on Gateway.
+Trusted modules that add product behavior use the same supervisor-owned
+ordering and address model.
 
 Local development uses Process Compose for product processes and Docker Compose
 for infrastructure dependencies.

@@ -6,8 +6,7 @@
 - Implement TDLib sidecar boundary.
 - Authenticate as the Telegram user and persist the session.
 - Discover personal chats, groups, channels, and Saved Messages.
-- Implement History Sync templates, concrete targets, target range projection,
-  and Telegram-owned coverage convergence.
+- Implement Telegram-owned coverage convergence for requested Telegram reads.
 - Store normalized Telegram table records in Postgres.
 - Build basic normalized message state for text-oriented messages.
 - Store attachment metadata without bulk-downloading payloads.

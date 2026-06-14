@@ -11,7 +11,6 @@
     "packages/policies",
     "packages/telegram",
     "packages/tdlib-docs",
-    "packages/history-sync",
     "packages/claude-plugin"
   ],
   "engines": {
@@ -29,9 +28,8 @@
     "dev:restart": "process-compose -U -u .tmp/process-compose.sock process restart",
     "dev:full-restart": "node scripts/devFullRestart.mjs",
     "dev:dashboard": "npm --workspace @agentg/dashboard run dev",
-    "dev:dashboard-server": "sh -c 'set -a; [ ! -f .env ] || . ./.env; set +a; DATABASE_URL=\"${DATABASE_URL:-postgres://agentg:agentg@127.0.0.1:5432/agentg}\" HISTORY_SYNC_RPC_URL=\"${HISTORY_SYNC_RPC_URL:-http://127.0.0.1:8704}\" NATS_URL=\"${NATS_URL:-nats://127.0.0.1:4222}\" TELEGRAM_RPC_URL=\"${TELEGRAM_RPC_URL:-http://127.0.0.1:8702}\" DASHBOARD_PORT=\"${DASHBOARD_PORT:-8789}\" npm --workspace @agentg/dashboard run dev:server'",
+    "dev:dashboard-server": "sh -c 'set -a; [ ! -f .env ] || . ./.env; set +a; DATABASE_URL=\"${DATABASE_URL:-postgres://agentg:agentg@127.0.0.1:5432/agentg}\" NATS_URL=\"${NATS_URL:-nats://127.0.0.1:4222}\" TELEGRAM_RPC_URL=\"${TELEGRAM_RPC_URL:-http://127.0.0.1:8702}\" DASHBOARD_PORT=\"${DASHBOARD_PORT:-8789}\" npm --workspace @agentg/dashboard run dev:server'",
     "dev:gateway": "sh -c 'set -a; [ ! -f .env ] || . ./.env; set +a; NATS_URL=\"${NATS_URL:-nats://127.0.0.1:4222}\" TELEGRAM_RPC_URL=\"${TELEGRAM_RPC_URL:-http://127.0.0.1:8702}\" PORT=\"${PORT:-8703}\" GATEWAY_PORT=\"${GATEWAY_PORT:-8787}\" npm --workspace @agentg/gateway run dev'",
-    "dev:history-sync": "sh -c 'set -a; [ ! -f .env ] || . ./.env; set +a; DATABASE_URL=\"${DATABASE_URL:-postgres://agentg:agentg@127.0.0.1:5432/agentg}\" NATS_URL=\"${NATS_URL:-nats://127.0.0.1:4222}\" TELEGRAM_RPC_URL=\"${TELEGRAM_RPC_URL:-http://127.0.0.1:8702}\" PORT=\"${PORT:-8704}\" npm --workspace @agentg/history-sync run dev'",
     "dev:policies": "sh -c 'set -a; [ ! -f .env ] || . ./.env; set +a; NATS_URL=\"${NATS_URL:-nats://127.0.0.1:4222}\" POLICY_CONFIG_DIR=\"${POLICY_CONFIG_DIR:-$PWD/config/policies}\" PORT=\"${PORT:-8705}\" npm --workspace @agentg/policies run dev'",
     "dev:claude": "npm --workspace @agentg/claude-plugin run start",
     "dev:telegram": "sh -c 'set -a; [ ! -f .env ] || . ./.env; set +a; DATABASE_URL=\"${DATABASE_URL:-postgres://agentg:agentg@127.0.0.1:5432/agentg}\" NATS_URL=\"${NATS_URL:-nats://127.0.0.1:4222}\" POLICIES_RPC_URL=\"${POLICIES_RPC_URL:-http://127.0.0.1:8705}\" PORT=\"${PORT:-8702}\" TDLIB_DATABASE_DIR=\"$PWD/td-data/database\" TDLIB_FILES_DIR=\"$PWD/td-data/files\" npm --workspace @agentg/telegram run dev'",
@@ -40,8 +38,8 @@
     "build": "npm --workspaces --if-present run build",
     "db:up": "docker compose up -d postgres --quiet-pull",
     "db:down": "docker compose down",
-    "db:generate": "npm --workspace @agentg/telegram run db:generate && npm --workspace @agentg/history-sync run db:generate",
-    "db:migrate": "sh -c 'set -a; [ ! -f .env ] || . ./.env; set +a; DATABASE_URL=\"${DATABASE_URL:-postgres://agentg:agentg@127.0.0.1:5432/agentg}\"; export DATABASE_URL; npm --workspace @agentg/telegram run db:migrate && npm --workspace @agentg/history-sync run db:migrate'",
+    "db:generate": "npm --workspace @agentg/telegram run db:generate",
+    "db:migrate": "sh -c 'set -a; [ ! -f .env ] || . ./.env; set +a; DATABASE_URL=\"${DATABASE_URL:-postgres://agentg:agentg@127.0.0.1:5432/agentg}\"; export DATABASE_URL; npm --workspace @agentg/telegram run db:migrate'",
     "db:recreate": "node scripts/dbRecreate.mjs",
     "db:ps": "docker compose ps postgres",
     "db:logs": "docker compose logs --tail=50 postgres",
@@ -62,8 +60,7 @@
     "check:dashboard": "npm --workspace @agentg/dashboard run typecheck && npm --workspace @agentg/dashboard --if-present run test && eslint packages/dashboard && prettier --check packages/dashboard",
     "check:policies": "npm run policies:generate && npm --workspace @agentg/policies run typecheck && npm --workspace @agentg/policies --if-present run test && eslint packages/policies && prettier --check packages/policies",
     "check:telegram": "npm --workspace @agentg/telegram run typecheck && npm --workspace @agentg/telegram --if-present run test && eslint packages/telegram && prettier --check packages/telegram",
-    "check:history-sync": "npm --workspace @agentg/history-sync run typecheck && npm --workspace @agentg/history-sync --if-present run test && eslint packages/history-sync && prettier --check packages/history-sync",
-    "check:modules": "npm run module-boundary:audit && npm run check:framework && npm run check:gateway && npm run check:telemetry && npm run check:dashboard && npm run check:policies && npm run check:telegram && npm run check:history-sync",
+    "check:modules": "npm run module-boundary:audit && npm run check:framework && npm run check:gateway && npm run check:telemetry && npm run check:dashboard && npm run check:policies && npm run check:telegram",
     "check": "npm run policies:generate && npm run typecheck && npm run lint && npm run source:audit && npm run format:check && npm run test"
   },
   "devDependencies": {

@@ -16,7 +16,6 @@ Use Postgres for:
 - current message state
 - chats and users
 - attachment metadata
-- History Sync templates and targets
 - Telegram history coverage
 
 ## Consequences

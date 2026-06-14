@@ -17,7 +17,6 @@ describe('telemetry route', () => {
     expect(telemetryTabFromSegment('get-messages')).toBe('get-messages');
     expect(telemetryTabFromSegment('history-reconciler')).toBe('history-reconciler');
     expect(telemetryTabFromSegment('files')).toBe('files');
-    expect(telemetryTabFromSegment('history-sync')).toBe('history-sync');
     expect(telemetryTabFromSegment('updates')).toBe('updates');
     expect(telemetryTabFromSegment('postgres')).toBe('postgres');
     expect(telemetryTabFromSegment('nats')).toBe('nats');
@@ -35,7 +34,6 @@ describe('telemetry route', () => {
     expect(telemetryRouteSegments('get-messages')).toEqual(['get-messages']);
     expect(telemetryRouteSegments('history-reconciler')).toEqual(['history-reconciler']);
     expect(telemetryRouteSegments('files')).toEqual(['files']);
-    expect(telemetryRouteSegments('history-sync')).toEqual(['history-sync']);
     expect(telemetryRouteSegments('updates')).toEqual(['updates']);
     expect(telemetryRouteSegments('postgres')).toEqual(['postgres']);
     expect(telemetryRouteSegments('nats')).toEqual(['nats']);

@@ -131,7 +131,7 @@ Metric rules:
 
 - For RPC metrics, `service_name` is the calling or serving process and
   `rpc.service` is the target/served module boundary such as `telegram`,
-  `history-sync`, `gateway`, or `dashboard`.
+  `gateway`, or `dashboard`.
 - Use duration histograms for latency and processing time.
 - Use gauges for current state such as queue size, concurrency, and last-seen
   timestamps.
@@ -151,10 +151,10 @@ The telemetry page is a thin read and navigation surface:
 
 - `telemetry.links` is a Dashboard backend procedure that reads backend UI
   links for embedded dashboards and debug tools.
-- The Operations, Telegram, Files, History Sync, TDLib Updates,
-  Postgres, and NATS tabs embed provisioned Grafana dashboards. Dashboard UIDs
-  and slugs are fixed in the Dashboard component; backend-provided links
-  cover only external observability tool base URLs.
+- The Operations, Telegram, Files, TDLib Updates, Postgres, and NATS tabs embed
+  provisioned Grafana dashboards. Dashboard UIDs and slugs are fixed in the
+  Dashboard component; backend-provided links cover only external observability
+  tool base URLs.
 - The NATS dashboard is backed by prometheus-nats-exporter metrics.
 - The Postgres dashboard is backed by postgres_exporter metrics and app-level
   `db.client.operation.duration` metrics.
@@ -207,14 +207,6 @@ stale recovery rate. Top-row rate panels use file queue gauges as the liveness
 anchor, so no matching failure/defer/stale events render as zero only when file
 queue telemetry itself is present; missing file telemetry remains visible as
 `No telemetry`.
-
-The provisioned `History Sync` dashboard groups module telemetry by controller,
-sync stages, workload, and downstream boundaries. It reads controller pass
-latency and errors, stage latency and errors, latest pass workload gauges,
-monotonic totals for fetched pages, fetched messages, stored messages, and
-covered intervals, History Sync RPC calls to Telegram, History Sync Postgres
-client operations, History Sync NATS publishing, and NATS processing for History
-Sync lifecycle events plus the Telegram chat directory update trigger.
 
 The provisioned `TDLib Updates` dashboard reads the handler catalog from
 `telegram_update_catalog_info` so all registered TDLib update handlers stay

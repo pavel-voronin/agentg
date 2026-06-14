@@ -89,7 +89,7 @@ export const telegramModule = defineModule('telegram', {
 
     return {
       getChat: getChatProcedure({ database, events }),
-      listChats: listChatsProcedure({ database })
+      getMessages: getMessagesProcedure({ database, events })
     };
   }
 });
@@ -105,11 +105,8 @@ The database package provides Postgres and Drizzle infrastructure only. Domains
 and modules own schemas and migrations in their own packages:
 
 - `@agentg/telegram`: `telegram_*`, journal `__drizzle_migrations_telegram`
-- `@agentg/history-sync`: `history_sync_*`, journal
-  `__drizzle_migrations_history_sync`
-
-Cross-domain table reads and writes are a boundary violation. A module that
-needs another domain's data calls that domain's module RPC surface.
+  Cross-domain table reads and writes are a boundary violation. A module that
+  needs another domain's data calls that domain's module RPC surface.
 
 ## RPC Results
 

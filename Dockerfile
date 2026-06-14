@@ -7,7 +7,6 @@ COPY packages/dashboard/package.json packages/dashboard/package.json
 COPY packages/claude-plugin/package.json packages/claude-plugin/package.json
 COPY packages/policies/package.json packages/policies/package.json
 COPY packages/telegram/package.json packages/telegram/package.json
-COPY packages/history-sync/package.json packages/history-sync/package.json
 COPY packages/tdlib-docs/package.json packages/tdlib-docs/package.json
 RUN npm install
 
@@ -26,7 +25,6 @@ COPY packages/dashboard/package.json packages/dashboard/package.json
 COPY packages/claude-plugin/package.json packages/claude-plugin/package.json
 COPY packages/policies/package.json packages/policies/package.json
 COPY packages/telegram/package.json packages/telegram/package.json
-COPY packages/history-sync/package.json packages/history-sync/package.json
 COPY packages/tdlib-docs/package.json packages/tdlib-docs/package.json
 RUN npm install --include=dev && npm cache clean --force
 COPY --from=build --chown=agentg:agentg /app/packages ./packages

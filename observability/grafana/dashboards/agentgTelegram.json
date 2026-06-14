@@ -390,7 +390,7 @@
             "uid": "victoria-metrics"
           },
           "refId": "B",
-          "expr": "histogram_quantile(0.95, sum by (rpc_method, le) (rate(rpc_client_call_duration_seconds_bucket{service_name=\"dashboard-server\", rpc_method=~\"getMessages|listChats|getChat|searchMessages|listRecentMessages|countMessagesInIntervals|getHistoryCoverage|getChatHistoryFacts|ensureHistoryCoverage\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (rpc_method, le) (rate(rpc_client_call_duration_seconds_bucket{service_name=\"dashboard-server\", rpc_method=~\"getMessages|getChat|searchMessages|listRecentMessages\"}[$__rate_interval])))",
           "legendFormat": "client {{rpc_method}}"
         }
       ],

@@ -33,8 +33,8 @@ asynchronous HistoryReconciler completion.
 
 ## Non-Goals
 
-- Do not expose raw TDLib procedures or TDLib cursors to Dashboard,
-  History Sync, Gateway, or other consumers.
+- Do not expose raw TDLib procedures or TDLib cursors to Dashboard, Gateway, or
+  other consumers.
 - Do not add public `downloadMessages`, `requestMessages`, `fetchPage`, or
   materialization strategy procedures.
 - Do not make file slot materialization or file download completion part of
@@ -363,8 +363,8 @@ Therefore:
   beginning of that owner history is reached.
 - TDLib `messages` responses may contain null entries. Null entries do not
   count as fetched messages and must not be persisted.
-- TDLib `total_count` is approximate. It must not prove readiness or beginning
-  of history.
+- TDLib `total_count` is approximate. It must not prove readiness, coverage, or
+  beginning of history.
 - A TDLib page smaller than the requested private limit does not by itself prove
   the beginning of history. Beginning is proven by TDLib owner semantics or by
   the readiness check after persisted coverage.
@@ -461,7 +461,6 @@ It does not own:
 - Public message read contracts.
 - File download completion.
 - Dashboard rendering of message bubbles.
-- History Sync target ownership.
 
 ## Reconciler Completion Rule
 
@@ -485,10 +484,9 @@ For `RangeSelector`, the reconciler continues until:
 The worker may process one TDLib page per tick. The durable job remains
 `queued`, `running`, or `deferred` until the selector becomes ready or fails.
 
-The existing `ensureHistoryCoverage(maxPages: 1)` behavior is not the target
-completion model for `getMessages`. That behavior advances coverage one pass at
-a time. `getMessages` pending requests require a durable job that lives until
-completion or failure.
+Single-pass history fetch behavior is not the target completion model for
+`getMessages`. `getMessages` pending requests require a durable job that lives
+until completion or failure.
 
 ## Events
 
@@ -662,7 +660,7 @@ Allowed label values:
 - `selector.kind = page | range`
 - `owner.kind = chat | forum_topic | direct_messages_topic | saved_messages_topic | message_thread`
 - `job.status = queued | running | deferred | failed`
-- `transition = completed | failed | skipped_covered`
+- `transition = completed | deferred | failed | skipped_covered`
 - `stage = claim | coverage_check | tdlib_fetch | persist | publish`
 - `message.result = fetched | stored`
 - `page.result = fetched | empty`

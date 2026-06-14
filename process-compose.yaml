@@ -15,7 +15,6 @@ environment:
   - 'NATS_URL=${NATS_URL:-nats://127.0.0.1:4222}'
   - 'TELEGRAM_RPC_URL=${TELEGRAM_RPC_URL:-http://127.0.0.1:8702}'
   - 'POLICIES_RPC_URL=${POLICIES_RPC_URL:-http://127.0.0.1:8705}'
-  - 'HISTORY_SYNC_RPC_URL=${HISTORY_SYNC_RPC_URL:-http://127.0.0.1:8704}'
   - 'AGENTG_TELEMETRY=${AGENTG_TELEMETRY:-1}'
   - 'OTEL_BLRP_SCHEDULE_DELAY=${OTEL_BLRP_SCHEDULE_DELAY:-1000}'
   - 'OTEL_BSP_SCHEDULE_DELAY=${OTEL_BSP_SCHEDULE_DELAY:-1000}'
@@ -45,7 +44,7 @@ processes:
 
   db-migrate:
     namespace: setup
-    description: Apply Telegram and History Sync Drizzle migrations.
+    description: Apply Telegram Drizzle migrations.
     command: npm run db:migrate
     depends_on:
       infra-up:
@@ -91,25 +90,6 @@ processes:
       timeout_seconds: 1
       failure_threshold: 300
 
-  history-sync:
-    namespace: app
-    description: History Sync templates, targets, coverage, and RPC service.
-    command: npm run dev:history-sync
-    environment:
-      - 'OTEL_SERVICE_NAME=history-sync'
-    availability:
-      restart: always
-      backoff_seconds: 2
-    depends_on:
-      telegram:
-        condition: process_healthy
-    readiness_probe:
-      exec:
-        command: nc -z 127.0.0.1 8704
-      period_seconds: 1
-      timeout_seconds: 1
-      failure_threshold: 120
-
   gateway:
     namespace: app
     description: External agent WebSocket gateway.
@@ -140,8 +120,6 @@ processes:
       backoff_seconds: 2
     depends_on:
       telegram:
-        condition: process_healthy
-      history-sync:
         condition: process_healthy
     readiness_probe:
       exec:

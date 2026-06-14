@@ -8,8 +8,8 @@
   `resource`, `process`, `procedure`, event bus, and typed internal RPC
   clients.
 - This package is the module boundary foundation.
-- Do not add domain-specific code here. Telegram, history sync, files, TDLib,
-  database schemas, and Dashboard screens belong outside this package.
+- Do not add domain-specific code here. Telegram, files, TDLib, database
+  schemas, and Dashboard screens belong outside this package.
 - Keep public API small. A new exported function is allowed only when it names a framework concept directly.
 - Root exports must stay empty by default. Export only values with a real
   current consumer outside this package. Framework tests may import internal

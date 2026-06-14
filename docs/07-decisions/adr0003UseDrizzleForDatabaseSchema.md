@@ -11,7 +11,7 @@ and migration placement.
 AgenTG needs a stable Postgres contract between Telegram ingestion code and
 durable storage. Hand-written bootstrap DDL was useful for the first validation
 tests, but it makes schema ownership ambiguous and does not scale well as
-normalization and history sync evolve.
+normalization and historical coverage evolve.
 
 ## Decision
 

@@ -7,12 +7,7 @@ import { createDatabase } from './database/client.js';
 import { useFiles } from './files/index.js';
 import { createLiveCoverageObserver } from './history/liveCoverage.js';
 import { useIngestion } from './ingestion/index.js';
-import { countMessagesInIntervalsProcedure } from './procedures/countMessagesInIntervals.js';
-import { ensureHistoryCoverageProcedure } from './procedures/ensureHistoryCoverage.js';
 import { getChatProcedure } from './procedures/getChat.js';
-import { getChatHistoryFactsProcedure } from './procedures/getChatHistoryFacts.js';
-import { getHistoryCoverageProcedure } from './procedures/getHistoryCoverage.js';
-import { listChatsProcedure } from './procedures/listChats.js';
 import { listRecentMessagesProcedure } from './procedures/listRecentMessages.js';
 import { getMessagesProcedure } from './procedures/getMessages.js';
 import { requestFileProcedure } from './procedures/requestFile.js';
@@ -105,12 +100,7 @@ export const telegramModule = defineModule('telegram', {
     };
 
     return {
-      countMessagesInIntervals: countMessagesInIntervalsProcedure(procedureResources),
-      ensureHistoryCoverage: ensureHistoryCoverageProcedure(procedureResources),
       getChat: getChatProcedure(procedureResources),
-      getChatHistoryFacts: getChatHistoryFactsProcedure(procedureResources),
-      getHistoryCoverage: getHistoryCoverageProcedure(procedureResources),
-      listChats: listChatsProcedure(procedureResources),
       listRecentMessages: listRecentMessagesProcedure(procedureResources),
       getMessages: getMessagesProcedure(procedureResources),
       requestFile: requestFileProcedure(procedureResources),

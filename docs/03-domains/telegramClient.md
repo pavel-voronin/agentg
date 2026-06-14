@@ -22,8 +22,8 @@ AgenTG should be useful as a Telegram client first.
 
 - Telegram mechanics should not be flattened into a generic message-feed model.
 - TDLib is an implementation detail of this domain. It must not appear in
-  procedure names, caller choices, Dashboard contracts, History Sync contracts,
-  Gateway contracts, or other module boundaries.
+  procedure names, caller choices, Dashboard contracts, Gateway contracts, or
+  other module boundaries.
 - Public Telegram procedures expose Telegram domain capabilities. They must not
   expose raw TDLib calls, page fetches, TDLib cursors, coverage internals, file
   reconciliation controls, or materialization strategy switches.

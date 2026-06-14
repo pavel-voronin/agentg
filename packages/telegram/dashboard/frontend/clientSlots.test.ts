@@ -7,7 +7,7 @@ import { clientTabFromItem } from './clientSlots.js';
 describe('Telegram client slots', () => {
   it('reads the client tab route segment from tab metadata', () => {
     const tab = clientTabFromItem(
-      contentItem('history-sync.client', {
+      contentItem('telegram.history.coverage', {
         tab: {
           label: 'History Coverage',
           order: 20,

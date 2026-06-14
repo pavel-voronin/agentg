@@ -1,8 +1,6 @@
 import { createLogger, logError, nats, startTelemetryRuntime } from '@agentg/framework';
-import { historySyncClient } from '@agentg/history-sync';
 import { telegramClient } from '@agentg/telegram';
 
-import { createProcedures as createHistorySyncProcedures } from '../../../history-sync/dashboard/backend/procedures.js';
 import { createProcedures as createTelegramProcedures } from '../../../telegram/dashboard/backend/procedures.js';
 import { createDatabase } from '../../../telegram/src/database/client.js';
 import { createProcedures as createTelemetryProcedures } from '../../../telemetry/dashboard/backend/procedures.js';
@@ -16,7 +14,6 @@ const events = nats(config.natsUrl)();
 await events.start();
 const database = createDatabase(config.databaseUrl);
 await database.start();
-const historySync = historySyncClient({ timeoutMs: 15_000, url: config.historySyncRpcUrl });
 const telegram = telegramClient({ timeoutMs: 15_000, url: config.telegramRpcUrl });
 
 try {
@@ -28,9 +25,6 @@ try {
     },
     events,
     procedures: {
-      ...createHistorySyncProcedures({
-        historySync
-      }),
       ...createTelegramProcedures({
         database: database.db,
         events,
