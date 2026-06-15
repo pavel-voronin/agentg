@@ -81,7 +81,7 @@ Metrics:
 - Telegram messages-page and message-view stage duration histograms
 - Telegram file-record stage duration histogram
 - Telegram file queue asset/job/byte gauges
-- Telegram file worker wake and job outcome counters
+- Telegram file worker wake, job outcome, and recovery outcome counters
 - Telegram file worker stage duration histogram
 - prometheus-nats-exporter metrics scraped by VictoriaMetrics from NATS
   monitoring endpoints
@@ -197,8 +197,8 @@ non-file app-level NATS send/process latency for Telegram event subjects.
 
 The provisioned `Files` dashboard is the operator x-ray for Telegram
 file handling. It reads file queue asset, job, and byte gauges, unknown-size
-backlog, worker wake reasons, worker job outcomes, worker stage latency and
-rate, file-record stage latency and rate, file-facing Dashboard RPC latency
+backlog, worker wake reasons, worker job outcomes, worker recovery outcomes,
+worker stage latency and rate, file-record stage latency and rate, file-facing Dashboard RPC latency
 and rate, file-table DB latency and rate, `telegram.files.*` event send/process
 telemetry, and recent Jaeger traces for file worker passes. The top row is made
 of red-flag indicators rather than raw graphs: queued backlog, failed assets,
