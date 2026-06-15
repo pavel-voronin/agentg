@@ -1,11 +1,3 @@
-import { and, eq } from 'drizzle-orm';
-
-import type { Database } from '../database/client.js';
-import {
-  telegramFileAssets,
-  telegramFileDownloadJobs,
-  telegramFileSlots
-} from '../database/schema.js';
 import { publishFileOwnerUpdated, publishFileQueueUpdated } from './events.js';
 import {
   assertMediaKind,
@@ -13,7 +5,8 @@ import {
   enqueueFileAssetDownload
 } from './persistence.js';
 import { decideFilePolicy } from './policy.js';
-import { readFileRef } from './read.js';
+import { readFileRef } from '../storage/fileReadStorage.js';
+import { readRequestFileSlotRow } from '../storage/fileRequestStorage.js';
 import type { FileRequestResult, FileSubsystemOptions } from './runtime.js';
 import type { FileOwner } from './types.js';
 
@@ -21,15 +14,6 @@ type RequestFileSlotOptions = Pick<
   FileSubsystemOptions,
   'database' | 'events' | 'getDownloadRules'
 >;
-
-type RequestFileSlotRow = {
-  assetKey: string;
-  assetStatus: string;
-  byteSize: number | null;
-  downloadError: string | null;
-  jobStatus: string | null;
-  mediaKind: string;
-};
 
 export async function requestFileSlot(
   options: RequestFileSlotOptions,
@@ -78,36 +62,4 @@ export async function requestFileSlot(
     decision,
     file: await readFileRef(options.database, input.owner, input.slotKey)
   };
-}
-
-async function readRequestFileSlotRow(
-  database: Database,
-  owner: FileOwner,
-  slotKey: string
-): Promise<RequestFileSlotRow | null> {
-  const [row] = await database
-    .select({
-      assetKey: telegramFileSlots.assetKey,
-      assetStatus: telegramFileAssets.status,
-      byteSize: telegramFileSlots.byteSize,
-      downloadError: telegramFileAssets.downloadError,
-      jobStatus: telegramFileDownloadJobs.status,
-      mediaKind: telegramFileSlots.mediaKind
-    })
-    .from(telegramFileSlots)
-    .innerJoin(telegramFileAssets, eq(telegramFileAssets.assetKey, telegramFileSlots.assetKey))
-    .leftJoin(
-      telegramFileDownloadJobs,
-      eq(telegramFileDownloadJobs.assetKey, telegramFileSlots.assetKey)
-    )
-    .where(
-      and(
-        eq(telegramFileSlots.ownerModel, owner._model),
-        eq(telegramFileSlots.ownerId, owner.id),
-        eq(telegramFileSlots.slotKey, slotKey)
-      )
-    )
-    .limit(1);
-
-  return row ?? null;
 }

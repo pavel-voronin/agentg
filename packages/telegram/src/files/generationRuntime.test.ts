@@ -18,11 +18,11 @@ vi.mock('./generation.js', () => ({
   runFileGeneration: vi.fn(
     (
       _options: unknown,
-      update: { generation_id: number | string },
+      update: { generationId: number | string },
       signal: AbortSignal
     ): Promise<void> => {
       generation.runs.push({
-        generationId: update.generation_id,
+        generationId: update.generationId,
         signal
       });
       return new Promise((resolve) => {
@@ -76,10 +76,9 @@ function generationUpdate(
   destinationPath: string
 ): FileGenerationStartUpdate {
   return {
-    _: 'updateFileGenerationStart',
     conversion: '#url#',
-    destination_path: destinationPath,
-    generation_id: generationId,
-    original_path: 'https://example.test/file'
+    destinationPath: destinationPath,
+    generationId: generationId,
+    originalPath: 'https://example.test/file'
   };
 }

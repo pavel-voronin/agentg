@@ -1,13 +1,78 @@
-import type { EventBus } from '@agentg/framework';
-import type { file } from 'tdlib-types';
-import type { UpdateByType } from '../tdlib/shape.js';
+import type { EventBus, JsonObject } from '@agentg/framework';
 
 import type { Database } from '../database/client.js';
-import { priorities } from '../tdlib/priority.js';
-import type { Tdlib } from '../tdlib/index.js';
+import type { FileSnapshot } from '../domain/models/fileSnapshot.js';
+import type { FileGenerationRequest } from '../domain/models/state.js';
 import type { FilePolicyDecision } from './policy.js';
 import type { MediaDownloadPolicyRule } from './policyRules.js';
 import type { FileRef } from './types.js';
+
+type OperationOptions = {
+  priority?: number;
+};
+
+type GenerationErrorInput = {
+  _: 'error';
+  code: number;
+  message: string;
+};
+
+export type FileOperationPort = {
+  addFileToDownloads(
+    input: {
+      chatId: number;
+      fileId: number;
+      messageId: number;
+      priority: number;
+    },
+    options?: OperationOptions
+  ): Promise<FileSnapshot>;
+  deleteFile(input: { fileId: number }, options?: OperationOptions): Promise<void>;
+  downloadFile(
+    input: {
+      fileId: number;
+      limit: number;
+      offset: number;
+      priority: number;
+      synchronous: boolean;
+    },
+    options?: OperationOptions
+  ): Promise<FileSnapshot>;
+  finishFileGeneration(
+    input: {
+      error: GenerationErrorInput | null;
+      generationId: number | string;
+    },
+    options?: OperationOptions
+  ): Promise<void>;
+  getFile(input: { fileId: number }, options?: OperationOptions): Promise<FileSnapshot | undefined>;
+  getMessageContent(
+    input: {
+      chatId: number;
+      messageId: number;
+    },
+    options?: OperationOptions
+  ): Promise<JsonObject>;
+  getQueueStats(): {
+    highestPendingPriority: number | null;
+    runningCount: number;
+  };
+  removeFileFromDownloads(
+    input: {
+      deleteFromCache: boolean;
+      fileId: number;
+    },
+    options?: OperationOptions
+  ): Promise<void>;
+  setFileGenerationProgress(
+    input: {
+      expectedSize: number;
+      generationId: number | string;
+      localPrefixSize: number;
+    },
+    options?: OperationOptions
+  ): Promise<void>;
+};
 
 export type FileSubsystemOptions = {
   database: Database;
@@ -20,8 +85,8 @@ export type FileSubsystemOptions = {
   getDownloadRules: () => readonly MediaDownloadPolicyRule[];
   maxConcurrentDownloads?: number;
   maxFilesPerTick?: number;
+  operations: FileOperationPort;
   staleCheckMs?: number;
-  tdlib: Tdlib;
   tdlibSourceDirectories: readonly string[];
 };
 
@@ -72,20 +137,7 @@ export type FileDownloadBatchResult = {
   watchdogCount: number;
 };
 
-export type NotificationGroup = UpdateByType<'updateActiveNotifications'>['groups'][number];
-export type Notification = UpdateByType<'updateNotification'>['notification'];
-export type QuickReplyMessage =
-  UpdateByType<'updateQuickReplyShortcut'>['shortcut']['first_message'];
-export type StickerSet = UpdateByType<'updateStickerSet'>['sticker_set'];
-export type Story = UpdateByType<'updateStory'>['story'];
-export type TrendingStickerSets = UpdateByType<'updateTrendingStickerSets'>['sticker_sets'];
-export type UserFullInfo = UpdateByType<'updateUserFullInfo'>['user_full_info'];
-export type ChatBackground = NonNullable<UpdateByType<'updateChatBackground'>['background']>;
-export type ChatPhotoInfo = NonNullable<UpdateByType<'updateChatPhoto'>['photo']>;
-export type ChatTheme = NonNullable<UpdateByType<'updateChatTheme'>['theme']>;
-export type DefaultBackground = NonNullable<UpdateByType<'updateDefaultBackground'>['background']>;
-export type EmojiChatTheme = UpdateByType<'updateEmojiChatThemes'>['chat_themes'][number];
-export type FileGenerationStartUpdate = UpdateByType<'updateFileGenerationStart'>;
+export type FileGenerationStartUpdate = FileGenerationRequest;
 
 export type CompletedFileAsset = {
   assetKey: string;
@@ -113,14 +165,15 @@ export const DEFAULT_WORKER_MAX_CONCURRENT_DOWNLOADS = 2;
 export const DEFAULT_WORKER_MAX_FILES_PER_TICK = 4;
 export const DEFAULT_WORKER_STALE_CHECK_MS = 1000;
 export const CANONICAL_FILES_DIR = 'agentg-media';
+const MAXIMUM_TDLIB_PRIORITY = 32;
 
-export function shouldDeferFileDownloads(tdlib: Tdlib): boolean {
-  const stats = tdlib.getQueueStats();
-  return stats.runningCount >= 4 || (stats.highestPendingPriority ?? 0) >= priorities.maximum;
+export function shouldDeferFileDownloads(operations: FileOperationPort): boolean {
+  const stats = operations.getQueueStats();
+  return stats.runningCount >= 4 || (stats.highestPendingPriority ?? 0) >= MAXIMUM_TDLIB_PRIORITY;
 }
 
 export function completedFileAssetFromTdlibFile(
-  file: file | undefined
+  file: FileSnapshot | undefined
 ): Omit<CompletedFileAsset, 'assetKey'> | null {
   if (file?.local.is_downloading_completed === true && file.local.path.length > 0) {
     return {

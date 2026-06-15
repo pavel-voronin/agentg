@@ -5,19 +5,20 @@ import { basename, extname, join, resolve, sep } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 
 import { createLogger, logContext, logError } from '@agentg/framework';
-import { and, eq, sql } from 'drizzle-orm';
-import type { Message, file } from 'tdlib-types';
 
-import type { Database } from '../database/client.js';
 import {
-  telegramFileAssets,
-  telegramFileDownloadJobs,
-  telegramFileSlots,
-  telegramTdlibFiles
-} from '../database/schema.js';
-import { MESSAGE_MODEL, messageModelParts } from '../model/refs.js';
-import { assertPriority, priorities } from '../tdlib/priority.js';
-import { tdFileOrUndefined, tdJsonObject } from '../tdlib/shape.js';
+  claimNextQueuedFileDownload,
+  hasDownloadingFileDownloads,
+  hasQueuedFileDownloads,
+  markFileDownloadDispatched,
+  markFileDownloadFailed as markFileDownloadFailedRecord,
+  markFileDownloadReady,
+  markFileDownloadRedispatched,
+  readFileDownloadRow,
+  readStaleFileDownloadRows,
+  refreshFileDownloadClaim
+} from '../storage/fileQueueStorage.js';
+import type { FileSnapshot } from '../domain/models/fileSnapshot.js';
 import { publishAssetOwnersAndQueue, publishFileQueueUpdated } from './events.js';
 import { handleFileSnapshot, refreshMessageFileSlot } from './persistence.js';
 import type {
@@ -47,12 +48,17 @@ import {
 } from './telemetry.js';
 
 const MAX_STALE_DOWNLOAD_ATTEMPTS = 3;
+const LOW_FILE_OPERATION_PRIORITY = 8;
 const logger = createLogger('telegram');
 
-type StaleFileDownloadRows = {
-  hasMore: boolean;
-  rows: FileDownloadRow[];
-};
+function assertPriority(priority: number): number {
+  if (Number.isSafeInteger(priority) && priority >= 1 && priority <= 32) {
+    return priority;
+  }
+  throw new Error(
+    `Telegram file operation priority must be an integer from 1 to 32: ${String(priority)}`
+  );
+}
 
 export async function processQueuedFileBatch(
   options: FileSubsystemOptions,
@@ -76,7 +82,7 @@ export async function processQueuedFileBatch(
   );
   recordWorkerBatchResult('stale', reconciled);
 
-  if (shouldDeferFileDownloads(options.tdlib)) {
+  if (shouldDeferFileDownloads(options.operations)) {
     const delayedCount = await hasQueuedFileDownloads(options.database);
     if (delayedCount > 0) {
       return {
@@ -136,42 +142,6 @@ export async function processQueuedFileBatch(
   };
 }
 
-async function claimNextQueuedFileDownload(database: Database): Promise<FileDownloadRow | null> {
-  const [candidate] = await database
-    .select({
-      assetKey: telegramFileDownloadJobs.assetKey
-    })
-    .from(telegramFileDownloadJobs)
-    .where(eq(telegramFileDownloadJobs.status, 'queued'))
-    .orderBy(sql`${telegramFileDownloadJobs.priority} desc`, telegramFileDownloadJobs.updatedAt)
-    .limit(1);
-
-  if (candidate === undefined) {
-    return null;
-  }
-
-  const [claimed] = await database
-    .update(telegramFileDownloadJobs)
-    .set({
-      attempts: sql`${telegramFileDownloadJobs.attempts} + 1`,
-      claimedAt: sql`now()`,
-      lastError: null,
-      status: 'downloading',
-      updatedAt: sql`now()`
-    })
-    .where(
-      and(
-        eq(telegramFileDownloadJobs.assetKey, candidate.assetKey),
-        eq(telegramFileDownloadJobs.status, 'queued')
-      )
-    )
-    .returning({
-      assetKey: telegramFileDownloadJobs.assetKey
-    });
-
-  return claimed === undefined ? null : readFileDownloadRow(database, claimed.assetKey);
-}
-
 async function processClaimedFile(
   options: FileSubsystemOptions,
   row: FileDownloadRow
@@ -204,7 +174,7 @@ async function processClaimedFile(
       ready: false
     };
   } catch (error) {
-    await markFileDownloadFailed(options.database, row.assetKey, error);
+    await markFileDownloadFailedRecord(options.database, row.assetKey, errorMessage(error));
     logFileDownloadFailed('batch', row, error);
     return {
       assetKey: row.assetKey,
@@ -251,31 +221,6 @@ async function reconcileStaleFileDownloads(
     processedCount: results.length,
     readyCount,
     watchdogCount: downloadingCount
-  };
-}
-
-async function readStaleFileDownloadRows(
-  database: Database,
-  staleBefore: Date,
-  limit: number
-): Promise<StaleFileDownloadRows> {
-  const jobs = await database
-    .select({
-      assetKey: telegramFileDownloadJobs.assetKey
-    })
-    .from(telegramFileDownloadJobs)
-    .where(staleDownloadCondition(staleBefore))
-    .orderBy(
-      sql`coalesce(${telegramFileDownloadJobs.claimedAt}, ${telegramFileDownloadJobs.updatedAt})`
-    )
-    .limit(limit + 1);
-
-  const rows = await Promise.all(
-    jobs.slice(0, limit).map((job) => readFileDownloadRow(database, job.assetKey))
-  );
-  return {
-    hasMore: jobs.length > limit,
-    rows: rows.filter((row): row is FileDownloadRow => row !== null)
   };
 }
 
@@ -328,7 +273,7 @@ async function reconcileStaleFileDownload(
       ready: false
     };
   } catch (error) {
-    await markFileDownloadFailed(options.database, row.assetKey, error);
+    await markFileDownloadFailedRecord(options.database, row.assetKey, errorMessage(error));
     logFileDownloadFailed('stale', row, error);
     return {
       assetKey: row.assetKey,
@@ -358,10 +303,10 @@ type FileDownloadRequest =
 async function dispatchTdlibFileDownload(
   options: FileSubsystemOptions,
   row: FileDownloadRow
-): Promise<file | undefined> {
+): Promise<FileSnapshot | undefined> {
   const request = fileDownloadRequest(row);
   if (request.kind === 'message') {
-    return options.tdlib.addFileToDownloads(
+    return options.operations.addFileToDownloads(
       {
         chatId: request.chatId,
         fileId: request.fileId,
@@ -372,7 +317,7 @@ async function dispatchTdlibFileDownload(
     );
   }
 
-  return options.tdlib.downloadFile(
+  return options.operations.downloadFile(
     {
       fileId: request.fileId,
       limit: request.limit,
@@ -421,11 +366,11 @@ async function recoverMessageDownloadRow(
     throw stalePointerError(row, expectedRemoteUniqueId, 'message asset has no slot key');
   }
 
-  const message = await readMessageForRecovery(options, row, expectedRemoteUniqueId);
+  const content = await readMessageContentForRecovery(options, row, expectedRemoteUniqueId);
   const result = await refreshMessageFileSlot(options.database, {
     assetKey: row.assetKey,
     chatId: String(row.transport.chatId),
-    content: tdJsonObject(message.content),
+    content,
     messageId: String(row.transport.messageId),
     slotKey: row.slotKey
   });
@@ -460,13 +405,13 @@ async function recoverMessageDownloadRow(
   return refreshed;
 }
 
-async function readMessageForRecovery(
+async function readMessageContentForRecovery(
   options: FileSubsystemOptions,
   row: FileDownloadRow & { transport: Extract<FileDownloadTransport, { kind: 'message' }> },
   expectedRemoteUniqueId: string
-): Promise<Message> {
+): Promise<NonNullable<Parameters<typeof refreshMessageFileSlot>[1]['content']>> {
   try {
-    return await options.tdlib.getMessage(
+    return await options.operations.getMessageContent(
       {
         chatId: row.transport.chatId,
         messageId: row.transport.messageId
@@ -508,19 +453,17 @@ export function fileDownloadRequest(row: FileDownloadRow): FileDownloadRequest {
 async function getTdlibFile(
   options: FileSubsystemOptions,
   row: FileDownloadRow
-): Promise<file | undefined> {
+): Promise<FileSnapshot | undefined> {
   if (row.latestTdlibFileId === null) {
     throw new Error(`Telegram file asset has no TDLib file id: ${row.assetKey}`);
   }
-  return tdFileOrUndefined(
-    await options.tdlib.getFile(
-      {
-        fileId: row.latestTdlibFileId
-      },
-      {
-        priority: priorities.low
-      }
-    )
+  return options.operations.getFile(
+    {
+      fileId: row.latestTdlibFileId
+    },
+    {
+      priority: LOW_FILE_OPERATION_PRIORITY
+    }
   );
 }
 
@@ -580,167 +523,11 @@ async function canonicalizeCompletedFile(
     await markFileDownloadReady(options.database, file.assetKey, stored);
     await cleanupTdlibFile(options, row);
   } catch (error) {
-    await markFileDownloadFailed(options.database, file.assetKey, error);
+    await markFileDownloadFailedRecord(options.database, file.assetKey, errorMessage(error));
     throw error;
   } finally {
     await publishAssetOwnersAndQueue(options, [file.assetKey]);
   }
-}
-
-async function readFileDownloadRow(
-  database: Database,
-  assetKey: string
-): Promise<FileDownloadRow | null> {
-  const [row] = await database
-    .select({
-      assetKey: telegramFileAssets.assetKey,
-      attempts: telegramFileDownloadJobs.attempts,
-      byteSize: telegramFileAssets.byteSize,
-      downloadedByteSize: telegramFileAssets.downloadedByteSize,
-      fileName: telegramFileSlots.fileName,
-      latestTdlibFileId: telegramFileAssets.latestTdlibFileId,
-      mediaKind: telegramFileSlots.mediaKind,
-      mimeType: telegramFileSlots.mimeType,
-      ownerId: telegramFileSlots.ownerId,
-      ownerModel: telegramFileSlots.ownerModel,
-      priority: telegramFileDownloadJobs.priority,
-      remoteUniqueId: telegramTdlibFiles.remoteUniqueId,
-      slotKey: telegramFileSlots.slotKey
-    })
-    .from(telegramFileDownloadJobs)
-    .innerJoin(
-      telegramFileAssets,
-      eq(telegramFileAssets.assetKey, telegramFileDownloadJobs.assetKey)
-    )
-    .leftJoin(
-      telegramTdlibFiles,
-      eq(telegramTdlibFiles.tdlibFileId, telegramFileAssets.latestTdlibFileId)
-    )
-    .leftJoin(telegramFileSlots, eq(telegramFileSlots.assetKey, telegramFileDownloadJobs.assetKey))
-    .where(eq(telegramFileAssets.assetKey, assetKey))
-    .orderBy(
-      sql`case when ${telegramFileSlots.ownerModel} = ${MESSAGE_MODEL} then 0 else 1 end`,
-      telegramFileSlots.ownerModel,
-      telegramFileSlots.ownerId,
-      telegramFileSlots.slotKey
-    )
-    .limit(1);
-
-  return row === undefined
-    ? null
-    : {
-        assetKey: row.assetKey,
-        attempts: row.attempts,
-        byteSize: row.byteSize,
-        downloadedByteSize: row.downloadedByteSize,
-        fileName: row.fileName,
-        latestTdlibFileId: row.latestTdlibFileId,
-        mediaKind: row.mediaKind,
-        mimeType: row.mimeType,
-        ownerId: row.ownerId,
-        ownerModel: row.ownerModel,
-        priority: row.priority,
-        remoteUniqueId: row.remoteUniqueId,
-        slotKey: row.slotKey,
-        transport: fileDownloadTransport(row.ownerModel, row.ownerId)
-      };
-}
-
-async function markFileDownloadReady(
-  database: Database,
-  assetKey: string,
-  stored: StoredCanonicalFile
-): Promise<void> {
-  await database
-    .update(telegramFileAssets)
-    .set({
-      byteSize: stored.byteSize,
-      downloadedByteSize: stored.byteSize,
-      downloadError: null,
-      relativePath: stored.relativePath,
-      sha256: stored.sha256,
-      status: 'ready',
-      updatedAt: sql`now()`
-    })
-    .where(eq(telegramFileAssets.assetKey, assetKey));
-
-  await database
-    .delete(telegramFileDownloadJobs)
-    .where(eq(telegramFileDownloadJobs.assetKey, assetKey));
-}
-
-async function refreshFileDownloadClaim(database: Database, assetKey: string): Promise<void> {
-  await database
-    .update(telegramFileDownloadJobs)
-    .set({
-      claimedAt: sql`now()`,
-      lastError: null,
-      status: 'downloading',
-      updatedAt: sql`now()`
-    })
-    .where(
-      and(
-        eq(telegramFileDownloadJobs.assetKey, assetKey),
-        eq(telegramFileDownloadJobs.status, 'downloading')
-      )
-    );
-}
-
-async function markFileDownloadDispatched(database: Database, assetKey: string): Promise<void> {
-  await database
-    .update(telegramFileDownloadJobs)
-    .set({
-      claimedAt: sql`now()`,
-      lastError: null,
-      status: 'downloading',
-      updatedAt: sql`now()`
-    })
-    .where(
-      and(
-        eq(telegramFileDownloadJobs.assetKey, assetKey),
-        eq(telegramFileDownloadJobs.status, 'downloading')
-      )
-    );
-}
-
-async function markFileDownloadRedispatched(database: Database, assetKey: string): Promise<void> {
-  await database
-    .update(telegramFileDownloadJobs)
-    .set({
-      attempts: sql`${telegramFileDownloadJobs.attempts} + 1`,
-      claimedAt: sql`now()`,
-      lastError: null,
-      status: 'downloading',
-      updatedAt: sql`now()`
-    })
-    .where(
-      and(
-        eq(telegramFileDownloadJobs.assetKey, assetKey),
-        eq(telegramFileDownloadJobs.status, 'downloading')
-      )
-    );
-}
-
-async function markFileDownloadFailed(
-  database: Database,
-  assetKey: string,
-  error: unknown
-): Promise<void> {
-  const message = error instanceof Error ? error.message : String(error);
-  await database
-    .update(telegramFileAssets)
-    .set({
-      downloadError: message,
-      status: 'failed',
-      updatedAt: sql`now()`
-    })
-    .where(
-      and(eq(telegramFileAssets.assetKey, assetKey), sql`${telegramFileAssets.status} <> 'ready'`)
-    );
-
-  await database
-    .delete(telegramFileDownloadJobs)
-    .where(eq(telegramFileDownloadJobs.assetKey, assetKey));
 }
 
 async function storeCanonicalFile(
@@ -834,75 +621,29 @@ async function cleanupTdlibFile(
   }
   try {
     if (row.transport.kind === 'message') {
-      await options.tdlib.removeFileFromDownloads(
+      await options.operations.removeFileFromDownloads(
         {
           deleteFromCache: true,
           fileId: row.latestTdlibFileId
         },
         {
-          priority: priorities.low
+          priority: LOW_FILE_OPERATION_PRIORITY
         }
       );
       return;
     }
 
-    await options.tdlib.deleteFile(
+    await options.operations.deleteFile(
       {
         fileId: row.latestTdlibFileId
       },
       {
-        priority: priorities.low
+        priority: LOW_FILE_OPERATION_PRIORITY
       }
     );
   } catch (error) {
     logTdlibCleanupError(row.assetKey, error);
   }
-}
-
-function fileDownloadTransport(
-  ownerModel: string | null,
-  ownerId: string | null
-): FileDownloadTransport {
-  if (ownerModel !== MESSAGE_MODEL) {
-    return { kind: 'file' };
-  }
-  if (ownerId === null) {
-    throw new Error('Telegram message file download has no owner id');
-  }
-  const parts = messageModelParts(ownerId);
-  if (parts === null) {
-    throw new Error(`Telegram message file download has invalid owner id: ${ownerId}`);
-  }
-  return {
-    chatId: parseTdlibInteger(parts.chatId, 'chat id'),
-    kind: 'message',
-    messageId: parseTdlibInteger(parts.messageId, 'message id')
-  };
-}
-
-function staleDownloadCondition(staleBefore: Date) {
-  return and(
-    eq(telegramFileDownloadJobs.status, 'downloading'),
-    sql`coalesce(${telegramFileDownloadJobs.claimedAt}, ${telegramFileDownloadJobs.updatedAt}) < ${staleBefore}`
-  );
-}
-
-async function hasQueuedFileDownloads(database: Database): Promise<number> {
-  const [row] = await database
-    .select({ assetKey: telegramFileDownloadJobs.assetKey })
-    .from(telegramFileDownloadJobs)
-    .where(eq(telegramFileDownloadJobs.status, 'queued'))
-    .limit(1);
-  return row === undefined ? 0 : 1;
-}
-
-async function hasDownloadingFileDownloads(database: Database): Promise<number> {
-  const [row] = await database
-    .select({ assetKey: telegramFileDownloadJobs.assetKey })
-    .from(telegramFileDownloadJobs)
-    .where(eq(telegramFileDownloadJobs.status, 'downloading'))
-    .limit(1);
-  return row === undefined ? 0 : 1;
 }
 
 function fileExtension(row: FileDownloadRow, localPath: string): string {
@@ -947,14 +688,6 @@ function isExistingFileError(error: unknown): boolean {
   );
 }
 
-function parseTdlibInteger(value: string, label: string): number {
-  const parsed = Number(value);
-  if (Number.isSafeInteger(parsed)) {
-    return parsed;
-  }
-  throw new Error(`Telegram ${label} must be a safe integer: ${value}`);
-}
-
 export function logWorkerError(error: unknown): void {
   logger.warn(
     {
@@ -983,7 +716,7 @@ export function logTdlibCleanupError(assetKey: string, error: unknown): void {
 function logStaleFileDownloadDecision(
   decision: 'redispatched' | 'retry_limit',
   row: FileDownloadRow,
-  file: file | undefined
+  file: FileSnapshot | undefined
 ): void {
   const event =
     decision === 'retry_limit'
@@ -1097,9 +830,9 @@ function fileDownloadRowLogFields(row: FileDownloadRow) {
   };
 }
 
-function tdlibFileSnapshotLogFields(file: file | undefined) {
+function tdlibFileSnapshotLogFields(file: FileSnapshot | undefined) {
   return {
-    tdlibExpectedSize: file?.expected_size ?? null,
+    tdlibExpectedSize: file?.expectedSize ?? null,
     tdlibFileId: file?.id ?? null,
     tdlibLocalCanBeDeleted: file?.local.can_be_deleted ?? null,
     tdlibLocalCanBeDownloaded: file?.local.can_be_downloaded ?? null,

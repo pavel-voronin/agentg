@@ -1,22 +1,22 @@
 import { rm } from 'node:fs/promises';
 
-import { createLogger, logError } from '@agentg/framework';
-import type { chat, message, updateFile, updateMessageContent } from 'tdlib-types';
+import { createLogger, logError, runWithRootTelemetryContext } from '@agentg/framework';
 
-import { tdJsonObject } from '../tdlib/shape.js';
+import type { FileSnapshot } from '../domain/models/fileSnapshot.js';
 import { publishAssetOwnersAndQueue } from './events.js';
+import type { FileSlotUpdate } from './extractor.js';
 import { runFileGeneration } from './generation.js';
-import {
-  markStoredMessageFileSlotsRecorded,
-  processMessageSlotMaterializationBatch
-} from './messageSlots.js';
+import { processMessageSlotMaterializationBatch } from './messageSlots.js';
+import { markStoredMessageFileSlotsRecorded } from '../storage/messageSlotStorage.js';
 import {
   deleteStoryFileSlots as deleteStorySlots,
   handleFileSnapshot,
-  recordFileSlotUpdate
+  recordFileSlotUpdate,
+  type FileSlotScope,
+  type FileSlotUpdateOptions
 } from './persistence.js';
 import type { MediaDownloadPolicyCause } from './policy.js';
-import { readFileQueueStats } from './read.js';
+import { readFileQueueStats } from '../storage/fileReadStorage.js';
 import { requestFileSlot } from './request.js';
 import {
   DEFAULT_WORKER_FAILURE_BACKOFF_MS,
@@ -27,23 +27,11 @@ import {
   completedFileAssetFromTdlibFile,
   positiveInteger,
   type ActiveFileGeneration,
-  type ChatBackground,
-  type ChatPhotoInfo,
-  type ChatTheme,
   type CompletedFileAsset,
-  type DefaultBackground,
-  type EmojiChatTheme,
   type FileDownloadBatchResult,
   type FileGenerationStartUpdate,
   type FileRequestResult,
-  type FileSubsystemOptions,
-  type Notification,
-  type NotificationGroup,
-  type QuickReplyMessage,
-  type StickerSet,
-  type Story,
-  type TrendingStickerSets,
-  type UserFullInfo
+  type FileSubsystemOptions
 } from './runtime.js';
 import { logWorkerError, processCompletedFileBatch, processQueuedFileBatch } from './queue.js';
 import {
@@ -57,70 +45,19 @@ import type { FileOwner } from './types.js';
 
 const logger = createLogger('telegram');
 
+export type FileSlotRecording = {
+  options?: FileSlotUpdateOptions;
+  scope?: FileSlotScope;
+  update: FileSlotUpdate;
+};
+
 export type FileSubsystem = {
   getQueueStats(): ReturnType<typeof readFileQueueStats>;
-  handleUpdateFile(update: updateFile): Promise<void>;
+  handleFileSnapshot(snapshot: FileSnapshot): Promise<void>;
+  recordFileSlots(recording: FileSlotRecording, cause: MediaDownloadPolicyCause): Promise<void>;
   scheduleMessageSlotMaterialization(): void;
   startFileGeneration(update: FileGenerationStartUpdate): void;
   stopFileGeneration(generationId: number | string): Promise<void>;
-  recordChatBackgroundFiles(
-    chatId: string,
-    background: ChatBackground,
-    cause: MediaDownloadPolicyCause
-  ): Promise<void>;
-  recordChatFiles(chat: chat, cause: MediaDownloadPolicyCause): Promise<void>;
-  recordChatPhotoFiles(
-    chatId: string,
-    photo: ChatPhotoInfo | null,
-    cause: MediaDownloadPolicyCause
-  ): Promise<void>;
-  recordChatThemeFiles(
-    chatId: string,
-    theme: ChatTheme | null,
-    cause: MediaDownloadPolicyCause
-  ): Promise<void>;
-  recordDefaultBackgroundFiles(
-    key: string,
-    background: DefaultBackground | null,
-    cause: MediaDownloadPolicyCause
-  ): Promise<void>;
-  recordEmojiChatThemeFiles(
-    themes: EmojiChatTheme[],
-    cause: MediaDownloadPolicyCause
-  ): Promise<void>;
-  recordMessageContentFiles(
-    update: updateMessageContent,
-    cause: MediaDownloadPolicyCause
-  ): Promise<void>;
-  recordMessageFiles(message: message, cause: MediaDownloadPolicyCause): Promise<void>;
-  recordNotificationGroupFiles(
-    groups: NotificationGroup[],
-    cause: MediaDownloadPolicyCause
-  ): Promise<void>;
-  recordActiveNotificationSnapshotFiles(
-    groups: NotificationGroup[],
-    cause: MediaDownloadPolicyCause
-  ): Promise<void>;
-  recordNotificationFiles(
-    groupId: number,
-    notification: Notification,
-    cause: MediaDownloadPolicyCause
-  ): Promise<void>;
-  recordQuickReplyMessageFiles(
-    message: QuickReplyMessage,
-    cause: MediaDownloadPolicyCause
-  ): Promise<void>;
-  recordStickerSetFiles(stickerSet: StickerSet, cause: MediaDownloadPolicyCause): Promise<void>;
-  recordStoryFiles(story: Story, cause: MediaDownloadPolicyCause): Promise<void>;
-  recordTrendingStickerSetFiles(
-    stickerSets: TrendingStickerSets,
-    cause: MediaDownloadPolicyCause
-  ): Promise<void>;
-  recordUserFullInfoFiles(
-    userId: string,
-    info: UserFullInfo,
-    cause: MediaDownloadPolicyCause
-  ): Promise<void>;
   deleteStoryFileSlots(input: { posterChatId: string; storyId: number }): Promise<void>;
   requestFile(input: { owner: FileOwner; slotKey: string }): Promise<FileRequestResult>;
 };
@@ -174,7 +111,7 @@ export function useFiles(options: FileSubsystemOptions): FileSubsystemRuntime {
     timer = setTimeout(() => {
       timer = undefined;
       timerDueAtMs = undefined;
-      runTick();
+      runWithRootTelemetryContext(runTick);
     }, normalizedDelayMs);
     timer.unref();
   };
@@ -288,9 +225,9 @@ export function useFiles(options: FileSubsystemOptions): FileSubsystemRuntime {
         return stats;
       });
     },
-    async handleUpdateFile(update): Promise<void> {
-      const changedAssets = await handleFileSnapshot(options.database, update.file);
-      const completedFile = completedFileAssetFromTdlibFile(update.file);
+    async handleFileSnapshot(snapshot): Promise<void> {
+      const changedAssets = await handleFileSnapshot(options.database, snapshot);
+      const completedFile = completedFileAssetFromTdlibFile(snapshot);
       if (completedFile !== null) {
         for (const assetKey of changedAssets) {
           completedFiles.set(assetKey, {
@@ -308,12 +245,12 @@ export function useFiles(options: FileSubsystemOptions): FileSubsystemRuntime {
       schedule('slot_enqueue', 0);
     },
     startFileGeneration(update): void {
-      const generationId = update.generation_id;
+      const generationId = update.generationId;
       activeFileGenerations.get(generationId)?.controller.abort();
 
       const generation: ActiveFileGeneration = {
         controller: new AbortController(),
-        destinationPath: update.destination_path
+        destinationPath: update.destinationPath
       };
       activeFileGenerations.set(generationId, generation);
 
@@ -325,7 +262,7 @@ export function useFiles(options: FileSubsystemOptions): FileSubsystemRuntime {
           logger.error(
             {
               event: 'telegram.file_generation_unhandled_failure',
-              generationId: update.generation_id,
+              generationId: update.generationId,
               ...logError(error)
             },
             'telegram file generation failed'
@@ -347,266 +284,18 @@ export function useFiles(options: FileSubsystemOptions): FileSubsystemRuntime {
       activeFileGenerations.delete(String(generationId));
       await rm(active.destinationPath, { force: true });
     },
-    async recordChatFiles(chat, cause): Promise<void> {
+    async recordFileSlots(recording, cause): Promise<void> {
       await recordFileSlotsAndWake(
-        recordFileSlotUpdate(
-          options,
-          {
-            chat: {
-              chat: tdJsonObject(chat),
-              id: String(chat.id)
-            }
-          },
-          cause
-        )
+        recordFileSlotUpdate(options, recording.update, cause, recording.scope, recording.options)
       );
-    },
-    async recordChatBackgroundFiles(chatId, background, cause): Promise<void> {
-      await recordFileSlotsAndWake(
-        recordFileSlotUpdate(
-          options,
-          {
-            chatBackground: {
-              background: tdJsonObject(background),
-              chatId
-            }
-          },
-          cause,
-          {
-            slotKeyPrefix: 'background.'
-          }
-        )
-      );
-    },
-    async recordChatPhotoFiles(chatId, photo, cause): Promise<void> {
-      await recordFileSlotsAndWake(
-        recordFileSlotUpdate(
-          options,
-          {
-            chatPhoto: {
-              chatId,
-              photo: photo === null ? null : tdJsonObject(photo)
-            }
-          },
-          cause,
-          {
-            slotKeyPrefix: 'avatar.'
-          }
-        )
-      );
-    },
-    async recordChatThemeFiles(chatId, theme, cause): Promise<void> {
-      await recordFileSlotsAndWake(
-        recordFileSlotUpdate(
-          options,
-          {
-            chatTheme: {
-              chatId,
-              theme: theme === null ? null : tdJsonObject(theme)
-            }
-          },
-          cause,
-          {
-            slotKeyPrefix: 'theme.'
-          }
-        )
-      );
-    },
-    async recordDefaultBackgroundFiles(key, background, cause): Promise<void> {
-      await recordFileSlotsAndWake(
-        recordFileSlotUpdate(
-          options,
-          {
-            defaultBackground: {
-              background: background === null ? null : tdJsonObject(background),
-              key
-            }
-          },
-          cause,
-          {
-            slotKeyPrefix: 'background.'
-          }
-        )
-      );
-    },
-    async recordEmojiChatThemeFiles(themes, cause): Promise<void> {
-      await recordFileSlotsAndWake(
-        recordFileSlotUpdate(
-          options,
-          {
-            emojiChatThemes: {
-              themes: themes.map(tdJsonObject)
-            }
-          },
-          cause
-        )
-      );
-    },
-    async recordMessageContentFiles(update, cause): Promise<void> {
-      const content = tdJsonObject(update.new_content);
-      await recordFileSlotsAndWake(
-        recordFileSlotUpdate(
-          options,
-          {
-            contentUpdate: {
-              chatId: String(update.chat_id),
-              content,
-              messageId: String(update.message_id)
-            }
-          },
-          cause
-        )
-      );
-      await markStoredMessageFileSlotsRecorded(options.database, {
-        chatId: String(update.chat_id),
-        content,
-        messageId: String(update.message_id)
-      });
-    },
-    async recordMessageFiles(message, cause): Promise<void> {
-      const content = tdJsonObject(message.content);
-      await recordFileSlotsAndWake(
-        recordFileSlotUpdate(
-          options,
-          {
-            message: {
-              chatId: String(message.chat_id),
-              content,
-              messageId: String(message.id)
-            }
-          },
-          cause
-        )
-      );
-      await markStoredMessageFileSlotsRecorded(options.database, {
-        chatId: String(message.chat_id),
-        content,
-        messageId: String(message.id)
-      });
-    },
-    async recordNotificationGroupFiles(groups, cause): Promise<void> {
-      await recordFileSlotsAndWake(
-        recordFileSlotUpdate(
-          options,
-          {
-            notificationGroups: {
-              groups: groups.map(tdJsonObject)
-            }
-          },
-          cause
-        )
-      );
-    },
-    async recordActiveNotificationSnapshotFiles(groups, cause): Promise<void> {
-      await recordFileSlotsAndWake(
-        recordFileSlotUpdate(
-          options,
-          {
-            notificationGroups: {
-              groups: groups.map(tdJsonObject)
-            }
-          },
-          cause,
-          undefined,
-          {
-            pruneStaleActiveNotificationSlots: true
-          }
-        )
-      );
-    },
-    async recordNotificationFiles(groupId, notification, cause): Promise<void> {
-      await recordFileSlotsAndWake(
-        recordFileSlotUpdate(
-          options,
-          {
-            notificationGroups: {
-              groups: [
-                {
-                  id: groupId,
-                  notifications: [tdJsonObject(notification)]
-                }
-              ]
-            }
-          },
-          cause
-        )
-      );
-    },
-    async recordQuickReplyMessageFiles(message, cause): Promise<void> {
-      await recordFileSlotsAndWake(
-        recordFileSlotUpdate(
-          options,
-          {
-            quickReplyMessage: {
-              content: tdJsonObject(message.content),
-              messageId: String(message.id)
-            }
-          },
-          cause
-        )
-      );
-    },
-    async recordStickerSetFiles(stickerSet, cause): Promise<void> {
-      await recordFileSlotsAndWake(
-        recordFileSlotUpdate(
-          options,
-          {
-            stickerSet: {
-              id: stickerSet.id,
-              stickerSet: tdJsonObject(stickerSet)
-            }
-          },
-          cause
-        )
-      );
-    },
-    async recordStoryFiles(story, cause): Promise<void> {
-      await recordFileSlotsAndWake(
-        recordFileSlotUpdate(
-          options,
-          {
-            story: {
-              posterChatId: String(story.poster_chat_id),
-              story: tdJsonObject(story),
-              storyId: story.id
-            }
-          },
-          cause
-        )
-      );
-    },
-    async recordTrendingStickerSetFiles(stickerSets, cause): Promise<void> {
-      await recordFileSlotsAndWake(
-        recordFileSlotUpdate(
-          options,
-          {
-            stickerSetInfos: {
-              sets: stickerSets.sets.map(tdJsonObject)
-            }
-          },
-          cause,
-          {
-            slotKeyPrefix: 'trending.'
-          }
-        )
-      );
-    },
-    async recordUserFullInfoFiles(userId, info, cause): Promise<void> {
-      await recordFileSlotsAndWake(
-        recordFileSlotUpdate(
-          options,
-          {
-            userFullInfo: {
-              info: tdJsonObject(info),
-              userId
-            }
-          },
-          cause,
-          {
-            slotKeyPrefix: 'full_info.'
-          }
-        )
-      );
+      const message = recording.update.message ?? recording.update.contentUpdate;
+      if (message?.content !== undefined) {
+        await markStoredMessageFileSlotsRecorded(options.database, {
+          chatId: message.chatId,
+          content: message.content,
+          messageId: message.messageId
+        });
+      }
     },
     async deleteStoryFileSlots(input): Promise<void> {
       await deleteStorySlots(options.database, input);

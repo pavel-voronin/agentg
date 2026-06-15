@@ -1,44 +1,29 @@
+import type { FileSnapshot } from '../domain/models/fileSnapshot.js';
 import type {
-  ActiveNotificationModelRef,
-  ChatModelRef,
-  DefaultBackgroundModelRef,
-  EmojiChatThemesModelRef,
-  MessageModelRef,
-  QuickReplyMessageModelRef,
-  StickerSetModelRef,
-  StoryModelRef,
-  UserModelRef
-} from '../model/refs.js';
-import type { file } from 'tdlib-types';
+  FileMediaKind,
+  FileOwner,
+  FileOwnerKey,
+  FileOwnerModel,
+  FileRef,
+  FileRenderKind,
+  FileStatus
+} from '../domain/models/fileRef.js';
+import {
+  fileMediaKinds,
+  fileRefId,
+  fileRenderKinds,
+  fileStatuses
+} from '../domain/models/fileRef.js';
 
-export const fileStatuses = ['known', 'queued', 'downloading', 'ready', 'failed'] as const;
-export const fileMediaKinds = [
-  'avatar',
-  'document',
-  'photo',
-  'thumbnail',
-  'video',
-  'voice'
-] as const;
-export const fileRenderKinds = ['audio', 'download', 'image', 'video'] as const;
-
-export type FileStatus = (typeof fileStatuses)[number];
-export type FileMediaKind = (typeof fileMediaKinds)[number];
-export type FileRenderKind = (typeof fileRenderKinds)[number];
-export type FileOwner =
-  | ActiveNotificationModelRef
-  | ChatModelRef
-  | DefaultBackgroundModelRef
-  | EmojiChatThemesModelRef
-  | MessageModelRef
-  | QuickReplyMessageModelRef
-  | StickerSetModelRef
-  | StoryModelRef
-  | UserModelRef;
-export type FileOwnerModel = FileOwner['_model'];
-export type FileOwnerKey = {
-  ownerId: string;
-  ownerModel: FileOwnerModel;
+export { fileMediaKinds, fileRefId, fileRenderKinds, fileStatuses };
+export type {
+  FileMediaKind,
+  FileOwner,
+  FileOwnerKey,
+  FileOwnerModel,
+  FileRef,
+  FileRenderKind,
+  FileStatus
 };
 
 export type FileOwnerChangedEvent = {
@@ -47,10 +32,41 @@ export type FileOwnerChangedEvent = {
   updatedAt: string;
 };
 
+export type FileFailureReasonCount = {
+  count: number;
+  reason:
+    | 'missing_tdlib_file_id'
+    | 'not_found'
+    | 'stale_tdlib_pointer'
+    | 'stale_retry_limit'
+    | 'storage_io'
+    | 'tdlib_path_outside_source_roots'
+    | 'unknown';
+};
+
+export type FileQueueStats = {
+  downloadingCount: number;
+  failedCount: number;
+  failureReasonCounts: FileFailureReasonCount[];
+  knownCount: number;
+  knownDownloadedBytes: number;
+  knownRemainingBytes: number;
+  knownTotalBytes: number;
+  oldestDownloadingAgeSeconds: number;
+  oldestDownloadingUnixSeconds: number;
+  queuedCount: number;
+  readyCount: number;
+  readyDownloadedBytes: number;
+  remainingCount: number;
+  staleDownloadingCount: number;
+  totalCount: number;
+  unknownRemainingCount: number;
+};
+
 export type ExtractedFileSlot = {
   byteSize: number | null;
   durationSeconds: number | null;
-  file: file;
+  file: FileSnapshot;
   fileName: string | null;
   height: number | null;
   mediaKind: FileMediaKind;
@@ -61,32 +77,3 @@ export type ExtractedFileSlot = {
   tdlibFileId: number;
   width: number | null;
 };
-
-export type FileRef = {
-  _model: 'telegram.file';
-  byteSize: number | null;
-  canRequest: boolean;
-  downloadedByteSize: number | null;
-  downloadError: string | null;
-  durationSeconds: number | null;
-  fileName: string | null;
-  height: number | null;
-  id: string;
-  mediaKind: FileMediaKind;
-  mimeType: string | null;
-  owner: FileOwner;
-  renderKind: FileRenderKind;
-  slotKey: string;
-  status: FileStatus;
-  updatedAt: string;
-  url: string | null;
-  width: number | null;
-};
-
-export function fileRefId(input: {
-  ownerModel: FileOwnerModel;
-  ownerId: string;
-  slotKey: string;
-}): string {
-  return [input.ownerModel, input.ownerId, input.slotKey].join(':');
-}

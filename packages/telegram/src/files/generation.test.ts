@@ -139,7 +139,7 @@ describe('Telegram file generation', () => {
       generationOptions(finishFileGeneration),
       {
         ...generationUpdate(),
-        original_path: 'file:///etc/passwd'
+        originalPath: 'file:///etc/passwd'
       },
       new AbortController().signal
     );
@@ -317,7 +317,7 @@ describe('Telegram file generation', () => {
         },
         {
           ...generationUpdate(),
-          destination_path: destinationPath
+          destinationPath: destinationPath
         },
         new AbortController().signal
       );
@@ -371,7 +371,7 @@ describe('Telegram file generation', () => {
         generationOptions(finishFileGeneration),
         {
           ...generationUpdate(),
-          destination_path: destinationPath
+          destinationPath: destinationPath
         },
         new AbortController().signal
       );
@@ -445,11 +445,10 @@ describe('Telegram file generation', () => {
 
 function generationUpdate(): FileGenerationStartUpdate {
   return {
-    _: 'updateFileGenerationStart',
     conversion: '#url#',
-    destination_path: '/tmp/agentg-generated-file',
-    generation_id: '42',
-    original_path: 'https://example.test/file'
+    destinationPath: '/tmp/agentg-generated-file',
+    generationId: '42',
+    originalPath: 'https://example.test/file'
   };
 }
 
@@ -478,7 +477,7 @@ function generationOptions(
   )
 ): FileSubsystemOptions {
   return {
-    tdlib: {
+    operations: {
       finishFileGeneration,
       setFileGenerationProgress: vi.fn(() => Promise.resolve())
     }

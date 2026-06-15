@@ -1,11 +1,11 @@
 import type { SQL } from 'drizzle-orm';
 import { PgDialect } from 'drizzle-orm/pg-core';
-import type { file } from 'tdlib-types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { recordTelemetryHistogram } from '@agentg/framework';
 
 import type { Database } from '../src/database/client.js';
+import type { FileSnapshot } from '../src/domain/models/fileSnapshot.js';
 import { ACTIVE_NOTIFICATION_MODEL } from '../src/model/refs.js';
 import { handleFileSnapshot, recordFileSlotUpdate } from '../src/files/persistence.js';
 import type { FileSubsystemOptions } from '../src/files/runtime.js';
@@ -218,15 +218,13 @@ function tdlibFile(input: {
   downloadedSize?: number;
   id: number;
   uniqueId: string;
-}): file {
+}): FileSnapshot {
   const completed = input.completed ?? true;
   const downloadedSize = input.downloadedSize ?? 100;
   return {
-    _: 'file',
-    expected_size: 100,
+    expectedSize: 100,
     id: input.id,
     local: {
-      _: 'localFile',
       can_be_deleted: true,
       can_be_downloaded: true,
       download_offset: 0,
@@ -237,7 +235,6 @@ function tdlibFile(input: {
       path: completed ? '/tmp/asset' : ''
     },
     remote: {
-      _: 'remoteFile',
       id: `remote-${input.uniqueId}`,
       is_uploading_active: false,
       is_uploading_completed: true,

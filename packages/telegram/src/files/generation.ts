@@ -12,10 +12,8 @@ import { BlockList, isIP } from 'node:net';
 import { dirname } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 
-import type { error$Input } from 'tdlib-types';
 import { createLogger, logError } from '@agentg/framework';
 
-import { priorities } from '../tdlib/priority.js';
 import {
   positiveInteger,
   type FileGenerationStartUpdate,
@@ -30,6 +28,13 @@ import {
 const MAX_GENERATION_REDIRECTS = 5;
 const DEFAULT_GENERATION_DOWNLOAD_TIMEOUT_MS = 30_000;
 const DEFAULT_GENERATION_MAX_BYTES = 100 * 1024 * 1024;
+const NORMAL_TDLIB_PRIORITY = 16;
+
+type FileGenerationErrorInput = {
+  _: 'error';
+  code: number;
+  message: string;
+};
 
 type SafeGeneratedFileTarget = {
   address: string;
@@ -85,7 +90,7 @@ async function runFileGenerationAttempt(
       recordFileGenerationOutcome('aborted');
       return;
     }
-    await finishFileGeneration(options, update.generation_id, null);
+    await finishFileGeneration(options, update.generationId, null);
     recordFileGenerationOutcome('completed');
   } catch (error) {
     if (signal.aborted) {
@@ -100,28 +105,29 @@ async function runFileGenerationAttempt(
       {
         conversion: update.conversion,
         event: 'telegram.file_generation_failed',
-        generationId: update.generation_id,
+        generationId: update.generationId,
         reason,
         ...logError(error)
       },
       'telegram file generation failed'
     );
-    await finishFileGeneration(options, update.generation_id, {
+    await finishFileGeneration(options, update.generationId, {
       _: 'error',
       code: 500,
       message: error instanceof Error ? error.message : String(error)
     });
+    await cleanupGeneratedFileDestination(update);
   }
 }
 
 async function cleanupGeneratedFileDestination(update: FileGenerationStartUpdate): Promise<void> {
   try {
-    await rm(update.destination_path, { force: true });
+    await rm(update.destinationPath, { force: true });
   } catch (error) {
     logger.warn(
       {
         event: 'telegram.file_generation_cleanup_failed',
-        generationId: update.generation_id,
+        generationId: update.generationId,
         ...logError(error)
       },
       'telegram file generation cleanup failed'
@@ -151,7 +157,7 @@ async function downloadGeneratedFileFromUrlAttempt(
   signal: AbortSignal,
   maxBytes: number
 ): Promise<void> {
-  let url = parseGeneratedFileUrl(update.original_path);
+  let url = parseGeneratedFileUrl(update.originalPath);
   let response: IncomingMessage | null = null;
   for (let redirectCount = 0; redirectCount <= MAX_GENERATION_REDIRECTS; redirectCount += 1) {
     try {
@@ -196,16 +202,16 @@ async function downloadGeneratedFileFromUrlAttempt(
     throw fileGenerationError('size_limit', 'Telegram generated file exceeds maximum allowed size');
   }
 
-  await setFileGenerationProgress(options, update.generation_id, {
+  await setFileGenerationProgress(options, update.generationId, {
     expectedSize: expectedSize ?? 0,
     localPrefixSize: 0
   });
 
-  await mkdir(dirname(update.destination_path), { recursive: true });
+  await mkdir(dirname(update.destinationPath), { recursive: true });
   try {
     await pipeline(
       limitGeneratedFileBytes(response, maxBytes),
-      createWriteStream(update.destination_path),
+      createWriteStream(update.destinationPath),
       {
         signal
       }
@@ -219,11 +225,11 @@ async function downloadGeneratedFileFromUrlAttempt(
 
   let generatedSize: number;
   try {
-    generatedSize = (await stat(update.destination_path)).size;
+    generatedSize = (await stat(update.destinationPath)).size;
   } catch {
     throw fileGenerationError('write_failed', 'Telegram generated file write failed');
   }
-  await setFileGenerationProgress(options, update.generation_id, {
+  await setFileGenerationProgress(options, update.generationId, {
     expectedSize: generatedSize,
     localPrefixSize: generatedSize
   });
@@ -237,14 +243,14 @@ async function setFileGenerationProgress(
     localPrefixSize: number;
   }
 ): Promise<void> {
-  await options.tdlib.setFileGenerationProgress(
+  await options.operations.setFileGenerationProgress(
     {
       expectedSize: safeFileGenerationSize(input.expectedSize),
       generationId,
       localPrefixSize: safeFileGenerationSize(input.localPrefixSize)
     },
     {
-      priority: priorities.normal
+      priority: NORMAL_TDLIB_PRIORITY
     }
   );
 }
@@ -252,15 +258,15 @@ async function setFileGenerationProgress(
 async function finishFileGeneration(
   options: FileSubsystemOptions,
   generationId: number | string,
-  error: error$Input | null
+  error: FileGenerationErrorInput | null
 ): Promise<void> {
-  await options.tdlib.finishFileGeneration(
+  await options.operations.finishFileGeneration(
     {
       error,
       generationId
     },
     {
-      priority: priorities.normal
+      priority: NORMAL_TDLIB_PRIORITY
     }
   );
 }

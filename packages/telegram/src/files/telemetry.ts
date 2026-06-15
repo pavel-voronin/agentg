@@ -1,35 +1,7 @@
 import { incrementTelemetryCounter, setTelemetryGauge, timeTelemetrySpan } from '@agentg/framework';
 
 import type { FileDownloadBatchResult } from './runtime.js';
-
-type QueueStatsTelemetry = {
-  downloadingCount: number;
-  failedCount: number;
-  failureReasonCounts: FailureReasonCount[];
-  knownCount: number;
-  knownDownloadedBytes: number;
-  knownRemainingBytes: number;
-  knownTotalBytes: number;
-  oldestDownloadingAgeSeconds: number;
-  oldestDownloadingUnixSeconds: number;
-  queuedCount: number;
-  readyCount: number;
-  readyDownloadedBytes: number;
-  staleDownloadingCount: number;
-  unknownRemainingCount: number;
-};
-
-type FailureReasonCount = {
-  count: number;
-  reason:
-    | 'missing_tdlib_file_id'
-    | 'not_found'
-    | 'stale_tdlib_pointer'
-    | 'stale_retry_limit'
-    | 'storage_io'
-    | 'tdlib_path_outside_source_roots'
-    | 'unknown';
-};
+import type { FileQueueStats } from './types.js';
 
 export type WorkerWakeReason =
   | 'batch_continuation'
@@ -93,7 +65,7 @@ const METRIC_WORKER_RECOVERY_OUTCOMES = 'telegram.file.worker.recovery.outcomes'
 const METRIC_WORKER_STAGE_DURATION = 'telegram.file.worker.stage.duration';
 const METRIC_WORKER_WAKE = 'telegram.file.worker.wake';
 
-export function recordQueueStatsTelemetry(stats: QueueStatsTelemetry): void {
+export function recordQueueStatsTelemetry(stats: FileQueueStats): void {
   setTelemetryGauge(METRIC_QUEUE_ASSETS, stats.knownCount, {
     'telegram.file.asset.status': 'known'
   });

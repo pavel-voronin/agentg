@@ -30,6 +30,10 @@ const telemetry = vi.hoisted(() => ({
   )
 }));
 
+const framework = vi.hoisted(() => ({
+  runWithRootTelemetryContext: vi.fn((operation: () => unknown) => operation())
+}));
+
 vi.mock('@agentg/framework', () => ({
   createLogger: () => ({
     warn() {
@@ -39,7 +43,8 @@ vi.mock('@agentg/framework', () => ({
   logError: (error: unknown) => ({
     'error.type': error instanceof Error ? error.name : typeof error,
     error
-  })
+  }),
+  runWithRootTelemetryContext: framework.runWithRootTelemetryContext
 }));
 
 vi.mock('../../src/files/queue.js', () => ({
@@ -68,6 +73,7 @@ describe('Telegram file subsystem worker scheduling', () => {
     vi.setSystemTime(new Date('2026-06-10T00:00:00.000Z'));
     worker.processCompletedFileBatch.mockResolvedValue(emptyBatchResult);
     worker.processQueuedFileBatch.mockResolvedValue(emptyBatchResult);
+    framework.runWithRootTelemetryContext.mockClear();
     messageSlots.processMessageSlotMaterializationBatch.mockResolvedValue({
       hasMore: false,
       processedCount: 0,
@@ -131,6 +137,7 @@ describe('Telegram file subsystem worker scheduling', () => {
     await vi.advanceTimersByTimeAsync(0);
 
     expect(worker.processQueuedFileBatch).toHaveBeenCalledTimes(1);
+    expect(framework.runWithRootTelemetryContext).toHaveBeenCalledTimes(1);
     expect(telemetry.recordWorkerWake).toHaveBeenCalledWith('stale_watchdog');
 
     if (queueChanged === undefined) {
@@ -145,6 +152,7 @@ describe('Telegram file subsystem worker scheduling', () => {
     await vi.advanceTimersByTimeAsync(0);
 
     expect(worker.processQueuedFileBatch).toHaveBeenCalledTimes(2);
+    expect(framework.runWithRootTelemetryContext).toHaveBeenCalledTimes(2);
     expect(telemetry.recordWorkerWake).toHaveBeenCalledWith('queue_event');
     close();
   });

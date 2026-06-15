@@ -3,7 +3,7 @@ import {
   readFileOwnersForAssets,
   readFileQueueStats,
   readFileRefsForOwners
-} from './read.js';
+} from '../storage/fileReadStorage.js';
 import { publishFileOwnerChanged, publishFileQueueChanged } from '../events.js';
 import type { FileSubsystemOptions } from './runtime.js';
 import { recordQueueStatsTelemetry } from './telemetry.js';

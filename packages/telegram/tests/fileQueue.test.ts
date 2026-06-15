@@ -108,7 +108,7 @@ describe('Telegram file download worker', () => {
         ...downloadRow(),
         priority: 33
       })
-    ).toThrow('TDLib priority must be an integer from 1 to 32');
+    ).toThrow('Telegram file operation priority must be an integer from 1 to 32');
   });
 
   it("treats TDLib cleanup Can't find file as a no-op", () => {
@@ -133,7 +133,7 @@ describe('Telegram file download worker', () => {
 
   it('defers file downloads when the shared TDLib scheduler is busy', async () => {
     const captured: { staleOrderBy?: SQL } = {};
-    const tdlib = {
+    const operations = {
       addFileToDownloads: vi.fn(),
       downloadFile: vi.fn(),
       getFile: vi.fn(),
@@ -153,7 +153,7 @@ describe('Telegram file download worker', () => {
     const result = await processQueuedFileBatch(
       workerOptions({
         database,
-        tdlib
+        operations
       }),
       {
         maxConcurrentDownloads: 1,
@@ -169,15 +169,15 @@ describe('Telegram file download worker', () => {
       readyCount: 0,
       watchdogCount: 0
     });
-    expect(tdlib.getFile).not.toHaveBeenCalled();
-    expect(tdlib.downloadFile).not.toHaveBeenCalled();
-    expect(tdlib.addFileToDownloads).not.toHaveBeenCalled();
+    expect(operations.getFile).not.toHaveBeenCalled();
+    expect(operations.downloadFile).not.toHaveBeenCalled();
+    expect(operations.addFileToDownloads).not.toHaveBeenCalled();
     expect(telemetry.incrementTelemetryCounter).not.toHaveBeenCalled();
     expect(captured.staleOrderBy).toBeDefined();
   });
 
   it('keeps downloading-only work on the stale watchdog under scheduler pressure', async () => {
-    const tdlib = {
+    const operations = {
       addFileToDownloads: vi.fn(),
       downloadFile: vi.fn(),
       getFile: vi.fn(),
@@ -199,7 +199,7 @@ describe('Telegram file download worker', () => {
             queued: false
           }
         ),
-        tdlib
+        operations
       }),
       {
         maxConcurrentDownloads: 1,
@@ -215,9 +215,9 @@ describe('Telegram file download worker', () => {
       readyCount: 0,
       watchdogCount: 1
     });
-    expect(tdlib.getFile).not.toHaveBeenCalled();
-    expect(tdlib.downloadFile).not.toHaveBeenCalled();
-    expect(tdlib.addFileToDownloads).not.toHaveBeenCalled();
+    expect(operations.getFile).not.toHaveBeenCalled();
+    expect(operations.downloadFile).not.toHaveBeenCalled();
+    expect(operations.addFileToDownloads).not.toHaveBeenCalled();
   });
 
   it('orders stale download scans by the stale index expression', async () => {
@@ -225,7 +225,7 @@ describe('Telegram file download worker', () => {
     const result = await processQueuedFileBatch(
       workerOptions({
         database: staleOrderDatabase(captured),
-        tdlib: idleTdlib()
+        operations: idleOperations()
       }),
       {
         maxConcurrentDownloads: 1,
@@ -247,7 +247,7 @@ describe('Telegram file download worker', () => {
   it('redispatches stale downloading jobs and increments their attempt count', async () => {
     const deleted = { count: 0 };
     const updates: Record<string, unknown>[] = [];
-    const tdlib = {
+    const operations = {
       addFileToDownloads: vi.fn(),
       downloadFile: vi.fn().mockResolvedValue(undefined),
       getFile: vi.fn().mockResolvedValue(undefined),
@@ -267,7 +267,7 @@ describe('Telegram file download worker', () => {
           deleted,
           updates
         }),
-        tdlib
+        operations
       }),
       {
         maxConcurrentDownloads: 1,
@@ -283,8 +283,8 @@ describe('Telegram file download worker', () => {
       readyCount: 0,
       watchdogCount: 1
     });
-    expect(tdlib.downloadFile).toHaveBeenCalledTimes(1);
-    expect(tdlib.addFileToDownloads).not.toHaveBeenCalled();
+    expect(operations.downloadFile).toHaveBeenCalledTimes(1);
+    expect(operations.addFileToDownloads).not.toHaveBeenCalled();
     expect(deleted.count).toBe(0);
     expect(updates).toHaveLength(1);
     const redispatchUpdate = updates[0];
@@ -301,7 +301,7 @@ describe('Telegram file download worker', () => {
   it('continues immediately when stale download backlog exceeds the tick limit', async () => {
     const deleted = { count: 0 };
     const updates: Record<string, unknown>[] = [];
-    const tdlib = {
+    const operations = {
       addFileToDownloads: vi.fn(),
       downloadFile: vi.fn().mockResolvedValue(undefined),
       getFile: vi.fn().mockResolvedValue(undefined),
@@ -322,7 +322,7 @@ describe('Telegram file download worker', () => {
           staleAssetKeys: ['asset-a', 'asset-b'],
           updates
         }),
-        tdlib
+        operations
       }),
       {
         maxConcurrentDownloads: 1,
@@ -338,7 +338,7 @@ describe('Telegram file download worker', () => {
       readyCount: 0,
       watchdogCount: 1
     });
-    expect(tdlib.downloadFile).toHaveBeenCalledTimes(1);
+    expect(operations.downloadFile).toHaveBeenCalledTimes(1);
     expect(deleted.count).toBe(0);
     expect(updates).toHaveLength(1);
   });
@@ -346,7 +346,7 @@ describe('Telegram file download worker', () => {
   it('fails stale downloading jobs after the stale retry limit', async () => {
     const deleted = { count: 0 };
     const updates: Record<string, unknown>[] = [];
-    const tdlib = {
+    const operations = {
       addFileToDownloads: vi.fn(),
       downloadFile: vi.fn(),
       getFile: vi.fn().mockResolvedValue(undefined),
@@ -366,7 +366,7 @@ describe('Telegram file download worker', () => {
           deleted,
           updates
         }),
-        tdlib
+        operations
       }),
       {
         maxConcurrentDownloads: 1,
@@ -382,7 +382,7 @@ describe('Telegram file download worker', () => {
       readyCount: 0,
       watchdogCount: 0
     });
-    expect(tdlib.downloadFile).not.toHaveBeenCalled();
+    expect(operations.downloadFile).not.toHaveBeenCalled();
     expect(deleted.count).toBe(1);
     expect(updates).toEqual([
       expect.objectContaining({
@@ -415,11 +415,11 @@ describe('Telegram file download worker', () => {
   it('refreshes message-owned stale TDLib pointers before dispatch', async () => {
     const deleted = { count: 0 };
     const updates: Record<string, unknown>[] = [];
-    const tdlib = {
+    const operations = {
       addFileToDownloads: vi.fn().mockResolvedValue(undefined),
       downloadFile: vi.fn(),
       getFile: vi.fn(),
-      getMessage: vi.fn().mockResolvedValue(
+      getMessageContent: vi.fn().mockResolvedValue(
         messageWithPhoto({
           chatId: -10042,
           file: tdlibFile({
@@ -427,7 +427,7 @@ describe('Telegram file download worker', () => {
             uniqueId: 'asset-a'
           }),
           messageId: 777
-        })
+        }).content
       ),
       getQueueStats() {
         return {
@@ -448,7 +448,7 @@ describe('Telegram file download worker', () => {
           }),
           updates
         }),
-        tdlib
+        operations
       }),
       {
         maxConcurrentDownloads: 1,
@@ -464,7 +464,7 @@ describe('Telegram file download worker', () => {
       readyCount: 0,
       watchdogCount: 1
     });
-    expect(tdlib.getMessage).toHaveBeenCalledWith(
+    expect(operations.getMessageContent).toHaveBeenCalledWith(
       {
         chatId: -10042,
         messageId: 777
@@ -473,7 +473,7 @@ describe('Telegram file download worker', () => {
         priority: 16
       }
     );
-    expect(tdlib.addFileToDownloads).toHaveBeenCalledWith(
+    expect(operations.addFileToDownloads).toHaveBeenCalledWith(
       {
         chatId: -10042,
         fileId: 2,
@@ -484,7 +484,7 @@ describe('Telegram file download worker', () => {
         priority: 16
       }
     );
-    expect(tdlib.downloadFile).not.toHaveBeenCalled();
+    expect(operations.downloadFile).not.toHaveBeenCalled();
     expect(deleted.count).toBe(0);
     expect(updates).toEqual([
       expect.objectContaining({
@@ -509,11 +509,11 @@ describe('Telegram file download worker', () => {
   it('fails non-message stale TDLib pointers without dispatching TDLib downloads', async () => {
     const deleted = { count: 0 };
     const updates: Record<string, unknown>[] = [];
-    const tdlib = {
+    const operations = {
       addFileToDownloads: vi.fn(),
       downloadFile: vi.fn(),
       getFile: vi.fn(),
-      getMessage: vi.fn(),
+      getMessageContent: vi.fn(),
       getQueueStats() {
         return {
           highestPendingPriority: null,
@@ -534,7 +534,7 @@ describe('Telegram file download worker', () => {
           },
           updates
         }),
-        tdlib
+        operations
       }),
       {
         maxConcurrentDownloads: 1,
@@ -550,10 +550,10 @@ describe('Telegram file download worker', () => {
       readyCount: 0,
       watchdogCount: 0
     });
-    expect(tdlib.getMessage).not.toHaveBeenCalled();
-    expect(tdlib.getFile).not.toHaveBeenCalled();
-    expect(tdlib.downloadFile).not.toHaveBeenCalled();
-    expect(tdlib.addFileToDownloads).not.toHaveBeenCalled();
+    expect(operations.getMessageContent).not.toHaveBeenCalled();
+    expect(operations.getFile).not.toHaveBeenCalled();
+    expect(operations.downloadFile).not.toHaveBeenCalled();
+    expect(operations.addFileToDownloads).not.toHaveBeenCalled();
     expect(deleted.count).toBe(1);
     expect(updates).toEqual([
       expect.objectContaining({
@@ -593,7 +593,7 @@ describe('Telegram file download worker', () => {
         {
           ...workerOptions({
             database: completedPathFailureDatabase(updates),
-            tdlib: idleTdlib()
+            operations: idleOperations()
           }),
           filesDirectory,
           tdlibSourceDirectories: [filesDirectory]
@@ -640,7 +640,7 @@ describe('Telegram file download worker', () => {
         {
           ...workerOptions({
             database: completedPathFailureDatabase(updates),
-            tdlib: idleTdlib()
+            operations: idleOperations()
           }),
           filesDirectory,
           tdlibSourceDirectories: [filesDirectory, databaseDirectory]
@@ -688,7 +688,7 @@ describe('Telegram file download worker', () => {
         {
           ...workerOptions({
             database: completedPathFailureDatabase(updates),
-            tdlib: idleTdlib()
+            operations: idleOperations()
           }),
           filesDirectory,
           tdlibSourceDirectories: [filesDirectory]
@@ -764,7 +764,7 @@ function messageDownloadRow(input: {
   };
 }
 
-function workerOptions(input: { database: Database; tdlib: unknown }): FileSubsystemOptions {
+function workerOptions(input: { database: Database; operations: unknown }): FileSubsystemOptions {
   return {
     database: input.database,
     events: {
@@ -786,8 +786,8 @@ function workerOptions(input: { database: Database; tdlib: unknown }): FileSubsy
       }
     },
     filesDirectory: '/tmp/agentg-test-files',
-    tdlibSourceDirectories: ['/tmp/agentg-test-files'],
-    tdlib: input.tdlib
+    operations: input.operations,
+    tdlibSourceDirectories: ['/tmp/agentg-test-files']
   } as unknown as FileSubsystemOptions;
 }
 
@@ -900,7 +900,7 @@ function queuedPointerMismatchDatabase(input: {
   } as unknown as Database;
 }
 
-function idleTdlib() {
+function idleOperations() {
   return {
     getQueueStats() {
       return {

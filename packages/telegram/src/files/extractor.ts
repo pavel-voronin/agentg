@@ -1,7 +1,6 @@
 import type { JsonObject } from '@agentg/framework';
 
-import type { file } from 'tdlib-types';
-
+import type { FileSnapshot } from '../domain/models/fileSnapshot.js';
 import {
   activeNotificationRef,
   chatRef,
@@ -13,7 +12,6 @@ import {
   storyRef,
   userRef
 } from '../model/refs.js';
-import { tdFileOrUndefined } from '../tdlib/shape.js';
 import type { ExtractedFileSlot, FileMediaKind, FileOwner, FileRenderKind } from './types.js';
 
 export type FileSlotUpdate = {
@@ -77,7 +75,7 @@ export type FileSlotUpdate = {
 
 type TdFileFacts = {
   byteSize: number | null;
-  file: file;
+  file: FileSnapshot;
   tdlibFileId: number;
 };
 
@@ -859,7 +857,7 @@ function fileSlot(input: {
 }
 
 function tdFileFacts(value: unknown): TdFileFacts | null {
-  const file = tdFileOrUndefined(value);
+  const file = fileSnapshotOrUndefined(value);
   if (file === undefined) {
     return null;
   }
@@ -868,11 +866,113 @@ function tdFileFacts(value: unknown): TdFileFacts | null {
   return {
     byteSize:
       safePositiveInteger(file.size) ??
-      safePositiveInteger(file.expected_size) ??
+      safePositiveInteger(file.expectedSize) ??
       (file.local.is_downloading_completed ? localDownloadedSize : null) ??
       null,
     file,
     tdlibFileId: file.id
+  };
+}
+
+function fileSnapshotOrUndefined(value: unknown): FileSnapshot | undefined {
+  const record = asPlainRecord(value);
+  if (record?._ !== 'file') {
+    return undefined;
+  }
+
+  const id = safeInteger(record.id);
+  const expectedSize = safeInteger(record.expected_size);
+  const size = safeInteger(record.size);
+  const local = localFileSnapshot(record.local);
+  const remote = remoteFileSnapshot(record.remote);
+
+  if (
+    id === null ||
+    expectedSize === null ||
+    size === null ||
+    local === undefined ||
+    remote === undefined
+  ) {
+    return undefined;
+  }
+
+  return {
+    expectedSize,
+    id,
+    local,
+    remote,
+    size
+  };
+}
+
+function localFileSnapshot(value: unknown): FileSnapshot['local'] | undefined {
+  const record = asPlainRecord(value);
+  if (record?._ !== 'localFile') {
+    return undefined;
+  }
+
+  const canBeDeleted = safeBoolean(record.can_be_deleted);
+  const canBeDownloaded = safeBoolean(record.can_be_downloaded);
+  const downloadOffset = safeInteger(record.download_offset);
+  const downloadedPrefixSize = safeInteger(record.downloaded_prefix_size);
+  const downloadedSize = safeInteger(record.downloaded_size);
+  const isDownloadingActive = safeBoolean(record.is_downloading_active);
+  const isDownloadingCompleted = safeBoolean(record.is_downloading_completed);
+  const path = safePlainString(record.path);
+
+  if (
+    canBeDeleted === null ||
+    canBeDownloaded === null ||
+    downloadOffset === null ||
+    downloadedPrefixSize === null ||
+    downloadedSize === null ||
+    isDownloadingActive === null ||
+    isDownloadingCompleted === null ||
+    path === null
+  ) {
+    return undefined;
+  }
+
+  return {
+    can_be_deleted: canBeDeleted,
+    can_be_downloaded: canBeDownloaded,
+    download_offset: downloadOffset,
+    downloaded_prefix_size: downloadedPrefixSize,
+    downloaded_size: downloadedSize,
+    is_downloading_active: isDownloadingActive,
+    is_downloading_completed: isDownloadingCompleted,
+    path
+  };
+}
+
+function remoteFileSnapshot(value: unknown): FileSnapshot['remote'] | undefined {
+  const record = asPlainRecord(value);
+  if (record?._ !== 'remoteFile') {
+    return undefined;
+  }
+
+  const id = safePlainString(record.id);
+  const isUploadingActive = safeBoolean(record.is_uploading_active);
+  const isUploadingCompleted = safeBoolean(record.is_uploading_completed);
+  const uniqueId = safePlainString(record.unique_id);
+  const uploadedSize = safeInteger(record.uploaded_size);
+
+  if (
+    id === null ||
+    isUploadingActive === null ||
+    isUploadingCompleted === null ||
+    uniqueId === null ||
+    uploadedSize === null
+  ) {
+    return undefined;
+  }
+
+  return {
+    id,
+    is_uploading_active: isUploadingActive,
+    is_uploading_completed: isUploadingCompleted,
+    unique_id: uniqueId,
+    uploaded_size: uploadedSize
   };
 }
 
@@ -902,6 +1002,14 @@ function asPlainRecord(value: unknown): Record<string, unknown> | undefined {
 
 function safeString(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+function safePlainString(value: unknown): string | null {
+  return typeof value === 'string' ? value : null;
+}
+
+function safeBoolean(value: unknown): boolean | null {
+  return typeof value === 'boolean' ? value : null;
 }
 
 function stickerMediaKind(renderKind: FileRenderKind): FileMediaKind {

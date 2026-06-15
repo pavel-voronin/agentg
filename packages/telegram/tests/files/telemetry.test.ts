@@ -56,7 +56,9 @@ describe('Telegram file telemetry', () => {
       queuedCount: 7,
       readyCount: 11,
       readyDownloadedBytes: 123456,
+      remainingCount: 9,
       staleDownloadingCount: 19,
+      totalCount: 16,
       unknownRemainingCount: 13
     });
 
