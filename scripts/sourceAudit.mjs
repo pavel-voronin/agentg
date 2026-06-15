@@ -367,7 +367,12 @@ function auditTelegramDateStorageContract() {
     failures.push('Telegram generated migration must store TDLib message date as timestamptz');
   }
 
-  for (const rel of ['packages/telegram/src/store/message.ts']) {
+  for (const rel of [
+    'packages/telegram/src/tdlib/messageState.ts',
+    'packages/telegram/src/storage/messageStorage.ts',
+    'packages/telegram/src/storage/messageRowStorage.ts',
+    'packages/telegram/src/repositories/messageAssembler.ts'
+  ]) {
     const source = readFileSync(join(root, rel), 'utf8');
     if (/getTime\(\)\s*\/\s*1000/.test(source)) {
       failures.push(`Telegram message storage must keep Date values as timestamptz: ${rel}`);
