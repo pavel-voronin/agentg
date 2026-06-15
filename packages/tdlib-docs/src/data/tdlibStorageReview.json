@@ -40038,7 +40038,7 @@
               "leaveGroupCall(group_call_id), endGroupCall(group_call_id), startScheduledVideoChat(group_call_id)",
               "toggleVideoChatEnabledStartNotification(group_call_id), toggleVideoChatMuteNewParticipants(group_call_id), setVideoChatTitle(group_call_id)",
               "toggleGroupCallIsMyVideoEnabled(group_call_id), toggleGroupCallIsMyVideoPaused(group_call_id), toggleGroupCallScreenSharingIsPaused(group_call_id)",
-              "startGroupCallRecording(group_call_id), endGroupCallRecording(group_call_id), startGroupCallScreenSharing(group_call_id), endGroupCallScreenSharing(group_call_id)",
+              "startGroupCalling(group_call_id), endGroupCalling(group_call_id), startGroupCallScreenSharing(group_call_id), endGroupCallScreenSharing(group_call_id)",
               "setGroupCallPaidMessageStarCount(group_call_id), toggleGroupCallAreMessagesAllowed(group_call_id), setLiveStoryMessageSender(group_call_id)",
               "getGroupCallStreams(group_call_id), getGroupCallStreamSegment(group_call_id), getVideoChatInviteLink(group_call_id), revokeGroupCallInviteLink(group_call_id)",
               "loadGroupCallParticipants(group_call_id), getLiveStoryStreamer(group_call_id), inviteGroupCallParticipant(group_call_id), inviteVideoChatParticipants(group_call_id), banGroupCallParticipants(group_call_id)",

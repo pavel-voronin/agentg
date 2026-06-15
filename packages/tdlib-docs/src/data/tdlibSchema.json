@@ -34846,7 +34846,7 @@
         { "description": "Group call identifier", "name": "group_call_id", "type": "int32" }
       ],
       "kind": "function",
-      "name": "endGroupCallRecording",
+      "name": "endGroupCalling",
       "resultType": "Ok"
     },
     {
@@ -45157,7 +45157,7 @@
         }
       ],
       "kind": "function",
-      "name": "startGroupCallRecording",
+      "name": "startGroupCalling",
       "resultType": "Ok"
     },
     {
