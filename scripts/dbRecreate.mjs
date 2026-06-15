@@ -1,11 +1,15 @@
 #!/usr/bin/env node
 /* global console, process */
 
-import 'dotenv/config';
-
 import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { loadEnvFile } from 'node:process';
 
 import { Client } from 'pg';
+
+if (existsSync('.env')) {
+  loadEnvFile('.env');
+}
 
 const DEFAULT_DATABASE_URL = 'postgres://agentg:agentg@localhost:5432/agentg';
 const databaseUrl = process.env.DATABASE_URL ?? DEFAULT_DATABASE_URL;
