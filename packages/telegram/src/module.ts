@@ -7,14 +7,17 @@ import { createDatabase } from './database/client.js';
 import { useFiles } from './files/index.js';
 import { createRestoreService } from './gap-restore/runtime.js';
 import { createLiveCoverageObserver } from './history/liveCoverage.js';
+import { createIngestionOperations } from './ingestion/adapters/operations.js';
 import { useIngestion } from './ingestion/index.js';
 import { getChatProcedure } from './procedures/getChat.js';
 import { listRecentMessagesProcedure } from './procedures/listRecentMessages.js';
 import { getMessagesProcedure } from './procedures/getMessages.js';
 import { requestFileProcedure } from './procedures/requestFile.js';
 import { searchMessagesProcedure } from './procedures/searchMessages.js';
+import { createHistorySource } from './reconciler/adapters/historySource.js';
 import { useHistoryReconciler } from './reconciler/runtime.js';
 import { createStatusTracker } from './status/tracker.js';
+import { createFileOperations } from './tdlib/fileOperations.js';
 import { useTdlib } from './tdlib/index.js';
 
 export const telegramModule = defineModule('telegram', {
@@ -50,8 +53,8 @@ export const telegramModule = defineModule('telegram', {
         events,
         filesDirectory: config.tdlibFilesDirectory,
         getDownloadRules,
-        tdlibSourceDirectories: [config.tdlibFilesDirectory, config.tdlibDatabaseDirectory],
-        tdlib
+        operations: createFileOperations(tdlib),
+        tdlibSourceDirectories: [config.tdlibFilesDirectory, config.tdlibDatabaseDirectory]
       });
 
       startup(() => resource.start());
@@ -68,7 +71,7 @@ export const telegramModule = defineModule('telegram', {
         database,
         events,
         files,
-        tdlib
+        historySource: createHistorySource(tdlib)
       });
 
       startup(() => resource.start());
@@ -81,8 +84,7 @@ export const telegramModule = defineModule('telegram', {
       database,
       events,
       files,
-      reconciler,
-      tdlib
+      reconciler
     };
     const getMessages = getMessagesProcedure(procedureResources);
     const gapRestore = resource('gapRestore', () =>
@@ -100,8 +102,8 @@ export const telegramModule = defineModule('telegram', {
         files,
         gapRestore,
         liveCoverage,
+        operations: createIngestionOperations(tdlib),
         status,
-        tdlib,
         updateConcurrency: config.ingestionUpdateConcurrency
       });
 

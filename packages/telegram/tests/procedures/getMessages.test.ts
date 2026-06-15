@@ -5,6 +5,9 @@ const telemetry = vi.hoisted(() => ({
     async (_input: unknown, operation: () => Promise<unknown>): Promise<unknown> => operation()
   )
 }));
+const messageRepository = vi.hoisted(() => ({
+  hydrateMessageRows: vi.fn()
+}));
 
 vi.mock('@agentg/framework', async (importOriginal) => {
   const framework = await importOriginal<typeof import('@agentg/framework')>();
@@ -14,8 +17,9 @@ vi.mock('@agentg/framework', async (importOriginal) => {
   };
 });
 
-vi.mock('../../src/reconciler/coverage.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../src/reconciler/coverage.js')>();
+vi.mock('../../src/storage/reconcilerCoverageStorage.js', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../../src/storage/reconcilerCoverageStorage.js')>();
   return {
     ...actual,
     isOwnerCovered: vi.fn(() => Promise.resolve(true)),
@@ -24,26 +28,27 @@ vi.mock('../../src/reconciler/coverage.js', async (importOriginal) => {
   };
 });
 
-vi.mock('../../src/views/message.js', () => ({
+vi.mock('../../src/storage/messageRowStorage.js', () => ({
   readMessageSelection: vi.fn(() => ({
     messageDate: 'messageDate',
     telegramMessageId: 'telegramMessageId'
   })),
-  toReadMessages: vi.fn((_database: unknown, messages: MessageStorageRow[]) =>
-    Promise.resolve(messages.map(readMessage))
-  )
+  toMessageStorageRows: vi.fn((rows: MessageStorageRow[]) => rows)
+}));
+
+vi.mock('../../src/repositories/messageRepository.js', () => ({
+  hydrateMessageRows: messageRepository.hydrateMessageRows
 }));
 
 import {
   isOwnerCovered,
   listOwnerCoverage,
   missingOwnerCoverageIntervals
-} from '../../src/reconciler/coverage.js';
+} from '../../src/storage/reconcilerCoverageStorage.js';
 import { getMessagesProcedure } from '../../src/procedures/getMessages.js';
 import type { GetMessagesInput } from '../../src/procedures/get-messages/contract.js';
 import type { ProcedureResources } from '../../src/procedures/resources.js';
-import type { MessageStorageRow } from '../../src/views/message.js';
-import { toReadMessages } from '../../src/views/message.js';
+import type { MessageStorageRow } from '../../src/storage/messageRowStorage.js';
 
 describe('Telegram getMessages procedure', () => {
   beforeEach(() => {
@@ -52,8 +57,8 @@ describe('Telegram getMessages procedure', () => {
     vi.mocked(isOwnerCovered).mockResolvedValue(true);
     vi.mocked(listOwnerCoverage).mockResolvedValue([]);
     vi.mocked(missingOwnerCoverageIntervals).mockResolvedValue([]);
-    vi.mocked(toReadMessages).mockImplementation((_database, messages) =>
-      Promise.resolve(messages.map(readMessage))
+    messageRepository.hydrateMessageRows.mockImplementation(
+      (_database, messages: MessageStorageRow[]) => Promise.resolve(messages.map(readMessage))
     );
     telemetry.timeTelemetrySpan.mockClear();
   });
@@ -85,7 +90,7 @@ describe('Telegram getMessages procedure', () => {
       reachedStart: false,
       status: 'ready'
     });
-    expect(toReadMessages).toHaveBeenCalledTimes(1);
+    expect(messageRepository.hydrateMessageRows).toHaveBeenCalledTimes(1);
     expect(JSON.stringify(telemetry.timeTelemetrySpan.mock.calls)).not.toContain(chatId);
   });
 
@@ -325,14 +330,6 @@ describe('Telegram getMessages procedure', () => {
         startAt: new Date('2026-05-01T13:00:01.000Z')
       }
     ]);
-    const tdlib = new Proxy(
-      {},
-      {
-        get() {
-          throw new Error('TDLib must not be called by getMessages');
-        }
-      }
-    );
     const files = new Proxy(
       {},
       {
@@ -345,8 +342,7 @@ describe('Telegram getMessages procedure', () => {
     await expect(
       procedure({
         files,
-        persistedRows: [[storedMessage('101', '2026-05-01T13:00:00.000Z')]],
-        tdlib
+        persistedRows: [[storedMessage('101', '2026-05-01T13:00:00.000Z')]]
       })({
         owner: {
           chatId,
@@ -373,7 +369,6 @@ type FakeDatabaseInput = {
   files?: unknown;
   pageEndRows?: PageEndRow[][] | undefined;
   persistedRows: MessageStorageRow[][];
-  tdlib?: unknown;
 };
 
 function procedure(input: FakeDatabaseInput, reconciler = fakeReconciler('pending_enqueued')) {
@@ -381,8 +376,7 @@ function procedure(input: FakeDatabaseInput, reconciler = fakeReconciler('pendin
     database: fakeDatabase(input),
     events: {},
     files: input.files ?? {},
-    reconciler,
-    tdlib: input.tdlib ?? {}
+    reconciler
   } as unknown as ProcedureResources);
 }
 
@@ -477,13 +471,14 @@ function storedMessage(messageId: string, messageDate: string | null): MessageSt
     isOutgoing: false,
     messageDate: messageDate === null ? null : new Date(messageDate),
     reactions: null,
-    replyTo: null,
+    replyChatId: null,
+    replyMessageId: null,
     senderId: null,
     senderType: null,
     telegramChatId: chatId,
     telegramMessageId: messageId,
     text: `message-${messageId}`,
-    textEntities: null
+    textEntities: []
   };
 }
 

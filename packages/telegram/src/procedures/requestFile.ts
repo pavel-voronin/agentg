@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
-import { fileOwnerModelRefSchema, fileRefSchema, nonEmptyStringSchema } from '../views/schemas.js';
+import { fileOwnerModelRefSchema, fileRefSchema } from '../domain/models/fileRef.js';
+import { nonEmptyStringSchema } from '../domain/models/scalars.js';
 import type { ProcedureResources } from './resources.js';
 
 const inputSchema = z.object({

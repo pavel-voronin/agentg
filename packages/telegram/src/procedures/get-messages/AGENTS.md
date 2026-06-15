@@ -7,7 +7,8 @@
   `pending` request id.
 - Do not expose TDLib operations, storage coverage, worker controls, file
   download mechanics, or reconciler strategy in this procedure contract.
-- This folder may read local storage and enqueue the Telegram history
-  reconciler. It must not call TDLib or the file subsystem directly.
+- This folder may call Telegram repositories and enqueue the Telegram history
+  reconciler. It must not read storage, call TDLib, or call the file subsystem
+  directly.
 - Procedure-specific schemas and DTO types stay here unless a real current
   Telegram-owned consumer needs them by direct internal import.

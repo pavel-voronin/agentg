@@ -1,14 +1,9 @@
 import { parseLimit } from '@agentg/framework';
-import { and, desc, eq, ilike, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
-import { telegramMessages } from '../database/schema.js';
-import { messageTextExpression, readMessageSelection, toReadMessages } from '../views/message.js';
-import {
-  nonEmptyStringSchema,
-  positiveIntegerSchema,
-  readMessageSchema
-} from '../views/schemas.js';
+import { messageSchema } from '../domain/models/message.js';
+import { nonEmptyStringSchema, positiveIntegerSchema } from '../domain/models/scalars.js';
+import { createRepositories } from '../repositories/repositories.js';
 import type { ProcedureResources } from './resources.js';
 
 const inputSchema = z.object({
@@ -18,7 +13,7 @@ const inputSchema = z.object({
 });
 
 const outputSchema = z.object({
-  messages: z.array(readMessageSchema)
+  messages: z.array(messageSchema)
 });
 
 type Input = z.infer<typeof inputSchema>;
@@ -34,19 +29,11 @@ export function searchMessagesProcedure(resources: ProcedureResources) {
 async function runSearchMessages(input: Input, resources: ProcedureResources): Promise<Output> {
   const text = input.query.trim();
   const limit = parseLimit(input.limit, 20, 100);
-  const textFilter = ilike(sql<string>`coalesce(${messageTextExpression()}, '')`, `%${text}%`);
-  const where =
-    input.chatId === undefined
-      ? textFilter
-      : and(eq(telegramMessages.chatId, input.chatId), textFilter);
-  const messages = await resources.database
-    .select(readMessageSelection())
-    .from(telegramMessages)
-    .where(where)
-    .orderBy(desc(telegramMessages.date), sql`${telegramMessages.id}::bigint desc`)
-    .limit(limit);
-
   return {
-    messages: await toReadMessages(resources.database, messages)
+    messages: await createRepositories(resources.database).messages.search({
+      chatId: input.chatId,
+      limit,
+      query: text
+    })
   };
 }

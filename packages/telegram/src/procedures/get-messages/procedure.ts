@@ -8,9 +8,8 @@ import {
   type GetMessagesOutput
 } from './contract.js';
 import { enqueueGetMessagesRequest } from './enqueue.js';
-import { checkMessagesReadiness } from './readiness.js';
-import { toOutputMessages } from './read.js';
-import { normalizeMessageOwner } from '../../reconciler/owner.js';
+import { normalizeMessageOwner } from '../../domain/models/messageSelection.js';
+import { checkMessagesReadiness } from '../../repositories/messageReadinessRepository.js';
 import { recordGetMessagesRequest } from '../../reconciler/telemetry.js';
 
 export function createGetMessagesProcedure(resources: ProcedureResources) {
@@ -42,15 +41,14 @@ export async function runGetMessages(
           result: 'ready',
           selectorKind: input.selector.kind
         });
-        const messages = await toOutputMessages(resources.database, readiness.rows.messages);
         return readiness.rows.selectorKind === 'page'
           ? {
-              messages,
+              messages: readiness.rows.messages,
               reachedStart: readiness.rows.reachedStart,
               status: 'ready'
             }
           : {
-              messages,
+              messages: readiness.rows.messages,
               status: 'ready'
             };
       }

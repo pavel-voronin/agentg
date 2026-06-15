@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { messageTextExpression, toReadMessage } from '../src/views/message.js';
+import { messageFromStorageRow } from '../src/repositories/messageAssembler.js';
+import { messageTextExpression, toMessageStorageRow } from '../src/storage/messageRowStorage.js';
 
 describe('Telegram message text extraction', () => {
   it('selects media captions as readable message text', () => {
@@ -11,31 +12,34 @@ describe('Telegram message text extraction', () => {
   });
 
   it('maps selected caption link entities onto read messages', () => {
-    const message = toReadMessage({
-      contentType: 'messagePhoto',
-      deletedAt: null,
-      editDate: null,
-      isDeleted: false,
-      isOutgoing: false,
-      messageDate: new Date('2026-05-28T00:00:00.000Z'),
-      reactions: null,
-      replyTo: null,
-      senderId: '30',
-      senderType: 'messageSenderUser',
-      telegramChatId: '20',
-      telegramMessageId: '10',
-      text: 'Caption example.com',
-      textEntities: [
-        {
-          _: 'textEntity',
-          length: 11,
-          offset: 8,
-          type: {
-            _: 'textEntityTypeUrl'
+    const message = messageFromStorageRow(
+      toMessageStorageRow({
+        contentType: 'messagePhoto',
+        deletedAt: null,
+        editDate: null,
+        isDeleted: false,
+        isOutgoing: false,
+        messageDate: new Date('2026-05-28T00:00:00.000Z'),
+        reactions: null,
+        replyChatId: null,
+        replyMessageId: null,
+        senderId: '30',
+        senderType: 'messageSenderUser',
+        telegramChatId: '20',
+        telegramMessageId: '10',
+        text: 'Caption example.com',
+        textEntities: [
+          {
+            _: 'textEntity',
+            length: 11,
+            offset: 8,
+            type: {
+              _: 'textEntityTypeUrl'
+            }
           }
-        }
-      ]
-    });
+        ]
+      })
+    );
 
     expect(message).toMatchObject({
       contentType: 'messagePhoto',

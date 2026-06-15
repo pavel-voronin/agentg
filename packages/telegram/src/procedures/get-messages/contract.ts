@@ -1,81 +1,37 @@
 import { z } from 'zod';
 
+import { messageSchema } from '../../domain/models/message.js';
 import {
-  isoDateTimeStringSchema,
-  positiveIntegerSchema,
-  readMessageSchema
-} from '../../views/schemas.js';
+  messageOwnerSchema,
+  messageReadRequestSchema,
+  messageSelectorSchema,
+  pageSelectorSchema,
+  rangeSelectorSchema,
+  type MessageReadRequest,
+  type MessageOwner,
+  type MessageSelector,
+  type PageSelector,
+  type RangeSelector
+} from '../../domain/models/messageSelection.js';
 
-const idSchema = z
-  .string()
-  .trim()
-  .regex(/^-?[0-9]+$/)
-  .refine((value) => Number.isSafeInteger(Number(value)))
-  .transform((value) => String(Number(value)));
-
-const int32IdSchema = idSchema.refine((value) => {
-  const parsed = Number(value);
-  return parsed >= -2_147_483_648 && parsed <= 2_147_483_647;
-});
-
-const messageIdSchema = idSchema.refine((value) => Number(value) > 0);
-
-export const messageOwnerSchema = z.discriminatedUnion('kind', [
-  z.object({
-    chatId: idSchema,
-    kind: z.literal('chat')
-  }),
-  z.object({
-    chatId: idSchema,
-    kind: z.literal('forumTopic'),
-    topicId: int32IdSchema
-  }),
-  z.object({
-    chatId: idSchema,
-    kind: z.literal('directMessagesTopic'),
-    topicId: idSchema
-  }),
-  z.object({
-    kind: z.literal('savedMessagesTopic'),
-    topicId: idSchema
-  }),
-  z.object({
-    chatId: idSchema,
-    kind: z.literal('messageThread'),
-    messageId: messageIdSchema
-  })
-]);
-
-export const pageSelectorSchema = z.object({
-  beforeMessageId: messageIdSchema.optional(),
-  count: positiveIntegerSchema,
-  kind: z.literal('page')
-});
-
-export const rangeSelectorSchema = z.object({
-  endAt: isoDateTimeStringSchema,
-  kind: z.literal('range'),
-  startAt: isoDateTimeStringSchema
-});
-
-export const messageSelectorSchema = z.discriminatedUnion('kind', [
+export {
+  messageOwnerSchema,
+  messageReadRequestSchema,
+  messageSelectorSchema,
   pageSelectorSchema,
   rangeSelectorSchema
-]);
+};
 
-export const getMessagesInputSchema = z.object({
-  owner: messageOwnerSchema,
-  selector: messageSelectorSchema
-});
+export const getMessagesInputSchema = messageReadRequestSchema;
 
 export const readyPageOutputSchema = z.object({
-  messages: z.array(readMessageSchema),
+  messages: z.array(messageSchema),
   reachedStart: z.boolean(),
   status: z.literal('ready')
 });
 
 export const readyRangeOutputSchema = z.object({
-  messages: z.array(readMessageSchema),
+  messages: z.array(messageSchema),
   status: z.literal('ready')
 });
 
@@ -90,9 +46,6 @@ export const getMessagesOutputSchema = z.union([
   pendingOutputSchema
 ]);
 
-export type MessageOwner = z.infer<typeof messageOwnerSchema>;
-export type PageSelector = z.infer<typeof pageSelectorSchema>;
-export type RangeSelector = z.infer<typeof rangeSelectorSchema>;
-export type MessageSelector = z.infer<typeof messageSelectorSchema>;
-export type GetMessagesInput = z.infer<typeof getMessagesInputSchema>;
+export type { MessageOwner, MessageSelector, PageSelector, RangeSelector };
+export type GetMessagesInput = MessageReadRequest;
 export type GetMessagesOutput = z.infer<typeof getMessagesOutputSchema>;

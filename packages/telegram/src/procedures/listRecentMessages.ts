@@ -1,15 +1,9 @@
 import { parseLimit } from '@agentg/framework';
-import { desc, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
-import { telegramMessages } from '../database/schema.js';
-import { readMessageSelection, toReadMessages } from '../views/message.js';
-import {
-  nonEmptyStringSchema,
-  positiveIntegerSchema,
-  readMessageSchema
-} from '../views/schemas.js';
-import { andSql } from '../views/sql.js';
+import { messageSchema } from '../domain/models/message.js';
+import { nonEmptyStringSchema, positiveIntegerSchema } from '../domain/models/scalars.js';
+import { createRepositories } from '../repositories/repositories.js';
 import type { ProcedureResources } from './resources.js';
 
 const inputSchema = z
@@ -21,7 +15,7 @@ const inputSchema = z
   .default({});
 
 const outputSchema = z.object({
-  messages: z.array(readMessageSchema)
+  messages: z.array(messageSchema)
 });
 
 type Input = z.infer<typeof inputSchema>;
@@ -36,20 +30,11 @@ export function listRecentMessagesProcedure(resources: ProcedureResources) {
 
 async function runListRecentMessages(input: Input, resources: ProcedureResources): Promise<Output> {
   const limit = parseLimit(input.limit, 50, 200);
-  const where = andSql(
-    input.chatId === undefined ? undefined : eq(telegramMessages.chatId, input.chatId),
-    input.beforeMessageId === undefined
-      ? undefined
-      : sql`${telegramMessages.id}::bigint < ${input.beforeMessageId}::bigint`
-  );
-  const messages = await resources.database
-    .select(readMessageSelection())
-    .from(telegramMessages)
-    .where(where)
-    .orderBy(desc(telegramMessages.date), sql`${telegramMessages.id}::bigint desc`)
-    .limit(limit);
-
   return {
-    messages: await toReadMessages(resources.database, messages)
+    messages: await createRepositories(resources.database).messages.listRecent({
+      beforeMessageId: input.beforeMessageId,
+      chatId: input.chatId,
+      limit
+    })
   };
 }
