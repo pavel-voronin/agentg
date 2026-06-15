@@ -4,6 +4,7 @@ import { performance } from 'node:perf_hooks';
 import {
   context,
   metrics,
+  ROOT_CONTEXT,
   SpanKind,
   SpanStatusCode,
   trace,
@@ -78,6 +79,10 @@ const gauges = new Map<string, ObservableGauge>();
 const gaugeValues = new Map<string, Map<string, GaugeValue>>();
 const histograms = new Map<string, Histogram>();
 let runtime: TelemetryRuntime | null = null;
+
+export function runWithRootTelemetryContext<T>(operation: () => T): T {
+  return context.with(ROOT_CONTEXT, operation);
+}
 
 type GaugeValue = {
   attributes: TelemetryAttributes;

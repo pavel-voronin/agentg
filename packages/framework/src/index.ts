@@ -19,6 +19,7 @@ export {
 export {
   incrementTelemetryCounter,
   recordTelemetryHistogram,
+  runWithRootTelemetryContext,
   setTelemetryGauge,
   startTelemetryRuntime,
   telemetryEnabled,

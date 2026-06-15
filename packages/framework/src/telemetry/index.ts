@@ -2,6 +2,7 @@ export type { TelemetryAttributes, TelemetryAttributeValue } from './contracts.j
 export {
   incrementTelemetryCounter,
   recordTelemetryHistogram,
+  runWithRootTelemetryContext,
   setTelemetryGauge,
   startTelemetryRuntime,
   startTelemetrySpan,

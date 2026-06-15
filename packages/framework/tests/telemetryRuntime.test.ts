@@ -9,16 +9,21 @@ type MetricReaderOptions = {
 };
 
 const mocks = vi.hoisted(() => ({
+  contextCalls: [] as unknown[],
   logProcessorConfigs: [] as LogProcessorConfig[],
   metricReaderOptions: [] as MetricReaderOptions[]
 }));
 
 vi.mock('@opentelemetry/api', () => ({
+  ROOT_CONTEXT: {
+    root: true
+  },
   context: {
     active() {
       return {};
     },
-    with(_context: unknown, operation: () => unknown) {
+    with(rootContext: unknown, operation: () => unknown) {
+      mocks.contextCalls.push(rootContext);
       return operation();
     }
   },
@@ -203,6 +208,7 @@ describe('telemetry runtime export cadence', () => {
     process.env = { ...originalEnv, AGENTG_TELEMETRY: '1' };
     delete process.env.OTEL_BLRP_SCHEDULE_DELAY;
     delete process.env.OTEL_METRIC_EXPORT_INTERVAL;
+    mocks.contextCalls.length = 0;
     mocks.logProcessorConfigs.length = 0;
     mocks.metricReaderOptions.length = 0;
   });
@@ -235,6 +241,15 @@ describe('telemetry runtime export cadence', () => {
     expect(mocks.logProcessorConfigs[0]?.scheduledDelayMillis).toBe(1500);
 
     await stop();
+  });
+
+  it('runs async boundary callbacks from the root telemetry context', async () => {
+    const { runWithRootTelemetryContext } = await import('../src/telemetry/recorder.js');
+
+    const result = runWithRootTelemetryContext(() => 'detached');
+
+    expect(result).toBe('detached');
+    expect(mocks.contextCalls).toEqual([{ root: true }]);
   });
 });
 
