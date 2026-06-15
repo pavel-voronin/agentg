@@ -1,0 +1,48 @@
+import type { TelegramPayload } from './payload.js';
+
+export type MessageState = {
+  authorSignature?: string | null | undefined;
+  autoDeleteIn?: number | null | undefined;
+  canBeSaved?: boolean | null | undefined;
+  chatId: string;
+  containsUnreadMention?: boolean | null | undefined;
+  containsUnreadPollVotes?: boolean | null | undefined;
+  content?: TelegramPayload | undefined;
+  date?: Date | undefined;
+  editDate?: Date | undefined;
+  effectId?: string | undefined;
+  factCheck?: TelegramPayload | undefined;
+  forwardInfo?: TelegramPayload | undefined;
+  guestBotCallerId?: TelegramPayload | undefined;
+  hasTimestampedMedia?: boolean | null | undefined;
+  id: string;
+  importInfo?: TelegramPayload | undefined;
+  interactionInfo?: TelegramPayload | undefined;
+  isChannelPost?: boolean | null | undefined;
+  isFromOffline?: boolean | null | undefined;
+  isOutgoing?: boolean | null | undefined;
+  isPaidStarSuggestedPost?: boolean | null | undefined;
+  isPaidTonSuggestedPost?: boolean | null | undefined;
+  isPinned?: boolean | null | undefined;
+  mediaAlbumId?: string | undefined;
+  paidMessageStarCount?: string | undefined;
+  reactions?: TelegramPayload | undefined;
+  replyMarkup?: TelegramPayload | undefined;
+  replyTo?: TelegramPayload | undefined;
+  restrictionInfo?: TelegramPayload | undefined;
+  schedulingState?: TelegramPayload | undefined;
+  selfDestructIn?: number | null | undefined;
+  selfDestructType?: TelegramPayload | undefined;
+  senderBoostCount?: number | null | undefined;
+  senderBusinessBotUserId?: string | undefined;
+  senderId?: TelegramPayload | undefined;
+  senderTag?: string | null | undefined;
+  sendingState?: TelegramPayload | undefined;
+  suggestedPostInfo?: TelegramPayload | undefined;
+  summaryLanguageCode?: string | null | undefined;
+  topicId?: TelegramPayload | undefined;
+  unreadReactions?: TelegramPayload | undefined;
+  viaBotUserId?: string | undefined;
+};
+
+export type MessagePatch = Partial<MessageState> & Pick<MessageState, 'chatId' | 'id'>;

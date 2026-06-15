@@ -1,0 +1,43 @@
+import type { TelegramPayload } from './payload.js';
+
+export type UserState = {
+  bio?: TelegramPayload | undefined;
+  birthdate?: TelegramPayload | undefined;
+  blockList?: TelegramPayload | undefined;
+  botInfo?: TelegramPayload | undefined;
+  botVerification?: TelegramPayload | undefined;
+  businessInfo?: TelegramPayload | undefined;
+  canBeCalled?: boolean | null | undefined;
+  firstName?: string | null | undefined;
+  firstProfileAudio?: TelegramPayload | undefined;
+  giftCount?: number | null | undefined;
+  giftSettings?: TelegramPayload | undefined;
+  groupInCommonCount?: number | null | undefined;
+  hasPostedToProfileStories?: boolean | null | undefined;
+  hasPrivateCalls?: boolean | null | undefined;
+  hasPrivateForwards?: boolean | null | undefined;
+  hasRestrictedVoiceAndVideoNoteMessages?: boolean | null | undefined;
+  hasSponsoredMessagesEnabled?: boolean | null | undefined;
+  id: string;
+  incomingPaidMessageStarCount?: string | null | undefined;
+  isPremium?: boolean | null | undefined;
+  lastName?: string | null | undefined;
+  mainProfileTab?: TelegramPayload | undefined;
+  needPhoneNumberPrivacyException?: boolean | null | undefined;
+  note?: TelegramPayload | undefined;
+  outgoingPaidMessageStarCount?: string | null | undefined;
+  pendingRating?: TelegramPayload | undefined;
+  pendingRatingDate?: Date | null | undefined;
+  personalChatId?: string | null | undefined;
+  personalPhotoId?: string | null | undefined;
+  photoId?: string | null | undefined;
+  publicPhotoId?: string | null | undefined;
+  rating?: TelegramPayload | undefined;
+  setChatBackground?: boolean | null | undefined;
+  status?: TelegramPayload | undefined;
+  supportsVideoCalls?: boolean | null | undefined;
+  type?: TelegramPayload | undefined;
+  usesUnofficialApp?: boolean | null | undefined;
+};
+
+export type UserPatch = Partial<UserState> & Pick<UserState, 'id'>;

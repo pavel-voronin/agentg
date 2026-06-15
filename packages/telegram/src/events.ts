@@ -1,11 +1,10 @@
 import type { EventBus } from '@agentg/framework';
 
-import type { FileOwnerChangedEvent } from './files/types.js';
-import type { readFileQueueStats } from './files/read.js';
-import type { ChatModelRef, MessageModelRef } from './model/refs.js';
-import type { GetMessagesInput } from './procedures/get-messages/contract.js';
+import type { FileOwnerChangedEvent, FileQueueStats } from './files/types.js';
 import type { StatusTracker } from './status/tracker.js';
-import type { ReadMessage } from './views/schemas.js';
+import type { Message } from './domain/models/message.js';
+import type { MessageReadRequest } from './domain/models/messageSelection.js';
+import type { MessageUpdatedPayload, MessagesDeletedPayload } from './domain/changes.js';
 
 export const HISTORY_QUEUE_CHANGED_EVENT = 'telegram.history.reconciler.queueChanged';
 
@@ -15,7 +14,7 @@ type LoginFailedEvent = {
 
 type StatusEvent = ReturnType<StatusTracker['snapshot']>;
 
-type MessagesReadyEvent = GetMessagesInput & {
+type MessagesReadyEvent = MessageReadRequest & {
   requestId: string;
 };
 
@@ -24,33 +23,16 @@ type MessagesFailedEvent = MessagesReadyEvent & {
 };
 
 type MessageCreatedEvent = {
-  message: ReadMessage;
+  message: Message;
 };
 
 type MessageUpdatedEvent = {
-  message: Pick<
-    ReadMessage,
-    | 'chat'
-    | 'contentType'
-    | 'editDate'
-    | 'media'
-    | 'reactions'
-    | 'serviceAction'
-    | 'telegramMessageId'
-    | 'text'
-    | 'textEntities'
-  >;
+  message: MessageUpdatedPayload;
 };
 
 type MessageDeletedEvent = {
-  delete: {
-    chat: ChatModelRef;
-    deletedAt: string;
-    messages: MessageModelRef[];
-  };
+  delete: MessagesDeletedPayload;
 };
-
-type FileQueueChangedEvent = Awaited<ReturnType<typeof readFileQueueStats>>;
 
 export function publishLoginStarted(events: EventBus): void {
   events.publish('telegram.login.started');
@@ -96,6 +78,6 @@ export function publishFileOwnerChanged(events: EventBus, event: FileOwnerChange
   events.publish('telegram.files.ownerChanged', event);
 }
 
-export function publishFileQueueChanged(events: EventBus, event: FileQueueChangedEvent): void {
+export function publishFileQueueChanged(events: EventBus, event: FileQueueStats): void {
   events.publish('telegram.files.queueChanged', event);
 }
