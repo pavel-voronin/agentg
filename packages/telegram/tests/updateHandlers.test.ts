@@ -7,16 +7,16 @@ import {
   telegramMessages
 } from '../src/database/schema.js';
 import type { IngestionResources } from '../src/ingestion/resources.js';
-import { handleUpdateChatLastMessage } from '../src/ingestion/update-handlers/updateChatLastMessage.js';
-import { handleUpdateDeleteMessages } from '../src/ingestion/update-handlers/updateDeleteMessages.js';
-import { handleUpdateMessageReaction } from '../src/ingestion/update-handlers/updateMessageReaction.js';
-import { handleUpdateNewChat } from '../src/ingestion/update-handlers/updateNewChat.js';
-import { handleUpdateNewMessage } from '../src/ingestion/update-handlers/updateNewMessage.js';
+import { handleUpdateChatLastMessage } from '../src/ingestion/adapters/update-handlers/updateChatLastMessage.js';
+import { handleUpdateDeleteMessages } from '../src/ingestion/adapters/update-handlers/updateDeleteMessages.js';
+import { handleUpdateMessageReaction } from '../src/ingestion/adapters/update-handlers/updateMessageReaction.js';
+import { handleUpdateNewChat } from '../src/ingestion/adapters/update-handlers/updateNewChat.js';
+import { handleUpdateNewMessage } from '../src/ingestion/adapters/update-handlers/updateNewMessage.js';
 
 describe('TDLib update handlers', () => {
   it('persists updateNewMessage through message type operations', async () => {
     const context = createHandlerContext();
-    const { insert, onConflictDoNothing, recordMessageFiles } = context;
+    const { insert, onConflictDoNothing, recordFileSlots } = context;
     const message = wireMessage({
       _: 'message',
       author_signature: 'channel admin',
@@ -130,9 +130,9 @@ describe('TDLib update handlers', () => {
       }
     });
     expect(context.events.publish.mock.invocationCallOrder[0]).toBeLessThan(
-      recordMessageFiles.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY
+      recordFileSlots.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY
     );
-    expect(recordMessageFiles).toHaveBeenCalledWith(update.message, 'live_update');
+    expect(hasRecordedMessageSlot(recordFileSlots, { chatId: '20', messageId: '10' })).toBe(true);
   });
 
   it('does not publish side effects when updateNewMessage already exists', async () => {
@@ -162,14 +162,14 @@ describe('TDLib update handlers', () => {
 
     await handleUpdateNewMessage(update, resources);
 
-    expect(context.recordMessageFiles).not.toHaveBeenCalled();
+    expect(context.recordFileSlots).not.toHaveBeenCalled();
     expect(context.recordLiveMessage).not.toHaveBeenCalled();
     expect(context.events.publish).not.toHaveBeenCalled();
   });
 
   it('persists updateNewChat last_message as a message row and chat last_message_id', async () => {
     const context = createHandlerContext();
-    const { insert, recordChatFiles, recordMessageFiles, values } = context;
+    const { insert, recordFileSlots, values } = context;
     const update = {
       _: 'updateNewChat',
       chat: {
@@ -217,13 +217,13 @@ describe('TDLib update handlers', () => {
         lastMessageId: '10'
       })
     );
-    expect(recordChatFiles).toHaveBeenCalledWith(update.chat, 'live_update');
-    expect(recordMessageFiles).toHaveBeenCalledWith(update.chat.last_message, 'live_update');
+    expect(hasRecordedChatSlot(recordFileSlots, '20')).toBe(true);
+    expect(hasRecordedMessageSlot(recordFileSlots, { chatId: '20', messageId: '10' })).toBe(true);
   });
 
   it('persists updateChatLastMessage message and updates chat last_message_id', async () => {
     const context = createHandlerContext();
-    const { insert, recordMessageFiles, values } = context;
+    const { insert, recordFileSlots, values } = context;
     const update = {
       _: 'updateChatLastMessage',
       chat_id: 20,
@@ -263,12 +263,12 @@ describe('TDLib update handlers', () => {
         lastMessageId: '10'
       })
     );
-    expect(recordMessageFiles).toHaveBeenCalledWith(update.last_message, 'live_update');
+    expect(hasRecordedMessageSlot(recordFileSlots, { chatId: '20', messageId: '10' })).toBe(true);
   });
 
   it('clears chat last_message_id when updateChatLastMessage has no last_message', async () => {
     const context = createHandlerContext();
-    const { recordMessageFiles, values } = context;
+    const { recordFileSlots, values } = context;
     const update = {
       _: 'updateChatLastMessage',
       chat_id: 20,
@@ -284,7 +284,7 @@ describe('TDLib update handlers', () => {
         lastMessageId: null
       })
     );
-    expect(recordMessageFiles).not.toHaveBeenCalled();
+    expect(recordFileSlots).not.toHaveBeenCalled();
   });
 
   it('hard-deletes stored messages for permanent updateDeleteMessages', async () => {
@@ -473,8 +473,7 @@ function resourcesFromContext(
     database: context.database,
     events: context.events,
     files: {
-      recordChatFiles: context.recordChatFiles,
-      recordMessageFiles: context.recordMessageFiles
+      recordFileSlots: context.recordFileSlots
     },
     liveCoverage: {
       recordLiveMessage: context.recordLiveMessage
@@ -546,8 +545,9 @@ function createHandlerContext(
     ),
     update: updateRows
   };
-  const recordChatFiles = vi.fn(() => Promise.resolve(undefined));
-  const recordMessageFiles = vi.fn(() => Promise.resolve(undefined));
+  const recordFileSlots = vi.fn<(recording: unknown, cause: string) => Promise<void>>(() =>
+    Promise.resolve(undefined)
+  );
   const recordLiveMessage = vi.fn(() => Promise.resolve(undefined));
   const events: { publish: ReturnType<typeof vi.fn<(type: string, data?: unknown) => void>> } = {
     publish: vi.fn<(type: string, data?: unknown) => void>()
@@ -561,9 +561,8 @@ function createHandlerContext(
     insert,
     onConflictDoNothing,
     onConflictDoUpdate,
-    recordChatFiles,
+    recordFileSlots,
     recordLiveMessage,
-    recordMessageFiles,
     recordedValues,
     returning,
     transaction: database.transaction,
@@ -587,6 +586,45 @@ function recordValue(value: unknown): Record<string, unknown> {
     throw new Error('expected recorded row object');
   }
   return value as Record<string, unknown>;
+}
+
+function recordValueOrUndefined(value: unknown): Record<string, unknown> | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return undefined;
+  }
+  return value as Record<string, unknown>;
+}
+
+function hasRecordedChatSlot(
+  recordFileSlots: ReturnType<typeof createHandlerContext>['recordFileSlots'],
+  chatId: string
+): boolean {
+  return recordFileSlots.mock.calls.some(([recording, cause]) => {
+    const update = recordValueOrUndefined(recordValueOrUndefined(recording)?.update);
+    const chat = recordValueOrUndefined(update?.chat);
+    const chatData = recordValueOrUndefined(chat?.chat);
+    return cause === 'live_update' && chat?.id === chatId && chatData?._ === 'chat';
+  });
+}
+
+function hasRecordedMessageSlot(
+  recordFileSlots: ReturnType<typeof createHandlerContext>['recordFileSlots'],
+  input: {
+    chatId: string;
+    messageId: string;
+  }
+): boolean {
+  return recordFileSlots.mock.calls.some(([recording, cause]) => {
+    const update = recordValueOrUndefined(recordValueOrUndefined(recording)?.update);
+    const message = recordValueOrUndefined(update?.message);
+    const content = recordValueOrUndefined(message?.content);
+    return (
+      cause === 'live_update' &&
+      message?.chatId === input.chatId &&
+      message.messageId === input.messageId &&
+      content?._ === 'messageText'
+    );
+  });
 }
 
 function recordedReactionValues(context: ReturnType<typeof createHandlerContext>) {

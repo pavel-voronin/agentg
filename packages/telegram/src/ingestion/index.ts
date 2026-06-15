@@ -5,29 +5,48 @@ import {
   recordTelemetryHistogram,
   timeTelemetrySpan
 } from '@agentg/framework';
-import { asc } from 'drizzle-orm';
-import type { ChatList$Input } from 'tdlib-types';
 
 import type { AccountIdentity } from '../account/index.js';
 import type { Database } from '../database/client.js';
-import { telegramChatFolderInfos } from '../database/schema.js';
 import type { FileSubsystem } from '../files/index.js';
 import type { RestoreService } from '../gap-restore/runtime.js';
-import { recordChatFiles, storeChat } from '../store/chat.js';
-import { recordMessageFiles, storeMessage } from '../store/message.js';
-import { storeUser } from '../store/user.js';
-import type { Tdlib } from '../tdlib/index.js';
-import { priorities } from '../tdlib/priority.js';
 import type { LiveCoverageObserver } from '../history/liveCoverage.js';
+import { createRepositories } from '../repositories/repositories.js';
 import type { StatusTracker } from '../status/tracker.js';
 import { startIngestionQueueTelemetry } from './queueTelemetry.js';
 import type { IngestionResources } from './resources.js';
-import { persistLiveUpdate } from './catalog.js';
+import { applyIngestionChanges } from './applyChanges.js';
+import { applyIngestionChangesToDatabase } from './applyChanges.js';
+import { savedChatChanges } from './adapters/chat.js';
+import { chatFileSlots, messageFileSlots } from './adapters/fileSlot.js';
+import { chatListInputFromKind, type InitialChatListKind } from './adapters/initialSync.js';
+import { savedUserChanges } from './adapters/user.js';
+import { persistLiveUpdate } from './adapters/catalog.js';
 import { recordHandledUpdateCatalog, recordUpdateSeen } from './updateCatalogTelemetry.js';
 import { createUpdateQueue } from './updateQueue.js';
 
 type IngestionRuntime = {
   start(): Promise<() => Promise<undefined>>;
+};
+
+type InitialChat = Parameters<typeof savedChatChanges>[0];
+type InitialChatListInput = ReturnType<typeof chatListInputFromKind>;
+type InitialUser = Parameters<typeof savedUserChanges>[0];
+type IngestionOperationOptions = {
+  priority?: number;
+};
+export type IngestionOperationPort = {
+  getChat(input: { chatId: number }, options?: IngestionOperationOptions): Promise<InitialChat>;
+  getChats(
+    input: { chatList: InitialChatListInput; limit: number },
+    options?: IngestionOperationOptions
+  ): Promise<{ chat_ids: number[] }>;
+  getMe(options?: IngestionOperationOptions): Promise<InitialUser>;
+  loadChats(
+    input: { chatList: InitialChatListInput; limit: number },
+    options?: IngestionOperationOptions
+  ): Promise<unknown>;
+  onUpdate(handler: (update: RuntimeUpdate) => void | Promise<void>): () => void;
 };
 
 export type IngestionOptions = {
@@ -37,8 +56,8 @@ export type IngestionOptions = {
   files: FileSubsystem;
   gapRestore: RestoreService;
   liveCoverage: LiveCoverageObserver;
+  operations: IngestionOperationPort;
   status: StatusTracker;
-  tdlib: Tdlib;
   updateConcurrency: number;
 };
 
@@ -47,16 +66,8 @@ const STATUS_HEARTBEAT_MS = 5000;
 const INITIAL_CHAT_SYNC_LIMIT = 100;
 const METRIC_UPDATE_PROCESSING_DURATION = 'telegram.update.processing.duration';
 const METRIC_UPDATE_QUEUE_WAIT_DURATION = 'telegram.ingestion.queue.wait.duration';
+const MAXIMUM_OPERATION_PRIORITY = 32;
 const logger = createLogger('telegram');
-
-type ChatListKind =
-  | {
-      kind: 'archive' | 'main';
-    }
-  | {
-      folderId: number;
-      kind: 'folder';
-    };
 
 type RuntimeUpdate = {
   readonly _: string;
@@ -113,7 +124,7 @@ export function useIngestion(options: IngestionOptions): IngestionRuntime {
       );
     }
   });
-  const unsubscribeUpdates = options.tdlib.onUpdate((update) => {
+  const unsubscribeUpdates = options.operations.onUpdate((update) => {
     recordUpdateSeen(update._);
     updates.enqueue(update);
   });
@@ -136,7 +147,7 @@ export function useIngestion(options: IngestionOptions): IngestionRuntime {
         options.status.publish();
       }, STATUS_HEARTBEAT_MS);
       statusHeartbeat.unref();
-      await syncInitialChats(options);
+      await syncInitialChats(options, resources);
       await updates.drain();
       await options.liveCoverage.markConnected();
       await options.liveCoverage.syncKnownChats();
@@ -175,16 +186,26 @@ export function useIngestion(options: IngestionOptions): IngestionRuntime {
 }
 
 async function persistAuthenticatedClient(options: IngestionOptions): Promise<void> {
-  const me = await options.tdlib.getMe({ priority: priorities.maximum });
+  const me = await options.operations.getMe({ priority: MAXIMUM_OPERATION_PRIORITY });
   options.account.setUserId(me.id);
-  await storeUser(options.database, me);
+  await applyIngestionChanges(
+    {
+      account: options.account.identity,
+      database: options.database,
+      events: options.events,
+      files: options.files,
+      liveCoverage: options.liveCoverage,
+      status: options.status
+    },
+    savedUserChanges(me)
+  );
 
-  const chats = await options.tdlib.getChats(
+  const chats = await options.operations.getChats(
     {
       chatList: { _: 'chatListMain' },
       limit: 20
     },
-    { priority: priorities.maximum }
+    { priority: MAXIMUM_OPERATION_PRIORITY }
   );
 
   logger.info(
@@ -203,9 +224,12 @@ async function persistAuthenticatedClient(options: IngestionOptions): Promise<vo
   );
 }
 
-async function syncInitialChats(options: IngestionOptions): Promise<void> {
-  const folderIds = await listKnownFolderIds(options.database);
-  const chatLists: ChatListKind[] = [
+async function syncInitialChats(
+  options: IngestionOptions,
+  resources: IngestionResources
+): Promise<void> {
+  const folderIds = await createRepositories(options.database).chatFolders.listKnownFolderIds();
+  const chatLists: InitialChatListKind[] = [
     { kind: 'main' },
     { kind: 'archive' },
     ...folderIds.map((folderId) => ({ folderId, kind: 'folder' as const }))
@@ -218,26 +242,22 @@ async function syncInitialChats(options: IngestionOptions): Promise<void> {
   let storedChatCount = 0;
 
   for (const chatId of chatIds) {
-    const chat = await options.tdlib.getChat(
+    const chat = await options.operations.getChat(
       {
         chatId
       },
       {
-        priority: priorities.maximum
+        priority: MAXIMUM_OPERATION_PRIORITY
       }
     );
-    const lastMessage = chat.last_message ?? null;
     await options.database.transaction(async (transaction) => {
-      if (lastMessage !== null) {
-        await storeMessage(transaction, lastMessage);
-      }
-
-      await storeChat(transaction, chat);
+      await applyIngestionChangesToDatabase(resources, transaction, savedChatChanges(chat));
     });
 
-    await recordChatFiles(options.files, chat, 'initialization');
+    const lastMessage = chat.last_message ?? null;
+    await options.files.recordFileSlots(chatFileSlots(chat), 'initialization');
     if (lastMessage !== null) {
-      await recordMessageFiles(options.files, lastMessage, 'initialization');
+      await options.files.recordFileSlots(messageFileSlots(lastMessage), 'initialization');
     }
     storedChatCount += 1;
   }
@@ -255,7 +275,7 @@ async function syncInitialChats(options: IngestionOptions): Promise<void> {
 
 async function syncInitialChatList(
   options: IngestionOptions,
-  chatList: ChatListKind,
+  chatList: InitialChatListKind,
   limit: number
 ): Promise<number[]> {
   await loadInitialChats(chatList, limit, options);
@@ -263,18 +283,18 @@ async function syncInitialChatList(
 }
 
 async function loadInitialChats(
-  chatList: ChatListKind,
+  chatList: InitialChatListKind,
   limit: number,
   options: IngestionOptions
 ): Promise<void> {
   for (;;) {
     try {
-      await options.tdlib.loadChats(
+      await options.operations.loadChats(
         {
-          chatList: toTdChatList(chatList),
+          chatList: chatListInputFromKind(chatList),
           limit
         },
-        { priority: priorities.maximum }
+        { priority: MAXIMUM_OPERATION_PRIORITY }
       );
     } catch (error) {
       if (isTdlibNotFound(error)) {
@@ -286,17 +306,17 @@ async function loadInitialChats(
 }
 
 async function getInitialChatIds(
-  chatList: ChatListKind,
+  chatList: InitialChatListKind,
   limit: number,
   options: IngestionOptions
 ): Promise<number[]> {
   try {
-    const chats = await options.tdlib.getChats(
+    const chats = await options.operations.getChats(
       {
-        chatList: toTdChatList(chatList),
+        chatList: chatListInputFromKind(chatList),
         limit
       },
-      { priority: priorities.maximum }
+      { priority: MAXIMUM_OPERATION_PRIORITY }
     );
     return chats.chat_ids;
   } catch (error) {
@@ -304,28 +324,6 @@ async function getInitialChatIds(
       return [];
     }
     throw error;
-  }
-}
-
-async function listKnownFolderIds(database: Database): Promise<number[]> {
-  const rows = await database
-    .select({
-      folderId: telegramChatFolderInfos.id
-    })
-    .from(telegramChatFolderInfos)
-    .orderBy(asc(telegramChatFolderInfos.position), asc(telegramChatFolderInfos.id));
-
-  return rows.map((row) => row.folderId);
-}
-
-function toTdChatList(chatList: ChatListKind): ChatList$Input {
-  switch (chatList.kind) {
-    case 'main':
-      return { _: 'chatListMain' };
-    case 'archive':
-      return { _: 'chatListArchive' };
-    case 'folder':
-      return { _: 'chatListFolder', chat_folder_id: chatList.folderId };
   }
 }
 
