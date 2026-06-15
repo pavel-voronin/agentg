@@ -1,26 +1,46 @@
-import { and, asc, eq, sql } from 'drizzle-orm';
 import type { message as Message, messages as Messages } from 'tdlib-types';
 
-import type { Database } from '../database/client.js';
-import { telegramMessages } from '../database/schema.js';
+import type { Database } from '../../database/client.js';
+import {
+  parseTelegramInt32,
+  parseTelegramInt53,
+  type MessageOwner,
+  type MessageSelector
+} from '../../domain/models/messageSelection.js';
+import type { MessageState } from '../../domain/models/messageState.js';
 import {
   HISTORY_PAST_BOUNDARY,
   HISTORY_TICK_MS,
   normalizeHistoryInterval,
   type HistoryInterval
-} from '../history/time.js';
-import type { MessageOwner, MessageSelector } from '../procedures/get-messages/contract.js';
-import { readPageRows } from '../procedures/get-messages/read.js';
-import type { Operations } from '../tdlib/operations.js';
-import { priorities } from '../tdlib/priority.js';
-import { tdDate, tdIdNumber } from '../tdlib/shape.js';
-import { ownerMessageCondition, parseTdlibInt32, parseTdlibInt53 } from './owner.js';
+} from '../../history/time.js';
+import {
+  readOldestKnownMessage,
+  readOldestPageMessageId
+} from '../../storage/historySourceStorage.js';
+import type { Operations } from '../../tdlib/operations.js';
+import { priorities } from '../../tdlib/priority.js';
+import { tdDate, tdIdNumber } from '../../tdlib/shape.js';
+import { messageStatesFromHistoryPage } from './historyPage.js';
 
 export type HistoryFetchStep = {
   coverageInterval?: HistoryInterval | undefined;
-  fetchedMessages: Message[];
+  fetchedMessages: MessageState[];
   reachedBeginning: boolean;
 };
+
+export function createHistorySource(tdlib: Operations) {
+  return {
+    fetchOwnerHistoryStep(
+      input: Omit<Parameters<typeof fetchOwnerHistoryStep>[0], 'tdlib'>
+    ): Promise<HistoryFetchStep> {
+      return fetchOwnerHistoryStep({
+        ...input,
+        tdlib
+      });
+    }
+  };
+}
 
 type HistoryCursor =
   | {
@@ -104,7 +124,7 @@ export async function fetchOwnerHistoryStep(input: {
             startAt: coveredStartAt
           }
         }),
-    fetchedMessages,
+    fetchedMessages: messageStatesFromHistoryPage(fetchedMessages),
     reachedBeginning
   };
 }
@@ -129,8 +149,8 @@ async function resolveCursor(
     if (selector.beforeMessageId !== undefined) {
       return {
         canPageProveBeginning: true,
-        coverageEndMessageId: parseTdlibInt53(selector.beforeMessageId, 'beforeMessageId'),
-        fromMessageId: parseTdlibInt53(selector.beforeMessageId, 'beforeMessageId'),
+        coverageEndMessageId: parseTelegramInt53(selector.beforeMessageId, 'beforeMessageId'),
+        fromMessageId: parseTelegramInt53(selector.beforeMessageId, 'beforeMessageId'),
         kind: 'cursor'
       };
     }
@@ -193,7 +213,7 @@ async function fetchOwnerHistory(
     case 'chat':
       return tdlib.getChatHistory(
         {
-          chatId: parseTdlibInt53(owner.chatId, 'chatId'),
+          chatId: parseTelegramInt53(owner.chatId, 'chatId'),
           fromMessageId,
           limit: PRIVATE_PAGE_SIZE,
           offset: 0,
@@ -204,8 +224,8 @@ async function fetchOwnerHistory(
     case 'forumTopic':
       return tdlib.getForumTopicHistory(
         {
-          chatId: parseTdlibInt53(owner.chatId, 'chatId'),
-          forumTopicId: parseTdlibInt32(owner.topicId, 'topicId'),
+          chatId: parseTelegramInt53(owner.chatId, 'chatId'),
+          forumTopicId: parseTelegramInt32(owner.topicId, 'topicId'),
           fromMessageId,
           limit: PRIVATE_PAGE_SIZE,
           offset: 0
@@ -215,11 +235,11 @@ async function fetchOwnerHistory(
     case 'directMessagesTopic':
       return tdlib.getDirectMessagesChatTopicHistory(
         {
-          chatId: parseTdlibInt53(owner.chatId, 'chatId'),
+          chatId: parseTelegramInt53(owner.chatId, 'chatId'),
           fromMessageId,
           limit: PRIVATE_PAGE_SIZE,
           offset: 0,
-          topicId: parseTdlibInt53(owner.topicId, 'topicId')
+          topicId: parseTelegramInt53(owner.topicId, 'topicId')
         },
         { priority: priorities.low }
       );
@@ -229,17 +249,17 @@ async function fetchOwnerHistory(
           fromMessageId,
           limit: PRIVATE_PAGE_SIZE,
           offset: 0,
-          topicId: parseTdlibInt53(owner.topicId, 'topicId')
+          topicId: parseTelegramInt53(owner.topicId, 'topicId')
         },
         { priority: priorities.low }
       );
     case 'messageThread':
       return tdlib.getMessageThreadHistory(
         {
-          chatId: parseTdlibInt53(owner.chatId, 'chatId'),
+          chatId: parseTelegramInt53(owner.chatId, 'chatId'),
           fromMessageId,
           limit: PRIVATE_PAGE_SIZE,
-          messageId: parseTdlibInt53(owner.messageId, 'messageId'),
+          messageId: parseTelegramInt53(owner.messageId, 'messageId'),
           offset: 0
         },
         { priority: priorities.low }
@@ -296,7 +316,7 @@ function readOwnerDateAnchor(
     case 'chat':
       return tdlib.getChatMessageByDate(
         {
-          chatId: parseTdlibInt53(owner.chatId, 'chatId'),
+          chatId: parseTelegramInt53(owner.chatId, 'chatId'),
           date
         },
         { priority: priorities.low }
@@ -304,9 +324,9 @@ function readOwnerDateAnchor(
     case 'directMessagesTopic':
       return tdlib.getDirectMessagesChatTopicMessageByDate(
         {
-          chatId: parseTdlibInt53(owner.chatId, 'chatId'),
+          chatId: parseTelegramInt53(owner.chatId, 'chatId'),
           date,
-          topicId: parseTdlibInt53(owner.topicId, 'topicId')
+          topicId: parseTelegramInt53(owner.topicId, 'topicId')
         },
         { priority: priorities.low }
       );
@@ -314,7 +334,7 @@ function readOwnerDateAnchor(
       return tdlib.getSavedMessagesTopicMessageByDate(
         {
           date,
-          topicId: parseTdlibInt53(owner.topicId, 'topicId')
+          topicId: parseTelegramInt53(owner.topicId, 'topicId')
         },
         { priority: priorities.low }
       );
@@ -322,38 +342,6 @@ function readOwnerDateAnchor(
     case 'messageThread':
       throw new Error(`Owner kind has no date anchor: ${owner.kind}`);
   }
-}
-
-async function readOldestPageMessageId(
-  database: Database,
-  owner: MessageOwner,
-  selector: Extract<MessageSelector, { kind: 'page' }>
-): Promise<number | undefined> {
-  const rows = await readPageRows(database, owner, selector);
-  const oldest = rows[0]?.telegramMessageId;
-  return oldest === undefined ? undefined : parseTdlibInt53(oldest, 'telegramMessageId');
-}
-
-async function readOldestKnownMessage(
-  database: Database,
-  owner: MessageOwner
-): Promise<{ messageDate?: Date | undefined; messageId: number } | undefined> {
-  const [row] = await database
-    .select({
-      messageDate: telegramMessages.date,
-      messageId: telegramMessages.id
-    })
-    .from(telegramMessages)
-    .where(and(ownerMessageCondition(owner), messageChatCondition(owner)))
-    .orderBy(asc(sql`${telegramMessages.id}::bigint`))
-    .limit(1);
-
-  return row === undefined
-    ? undefined
-    : {
-        messageDate: row.messageDate ?? undefined,
-        messageId: parseTdlibInt53(row.messageId, 'telegramMessageId')
-      };
 }
 
 function ownerHasDateAnchor(owner: MessageOwner): boolean {
@@ -399,12 +387,6 @@ function cursorCoverageEndAt(
   const anchor = messages.find((message) => tdMessageId(message) === cursor.coverageEndMessageId);
   const anchorDate = tdMessageDate(anchor);
   return anchorDate === undefined ? undefined : nextHistorySecond(anchorDate);
-}
-
-function messageChatCondition(owner: MessageOwner) {
-  return owner.kind === 'savedMessagesTopic'
-    ? undefined
-    : eq(telegramMessages.chatId, owner.chatId);
 }
 
 function tdMessageId(message: Message | undefined): number | undefined {

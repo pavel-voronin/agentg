@@ -5,7 +5,7 @@ import {
   openHistoryLiveWindow,
   recoverHistoryLiveWindows,
   registerHistoryLiveChats
-} from './coverage.js';
+} from '../storage/historyCoverageStorage.js';
 import { ceilToHistorySecond, floorToHistorySecond } from './time.js';
 import type { Database } from '../database/client.js';
 

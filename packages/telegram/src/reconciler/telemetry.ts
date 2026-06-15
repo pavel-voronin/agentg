@@ -6,8 +6,8 @@ import {
   type TelemetryAttributes
 } from '@agentg/framework';
 
-import { ownerKindValues, type OwnerKind } from './owner.js';
-import type { JobStatus, ReconcilerStats } from './jobs.js';
+import { ownerKindValues, type OwnerKind } from '../domain/models/messageSelection.js';
+import type { JobStatus, ReconcilerStats } from '../storage/reconcilerJobStorage.js';
 
 export type GetMessagesResult = 'pending_coalesced' | 'pending_enqueued' | 'ready';
 export type Transition = 'completed' | 'deferred' | 'failed' | 'skipped_covered';

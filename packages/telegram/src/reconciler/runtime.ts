@@ -1,5 +1,9 @@
-import { createLogger, logError, type EventBus } from '@agentg/framework';
-import type { message as Message } from 'tdlib-types';
+import {
+  createLogger,
+  logError,
+  runWithRootTelemetryContext,
+  type EventBus
+} from '@agentg/framework';
 
 import type { Database } from '../database/client.js';
 import {
@@ -9,15 +13,14 @@ import {
   publishMessagesReady
 } from '../events.js';
 import type { FileSubsystem } from '../files/index.js';
-import { orderHistoryIntervalsClosestToPresent } from '../history/coverage.js';
+import { orderHistoryIntervalsClosestToPresent } from '../storage/historyCoverageStorage.js';
 import type { HistoryInterval } from '../history/time.js';
-import type { Operations } from '../tdlib/operations.js';
-import { storeMessages } from '../store/message.js';
-import { checkMessagesReadiness } from '../procedures/get-messages/readiness.js';
+import type { MessageState } from '../domain/models/messageState.js';
+import { createMessageRepository } from '../repositories/messageRepository.js';
+import { checkMessagesReadiness } from '../repositories/messageReadinessRepository.js';
 import type { GetMessagesInput } from '../procedures/get-messages/contract.js';
-import { normalizeMessageOwner } from './owner.js';
-import { writeOwnerCoverage } from './coverage.js';
-import { fetchOwnerHistoryStep } from './tdlib.js';
+import { normalizeMessageOwner } from '../domain/models/messageSelection.js';
+import { writeOwnerCoverage } from '../storage/reconcilerCoverageStorage.js';
 import {
   claimNextHistoryJob,
   completeHistoryJob,
@@ -29,7 +32,7 @@ import {
   releaseHistoryJob,
   type EnqueueResult,
   type HistoryJob
-} from './jobs.js';
+} from '../storage/reconcilerJobStorage.js';
 import {
   errorType,
   recordCoverageIntervals,
@@ -59,8 +62,21 @@ type Options = {
   database: Database;
   events: EventBus;
   files: FileSubsystem;
+  historySource: HistorySourcePort;
   lockTimeoutMs?: number | undefined;
-  tdlib: Operations;
+};
+
+type HistorySourcePort = {
+  fetchOwnerHistoryStep(input: {
+    database: Database;
+    interval: HistoryInterval;
+    owner: GetMessagesInput['owner'];
+    selector: GetMessagesInput['selector'];
+  }): Promise<{
+    coverageInterval?: HistoryInterval | undefined;
+    fetchedMessages: MessageState[];
+    reachedBeginning: boolean;
+  }>;
 };
 
 const DEFAULT_LOCK_TIMEOUT_MS = 5 * 60 * 1000;
@@ -102,7 +118,7 @@ export function useHistoryReconciler(options: Options): HistoryReconcilerRuntime
     timer = setTimeout(() => {
       timer = undefined;
       timerDueAt = undefined;
-      runTick();
+      runWithRootTelemetryContext(runTick);
     }, normalizedDelayMs);
     timer.unref();
   };
@@ -200,12 +216,11 @@ export function useHistoryReconciler(options: Options): HistoryReconcilerRuntime
         'telegram.history.reconciler.tdlib_fetch',
         { 'owner.kind': ownerKind, stage: 'tdlib_fetch' },
         () =>
-          fetchOwnerHistoryStep({
+          options.historySource.fetchOwnerHistoryStep({
             database: options.database,
             interval,
             owner: job.owner,
-            selector: job.selector,
-            tdlib: options.tdlib
+            selector: job.selector
           })
       );
       recordPage(fetched.fetchedMessages.length === 0 ? 'empty' : 'fetched');
@@ -494,12 +509,14 @@ export function useHistoryReconciler(options: Options): HistoryReconcilerRuntime
   };
 }
 
-async function persistMessages(database: Database, messages: Message[]): Promise<number> {
+async function persistMessages(database: Database, messages: MessageState[]): Promise<number> {
   if (messages.length === 0) {
     return 0;
   }
 
-  return database.transaction((transaction) => storeMessages(transaction, messages));
+  return createMessageRepository(database).transaction((repository) =>
+    repository.saveMany(messages)
+  );
 }
 
 function nextInterval(intervals: HistoryInterval[]): HistoryInterval | undefined {

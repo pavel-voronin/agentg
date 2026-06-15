@@ -1,12 +1,12 @@
 import type { EventBus } from '@agentg/framework';
-import type { message as Message } from 'tdlib-types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Database } from '../../src/database/client.js';
 import type { FileSubsystem } from '../../src/files/index.js';
 import type { GetMessagesInput } from '../../src/procedures/get-messages/contract.js';
 import type { HistoryInterval } from '../../src/history/time.js';
-import type { HistoryJob } from '../../src/reconciler/jobs.js';
+import type { MessageState } from '../../src/domain/models/messageState.js';
+import type { HistoryJob } from '../../src/storage/reconcilerJobStorage.js';
 
 const jobs = vi.hoisted(() => ({
   claimNextHistoryJob: vi.fn(),
@@ -23,7 +23,7 @@ const readiness = vi.hoisted(() => ({
   checkMessagesReadiness: vi.fn()
 }));
 
-const tdlib = vi.hoisted(() => ({
+const historySource = vi.hoisted(() => ({
   fetchOwnerHistoryStep: vi.fn()
 }));
 
@@ -31,8 +31,12 @@ const coverage = vi.hoisted(() => ({
   writeOwnerCoverage: vi.fn()
 }));
 
-const store = vi.hoisted(() => ({
-  storeMessages: vi.fn()
+const messageStorage = vi.hoisted(() => ({
+  saveMessageStates: vi.fn()
+}));
+
+const framework = vi.hoisted(() => ({
+  runWithRootTelemetryContext: vi.fn((operation: () => unknown) => operation())
 }));
 
 vi.mock('@agentg/framework', () => ({
@@ -49,18 +53,25 @@ vi.mock('@agentg/framework', () => ({
   }),
   logError: (error: unknown) => ({
     error
-  })
+  }),
+  runWithRootTelemetryContext: framework.runWithRootTelemetryContext
 }));
 
-vi.mock('../../src/reconciler/jobs.js', () => jobs);
+vi.mock('../../src/storage/reconcilerJobStorage.js', () => jobs);
 
-vi.mock('../../src/procedures/get-messages/readiness.js', () => readiness);
+vi.mock('../../src/repositories/messageReadinessRepository.js', () => readiness);
 
-vi.mock('../../src/reconciler/tdlib.js', () => tdlib);
+vi.mock('../../src/reconciler/adapters/historySource.js', () => historySource);
 
-vi.mock('../../src/reconciler/coverage.js', () => coverage);
+vi.mock('../../src/storage/reconcilerCoverageStorage.js', () => coverage);
 
-vi.mock('../../src/store/message.js', () => store);
+vi.mock('../../src/storage/messageStorage.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../src/storage/messageStorage.js')>();
+  return {
+    ...actual,
+    saveMessageStates: messageStorage.saveMessageStates
+  };
+});
 
 vi.mock('../../src/reconciler/telemetry.js', () => ({
   errorType: vi.fn((_error: unknown, stage?: string) =>
@@ -98,9 +109,10 @@ describe('Telegram history reconciler runtime', () => {
     jobs.readHistoryReconcilerStats.mockReset();
     jobs.releaseHistoryJob.mockReset();
     readiness.checkMessagesReadiness.mockReset();
-    tdlib.fetchOwnerHistoryStep.mockReset();
+    historySource.fetchOwnerHistoryStep.mockReset();
     coverage.writeOwnerCoverage.mockReset();
-    store.storeMessages.mockReset();
+    framework.runWithRootTelemetryContext.mockClear();
+    messageStorage.saveMessageStates.mockReset();
 
     jobs.readHistoryReconcilerStats.mockResolvedValue({
       oldestJobAgeSeconds: [],
@@ -109,7 +121,7 @@ describe('Telegram history reconciler runtime', () => {
     jobs.readNextHistoryJobRunAt.mockResolvedValue(undefined);
     jobs.releaseHistoryJob.mockResolvedValue(undefined);
     coverage.writeOwnerCoverage.mockResolvedValue([]);
-    store.storeMessages.mockResolvedValue(1);
+    messageStorage.saveMessageStates.mockResolvedValue(1);
   });
 
   afterEach(() => {
@@ -147,7 +159,7 @@ describe('Telegram history reconciler runtime', () => {
         missing: [interval],
         ready: false
       });
-    tdlib.fetchOwnerHistoryStep.mockResolvedValue({
+    historySource.fetchOwnerHistoryStep.mockResolvedValue({
       coverageInterval: interval,
       fetchedMessages: [telegramMessage()],
       reachedBeginning: false
@@ -157,7 +169,7 @@ describe('Telegram history reconciler runtime', () => {
       database,
       events,
       files: fileSubsystem,
-      tdlib: {} as never
+      historySource
     });
     const close = await runtime.start();
     await vi.runAllTimersAsync();
@@ -167,8 +179,17 @@ describe('Telegram history reconciler runtime', () => {
     expect(events.publish).not.toHaveBeenCalledWith('telegram.messages.ready', expect.anything());
     expect(fileSubsystem.recordMessageFiles).not.toHaveBeenCalled();
     expect(fileSubsystem.scheduleMessageSlotMaterialization).toHaveBeenCalledTimes(1);
-    expect(store.storeMessages).toHaveBeenCalledTimes(1);
-    expect(store.storeMessages).toHaveBeenCalledWith(expect.anything(), [telegramMessage()]);
+    expect(messageStorage.saveMessageStates).toHaveBeenCalledTimes(1);
+    expect(messageStorage.saveMessageStates).toHaveBeenCalledWith(
+      expect.anything(),
+      [
+        expect.objectContaining({
+          chatId: '123',
+          id: '10'
+        })
+      ],
+      undefined
+    );
 
     close();
   });
@@ -214,7 +235,7 @@ describe('Telegram history reconciler runtime', () => {
       database,
       events,
       files: fileSubsystemMock(),
-      tdlib: {} as never
+      historySource
     });
     const close = await runtime.start();
     await vi.runAllTimersAsync();
@@ -260,7 +281,7 @@ describe('Telegram history reconciler runtime', () => {
       database,
       events,
       files: fileSubsystemMock(),
-      tdlib: {} as never
+      historySource
     });
     const close = await runtime.start();
     await vi.runAllTimersAsync();
@@ -284,17 +305,19 @@ describe('Telegram history reconciler runtime', () => {
       database,
       events: eventBusMock(),
       files: fileSubsystemMock(),
-      tdlib: {} as never
+      historySource
     });
     const close = await runtime.start();
     await vi.advanceTimersByTimeAsync(0);
     expect(jobs.claimNextHistoryJob).toHaveBeenCalledTimes(1);
+    expect(framework.runWithRootTelemetryContext).toHaveBeenCalledTimes(1);
     expect(jobs.readNextHistoryJobRunAt).toHaveBeenCalledWith(database, {
       lockTimeoutMs: 300_000
     });
 
     await vi.advanceTimersByTimeAsync(30_000);
     expect(jobs.claimNextHistoryJob).toHaveBeenCalledTimes(2);
+    expect(framework.runWithRootTelemetryContext).toHaveBeenCalledTimes(2);
 
     close();
   });
@@ -315,7 +338,7 @@ describe('Telegram history reconciler runtime', () => {
       database,
       events: eventBusMock(),
       files: fileSubsystemMock(),
-      tdlib: {} as never
+      historySource
     });
     const close = await runtime.start();
     await vi.advanceTimersByTimeAsync(0);
@@ -357,7 +380,7 @@ describe('Telegram history reconciler runtime', () => {
       database,
       events,
       files: fileSubsystemMock(),
-      tdlib: {} as never
+      historySource
     });
     const close = await runtime.start();
     await vi.runAllTimersAsync();
@@ -387,7 +410,7 @@ describe('Telegram history reconciler runtime', () => {
       database,
       events,
       files: fileSubsystemMock(),
-      tdlib: {} as never
+      historySource
     });
     const close = await runtime.start();
     await vi.runAllTimersAsync();
@@ -445,14 +468,9 @@ function getMessagesInput(): GetMessagesInput {
   };
 }
 
-function telegramMessage(): Message {
+function telegramMessage(): MessageState {
   return {
-    _: 'message',
-    author_signature: '',
-    auto_delete_in: 0,
-    can_be_saved: true,
-    chat_id: 123,
-    contains_unread_mention: false,
+    chatId: '123',
     content: {
       _: 'messageText',
       text: {
@@ -461,25 +479,18 @@ function telegramMessage(): Message {
         text: 'hello'
       }
     },
-    date: 1_781_232_000,
-    edit_date: 0,
-    id: 456,
-    import_info: null,
-    interaction_info: null,
-    is_channel_post: false,
-    is_from_offline: false,
-    is_outgoing: false,
-    is_paid_star_suggested_post: false,
-    is_paid_ton_suggested_post: false,
-    is_pinned: false,
-    sender_id: {
+    date: new Date('2026-06-11T23:00:00.000Z'),
+    id: '10',
+    interactionInfo: null,
+    isOutgoing: false,
+    replyTo: null,
+    senderId: {
       _: 'messageSenderUser',
       user_id: 1
     },
-    sending_state: null,
-    unread_reactions: [],
-    via_bot_user_id: 0
-  } as unknown as Message;
+    sendingState: null,
+    topicId: null
+  };
 }
 
 function eventBusMock(): EventBus & { publish: ReturnType<typeof vi.fn> } {

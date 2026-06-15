@@ -1,12 +1,12 @@
 import type { message as Message } from 'tdlib-types';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { Database } from '../../src/database/client.js';
-import type { MessageStorageRow } from '../../src/views/message.js';
-import type { Operations } from '../../src/tdlib/operations.js';
-import { fetchOwnerHistoryStep } from '../../src/reconciler/tdlib.js';
+import type { Database } from '../../../src/database/client.js';
+import { fetchOwnerHistoryStep } from '../../../src/reconciler/adapters/historySource.js';
+import type { Operations } from '../../../src/tdlib/operations.js';
+import type { MessageStorageRow } from '../../../src/storage/messageRowStorage.js';
 
-describe('Telegram history reconciler TDLib adapter', () => {
+describe('Telegram history source adapter', () => {
   it('does not prove owner beginning from a non-empty initial zero cursor page', async () => {
     const getForumTopicHistory = vi.fn(() =>
       Promise.resolve({
@@ -280,7 +280,21 @@ function interval(startAt: string, endAt: string) {
 function message(id: number, date: string): Message {
   return {
     _: 'message',
+    chat_id: 123,
+    content: {
+      _: 'messageText',
+      text: {
+        _: 'formattedText',
+        entities: [],
+        text: `message-${String(id)}`
+      }
+    },
     date: Math.floor(new Date(date).getTime() / 1000),
-    id
+    id,
+    is_outgoing: false,
+    sender_id: {
+      _: 'messageSenderUser',
+      user_id: 30
+    }
   } as unknown as Message;
 }

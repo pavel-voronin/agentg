@@ -5,7 +5,7 @@ import {
   listHistoryChats,
   readHistoryLiveBoundary,
   type HistoryChat
-} from '../history/coverage.js';
+} from '../storage/historyCoverageStorage.js';
 import type { GetMessagesInput, GetMessagesOutput } from '../procedures/get-messages/contract.js';
 import type { HistoryGapRestoreRuleSet as RuleSet } from '../../policies/policies.js';
 import { planRequest, selectDecision } from './planner.js';

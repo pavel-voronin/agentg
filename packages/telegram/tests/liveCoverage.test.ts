@@ -7,11 +7,11 @@ import {
   openHistoryLiveWindow,
   recoverHistoryLiveWindows,
   registerHistoryLiveChats
-} from '../src/history/coverage.js';
+} from '../src/storage/historyCoverageStorage.js';
 import { createLiveCoverageObserver } from '../src/history/liveCoverage.js';
 import type { Database } from '../src/database/client.js';
 
-vi.mock('../src/history/coverage.js', () => ({
+vi.mock('../src/storage/historyCoverageStorage.js', () => ({
   closeHistoryLiveWindow: vi.fn(() => Promise.resolve(undefined)),
   extendHistoryLiveWindow: vi.fn(() => Promise.resolve(undefined)),
   listHistoryChatIds: vi.fn(() => Promise.resolve(['chat-a', 'chat-b'])),
