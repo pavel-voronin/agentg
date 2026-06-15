@@ -1,4 +1,4 @@
-import type { FileRef, MessageTextEntity, ReadMessage } from '../../../src/views/schemas.js';
+import type { FileRef, Message, MessageTextEntity } from '../../../src/domain/models/message.js';
 import type {
   MediaFileView,
   MessageTarget,
@@ -9,11 +9,11 @@ import type {
 import { providerFileUrl } from '../mediaUrl.js';
 
 type TimelineOptions = {
-  messagesByTelegramId: ReadonlyMap<string, ReadMessage>;
+  messagesByTelegramId: ReadonlyMap<string, Message>;
   selectedChatAvatarUrl: string | null;
 };
 
-export function buildTimelineItems(input: ReadMessage[], options: TimelineOptions): TimelineItem[] {
+export function buildTimelineItems(input: Message[], options: TimelineOptions): TimelineItem[] {
   const items: TimelineItem[] = [];
   let currentDateKey = '';
   for (const message of input) {
@@ -50,11 +50,11 @@ export function buildTimelineItems(input: ReadMessage[], options: TimelineOption
   return items;
 }
 
-export function sortMessages(input: ReadMessage[]): ReadMessage[] {
+export function sortMessages(input: Message[]): Message[] {
   return [...input].sort(compareMessages);
 }
 
-export function messageBelongsToChat(message: ReadMessage, chatId: string): boolean {
+export function messageBelongsToChat(message: Message, chatId: string): boolean {
   return message.chat.id === chatId;
 }
 
@@ -62,7 +62,7 @@ export function upsertMessageFile(files: FileRef[], file: FileRef): FileRef[] {
   return [...files.filter((item) => item.slotKey !== file.slotKey), file].sort(compareFileRefs);
 }
 
-function messageView(message: ReadMessage, options: TimelineOptions): MessageView {
+function messageView(message: Message, options: TimelineOptions): MessageView {
   const replyTarget = message.replyTo === null ? null : replyTargetFromMessage(message);
   const replyMessage =
     replyTarget === null ? null : (options.messagesByTelegramId.get(replyTarget.messageId) ?? null);
@@ -92,7 +92,7 @@ function messageView(message: ReadMessage, options: TimelineOptions): MessageVie
   };
 }
 
-function mediaFileViews(message: ReadMessage): MediaFileView[] {
+function mediaFileViews(message: Message): MediaFileView[] {
   const thumbnailUrl = providerFileUrl(
     message.media.files.find((file) => file.mediaKind === 'thumbnail' && file.url !== null)?.url ??
       null
@@ -185,7 +185,7 @@ function compareFileRefs(left: FileRef, right: FileRef): number {
   return left.slotKey.localeCompare(right.slotKey);
 }
 
-function replyTargetFromMessage(message: ReadMessage): MessageTarget | null {
+function replyTargetFromMessage(message: Message): MessageTarget | null {
   if (message.replyTo === null) {
     return null;
   }
@@ -195,7 +195,7 @@ function replyTargetFromMessage(message: ReadMessage): MessageTarget | null {
   };
 }
 
-function messageBody(message: ReadMessage): string {
+function messageBody(message: Message): string {
   if (message.isDeleted) {
     return 'Deleted message';
   }
@@ -209,7 +209,7 @@ function messageBody(message: ReadMessage): string {
   return contentLabel(message.contentType) ?? 'Unsupported message';
 }
 
-function messageServiceLabel(message: ReadMessage): string | null {
+function messageServiceLabel(message: Message): string | null {
   const action = message.serviceAction;
   if (action?.kind !== 'chatMemberLeft') {
     return null;
@@ -217,7 +217,7 @@ function messageServiceLabel(message: ReadMessage): string | null {
   return `${action.userDisplayName} left the group`;
 }
 
-function messageTextSegments(message: ReadMessage): MessageTextSegment[] {
+function messageTextSegments(message: Message): MessageTextSegment[] {
   const text = message.text;
   if (
     !message.isDeleted &&
@@ -309,7 +309,7 @@ function contentLabel(contentType: string): string | null {
   return contentType.replace(/^message/, '').trim() || contentType;
 }
 
-function senderLabel(message: ReadMessage): string | null {
+function senderLabel(message: Message): string | null {
   if (message.isOutgoing) {
     return null;
   }
@@ -324,7 +324,7 @@ function avatarLabel(value: string): string {
   return trimmed.length === 0 ? '?' : trimmed.slice(0, 1).toLocaleUpperCase();
 }
 
-function compareMessages(left: ReadMessage, right: ReadMessage): number {
+function compareMessages(left: Message, right: Message): number {
   const dateComparison = messageTimestamp(left) - messageTimestamp(right);
   if (dateComparison !== 0) {
     return dateComparison;
@@ -332,7 +332,7 @@ function compareMessages(left: ReadMessage, right: ReadMessage): number {
   return compareMessageIds(left.telegramMessageId, right.telegramMessageId);
 }
 
-function messageTimestamp(message: ReadMessage): number {
+function messageTimestamp(message: Message): number {
   const parsed = message.messageDate === null ? Number.NaN : Date.parse(message.messageDate);
   return Number.isNaN(parsed) ? 0 : parsed;
 }

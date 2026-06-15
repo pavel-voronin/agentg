@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import type { FileRef, ReadMessage } from '../../../src/views/schemas.js';
+import type { FileRef, Message } from '../../../src/domain/models/message.js';
 import type { MessageTarget, MessageView } from '../chat-messages/types.js';
 import ChatMessageMediaList from './chatMessageMediaList.vue';
 
@@ -12,7 +12,7 @@ type ReactionBadge = {
 };
 
 const props = defineProps<{
-  message: ReadMessage;
+  message: Message;
   view: MessageView;
 }>();
 

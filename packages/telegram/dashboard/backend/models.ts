@@ -1,94 +1,33 @@
 import { z } from 'zod';
 
-import {
-  fileOwnerModelRefSchema,
-  fileRefSchema,
-  isoDateTimeStringSchema,
-  nonEmptyStringSchema,
-  nonNegativeIntegerSchema,
-  readChatSchema,
-  readMessageSchema
-} from '../../src/views/schemas.js';
+import { fileOwnerModelRefSchema, fileRefSchema } from '../../src/domain/models/fileRef.js';
+import { messageSchema } from '../../src/domain/models/message.js';
+import { nonEmptyStringSchema } from '../../src/domain/models/scalars.js';
 import {
   getMessagesInputSchema,
   getMessagesOutputSchema
 } from '../../src/procedures/get-messages/contract.js';
+import {
+  chatDirectoryInputSchema,
+  chatDirectorySchema as chatDirectoryOutputSchema,
+  chatDirectoryEntrySchema,
+  chatFolderSchema,
+  chatLastMessageSchema,
+  chatTypeCountSchema,
+  type ChatDirectoryEntry,
+  type ChatFolder,
+  type ChatTypeCount
+} from '../../src/domain/models/chatDirectory.js';
 
 export { getMessagesInputSchema, getMessagesOutputSchema };
-
-export const chatPlacementSchema = z.discriminatedUnion('kind', [
-  z.object({
-    isPinned: z.boolean(),
-    kind: z.literal('archive'),
-    order: z.string()
-  }),
-  z.object({
-    isPinned: z.boolean(),
-    kind: z.literal('main'),
-    order: z.string()
-  }),
-  z.object({
-    folderId: nonNegativeIntegerSchema,
-    isPinned: z.boolean(),
-    kind: z.literal('folder'),
-    order: z.string()
-  })
-]);
-
-export const chatLastMessageSchema = z.object({
-  authorName: z.string().nullable(),
-  authorPlaceholder: z.boolean(),
-  date: isoDateTimeStringSchema.nullable(),
-  datePlaceholder: z.boolean(),
-  isForwarded: z.boolean(),
-  isOutgoing: z.boolean(),
-  isRead: z.boolean().nullable(),
-  readPlaceholder: z.boolean(),
-  text: z.string(),
-  textPlaceholder: z.boolean()
-});
-
-export const chatDirectoryEntrySchema = readChatSchema.extend({
-  isBot: z.boolean(),
-  isPremium: z.boolean(),
-  isSelf: z.boolean(),
-  isUnread: z.boolean(),
-  lastMessage: chatLastMessageSchema.nullable(),
-  lastMessageDate: isoDateTimeStringSchema.nullable(),
-  notificationsEnabled: z.boolean().nullable(),
-  notificationsPlaceholder: z.boolean(),
-  placements: z.array(chatPlacementSchema),
-  unreadCount: nonNegativeIntegerSchema,
-  unreadCountPlaceholder: z.boolean()
-});
-
-export const chatFolderSchema = z.object({
-  _model: z.literal('telegram.chatFolder'),
-  folderId: nonNegativeIntegerSchema,
-  iconName: z.string().nullable(),
-  id: z.string(),
-  position: nonNegativeIntegerSchema,
-  title: z.string()
-});
-
-export const chatTypeCountSchema = z.object({
-  count: nonNegativeIntegerSchema,
-  type: z.string()
-});
-
-export const chatDirectoryInputSchema = z
-  .object({
-    query: nonEmptyStringSchema.optional(),
-    type: nonEmptyStringSchema.optional()
-  })
-  .default({});
-
-export const chatDirectoryOutputSchema = z.object({
-  chats: z.array(chatDirectoryEntrySchema),
-  folders: z.array(chatFolderSchema),
-  navigationChats: z.array(chatDirectoryEntrySchema),
-  types: z.array(chatTypeCountSchema)
-});
+export {
+  chatDirectoryEntrySchema,
+  chatDirectoryInputSchema,
+  chatDirectoryOutputSchema,
+  chatFolderSchema,
+  chatLastMessageSchema,
+  chatTypeCountSchema
+};
 
 export const messageLookupInputSchema = z.object({
   chatId: nonEmptyStringSchema,
@@ -96,7 +35,7 @@ export const messageLookupInputSchema = z.object({
 });
 
 export const messageLookupOutputSchema = z.object({
-  message: readMessageSchema.nullable()
+  message: messageSchema.nullable()
 });
 
 export const fileRequestInputSchema = z.object({
@@ -122,6 +61,4 @@ export const fileRequestOutputSchema = z.object({
   file: fileRefSchema.nullable()
 });
 
-export type ChatDirectoryEntry = z.infer<typeof chatDirectoryEntrySchema>;
-export type ChatFolder = z.infer<typeof chatFolderSchema>;
-export type ChatTypeCount = z.infer<typeof chatTypeCountSchema>;
+export type { ChatDirectoryEntry, ChatFolder, ChatTypeCount };

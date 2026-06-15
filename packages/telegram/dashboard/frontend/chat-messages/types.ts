@@ -1,9 +1,9 @@
 import type {
   FileRef,
+  Message,
   MessageServiceAction,
-  MessageTextEntity,
-  ReadMessage
-} from '../../../src/views/schemas.js';
+  MessageTextEntity
+} from '../../../src/domain/models/message.js';
 
 export type GetMessagesResult = {
   messages?: unknown;
@@ -32,7 +32,7 @@ export type TimelineMessageItem = {
   dateLabel: string;
   id: string;
   kind: 'message';
-  message: ReadMessage;
+  message: Message;
   view: MessageView;
 };
 
@@ -41,7 +41,7 @@ export type TimelineServiceItem = {
   id: string;
   kind: 'service';
   label: string;
-  message: ReadMessage;
+  message: Message;
 };
 
 export type TimelineItem = TimelineDateItem | TimelineMessageItem | TimelineServiceItem;
@@ -97,7 +97,7 @@ export type MessageUpdate = {
   editDate: string | null;
   mediaFiles: FileRef[] | null;
   messageId: string;
-  reactions: ReadMessage['reactions'];
+  reactions: Message['reactions'];
   serviceAction: MessageServiceAction | null;
   text: string | null;
   textEntities: MessageTextEntity[];

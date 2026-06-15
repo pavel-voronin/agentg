@@ -1,19 +1,19 @@
 import type {
   FileRef,
+  Message,
   MessageServiceAction,
-  MessageTextEntity,
-  ReadMessage
-} from '../../../src/views/schemas.js';
+  MessageTextEntity
+} from '../../../src/domain/models/message.js';
 import { normalizeFileRefs } from '../fileRefs.js';
 import type { MessageDeletion, MessageUpdate } from './types.js';
 
-export function readMessages(value: unknown): ReadMessage[] {
+export function readMessages(value: unknown): Message[] {
   return Array.isArray(value)
     ? value.map((item) => normalizeMessage(asRecord(item))).filter(isDefined)
     : [];
 }
 
-export function normalizeMessage(value: Record<string, unknown> | undefined): ReadMessage | null {
+export function normalizeMessage(value: Record<string, unknown> | undefined): Message | null {
   const id = asString(value?.id);
   const chat = asRecord(value?.chat);
   const chatId = asString(chat?.id);
@@ -113,7 +113,7 @@ export function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function normalizeMessageMedia(value: unknown): ReadMessage['media'] {
+function normalizeMessageMedia(value: unknown): Message['media'] {
   return {
     files: normalizeFileRefs(asRecord(value)?.files)
   };
@@ -126,13 +126,13 @@ function normalizeOptionalMessageMedia(value: unknown): FileRef[] | null {
   return normalizeMessageMedia(value).files;
 }
 
-function normalizeMessageReactions(value: unknown): ReadMessage['reactions'] {
+function normalizeMessageReactions(value: unknown): Message['reactions'] {
   return asArray(value).map(normalizeMessageReaction).filter(isDefined);
 }
 
 function normalizeMessageReaction(
   value: Record<string, unknown>
-): ReadMessage['reactions'][number] | undefined {
+): Message['reactions'][number] | undefined {
   const reactionType = asString(value.reactionType);
   const totalCount = asNonNegativeInteger(value.totalCount);
   if (reactionType === undefined || totalCount === undefined) {
@@ -177,7 +177,7 @@ function normalizeTextEntity(value: Record<string, unknown>): MessageTextEntity 
   };
 }
 
-function normalizeReply(value: unknown): ReadMessage['replyTo'] {
+function normalizeReply(value: unknown): Message['replyTo'] {
   const reply = asRecord(value);
   const chatId = asString(asRecord(reply?.chat)?.id);
   const messageId = asString(reply?.telegramMessageId);
@@ -219,7 +219,7 @@ function normalizeServiceAction(value: unknown): MessageServiceAction | null {
   };
 }
 
-function normalizeSender(value: unknown): ReadMessage['sender'] {
+function normalizeSender(value: unknown): Message['sender'] {
   const sender = asRecord(value);
   const model = asString(sender?._model);
   const id = asString(sender?.id);

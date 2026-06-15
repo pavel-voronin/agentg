@@ -1,8 +1,8 @@
 # Dashboard Backend
 
 - This folder owns Telegram Dashboard-only backend code.
-- Procedures here serve Telegram Dashboard UI and may read Telegram storage
-  directly.
+- Procedures here serve Telegram Dashboard UI and must read Telegram data through
+  domain procedures or repositories that return domain models.
 - Procedures here are not public module procedures for other modules.
 - Procedures here must not make Dashboard choose Telegram internals such as
   TDLib methods, raw history fetches, page cursors, coverage convergence, or file

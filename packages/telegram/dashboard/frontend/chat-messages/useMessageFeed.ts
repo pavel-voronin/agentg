@@ -10,7 +10,7 @@ import {
 } from 'vue';
 
 import { useDashboardHost, type DashboardHostEvent } from '@agentg/framework/dashboard';
-import type { FileRef, ReadMessage } from '../../../src/views/schemas.js';
+import type { FileRef, Message } from '../../../src/domain/models/message.js';
 import { useTelegramDashboardApi } from '../api.js';
 import {
   fileOwnerEventKey,
@@ -45,7 +45,7 @@ export function useMessageFeed(options: {
 }) {
   const api = useTelegramDashboardApi();
   const host = useDashboardHost();
-  const messages = shallowRef<ReadMessage[]>([]);
+  const messages = shallowRef<Message[]>([]);
   const loadingInitial = ref(false);
   const loadingOlder = ref(false);
   const reachedStart = ref(false);
@@ -61,7 +61,7 @@ export function useMessageFeed(options: {
 
   const sortedMessages = computed(() => sortMessages(messages.value));
   const messagesByTelegramId = computed(() => {
-    const index = new Map<string, ReadMessage>();
+    const index = new Map<string, Message>();
     for (const message of sortedMessages.value) {
       index.set(message.telegramMessageId, message);
     }
@@ -427,7 +427,7 @@ export function useMessageFeed(options: {
     }
   }
 
-  function mergeMessages(nextMessages: ReadMessage[]): void {
+  function mergeMessages(nextMessages: Message[]): void {
     if (nextMessages.length === 0) {
       return;
     }

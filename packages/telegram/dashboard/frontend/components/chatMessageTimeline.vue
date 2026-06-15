@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { FileRef } from '../../../src/views/schemas.js';
+import type { FileRef } from '../../../src/domain/models/fileRef.js';
 import type { MessageTarget, TimelineItem } from '../chat-messages/types.js';
 import ChatMessageBubble from './chatMessageBubble.vue';
 

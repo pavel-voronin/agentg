@@ -1,24 +1,11 @@
 import type { EventBus } from '@agentg/framework';
-import { and, asc, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { TELEGRAM_DASHBOARD_METHODS } from '../contracts.js';
 import type { Database } from '../../src/database/client.js';
 import type { telegramClient } from '../../src/index.js';
-import {
-  telegramChatFolderInfos,
-  telegramChats,
-  telegramMessages
-} from '../../src/database/schema.js';
-import { chatSearchWhere, readChatSelection, toChatStorageRow } from '../../src/views/chat.js';
-import { readMessageSelection, toReadMessages } from '../../src/views/message.js';
-import { andSql } from '../../src/views/sql.js';
-import {
-  chatFolderEntry,
-  chatTypeCounts,
-  listableChatDirectoryEntries,
-  toChatDirectoryEntries
-} from './chatDirectory.js';
+import { createMessageRepository } from '../../src/repositories/messageRepository.js';
+import { createChatDirectoryRepository } from '../../src/repositories/chatDirectoryRepository.js';
 import {
   chatDirectoryInputSchema,
   chatDirectoryOutputSchema,
@@ -27,8 +14,7 @@ import {
   messageLookupInputSchema,
   messageLookupOutputSchema,
   getMessagesInputSchema,
-  getMessagesOutputSchema,
-  type ChatFolder
+  getMessagesOutputSchema
 } from './models.js';
 
 type ChatDirectoryInput = z.infer<typeof chatDirectoryInputSchema>;
@@ -81,73 +67,23 @@ async function runChatDirectory(
   input: ChatDirectoryInput,
   resources: Resources
 ): Promise<ChatDirectoryOutput> {
-  const searchQuery = input.query?.trim();
-  const type = input.type?.trim();
-  const queryWhere =
-    searchQuery === undefined || searchQuery.length === 0
-      ? undefined
-      : chatSearchWhere(searchQuery);
-  const typeWhere =
-    type === undefined
-      ? undefined
-      : sql`${telegramChats.type}->>'_' = ${chatTypeToTdlibConstructor(type)}`;
-  const where = andSql(queryWhere, typeWhere);
-  const navigationWhere = typeWhere;
-
-  const [matchingChats, navigationChats, folders] = await Promise.all([
-    resources.database
-      .select(readChatSelection())
-      .from(telegramChats)
-      .where(where)
-      .orderBy(asc(telegramChats.title), asc(telegramChats.id)),
-    resources.database
-      .select(readChatSelection())
-      .from(telegramChats)
-      .where(navigationWhere)
-      .orderBy(asc(telegramChats.title), asc(telegramChats.id)),
-    resources.database
-      .select({
-        icon: telegramChatFolderInfos.icon,
-        id: telegramChatFolderInfos.id,
-        name: telegramChatFolderInfos.name,
-        position: telegramChatFolderInfos.position
-      })
-      .from(telegramChatFolderInfos)
-      .orderBy(asc(telegramChatFolderInfos.position), asc(telegramChatFolderInfos.id))
-  ]);
-  const chats = listableChatDirectoryEntries(
-    await toChatDirectoryEntries(resources.database, matchingChats.map(toChatStorageRow))
-  );
-  const navigation = listableChatDirectoryEntries(
-    await toChatDirectoryEntries(resources.database, navigationChats.map(toChatStorageRow))
-  );
-  const folderEntries: ChatFolder[] = folders.map(chatFolderEntry);
-
-  return {
-    chats,
-    folders: folderEntries,
-    navigationChats: navigation,
-    types: chatTypeCounts(navigation)
-  };
+  return createChatDirectoryRepository(resources.database).list(input);
 }
 
 async function runMessage(
   input: MessageLookupInput,
   resources: Resources
 ): Promise<MessageLookupOutput> {
-  const [message] = await resources.database
-    .select(readMessageSelection())
-    .from(telegramMessages)
-    .where(and(eq(telegramMessages.chatId, input.chatId), eq(telegramMessages.id, input.messageId)))
-    .limit(1);
-  const [readMessage] = await toReadMessages(
-    resources.database,
-    message === undefined ? [] : [message]
-  );
-
   return {
-    message: readMessage ?? null
+    message: await readMessage(resources.database, input)
   };
+}
+
+async function readMessage(
+  database: Database,
+  input: MessageLookupInput
+): Promise<MessageLookupOutput['message']> {
+  return createMessageRepository(database).read(input);
 }
 
 async function runGetMessages(
@@ -162,17 +98,4 @@ async function requestFile(
   resources: Resources
 ): Promise<FileRequestOutput> {
   return resources.telegram.requestFile(input);
-}
-
-function chatTypeToTdlibConstructor(type: string): string {
-  if (type === 'private') {
-    return 'chatTypePrivate';
-  }
-  if (type === 'secret') {
-    return 'chatTypeSecret';
-  }
-  if (type === 'channel' || type === 'group') {
-    return 'chatTypeSupergroup';
-  }
-  return type;
 }
