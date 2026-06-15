@@ -62,6 +62,12 @@
   clear user intent. User intent includes direct UI actions such as clicking a
   button, changing an input, selecting an item, or an explicit user instruction
   that requires a procedure call.
+- User intent may continue across an asynchronous domain workflow when the
+  Dashboard stores a concrete request identifier created by the user's action.
+  A domain event that completes or advances that same request may trigger the
+  exact follow-up procedure call needed to read the request result, as long as
+  the call is correlated to the stored request identifier and does not broaden
+  into an unrelated refresh.
 - Timers, polling loops, broad event triggers, lifecycle hooks, and background
   refreshes must not call domain procedures from Dashboard or from
   Dashboard components provided by domains.
