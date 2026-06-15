@@ -1,5 +1,5 @@
 import { storeChatBackground } from '../../store/chatBackground.js';
-import type { UpdateByType } from '../types.js';
+import type { UpdateByType } from '../../tdlib/shape.js';
 import type { IngestionResources } from '../resources.js';
 
 type ChatBackgroundUpdate = UpdateByType<'updateChatBackground'>;
@@ -9,7 +9,6 @@ export async function handleUpdateChatBackground(
   resources: IngestionResources
 ): Promise<void> {
   const { database } = resources;
-  const { events } = resources;
   const { files } = resources;
   const chatId = String(update.chat_id);
   const background = update.background ?? null;
@@ -18,5 +17,4 @@ export async function handleUpdateChatBackground(
   if (background !== null) {
     await files.recordChatBackgroundFiles(chatId, background, 'live_update');
   }
-  await events.publishTelegramChatDirectoryUpdated(chatId);
 }

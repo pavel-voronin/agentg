@@ -1,5 +1,5 @@
 import { upsertTelegramKv } from '../../store/kv.js';
-import type { UpdateByType } from '../types.js';
+import type { UpdateByType } from '../../tdlib/shape.js';
 import type { IngestionResources } from '../resources.js';
 
 type FileDownloadsUpdate = UpdateByType<'updateFileDownloads'>;
@@ -11,7 +11,6 @@ export async function handleUpdateFileDownloads(
   resources: IngestionResources
 ): Promise<void> {
   const { database } = resources;
-  const { events } = resources;
   const state = {
     downloaded_size: update.downloaded_size,
     total_count: update.total_count,
@@ -19,5 +18,4 @@ export async function handleUpdateFileDownloads(
   };
 
   await upsertTelegramKv(database, FILE_DOWNLOADS_STATE_KEY, state);
-  await events.publishTelegramFileDownloadsUpdated(state);
 }

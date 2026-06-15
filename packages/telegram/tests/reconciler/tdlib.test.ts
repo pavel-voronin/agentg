@@ -10,7 +10,7 @@ describe('Telegram history reconciler TDLib adapter', () => {
   it('does not prove owner beginning from a non-empty initial zero cursor page', async () => {
     const getForumTopicHistory = vi.fn(() =>
       Promise.resolve({
-        total_count: 200,
+        total_count: 1,
         messages: [
           message(200, '2026-06-11T23:59:00.000Z'),
           message(199, '2026-06-11T23:58:00.000Z')
@@ -133,10 +133,116 @@ describe('Telegram history reconciler TDLib adapter', () => {
     expect(result.reachedBeginning).toBe(false);
     expect(result.coverageInterval).toBeUndefined();
   });
+
+  it('does not prove beginning from TDLib pages containing null placeholders', async () => {
+    const getForumTopicHistory = vi.fn(() =>
+      Promise.resolve({
+        total_count: 0,
+        messages: [null]
+      })
+    );
+
+    const result = await fetchOwnerHistoryStep({
+      database: historyDatabase(),
+      interval: interval('2013-08-14T00:00:00.000Z', '2026-06-12T00:00:00.000Z'),
+      owner: {
+        chatId: '123',
+        kind: 'forumTopic',
+        topicId: '7'
+      },
+      selector: {
+        count: 100,
+        kind: 'page'
+      },
+      tdlib: {
+        getForumTopicHistory
+      } as unknown as Operations
+    });
+
+    expect(result.reachedBeginning).toBe(false);
+    expect(result.coverageInterval).toBeUndefined();
+  });
+
+  it('clamps no-anchor local cursor coverage to the local cursor message date', async () => {
+    const getForumTopicHistory = vi.fn(() =>
+      Promise.resolve({
+        total_count: 500,
+        messages: [
+          message(200, '2026-06-11T23:59:00.000Z'),
+          message(199, '2026-06-11T23:58:00.000Z')
+        ]
+      })
+    );
+
+    const result = await fetchOwnerHistoryStep({
+      database: historyDatabase({
+        oldestKnownRows: [
+          {
+            messageDate: new Date('2026-06-11T23:59:00.000Z'),
+            messageId: '200'
+          }
+        ]
+      }),
+      interval: interval('2013-08-14T00:00:00.000Z', '2026-06-12T00:00:00.000Z'),
+      owner: {
+        chatId: '123',
+        kind: 'forumTopic',
+        topicId: '7'
+      },
+      selector: {
+        endAt: '2026-06-12T00:00:00.000Z',
+        kind: 'range',
+        startAt: '2013-08-14T00:00:00.000Z'
+      },
+      tdlib: {
+        getForumTopicHistory
+      } as unknown as Operations
+    });
+
+    expect(result.coverageInterval).toEqual({
+      endAt: new Date('2026-06-11T23:59:01.000Z'),
+      startAt: new Date('2026-06-11T23:58:01.000Z')
+    });
+  });
+
+  it('proves empty no-anchor owner history from an empty zero cursor page', async () => {
+    const getForumTopicHistory = vi.fn(() =>
+      Promise.resolve({
+        total_count: 0,
+        messages: []
+      })
+    );
+
+    const result = await fetchOwnerHistoryStep({
+      database: historyDatabase(),
+      interval: interval('2013-08-14T00:00:00.000Z', '2026-06-12T00:00:00.000Z'),
+      owner: {
+        chatId: '123',
+        kind: 'forumTopic',
+        topicId: '7'
+      },
+      selector: {
+        count: 100,
+        kind: 'page'
+      },
+      tdlib: {
+        getForumTopicHistory
+      } as unknown as Operations
+    });
+
+    expect(result).toEqual({
+      coverageInterval: {
+        endAt: new Date('2026-06-12T00:00:00.000Z'),
+        startAt: new Date('2013-08-14T00:00:00.000Z')
+      },
+      fetchedMessages: [],
+      reachedBeginning: true
+    });
+  });
 });
 
 function historyDatabase(input?: {
-  oldestKnownRows?: { messageId: string }[];
+  oldestKnownRows?: { messageDate?: Date | null; messageId: string }[];
   pageRows?: Pick<MessageStorageRow, 'telegramMessageId'>[];
 }): Database {
   return {

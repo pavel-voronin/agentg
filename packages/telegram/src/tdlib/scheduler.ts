@@ -1,15 +1,9 @@
-import type { Invoker, InvokeOptions } from './operationEvents.js';
+import type { Invoker, InvokeOptions, QueueStats } from './operationTypes.js';
 import { priorities, resolvePriority } from './priority.js';
 
 export type Scheduler = Invoker & {
   close(): void;
   getQueueStats(): QueueStats;
-};
-
-export type QueueStats = {
-  highestPendingPriority: number | null;
-  pendingCount: number;
-  runningCount: number;
 };
 
 export type SchedulerOptions = {

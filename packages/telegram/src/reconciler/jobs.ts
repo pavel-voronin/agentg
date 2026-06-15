@@ -6,6 +6,7 @@ import type { Database } from '../database/client.js';
 import { telegramHistoryReconcilerJobs } from '../database/schema.js';
 import {
   getMessagesInputSchema,
+  messageSelectorSchema,
   type GetMessagesInput,
   type MessageOwner,
   type MessageSelector
@@ -14,7 +15,10 @@ import { normalizeMessageOwner } from './owner.js';
 
 export type JobStatus = 'deferred' | 'failed' | 'queued' | 'running';
 
-export type EnqueueResult = 'pending_coalesced' | 'pending_enqueued';
+export type EnqueueResult = {
+  requestId: string;
+  result: 'pending_coalesced' | 'pending_enqueued';
+};
 
 export type HistoryJob = {
   attemptCount: number;
@@ -74,7 +78,10 @@ export async function enqueueHistoryJob(
       });
 
     if (inserted !== undefined) {
-      return 'pending_enqueued';
+      return {
+        requestId: input.requestId,
+        result: 'pending_enqueued'
+      };
     }
   }
 }
@@ -94,7 +101,7 @@ async function coalesceOrRequeueExistingHistoryJob(
     .limit(1);
 
   if (existing === undefined) {
-    return null;
+    return coalesceOverlappingActiveRangeJob(database, input, normalized, now);
   }
 
   if (ACTIVE_STATUSES.includes(existing.status as JobStatus)) {
@@ -104,7 +111,10 @@ async function coalesceOrRequeueExistingHistoryJob(
         updatedAt: sql`now()`
       })
       .where(eq(telegramHistoryReconcilerJobs.requestId, input.requestId));
-    return 'pending_coalesced';
+    return {
+      requestId: input.requestId,
+      result: 'pending_coalesced'
+    };
   }
 
   await database
@@ -123,7 +133,66 @@ async function coalesceOrRequeueExistingHistoryJob(
       updatedAt: sql`now()`
     })
     .where(eq(telegramHistoryReconcilerJobs.requestId, input.requestId));
-  return 'pending_enqueued';
+  return {
+    requestId: input.requestId,
+    result: 'pending_enqueued'
+  };
+}
+
+async function coalesceOverlappingActiveRangeJob(
+  database: Database,
+  input: GetMessagesInput & { requestId: string },
+  normalized: ReturnType<typeof normalizeMessageOwner>,
+  now: Date
+): Promise<EnqueueResult | null> {
+  if (input.selector.kind !== 'range') {
+    return null;
+  }
+
+  const rows = await database
+    .select({
+      requestId: telegramHistoryReconcilerJobs.requestId,
+      selector: telegramHistoryReconcilerJobs.selector
+    })
+    .from(telegramHistoryReconcilerJobs)
+    .where(
+      and(
+        eq(telegramHistoryReconcilerJobs.ownerKey, normalized.key),
+        eq(telegramHistoryReconcilerJobs.selectorKind, 'range'),
+        inArray(telegramHistoryReconcilerJobs.status, ['queued', 'deferred'])
+      )
+    )
+    .limit(1);
+
+  for (const row of rows) {
+    const selector = messageSelectorSchema.parse(row.selector);
+    if (selector.kind !== 'range') {
+      continue;
+    }
+    if (!rangesOverlap(selector, input.selector)) {
+      continue;
+    }
+
+    await database
+      .update(telegramHistoryReconcilerJobs)
+      .set({
+        attemptCount: 0,
+        lastFailureReason: null,
+        lockedAt: null,
+        nextRunAt: now,
+        selector: toJsonValue(mergeRanges(selector, input.selector)),
+        selectorKind: 'range',
+        status: 'queued',
+        updatedAt: sql`now()`
+      })
+      .where(eq(telegramHistoryReconcilerJobs.requestId, row.requestId));
+    return {
+      requestId: row.requestId,
+      result: 'pending_coalesced'
+    };
+  }
+
+  return null;
 }
 
 function historyJobInsertValue(
@@ -145,6 +214,37 @@ function historyJobInsertValue(
     status: 'queued',
     updatedAt: sql`now()`
   };
+}
+
+function rangesOverlap(
+  first: Extract<MessageSelector, { kind: 'range' }>,
+  second: Extract<MessageSelector, { kind: 'range' }>
+): boolean {
+  return (
+    new Date(first.startAt) <= new Date(second.endAt) &&
+    new Date(second.startAt) <= new Date(first.endAt)
+  );
+}
+
+function mergeRanges(
+  first: Extract<MessageSelector, { kind: 'range' }>,
+  second: Extract<MessageSelector, { kind: 'range' }>
+): Extract<MessageSelector, { kind: 'range' }> {
+  const startAt = minDate(new Date(first.startAt), new Date(second.startAt));
+  const endAt = maxDate(new Date(first.endAt), new Date(second.endAt));
+  return {
+    endAt: endAt.toISOString(),
+    kind: 'range',
+    startAt: startAt.toISOString()
+  };
+}
+
+function minDate(first: Date, second: Date): Date {
+  return first <= second ? first : second;
+}
+
+function maxDate(first: Date, second: Date): Date {
+  return first >= second ? first : second;
 }
 
 export async function claimNextHistoryJob(
@@ -311,17 +411,39 @@ export async function readHistoryReconcilerStats(
   };
 }
 
-export async function readNextHistoryJobRunAt(database: Database): Promise<Date | undefined> {
-  const [row] = await database
+export async function readNextHistoryJobRunAt(
+  database: Database,
+  options: {
+    lockTimeoutMs: number;
+  }
+): Promise<Date | undefined> {
+  const rows = await database
     .select({
-      nextRunAt: telegramHistoryReconcilerJobs.nextRunAt
+      lockedAt: telegramHistoryReconcilerJobs.lockedAt,
+      nextRunAt: telegramHistoryReconcilerJobs.nextRunAt,
+      status: telegramHistoryReconcilerJobs.status
     })
     .from(telegramHistoryReconcilerJobs)
-    .where(inArray(telegramHistoryReconcilerJobs.status, ['queued', 'deferred']))
-    .orderBy(asc(telegramHistoryReconcilerJobs.nextRunAt))
-    .limit(1);
+    .where(inArray(telegramHistoryReconcilerJobs.status, ['queued', 'deferred', 'running']));
 
-  return row?.nextRunAt;
+  return earliestDate(
+    rows
+      .map((row) =>
+        row.status === 'running' ? staleRunAt(row.lockedAt, options.lockTimeoutMs) : row.nextRunAt
+      )
+      .filter((value): value is Date => value instanceof Date)
+  );
+}
+
+function staleRunAt(lockedAt: Date | null, lockTimeoutMs: number): Date | undefined {
+  return lockedAt === null ? undefined : new Date(lockedAt.getTime() + lockTimeoutMs);
+}
+
+function earliestDate(values: Date[]): Date | undefined {
+  const [first, ...rest] = values;
+  return first === undefined
+    ? undefined
+    : rest.reduce((earliest, value) => (value < earliest ? value : earliest), first);
 }
 
 function parseJob(row: {

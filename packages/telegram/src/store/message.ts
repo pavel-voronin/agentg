@@ -9,7 +9,7 @@ import {
   telegramFileSlots,
   telegramMessages
 } from '../database/schema.js';
-import { tdDate, tdId, tdJsonObject, tdJsonValue } from '../tdlib/value.js';
+import { tdDate, tdId, tdJsonObject, tdJsonValue } from '../tdlib/shape.js';
 import type { message as Message, updateMessageContent as MessageContentUpdate } from 'tdlib-types';
 import type { FileSubsystem } from '../files/index.js';
 import type { MediaDownloadPolicyCause } from '../files/policy.js';
@@ -28,7 +28,6 @@ const MESSAGE_UPSERT_COLUMNS = [
   'autoDeleteIn',
   'canBeSaved',
   'containsUnreadMention',
-  'containsUnreadPollVotes',
   'content',
   'date',
   'editDate',

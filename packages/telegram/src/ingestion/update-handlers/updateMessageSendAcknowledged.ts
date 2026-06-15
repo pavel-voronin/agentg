@@ -1,7 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 
 import { telegramMessages } from '../../database/schema.js';
-import type { UpdateByType } from '../types.js';
+import type { UpdateByType } from '../../tdlib/shape.js';
 import type { IngestionResources } from '../resources.js';
 
 type MessageSendAcknowledgedUpdate = UpdateByType<'updateMessageSendAcknowledged'>;
@@ -11,7 +11,6 @@ export async function handleUpdateMessageSendAcknowledged(
   resources: IngestionResources
 ): Promise<void> {
   const { database } = resources;
-  const { events } = resources;
   const chatId = String(update.chat_id);
   const messageId = String(update.message_id);
   const messageKey = and(eq(telegramMessages.chatId, chatId), eq(telegramMessages.id, messageId));
@@ -35,6 +34,4 @@ export async function handleUpdateMessageSendAcknowledged(
   if (updatedMessage === undefined) {
     return;
   }
-
-  await events.publishTelegramStoredMessageUpdated({ chatId, messageId });
 }

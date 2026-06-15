@@ -1,6 +1,6 @@
 import type { Database } from '../database/client.js';
 import { telegramChatFolderInfos } from '../database/schema.js';
-import { tdJsonObject } from '../tdlib/value.js';
+import { tdJsonObject } from '../tdlib/shape.js';
 import type { updateChatFolders as ChatFoldersUpdate } from 'tdlib-types';
 
 export async function replaceChatFolders(

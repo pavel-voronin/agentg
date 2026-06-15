@@ -6,35 +6,90 @@ import {
   claimNextHistoryJob,
   deferHistoryJob,
   enqueueHistoryJob,
+  readNextHistoryJobRunAt,
   releaseHistoryJob
 } from '../../src/reconciler/jobs.js';
 
 describe('History reconciler jobs', () => {
   it('coalesces a duplicate demand that loses the request id insert race', async () => {
+    const demand = input();
     const database = enqueueDatabase({
       insertRows: [[]],
       selectRows: [[], [{ status: 'queued' }]]
     });
 
-    const result = await enqueueHistoryJob(database, input());
+    const result = await enqueueHistoryJob(database, demand);
 
-    expect(result).toBe('pending_coalesced');
+    expect(result).toEqual({
+      requestId: demand.requestId,
+      result: 'pending_coalesced'
+    });
     expect(database.insertCount()).toBe(1);
     expect(database.updateValues()).toHaveLength(1);
     expect(database.updateValues()[0]).toHaveProperty('updatedAt');
   });
 
   it('enqueues a new demand when the insert wins', async () => {
+    const demand = input();
     const database = enqueueDatabase({
       insertRows: [[{ requestId: 'request-a' }]],
       selectRows: [[]]
     });
 
-    const result = await enqueueHistoryJob(database, input());
+    const result = await enqueueHistoryJob(database, demand);
 
-    expect(result).toBe('pending_enqueued');
+    expect(result).toEqual({
+      requestId: demand.requestId,
+      result: 'pending_enqueued'
+    });
     expect(database.insertCount()).toBe(1);
     expect(database.updateValues()).toEqual([]);
+  });
+
+  it('coalesces overlapping active range work for the same owner', async () => {
+    const demand = rangeInput({
+      endAt: '2026-06-15T06:41:17.000Z',
+      requestId: 'new-range',
+      startAt: '2026-06-15T06:11:17.000Z'
+    });
+    const now = new Date('2026-06-15T06:41:20.000Z');
+    const database = enqueueDatabase({
+      insertRows: [],
+      selectRows: [
+        [],
+        [
+          {
+            requestId: 'existing-range',
+            selector: {
+              endAt: '2026-06-15T06:20:22.000Z',
+              kind: 'range',
+              startAt: '2026-06-15T05:50:22.000Z'
+            }
+          }
+        ]
+      ]
+    });
+
+    const result = await enqueueHistoryJob(database, demand, now);
+
+    expect(result).toEqual({
+      requestId: 'existing-range',
+      result: 'pending_coalesced'
+    });
+    expect(database.insertCount()).toBe(0);
+    expect(database.updateValues()[0]).toMatchObject({
+      attemptCount: 0,
+      lastFailureReason: null,
+      lockedAt: null,
+      nextRunAt: now,
+      selector: {
+        endAt: '2026-06-15T06:41:17.000Z',
+        kind: 'range',
+        startAt: '2026-06-15T05:50:22.000Z'
+      },
+      selectorKind: 'range',
+      status: 'queued'
+    });
   });
 
   it('does not consume retry attempts when claiming runnable work', async () => {
@@ -63,10 +118,30 @@ describe('History reconciler jobs', () => {
       status: 'queued'
     });
   });
+
+  it('schedules non-stale running jobs at their stale claim time', async () => {
+    const database = nextRunAtDatabase([
+      {
+        lockedAt: new Date('2026-06-12T00:00:00.000Z'),
+        nextRunAt: new Date('2026-06-12T00:00:00.000Z'),
+        status: 'running'
+      },
+      {
+        lockedAt: null,
+        nextRunAt: new Date('2026-06-12T00:10:00.000Z'),
+        status: 'deferred'
+      }
+    ]);
+
+    await expect(readNextHistoryJobRunAt(database, { lockTimeoutMs: 300_000 })).resolves.toEqual(
+      new Date('2026-06-12T00:05:00.000Z')
+    );
+  });
 });
 
 type Row = {
   requestId?: string;
+  selector?: unknown;
   status?: string;
 };
 
@@ -220,6 +295,22 @@ function updateOnlyDatabase(): TestDatabase {
   } as unknown as TestDatabase;
 }
 
+function nextRunAtDatabase(rows: unknown[]): Database {
+  return {
+    select() {
+      return {
+        from() {
+          return {
+            where() {
+              return Promise.resolve(rows);
+            }
+          };
+        }
+      };
+    }
+  } as unknown as Database;
+}
+
 function input(): GetMessagesInput & { requestId: string } {
   return {
     owner: {
@@ -230,6 +321,25 @@ function input(): GetMessagesInput & { requestId: string } {
     selector: {
       count: 100,
       kind: 'page'
+    }
+  };
+}
+
+function rangeInput(input: {
+  endAt: string;
+  requestId: string;
+  startAt: string;
+}): GetMessagesInput & { requestId: string } {
+  return {
+    owner: {
+      chatId: '123',
+      kind: 'chat'
+    },
+    requestId: input.requestId,
+    selector: {
+      endAt: input.endAt,
+      kind: 'range',
+      startAt: input.startAt
     }
   };
 }

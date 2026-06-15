@@ -1,6 +1,6 @@
 import { storeMessage } from '../../store/message.js';
 import { upsertSavedMessagesTopic } from '../../store/savedMessages.js';
-import type { UpdateByType } from '../types.js';
+import type { UpdateByType } from '../../tdlib/shape.js';
 import type { IngestionResources } from '../resources.js';
 
 type SavedMessagesTopicUpdate = UpdateByType<'updateSavedMessagesTopic'>;
@@ -10,7 +10,6 @@ export async function handleUpdateSavedMessagesTopic(
   resources: IngestionResources
 ): Promise<void> {
   const { database } = resources;
-  const { events } = resources;
   const { files } = resources;
   const { topic } = update;
   const lastMessage = topic.last_message ?? null;
@@ -26,6 +25,4 @@ export async function handleUpdateSavedMessagesTopic(
   if (lastMessage !== null) {
     await files.recordMessageFiles(lastMessage, 'live_update');
   }
-
-  await events.publishTelegramSavedMessagesTopicUpdated(update);
 }

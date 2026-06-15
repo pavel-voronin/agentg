@@ -1,6 +1,6 @@
 import { chatListKey } from '../../store/chatListKey.js';
 import { upsertTelegramKv } from '../../store/kv.js';
-import type { UpdateByType } from '../types.js';
+import type { UpdateByType } from '../../tdlib/shape.js';
 import type { IngestionResources } from '../resources.js';
 
 type UnreadChatCountUpdate = UpdateByType<'updateUnreadChatCount'>;
@@ -10,7 +10,6 @@ export async function handleUpdateUnreadChatCount(
   resources: IngestionResources
 ): Promise<void> {
   const { database } = resources;
-  const { events } = resources;
   await upsertTelegramKv(database, `unread_chat_count:${chatListKey(update.chat_list)}`, {
     total_count: update.total_count,
     unread_count: update.unread_count,
@@ -18,6 +17,4 @@ export async function handleUpdateUnreadChatCount(
     marked_as_unread_count: update.marked_as_unread_count,
     marked_as_unread_unmuted_count: update.marked_as_unread_unmuted_count
   });
-
-  await events.publishTelegramUnreadChatCountUpdated(update);
 }

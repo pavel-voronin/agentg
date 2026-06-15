@@ -1,14 +1,15 @@
 import { storeChatLastMessage } from '../../store/chat.js';
 import { recordMessageFiles, storeMessage } from '../../store/message.js';
-import type { ChatLastMessageUpdate } from '../types.js';
+import type { UpdateByType } from '../../tdlib/shape.js';
 import type { IngestionResources } from '../resources.js';
+
+type ChatLastMessageUpdate = UpdateByType<'updateChatLastMessage'>;
 
 export async function handleUpdateChatLastMessage(
   update: ChatLastMessageUpdate,
   resources: IngestionResources
 ): Promise<void> {
   const { database } = resources;
-  const { events } = resources;
   const { files } = resources;
   const lastMessage = update.last_message ?? null;
   await database.transaction(async (transaction) => {
@@ -22,6 +23,4 @@ export async function handleUpdateChatLastMessage(
   if (lastMessage !== null) {
     await recordMessageFiles(files, lastMessage, 'live_update');
   }
-
-  await events.publishTelegramChatDirectoryUpdated(String(update.chat_id));
 }

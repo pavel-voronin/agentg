@@ -1,5 +1,5 @@
 import { replaceTelegramChatPositions, upsertTelegramChatFragment } from '../../store/chat.js';
-import { tdJsonValue, type UpdateByType } from '../types.js';
+import { tdJsonValue, type UpdateByType } from '../../tdlib/shape.js';
 import type { IngestionResources } from '../resources.js';
 
 type ChatDraftMessageUpdate = UpdateByType<'updateChatDraftMessage'>;
@@ -9,7 +9,6 @@ export async function handleUpdateChatDraftMessage(
   resources: IngestionResources
 ): Promise<void> {
   const { database } = resources;
-  const { events } = resources;
   const chatId = String(update.chat_id);
   await database.transaction(async (transaction) => {
     await upsertTelegramChatFragment(transaction, {
@@ -18,5 +17,4 @@ export async function handleUpdateChatDraftMessage(
     });
     await replaceTelegramChatPositions(transaction, chatId, update.positions);
   });
-  await events.publishTelegramChatDirectoryUpdated(chatId);
 }

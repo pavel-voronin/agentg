@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 
 import { telegramFileGenerationRequests } from '../../database/schema.js';
-import type { UpdateByType } from '../types.js';
+import type { UpdateByType } from '../../tdlib/shape.js';
 import type { IngestionResources } from '../resources.js';
 
 type FileGenerationStopUpdate = UpdateByType<'updateFileGenerationStop'>;

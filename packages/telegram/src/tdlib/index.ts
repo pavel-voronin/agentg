@@ -3,6 +3,7 @@ import type { Update } from 'tdlib-types';
 import type { Client } from 'tdl';
 
 import { configureTdlib, createClient, type ClientConfig } from './client.js';
+import { publishLoginCompleted, publishLoginFailed, publishLoginStarted } from '../events.js';
 import { createOperations, type Operations } from './operations.js';
 import { createScheduler, type Scheduler } from './scheduler.js';
 
@@ -64,16 +65,15 @@ export function useTdlib(options: TdlibOptions): TdlibRuntime {
       client.on('update', handleUpdate);
       scheduler = createScheduler(client);
       operations = createOperations({
-        client: scheduler,
-        events: options.events
+        client: scheduler
       });
-      options.events.publish('telegram.login.started');
+      publishLoginStarted(options.events);
       loginStarted = true;
       await client.login();
-      options.events.publish('telegram.login.completed');
+      publishLoginCompleted(options.events);
     } catch (error) {
       if (loginStarted) {
-        options.events.publish('telegram.login.failed', {
+        publishLoginFailed(options.events, {
           error: error instanceof Error ? error.message : String(error)
         });
       }

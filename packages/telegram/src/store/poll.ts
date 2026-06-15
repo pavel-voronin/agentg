@@ -8,7 +8,7 @@ import {
   telegramPollOptions,
   telegramPolls
 } from '../database/schema.js';
-import { tdId, tdJsonValue, type UpdateByType } from '../tdlib/value.js';
+import { tdId, tdJsonValue, type UpdateByType } from '../tdlib/shape.js';
 
 type Poll = UpdateByType<'updatePoll'>['poll'] & {
   country_codes?: string[];

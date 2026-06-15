@@ -1,7 +1,7 @@
 import { and, eq, inArray } from 'drizzle-orm';
 
 import { telegramGroupCallMessages } from '../../database/schema.js';
-import type { UpdateByType } from '../types.js';
+import type { UpdateByType } from '../../tdlib/shape.js';
 import type { IngestionResources } from '../resources.js';
 
 type GroupCallMessagesDeletedUpdate = UpdateByType<'updateGroupCallMessagesDeleted'>;
@@ -11,7 +11,6 @@ export async function handleUpdateGroupCallMessagesDeleted(
   resources: IngestionResources
 ): Promise<void> {
   const { database } = resources;
-  const { events } = resources;
   const groupCallId = update.group_call_id;
   const messageIds = update.message_ids;
 
@@ -23,9 +22,4 @@ export async function handleUpdateGroupCallMessagesDeleted(
         inArray(telegramGroupCallMessages.messageId, messageIds)
       )
     );
-
-  await events.publishTelegramGroupCallMessagesDeleted({
-    groupCallId,
-    messageIds
-  });
 }

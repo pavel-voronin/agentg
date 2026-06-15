@@ -1,12 +1,13 @@
-import type { UpdateByType } from '../types.js';
+import type { UpdateByType } from '../../tdlib/shape.js';
 import type { IngestionResources } from '../resources.js';
 
 type NewGroupCallPaidReactionUpdate = UpdateByType<'updateNewGroupCallPaidReaction'>;
 
-export async function handleUpdateNewGroupCallPaidReaction(
+export function handleUpdateNewGroupCallPaidReaction(
   update: NewGroupCallPaidReactionUpdate,
   resources: IngestionResources
 ): Promise<void> {
-  const { events } = resources;
-  await events.publishTelegramGroupCallPaidReactionReceived(update);
+  void update;
+  void resources;
+  return Promise.resolve();
 }

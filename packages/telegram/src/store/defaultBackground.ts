@@ -4,7 +4,7 @@ import type { JsonValue } from '@agentg/framework';
 
 import type { Database } from '../database/client.js';
 import { telegramKv } from '../database/schema.js';
-import { type UpdateByType } from '../tdlib/value.js';
+import { type UpdateByType } from '../tdlib/shape.js';
 import { storeTelegramBackground } from './chatBackground.js';
 import { deleteTelegramKv, upsertTelegramKv } from './kv.js';
 

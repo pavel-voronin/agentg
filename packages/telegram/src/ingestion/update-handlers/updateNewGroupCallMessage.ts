@@ -1,5 +1,5 @@
 import { telegramGroupCallMessages } from '../../database/schema.js';
-import { tdDate, tdId, tdJsonObject, type UpdateByType } from '../types.js';
+import { tdDate, tdId, tdJsonObject, type UpdateByType } from '../../tdlib/shape.js';
 import type { IngestionResources } from '../resources.js';
 
 type NewGroupCallMessageUpdate = UpdateByType<'updateNewGroupCallMessage'>;
@@ -9,7 +9,6 @@ export async function handleUpdateNewGroupCallMessage(
   resources: IngestionResources
 ): Promise<void> {
   const { database } = resources;
-  const { events } = resources;
   const row: typeof telegramGroupCallMessages.$inferInsert = {
     canBeDeleted: update.message.can_be_deleted,
     date: requiredDate(update.message.date),
@@ -29,8 +28,6 @@ export async function handleUpdateNewGroupCallMessage(
       set: row,
       target: [telegramGroupCallMessages.groupCallId, telegramGroupCallMessages.messageId]
     });
-
-  await events.publishTelegramGroupCallMessageCreated(update);
 }
 
 function requiredDate(value: number): Date {

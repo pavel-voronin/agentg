@@ -1,13 +1,13 @@
 import { storeChatListMembership } from '../../store/chatListMembership.js';
-import type { ChatAddedToListUpdate } from '../types.js';
+import type { UpdateByType } from '../../tdlib/shape.js';
 import type { IngestionResources } from '../resources.js';
+
+type ChatAddedToListUpdate = UpdateByType<'updateChatAddedToList'>;
 
 export async function handleUpdateChatAddedToList(
   update: ChatAddedToListUpdate,
   resources: IngestionResources
 ): Promise<void> {
   const { database } = resources;
-  const { events } = resources;
   await storeChatListMembership(database, update);
-  await events.publishTelegramChatDirectoryUpdated(String(update.chat_id));
 }

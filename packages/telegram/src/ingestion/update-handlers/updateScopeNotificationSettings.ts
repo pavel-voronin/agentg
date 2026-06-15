@@ -1,4 +1,4 @@
-import type { UpdateByType } from '../types.js';
+import type { UpdateByType } from '../../tdlib/shape.js';
 import { upsertScopeNotificationSettings } from '../../store/notificationSettings.js';
 import type { IngestionResources } from '../resources.js';
 
@@ -9,10 +9,8 @@ export async function handleUpdateScopeNotificationSettings(
   resources: IngestionResources
 ): Promise<void> {
   const { database } = resources;
-  const { events } = resources;
-  const scopeKey = await upsertScopeNotificationSettings(database, {
+  await upsertScopeNotificationSettings(database, {
     notificationSettings: update.notification_settings,
     scope: update.scope
   });
-  await events.publishTelegramScopeNotificationSettingsUpdated(scopeKey);
 }

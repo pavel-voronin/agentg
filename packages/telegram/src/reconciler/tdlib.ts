@@ -13,7 +13,7 @@ import type { MessageOwner, MessageSelector } from '../procedures/get-messages/c
 import { readPageRows } from '../procedures/get-messages/read.js';
 import type { Operations } from '../tdlib/operations.js';
 import { priorities } from '../tdlib/priority.js';
-import { tdDate, tdIdNumber } from '../tdlib/value.js';
+import { tdDate, tdIdNumber } from '../tdlib/shape.js';
 import { ownerMessageCondition, parseTdlibInt32, parseTdlibInt53 } from './owner.js';
 
 export type HistoryFetchStep = {
@@ -61,10 +61,11 @@ export async function fetchOwnerHistoryStep(input: {
   }
 
   const history = await fetchOwnerHistory(input.tdlib, input.owner, cursor.fromMessageId);
-  const fetchedMessages = history.messages.filter(isFetchedMessage);
+  const rawMessages = history.messages;
+  const fetchedMessages = rawMessages.filter(isFetchedMessage);
   const coverageEndAt = cursorCoverageEndAt(cursor, fetchedMessages);
   if (fetchedMessages.length === 0) {
-    const reachedBeginning = hasTdlibBeginningProof(history, cursor, fetchedMessages);
+    const reachedBeginning = hasTdlibBeginningProof(cursor, rawMessages);
     return {
       ...(coverageEndAt === undefined || !reachedBeginning
         ? {}
@@ -80,7 +81,7 @@ export async function fetchOwnerHistoryStep(input: {
   }
 
   const oldestDate = oldestMessageDate(fetchedMessages);
-  const reachedBeginning = hasTdlibBeginningProof(history, cursor, fetchedMessages);
+  const reachedBeginning = hasTdlibBeginningProof(cursor, rawMessages);
   const crossedStart = fetchedMessages.some((message) => {
     const date = tdMessageDate(message);
     return date !== undefined && date < interval.startAt;
@@ -135,12 +136,15 @@ async function resolveCursor(
     }
   }
 
-  const localOldest = await readOldestKnownMessageId(database, owner);
+  const localOldest = await readOldestKnownMessage(database, owner);
   if (localOldest !== undefined && !ownerHasDateAnchor(owner)) {
     return {
       canPageProveBeginning: true,
-      coverageEndAt: interval.endAt,
-      fromMessageId: localOldest,
+      coverageEndAt:
+        localOldest.messageDate === undefined
+          ? undefined
+          : nextHistorySecond(localOldest.messageDate),
+      fromMessageId: localOldest.messageId,
       kind: 'cursor'
     };
   }
@@ -173,9 +177,9 @@ async function resolveCursor(
   }
 
   return {
-    canPageProveBeginning: localOldest !== undefined,
+    canPageProveBeginning: true,
     coverageEndAt: interval.endAt,
-    fromMessageId: localOldest ?? 0,
+    fromMessageId: localOldest?.messageId ?? 0,
     kind: 'cursor'
   };
 }
@@ -330,12 +334,13 @@ async function readOldestPageMessageId(
   return oldest === undefined ? undefined : parseTdlibInt53(oldest, 'telegramMessageId');
 }
 
-async function readOldestKnownMessageId(
+async function readOldestKnownMessage(
   database: Database,
   owner: MessageOwner
-): Promise<number | undefined> {
+): Promise<{ messageDate?: Date | undefined; messageId: number } | undefined> {
   const [row] = await database
     .select({
+      messageDate: telegramMessages.date,
       messageId: telegramMessages.id
     })
     .from(telegramMessages)
@@ -343,7 +348,12 @@ async function readOldestKnownMessageId(
     .orderBy(asc(sql`${telegramMessages.id}::bigint`))
     .limit(1);
 
-  return row === undefined ? undefined : parseTdlibInt53(row.messageId, 'telegramMessageId');
+  return row === undefined
+    ? undefined
+    : {
+        messageDate: row.messageDate ?? undefined,
+        messageId: parseTdlibInt53(row.messageId, 'telegramMessageId')
+      };
 }
 
 function ownerHasDateAnchor(owner: MessageOwner): boolean {
@@ -413,35 +423,20 @@ function oldestMessageDate(messages: Message[]): Date | undefined {
     : rest.reduce((oldest, date) => (date < oldest ? date : oldest), first);
 }
 
-function oldestMessageIdOlderThan(
-  messages: Message[],
-  cursorMessageId: number
-): number | undefined {
-  const ids = messages
-    .map(tdMessageId)
-    .filter((id): id is number => id !== undefined && id < cursorMessageId);
-
-  return ids.length === 0 ? undefined : Math.min(...ids);
-}
-
 function hasTdlibBeginningProof(
-  history: Messages,
   cursor: Extract<HistoryCursor, { kind: 'cursor' }>,
-  messages: Message[]
+  rawMessages: readonly (Message | null)[]
 ): boolean {
   if (!cursor.canPageProveBeginning) {
     return false;
   }
-  if (history.total_count === 0) {
-    return messages.length === 0;
-  }
-  if (history.total_count > history.messages.length) {
+  if (rawMessages.some((message) => message === null)) {
     return false;
   }
-  return (
-    cursor.fromMessageId === 0 ||
-    oldestMessageIdOlderThan(messages, cursor.fromMessageId) !== undefined
-  );
+  if (cursor.fromMessageId === 0) {
+    return rawMessages.length === 0;
+  }
+  return false;
 }
 
 function nextHistorySecond(date: Date): Date {

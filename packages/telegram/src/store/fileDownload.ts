@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 
 import type { Database } from '../database/client.js';
 import { telegramFileDownloads } from '../database/schema.js';
-import { tdDate } from '../tdlib/value.js';
+import { tdDate } from '../tdlib/shape.js';
 import type { message as Message } from 'tdlib-types';
 
 type FileDownload = {

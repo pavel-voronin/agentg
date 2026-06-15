@@ -2,7 +2,7 @@ import type { JsonValue } from '@agentg/framework';
 
 import type { Database } from '../database/client.js';
 import { telegramChatPhotos, telegramFiles, telegramUsers } from '../database/schema.js';
-import { tdDate, tdId, tdJsonObject, tdJsonValue, type UpdateByType } from '../tdlib/value.js';
+import { tdDate, tdId, tdJsonObject, tdJsonValue, type UpdateByType } from '../tdlib/shape.js';
 import type { file as File } from 'tdlib-types';
 
 type UserFullInfoUpdate = UpdateByType<'updateUserFullInfo'>;

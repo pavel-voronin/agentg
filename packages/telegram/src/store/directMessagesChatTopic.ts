@@ -1,6 +1,6 @@
 import type { Database } from '../database/client.js';
 import { telegramDirectMessagesChatTopics } from '../database/schema.js';
-import { tdJsonObject, tdJsonValue, type UpdateByType } from '../tdlib/value.js';
+import { tdJsonObject, tdJsonValue, type UpdateByType } from '../tdlib/shape.js';
 
 type DirectMessagesChatTopic = UpdateByType<'updateDirectMessagesChatTopic'>['topic'];
 

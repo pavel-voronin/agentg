@@ -1,5 +1,5 @@
 import { telegramForumTopicInfos } from '../../database/schema.js';
-import { tdJsonObject, type UpdateByType } from '../types.js';
+import { tdJsonObject, type UpdateByType } from '../../tdlib/shape.js';
 import type { IngestionResources } from '../resources.js';
 
 type ForumTopicInfoUpdate = UpdateByType<'updateForumTopicInfo'>;
@@ -10,7 +10,6 @@ export async function handleUpdateForumTopicInfo(
   resources: IngestionResources
 ): Promise<void> {
   const { database } = resources;
-  const { events } = resources;
   const { info } = update;
   const row = forumTopicInfoRow(info);
 
@@ -21,11 +20,6 @@ export async function handleUpdateForumTopicInfo(
       set: row,
       target: [telegramForumTopicInfos.chatId, telegramForumTopicInfos.forumTopicId]
     });
-
-  await events.publishTelegramForumTopicInfoUpdated({
-    chatId: row.chatId,
-    forumTopicId: row.forumTopicId
-  });
 }
 
 function forumTopicInfoRow(info: ForumTopicInfo): typeof telegramForumTopicInfos.$inferInsert {

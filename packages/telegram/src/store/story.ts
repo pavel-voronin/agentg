@@ -4,7 +4,7 @@ import type { JsonValue } from '@agentg/framework';
 
 import type { Database } from '../database/client.js';
 import { telegramStories } from '../database/schema.js';
-import { tdDate, tdJsonValue, type UpdateByType } from '../tdlib/value.js';
+import { tdDate, tdJsonValue, type UpdateByType } from '../tdlib/shape.js';
 
 type Story = UpdateByType<'updateStory'>['story'];
 type StoryFailureMetadata = {

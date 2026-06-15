@@ -1,5 +1,5 @@
 import { storeBusinessMessage } from '../../store/businessMessage.js';
-import type { UpdateByType } from '../types.js';
+import type { UpdateByType } from '../../tdlib/shape.js';
 import type { IngestionResources } from '../resources.js';
 
 type NewBusinessCallbackQueryUpdate = UpdateByType<'updateNewBusinessCallbackQuery'>;
@@ -9,7 +9,6 @@ export async function handleUpdateNewBusinessCallbackQuery(
   resources: IngestionResources
 ): Promise<void> {
   const { database } = resources;
-  const { events } = resources;
   const { files } = resources;
   await storeBusinessMessage(database, {
     businessMessage: update.message,
@@ -22,6 +21,4 @@ export async function handleUpdateNewBusinessCallbackQuery(
   if (replyToMessage !== null) {
     await files.recordMessageFiles(replyToMessage, 'live_update');
   }
-
-  await events.publishTelegramBusinessCallbackQueryReceived(update);
 }

@@ -1,6 +1,10 @@
+import type { SQL } from 'drizzle-orm';
+import { PgDialect } from 'drizzle-orm/pg-core';
 import { describe, expect, it } from 'vitest';
 
+import type { Database } from '../src/database/client.js';
 import {
+  listHistoryChats,
   normalizeCoverageSegments,
   planHistoryCoverageMerge,
   subtractHistoryIntervals
@@ -134,6 +138,37 @@ describe('Telegram history coverage', () => {
       updates: []
     });
   });
+
+  it('lists only restorable stored chats', async () => {
+    const captured: CapturedHistoryChatQuery = {};
+    const chats = await listHistoryChats(
+      historyChatsDatabase(captured, [
+        historyChatRow('100', 'channel', [{ _: 'chatListMain' }]),
+        historyChatRow('200', 'private', []),
+        historyChatRow('300', 'group', null),
+        historyChatRow('400', 'secret', { _: 'chatListMain' }),
+        historyChatRow('500', 'chatTypeUnsupported', [{ _: 'chatListMain' }]),
+        historyChatRow('600', 'group', [{ _: 'chatListArchive' }])
+      ])
+    );
+
+    expect(chats).toEqual([
+      {
+        chatId: '100',
+        type: 'channel'
+      },
+      {
+        chatId: '600',
+        type: 'group'
+      }
+    ]);
+
+    const where = compileCapturedSql(captured.where);
+    expect(where.sql).toContain('case');
+    expect(where.sql).toContain('jsonb_typeof("telegram_chats"."chat_lists") = \'array\'');
+    expect(where.sql).toContain('jsonb_array_length("telegram_chats"."chat_lists") > 0');
+    expect(where.sql).toContain('else false');
+  });
 });
 
 function interval(startAt: string, endAt: string) {
@@ -170,4 +205,53 @@ function coverageRow(
 
 function provedAt(time: string): Date {
   return new Date(`2026-05-01T${time}:00.000Z`);
+}
+
+type CapturedHistoryChatQuery = {
+  where?: SQL;
+};
+
+type HistoryChatRow = {
+  chatLists: unknown;
+  telegramChatId: string;
+  type: string;
+};
+
+function historyChatsDatabase(
+  captured: CapturedHistoryChatQuery,
+  rows: HistoryChatRow[]
+): Database {
+  return {
+    select() {
+      return {
+        from() {
+          return {
+            where(condition: SQL) {
+              captured.where = condition;
+              return {
+                orderBy() {
+                  return Promise.resolve(rows);
+                }
+              };
+            }
+          };
+        }
+      };
+    }
+  } as unknown as Database;
+}
+
+function historyChatRow(telegramChatId: string, type: string, chatLists: unknown): HistoryChatRow {
+  return {
+    chatLists,
+    telegramChatId,
+    type
+  };
+}
+
+function compileCapturedSql(value: SQL | undefined) {
+  if (value === undefined) {
+    throw new Error('Expected captured SQL expression');
+  }
+  return new PgDialect().sqlToQuery(value);
 }

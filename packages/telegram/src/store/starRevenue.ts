@@ -3,7 +3,7 @@ import type { JsonValue } from '@agentg/framework';
 import type { Database } from '../database/client.js';
 import { chatRef, userRef } from '../model/refs.js';
 import { telegramStarRevenueStatuses } from '../database/schema.js';
-import { tdJsonValue, type UpdateByType } from '../tdlib/value.js';
+import { tdJsonValue, type UpdateByType } from '../tdlib/shape.js';
 
 type StarRevenueStatusUpdate = UpdateByType<'updateStarRevenueStatus'>;
 

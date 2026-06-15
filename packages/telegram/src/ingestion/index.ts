@@ -1,9 +1,9 @@
 import {
   createLogger,
+  type EventBus,
   logError,
   recordTelemetryHistogram,
-  timeTelemetrySpan,
-  type EventBus
+  timeTelemetrySpan
 } from '@agentg/framework';
 import { asc } from 'drizzle-orm';
 import type { ChatList$Input } from 'tdlib-types';
@@ -12,6 +12,7 @@ import type { AccountIdentity } from '../account/index.js';
 import type { Database } from '../database/client.js';
 import { telegramChatFolderInfos } from '../database/schema.js';
 import type { FileSubsystem } from '../files/index.js';
+import type { RestoreService } from '../gap-restore/runtime.js';
 import { recordChatFiles, storeChat } from '../store/chat.js';
 import { recordMessageFiles, storeMessage } from '../store/message.js';
 import { storeUser } from '../store/user.js';
@@ -19,7 +20,6 @@ import type { Tdlib } from '../tdlib/index.js';
 import { priorities } from '../tdlib/priority.js';
 import type { LiveCoverageObserver } from '../history/liveCoverage.js';
 import type { StatusTracker } from '../status/tracker.js';
-import { createUpdateEvents } from './events.js';
 import { startIngestionQueueTelemetry } from './queueTelemetry.js';
 import type { IngestionResources } from './resources.js';
 import { persistLiveUpdate } from './catalog.js';
@@ -35,6 +35,7 @@ export type IngestionOptions = {
   database: Database;
   events: EventBus;
   files: FileSubsystem;
+  gapRestore: RestoreService;
   liveCoverage: LiveCoverageObserver;
   status: StatusTracker;
   tdlib: Tdlib;
@@ -65,7 +66,7 @@ export function useIngestion(options: IngestionOptions): IngestionRuntime {
   const resources: IngestionResources = {
     account: options.account.identity,
     database: options.database,
-    events: createUpdateEvents(options.events),
+    events: options.events,
     files: options.files,
     liveCoverage: options.liveCoverage,
     status: options.status
@@ -136,7 +137,11 @@ export function useIngestion(options: IngestionOptions): IngestionRuntime {
       }, STATUS_HEARTBEAT_MS);
       statusHeartbeat.unref();
       await syncInitialChats(options);
+      await updates.drain();
+      await options.liveCoverage.markConnected();
       await options.liveCoverage.syncKnownChats();
+      await options.liveCoverage.wait();
+      await options.gapRestore.restore();
       liveCoverageTick = setInterval(() => {
         void options.liveCoverage.tick();
       }, LIVE_COVERAGE_TICK_MS);

@@ -213,5 +213,8 @@ describe('Telegram history reconciler telemetry', () => {
     expect(errorType(new Error('write failed'), 'persist')).toBe('storage_error');
     expect(errorType(new Error('request timed out'), 'tdlib_fetch')).toBe('timeout');
     expect(errorType(new Error('TDLib unavailable'), 'tdlib_fetch')).toBe('tdlib_unavailable');
+    expect(errorType(new Error('deadlock detected'), 'coverage_check')).toBe(
+      'coverage_write_error'
+    );
   });
 });

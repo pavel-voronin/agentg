@@ -1,12 +1,13 @@
-import type { UpdateByType } from '../types.js';
+import type { UpdateByType } from '../../tdlib/shape.js';
 import type { IngestionResources } from '../resources.js';
 
 type ChatOnlineMemberCountUpdate = UpdateByType<'updateChatOnlineMemberCount'>;
 
-export async function handleUpdateChatOnlineMemberCount(
+export function handleUpdateChatOnlineMemberCount(
   update: ChatOnlineMemberCountUpdate,
   resources: IngestionResources
 ): Promise<void> {
-  const { events } = resources;
-  await events.publishTelegramChatOnlineMemberCountUpdated(update);
+  void update;
+  void resources;
+  return Promise.resolve();
 }

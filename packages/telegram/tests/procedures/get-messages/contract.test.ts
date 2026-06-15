@@ -44,4 +44,36 @@ describe('Telegram getMessages contract', () => {
       })
     ).toThrow();
   });
+
+  it('rejects zero message anchors', () => {
+    expect(() =>
+      getMessagesInputSchema.parse({
+        owner: {
+          chatId: '123',
+          kind: 'chat'
+        },
+        selector: {
+          beforeMessageId: '0',
+          count: 100,
+          kind: 'page'
+        }
+      })
+    ).toThrow();
+  });
+
+  it('rejects zero thread root message ids', () => {
+    expect(() =>
+      getMessagesInputSchema.parse({
+        owner: {
+          chatId: '123',
+          kind: 'messageThread',
+          messageId: '0'
+        },
+        selector: {
+          count: 100,
+          kind: 'page'
+        }
+      })
+    ).toThrow();
+  });
 });

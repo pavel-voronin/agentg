@@ -1,5 +1,7 @@
 import type { EventBus } from '@agentg/framework';
 
+import { publishStatus } from '../events.js';
+
 export type StatusTracker = {
   markAuthenticated(authenticated: boolean): void;
   markConnectionState(connectionState: string): boolean;
@@ -21,7 +23,7 @@ export function createStatusTracker(events: EventBus): StatusTracker {
   };
 
   const publish = (): void => {
-    events.publish('telegram.status', { ...state });
+    publishStatus(events, { ...state });
   };
 
   return {

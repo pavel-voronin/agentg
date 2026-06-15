@@ -4,7 +4,7 @@ import type { JsonValue } from '@agentg/framework';
 
 import type { Database } from '../database/client.js';
 import { telegramKv } from '../database/schema.js';
-import { tdJsonValue } from '../tdlib/value.js';
+import { tdJsonValue } from '../tdlib/shape.js';
 
 export async function upsertTelegramKv(
   database: Database,

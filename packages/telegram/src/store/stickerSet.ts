@@ -2,7 +2,7 @@ import type { JsonValue } from '@agentg/framework';
 
 import type { Database } from '../database/client.js';
 import { telegramStickerSets } from '../database/schema.js';
-import { tdJsonValue, type UpdateByType } from '../tdlib/value.js';
+import { tdJsonValue, type UpdateByType } from '../tdlib/shape.js';
 
 type StickerSet = UpdateByType<'updateStickerSet'>['sticker_set'];
 

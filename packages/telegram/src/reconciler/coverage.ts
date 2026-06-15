@@ -297,10 +297,7 @@ function mergeOwnerSegments(segments: OwnerCoverageSegment[]): OwnerCoverageSegm
       continue;
     }
 
-    if (
-      segment.ownerKey !== last.ownerKey ||
-      segment.startAt.getTime() > last.endAt.getTime() + HISTORY_TICK_MS
-    ) {
+    if (segment.ownerKey !== last.ownerKey || segment.startAt > last.endAt) {
       merged.push({ ...segment });
       continue;
     }

@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 
 import type { Database } from '../database/client.js';
 import { telegramAutosaveSettings } from '../database/schema.js';
-import { type UpdateByType } from '../tdlib/value.js';
+import { type UpdateByType } from '../tdlib/shape.js';
 
 type AutosaveSettingsUpdate = UpdateByType<'updateAutosaveSettings'>;
 type AutosaveSettingsScope = AutosaveSettingsUpdate['scope'];

@@ -1,6 +1,6 @@
 import type { Database } from '../database/client.js';
 import { telegramChatRevenueAmounts } from '../database/schema.js';
-import { type UpdateByType } from '../tdlib/value.js';
+import { type UpdateByType } from '../tdlib/shape.js';
 
 type ChatRevenueAmountUpdate = UpdateByType<'updateChatRevenueAmount'>;
 

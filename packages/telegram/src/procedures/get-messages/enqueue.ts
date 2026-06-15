@@ -10,12 +10,8 @@ export async function enqueueGetMessagesRequest(
   result: 'pending_coalesced' | 'pending_enqueued';
 }> {
   const requestId = getMessagesRequestId(input);
-  const result = await reconciler.enqueue({
+  return reconciler.enqueue({
     ...input,
     requestId
   });
-  return {
-    requestId,
-    result
-  };
 }

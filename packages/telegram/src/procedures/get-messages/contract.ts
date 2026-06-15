@@ -18,6 +18,8 @@ const int32IdSchema = idSchema.refine((value) => {
   return parsed >= -2_147_483_648 && parsed <= 2_147_483_647;
 });
 
+const messageIdSchema = idSchema.refine((value) => Number(value) > 0);
+
 export const messageOwnerSchema = z.discriminatedUnion('kind', [
   z.object({
     chatId: idSchema,
@@ -40,12 +42,12 @@ export const messageOwnerSchema = z.discriminatedUnion('kind', [
   z.object({
     chatId: idSchema,
     kind: z.literal('messageThread'),
-    messageId: idSchema
+    messageId: messageIdSchema
   })
 ]);
 
 export const pageSelectorSchema = z.object({
-  beforeMessageId: idSchema.optional(),
+  beforeMessageId: messageIdSchema.optional(),
   count: positiveIntegerSchema,
   kind: z.literal('page')
 });

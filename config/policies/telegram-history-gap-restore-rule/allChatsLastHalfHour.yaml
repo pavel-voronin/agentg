@@ -1,0 +1,7 @@
+apiVersion: agentg.dev/v1
+kind: TelegramHistoryGapRestoreRule
+metadata:
+  name: allChatsLastHalfHour
+spec:
+  restore: true
+  windowSeconds: 1800

@@ -1,6 +1,6 @@
 import { telegramChatJoinRequests } from '../../database/schema.js';
 import { upsertChatInviteLink } from '../../store/chatMember.js';
-import { tdDate, type UpdateByType } from '../types.js';
+import { tdDate, type UpdateByType } from '../../tdlib/shape.js';
 import type { IngestionResources } from '../resources.js';
 
 type NewChatJoinRequestUpdate = UpdateByType<'updateNewChatJoinRequest'>;
@@ -10,7 +10,6 @@ export async function handleUpdateNewChatJoinRequest(
   resources: IngestionResources
 ): Promise<void> {
   const { database } = resources;
-  const { events } = resources;
   const chatId = String(update.chat_id);
   const inviteLink = update.invite_link ?? null;
   const row = {
@@ -35,8 +34,6 @@ export async function handleUpdateNewChatJoinRequest(
         target: [telegramChatJoinRequests.chatId, telegramChatJoinRequests.userId]
       });
   });
-
-  await events.publishTelegramChatJoinRequestCreated(update);
 }
 
 function requiredDate(value: number): Date {

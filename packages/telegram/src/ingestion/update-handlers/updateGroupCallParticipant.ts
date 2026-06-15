@@ -1,7 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 
 import { telegramGroupCallParticipants } from '../../database/schema.js';
-import { tdJsonValue, type UpdateByType } from '../types.js';
+import { tdJsonValue, type UpdateByType } from '../../tdlib/shape.js';
 import type { IngestionResources } from '../resources.js';
 
 type GroupCallParticipantUpdate = UpdateByType<'updateGroupCallParticipant'>;
@@ -13,7 +13,6 @@ export async function handleUpdateGroupCallParticipant(
   resources: IngestionResources
 ): Promise<void> {
   const { database } = resources;
-  const { events } = resources;
   const groupCallId = update.group_call_id;
   const participantId = messageSenderKey(update.participant.participant_id);
   const removed = update.participant.order === '';
@@ -40,13 +39,6 @@ export async function handleUpdateGroupCallParticipant(
         ]
       });
   }
-
-  await events.publishTelegramGroupCallParticipantUpdatedOrRemoved({
-    groupCallId,
-    participant: tdJsonValue(update.participant) ?? null,
-    participantId,
-    removed
-  });
 }
 
 function telegramGroupCallParticipantRow(

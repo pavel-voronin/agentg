@@ -1,12 +1,13 @@
-import type { UpdateByType } from '../types.js';
+import type { UpdateByType } from '../../tdlib/shape.js';
 import type { IngestionResources } from '../resources.js';
 
 type NewInlineQueryUpdate = UpdateByType<'updateNewInlineQuery'>;
 
-export async function handleUpdateNewInlineQuery(
+export function handleUpdateNewInlineQuery(
   update: NewInlineQueryUpdate,
   resources: IngestionResources
 ): Promise<void> {
-  const { events } = resources;
-  await events.publishTelegramInlineQueryReceived(update);
+  void update;
+  void resources;
+  return Promise.resolve();
 }

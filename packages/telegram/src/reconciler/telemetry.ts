@@ -166,6 +166,9 @@ export function errorType(error: unknown, stage?: Stage): ErrorType {
   if (stage === 'persist') {
     return 'storage_error';
   }
+  if (stage === 'coverage_check') {
+    return 'coverage_write_error';
+  }
   if (isTimeoutError(error)) {
     return 'timeout';
   }

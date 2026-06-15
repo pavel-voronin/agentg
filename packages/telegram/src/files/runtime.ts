@@ -1,6 +1,6 @@
 import type { EventBus } from '@agentg/framework';
 import type { file } from 'tdlib-types';
-import type { UpdateByType } from '../tdlib/value.js';
+import type { UpdateByType } from '../tdlib/shape.js';
 
 import type { Database } from '../database/client.js';
 import { priorities } from '../tdlib/priority.js';

@@ -1,5 +1,5 @@
 import { applyActiveNotificationGroupUpdate } from '../../store/activeNotification.js';
-import type { UpdateByType } from '../types.js';
+import type { UpdateByType } from '../../tdlib/shape.js';
 import type { IngestionResources } from '../resources.js';
 
 type NotificationGroupUpdate = UpdateByType<'updateNotificationGroup'>;
@@ -10,7 +10,6 @@ export async function handleUpdateNotificationGroup(
   resources: IngestionResources
 ): Promise<void> {
   const { database } = resources;
-  const { events } = resources;
   const { files } = resources;
   await applyActiveNotificationGroupUpdate(database, update);
 
@@ -24,5 +23,4 @@ export async function handleUpdateNotificationGroup(
   };
 
   await files.recordNotificationGroupFiles([syntheticGroup], 'live_update');
-  await events.publishTelegramActiveNotificationsUpdated();
 }

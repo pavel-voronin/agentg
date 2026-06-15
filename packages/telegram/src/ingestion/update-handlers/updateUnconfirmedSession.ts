@@ -1,5 +1,5 @@
 import { deleteTelegramKv, upsertTelegramKv } from '../../store/kv.js';
-import type { UpdateByType } from '../types.js';
+import type { UpdateByType } from '../../tdlib/shape.js';
 import type { IngestionResources } from '../resources.js';
 
 type UnconfirmedSessionUpdate = UpdateByType<'updateUnconfirmedSession'>;
@@ -11,7 +11,6 @@ export async function handleUpdateUnconfirmedSession(
   resources: IngestionResources
 ): Promise<void> {
   const { database } = resources;
-  const { events } = resources;
   const session = update.session ?? null;
 
   if (session === null) {
@@ -19,6 +18,4 @@ export async function handleUpdateUnconfirmedSession(
   } else {
     await upsertTelegramKv(database, UNCONFIRMED_SESSION_KEY, session);
   }
-
-  await events.publishTelegramUnconfirmedSessionUpdated(update);
 }

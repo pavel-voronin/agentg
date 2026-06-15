@@ -1,12 +1,13 @@
-import type { UpdateByType } from '../types.js';
+import type { UpdateByType } from '../../tdlib/shape.js';
 import type { IngestionResources } from '../resources.js';
 
 type NewCustomEventUpdate = UpdateByType<'updateNewCustomEvent'>;
 
-export async function handleUpdateNewCustomEvent(
+export function handleUpdateNewCustomEvent(
   update: NewCustomEventUpdate,
   resources: IngestionResources
 ): Promise<void> {
-  const { events } = resources;
-  await events.publishTelegramCustomEventReceived(update);
+  void update;
+  void resources;
+  return Promise.resolve();
 }

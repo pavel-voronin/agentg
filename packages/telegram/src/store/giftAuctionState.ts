@@ -8,7 +8,7 @@ import {
   telegramGifts,
   telegramStickers
 } from '../database/schema.js';
-import { tdJsonObject, tdJsonValue, type UpdateByType } from '../tdlib/value.js';
+import { tdJsonObject, tdJsonValue, type UpdateByType } from '../tdlib/shape.js';
 import type { file as File } from 'tdlib-types';
 
 type GiftAuctionState = UpdateByType<'updateActiveGiftAuctions'>['states'][number];

@@ -4,7 +4,7 @@ import type { Database } from '../database/client.js';
 import { telegramChatPositions, telegramChats } from '../database/schema.js';
 import type { FileSubsystem } from '../files/index.js';
 import type { MediaDownloadPolicyCause } from '../files/policy.js';
-import { tdId, tdJsonObject, tdJsonValue, type TypedObject } from '../tdlib/value.js';
+import { tdId, tdJsonObject, tdJsonValue, type TypedObject } from '../tdlib/shape.js';
 import type {
   chat as Chat,
   message as Message,

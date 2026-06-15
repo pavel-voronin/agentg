@@ -1,5 +1,7 @@
+import { publishMessageUpdated } from '../../events.js';
 import { storeBusinessMessage } from '../../store/businessMessage.js';
-import type { Message, MessageContentUpdate, UpdateByType } from '../types.js';
+import { updatedBusinessMessagePayload } from '../messagePayloads.js';
+import type { UpdateByType } from '../../tdlib/shape.js';
 import type { IngestionResources } from '../resources.js';
 
 type BusinessMessageEditedUpdate = UpdateByType<'updateBusinessMessageEdited'>;
@@ -16,21 +18,13 @@ export async function handleUpdateBusinessMessageEdited(
     connectionId: update.connection_id
   });
 
+  publishMessageUpdated(events, {
+    message: updatedBusinessMessagePayload(update.message.message)
+  });
   await files.recordMessageFiles(update.message.message, 'live_update');
 
   const replyToMessage = update.message.reply_to_message ?? null;
   if (replyToMessage !== null) {
     await files.recordMessageFiles(replyToMessage, 'live_update');
   }
-
-  await events.publishTelegramMessageUpdated(messageContentUpdate(update.message.message));
-}
-
-function messageContentUpdate(message: Message): MessageContentUpdate {
-  return {
-    _: 'updateMessageContent',
-    chat_id: message.chat_id,
-    message_id: message.id,
-    new_content: message.content
-  };
 }

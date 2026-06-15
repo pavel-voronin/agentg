@@ -1,6 +1,6 @@
 import type { Database } from '../database/client.js';
 import { telegramBusinessConnections } from '../database/schema.js';
-import { tdDate, tdJsonValue, type UpdateByType } from '../tdlib/value.js';
+import { tdDate, tdJsonValue, type UpdateByType } from '../tdlib/shape.js';
 
 type BusinessConnection = UpdateByType<'updateBusinessConnection'>['connection'];
 

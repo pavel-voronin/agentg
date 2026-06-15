@@ -3,7 +3,7 @@ import { and, eq, sql, type SQL } from 'drizzle-orm';
 
 import type { Database } from '../database/client.js';
 import { telegramChatPositions, telegramChats } from '../database/schema.js';
-import { tdJsonObject, type TypedObject, type UpdateByType } from '../tdlib/value.js';
+import { tdJsonObject, type TypedObject, type UpdateByType } from '../tdlib/shape.js';
 import type { updateChatAddedToList as ChatAddedToListUpdate } from 'tdlib-types';
 import { chatListKey } from './chatListKey.js';
 

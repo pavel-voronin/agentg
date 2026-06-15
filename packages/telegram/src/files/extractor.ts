@@ -13,7 +13,7 @@ import {
   storyRef,
   userRef
 } from '../model/refs.js';
-import { tdFileOrUndefined } from '../tdlib/value.js';
+import { tdFileOrUndefined } from '../tdlib/shape.js';
 import type { ExtractedFileSlot, FileMediaKind, FileOwner, FileRenderKind } from './types.js';
 
 export type FileSlotUpdate = {

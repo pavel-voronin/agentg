@@ -4,7 +4,7 @@ import type { JsonValue } from '@agentg/framework';
 
 import type { Database } from '../database/client.js';
 import { telegramChatPhotos, telegramFiles, telegramSupergroups } from '../database/schema.js';
-import { tdId, tdJsonObject, tdJsonValue } from '../tdlib/value.js';
+import { tdId, tdJsonObject, tdJsonValue } from '../tdlib/shape.js';
 import type {
   file as File,
   updateSupergroupFullInfo as SupergroupFullInfoUpdate

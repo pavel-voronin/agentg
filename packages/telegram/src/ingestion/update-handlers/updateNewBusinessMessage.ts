@@ -1,7 +1,9 @@
 import { telegramBusinessMessages } from '../../database/schema.js';
 import type { Database } from '../../database/client.js';
+import { publishMessageCreated } from '../../events.js';
 import { recordMessageFiles, storeMessage } from '../../store/message.js';
-import type { UpdateByType } from '../types.js';
+import { createdMessagePayload } from '../messagePayloads.js';
+import type { UpdateByType } from '../../tdlib/shape.js';
 import type { IngestionResources } from '../resources.js';
 
 type NewBusinessMessageUpdate = UpdateByType<'updateNewBusinessMessage'>;
@@ -20,11 +22,15 @@ export async function handleUpdateNewBusinessMessage(
   const { events } = resources;
   const { files } = resources;
   const { recordLiveMessage } = resources.liveCoverage;
-  const { businessMessageInserted, messageInserted } = await storeNewBusinessMessage(database, {
+  const stored = await storeNewBusinessMessage(database, {
     businessMessage: update.message,
     connectionId: update.connection_id
   });
   const message = update.message.message;
+
+  if (stored.messageInserted || stored.businessMessageInserted) {
+    publishMessageCreated(events, { message: createdMessagePayload(message) });
+  }
 
   await recordMessageFiles(files, message, 'live_update');
 
@@ -35,10 +41,6 @@ export async function handleUpdateNewBusinessMessage(
 
   if (message.date > 0) {
     void recordLiveMessage(String(message.chat_id), new Date(message.date * 1000));
-  }
-
-  if (messageInserted || businessMessageInserted) {
-    await events.publishTelegramMessageCreated(message);
   }
 }
 

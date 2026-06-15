@@ -1,5 +1,5 @@
 import { replaceTermsOfService } from '../../store/termsOfService.js';
-import type { UpdateByType } from '../types.js';
+import type { UpdateByType } from '../../tdlib/shape.js';
 import type { IngestionResources } from '../resources.js';
 
 type TermsOfServiceUpdate = UpdateByType<'updateTermsOfService'>;
@@ -9,7 +9,5 @@ export async function handleUpdateTermsOfService(
   resources: IngestionResources
 ): Promise<void> {
   const { database } = resources;
-  const { events } = resources;
   await replaceTermsOfService(database, update);
-  await events.publishTelegramTermsOfServiceRequired(update);
 }

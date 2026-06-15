@@ -21,6 +21,14 @@ describe('Telegram message store', () => {
     expect(query.sql).toContain('then null else "telegram_messages"."file_slots_recorded_at" end');
   });
 
+  it('does not overwrite unread poll vote state from full message upserts', async () => {
+    const captured: { set?: Record<string, unknown> } = {};
+
+    await storeMessages(storeDatabase(captured), [telegramMessage()]);
+
+    expect(captured.set).not.toHaveProperty('containsUnreadPollVotes');
+  });
+
   it('clears file slot marker when updateMessageContent changes content', async () => {
     const captured: { set?: Record<string, unknown> } = {};
 

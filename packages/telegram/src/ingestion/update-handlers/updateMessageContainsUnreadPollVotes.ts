@@ -1,14 +1,15 @@
 import { upsertTelegramChatFragment } from '../../store/chat.js';
 import { upsertTelegramMessageFragment } from '../../store/message.js';
 import type { IngestionResources } from '../resources.js';
-import type { MessageContainsUnreadPollVotesUpdate } from '../types.js';
+import type { UpdateByType } from '../../tdlib/shape.js';
+
+type MessageContainsUnreadPollVotesUpdate = UpdateByType<'updateMessageContainsUnreadPollVotes'>;
 
 export async function handleUpdateMessageContainsUnreadPollVotes(
   update: MessageContainsUnreadPollVotesUpdate,
   resources: IngestionResources
 ): Promise<void> {
   const { database } = resources;
-  const { events } = resources;
   const chatId = String(update.chat_id);
   const messageId = String(update.message_id);
 
@@ -22,7 +23,4 @@ export async function handleUpdateMessageContainsUnreadPollVotes(
     id: chatId,
     unreadPollVoteCount: update.unread_poll_vote_count
   });
-
-  await events.publishTelegramStoredMessageUpdated({ chatId, messageId });
-  await events.publishTelegramChatDirectoryUpdated(chatId);
 }

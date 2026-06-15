@@ -5,7 +5,7 @@ import type { JsonObject, JsonValue } from '@agentg/framework';
 import { telegramMessages } from '../../database/schema.js';
 import { reactionTypeKey } from '../../store/reaction.js';
 import { upsertTelegramMessageFragment } from '../../store/message.js';
-import { tdJsonValue, type UpdateByType } from '../types.js';
+import { tdJsonValue, type UpdateByType } from '../../tdlib/shape.js';
 import type { IngestionResources } from '../resources.js';
 
 type MessageReactionUpdate = UpdateByType<'updateMessageReaction'>;
@@ -26,7 +26,6 @@ export async function handleUpdateMessageReaction(
   resources: IngestionResources
 ): Promise<void> {
   const { database } = resources;
-  const { events } = resources;
   const oldReactions = uniqueReactionTypes(update.old_reaction_types);
   const newReactions = uniqueReactionTypes(update.new_reaction_types);
   const removed = [...oldReactions.keys()].filter((key) => !newReactions.has(key));
@@ -124,8 +123,6 @@ export async function handleUpdateMessageReaction(
       ])
     });
   });
-
-  await events.publishTelegramStoredMessageUpdated({ chatId, messageId });
 }
 
 function uniqueReactionTypes(reactions: readonly ReactionType[]): Map<string, ReactionType> {

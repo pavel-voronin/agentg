@@ -28,6 +28,13 @@ export type HistoryCoverageWriteResult = {
   intervals: HistoryCoverageWriteSegment[];
 };
 
+export type HistoryChatType = 'private' | 'secret' | 'group' | 'channel';
+
+export type HistoryChat = {
+  chatId: string;
+  type: HistoryChatType;
+};
+
 export type HistoryCoverageMergePlan = {
   deleteIds: number[];
   inserts: HistoryCoverageSegment[];
@@ -51,8 +58,13 @@ const coverageLocks = new Map<string, Promise<void>>();
 const HISTORY_COVERAGE_BATCH_CHUNK_SIZE = 5000;
 
 export async function listHistoryChatIds(database: Database): Promise<string[]> {
+  return (await listHistoryChats(database)).map((chat) => chat.chatId);
+}
+
+export async function listHistoryChats(database: Database): Promise<HistoryChat[]> {
   const rows = await database
     .select({
+      chatLists: telegramChats.chatLists,
       telegramChatId: telegramChats.id,
       type: sql<string>`case
         when ${telegramChats.type}->>'_' = 'chatTypePrivate' then 'private'
@@ -64,9 +76,48 @@ export async function listHistoryChatIds(database: Database): Promise<string[]> 
       end`
     })
     .from(telegramChats)
+    .where(
+      sql`case
+      when jsonb_typeof(${telegramChats.chatLists}) = 'array'
+      then jsonb_array_length(${telegramChats.chatLists}) > 0
+      else false
+    end`
+    )
     .orderBy(asc(telegramChats.id));
 
-  return rows.filter((row) => isHistoryCoverageChatType(row.type)).map((row) => row.telegramChatId);
+  const chats: HistoryChat[] = [];
+  for (const row of rows) {
+    if (!isHistoryChatType(row.type) || !isRestorableChatLists(row.chatLists)) {
+      continue;
+    }
+    chats.push({
+      chatId: row.telegramChatId,
+      type: row.type
+    });
+  }
+  return chats;
+}
+
+export async function readHistoryLiveBoundary(
+  database: Database,
+  chatId: string
+): Promise<Date | null> {
+  const [row] = await database
+    .select({
+      eligibleFrom: telegramHistoryLiveChats.eligibleFrom,
+      startAt: telegramHistoryLiveWindows.startAt
+    })
+    .from(telegramHistoryLiveChats)
+    .innerJoin(telegramHistoryLiveWindows, isNull(telegramHistoryLiveWindows.closedAt))
+    .where(eq(telegramHistoryLiveChats.telegramChatId, chatId))
+    .orderBy(asc(telegramHistoryLiveWindows.startAt))
+    .limit(1);
+
+  if (row === undefined) {
+    return null;
+  }
+
+  return maxDate(row.startAt, row.eligibleFrom);
 }
 
 export async function listHistoryCoverage(
@@ -702,6 +753,10 @@ function uniqueSortedStrings(values: string[]): string[] {
   return [...new Set(values)].sort();
 }
 
-function isHistoryCoverageChatType(type: string): boolean {
+function isHistoryChatType(type: string): type is HistoryChatType {
   return type === 'private' || type === 'secret' || type === 'group' || type === 'channel';
+}
+
+function isRestorableChatLists(value: unknown): boolean {
+  return Array.isArray(value) && value.length > 0;
 }

@@ -1,10 +1,11 @@
 import { defineModule } from '@agentg/framework';
 
-import { fileDownloadRulesPolicy } from '../policies/policies.js';
+import { fileDownloadRulesPolicy, historyGapRestoreRulesPolicy } from '../policies/policies.js';
 import { createAccountIdentity } from './account/index.js';
 import { readConfig } from './config.js';
 import { createDatabase } from './database/client.js';
 import { useFiles } from './files/index.js';
+import { createRestoreService } from './gap-restore/runtime.js';
 import { createLiveCoverageObserver } from './history/liveCoverage.js';
 import { useIngestion } from './ingestion/index.js';
 import { getChatProcedure } from './procedures/getChat.js';
@@ -20,6 +21,7 @@ export const telegramModule = defineModule('telegram', {
   config: readConfig,
   setup({ config, events, resource, usePolicy }) {
     const getDownloadRules = usePolicy(fileDownloadRulesPolicy);
+    const getGapRestoreRules = usePolicy(historyGapRestoreRulesPolicy);
     const database = resource('database', ({ startup }) => {
       const resource = createDatabase(config.databaseUrl);
 
@@ -75,12 +77,28 @@ export const telegramModule = defineModule('telegram', {
     });
     const status = resource('status', () => createStatusTracker(events));
     const account = resource('account', () => createAccountIdentity());
+    const procedureResources = {
+      database,
+      events,
+      files,
+      reconciler,
+      tdlib
+    };
+    const getMessages = getMessagesProcedure(procedureResources);
+    const gapRestore = resource('gapRestore', () =>
+      createRestoreService({
+        database,
+        getMessages,
+        getRules: getGapRestoreRules
+      })
+    );
     resource('ingestion', ({ startup }) => {
       const ingestion = useIngestion({
         account,
         database,
         events,
         files,
+        gapRestore,
         liveCoverage,
         status,
         tdlib,
@@ -91,18 +109,11 @@ export const telegramModule = defineModule('telegram', {
 
       return undefined;
     });
-    const procedureResources = {
-      database,
-      events,
-      files,
-      reconciler,
-      tdlib
-    };
 
     return {
       getChat: getChatProcedure(procedureResources),
       listRecentMessages: listRecentMessagesProcedure(procedureResources),
-      getMessages: getMessagesProcedure(procedureResources),
+      getMessages,
       requestFile: requestFileProcedure(procedureResources),
       searchMessages: searchMessagesProcedure(procedureResources),
       status: () => ({

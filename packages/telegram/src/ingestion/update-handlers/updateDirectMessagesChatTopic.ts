@@ -1,6 +1,6 @@
 import { storeDirectMessagesChatTopic } from '../../store/directMessagesChatTopic.js';
 import { recordMessageFiles, storeMessage } from '../../store/message.js';
-import type { UpdateByType } from '../types.js';
+import type { UpdateByType } from '../../tdlib/shape.js';
 import type { IngestionResources } from '../resources.js';
 
 type DirectMessagesChatTopicUpdate = UpdateByType<'updateDirectMessagesChatTopic'>;
@@ -10,7 +10,6 @@ export async function handleUpdateDirectMessagesChatTopic(
   resources: IngestionResources
 ): Promise<void> {
   const { database } = resources;
-  const { events } = resources;
   const { files } = resources;
   const { topic } = update;
   const lastMessage = topic.last_message ?? null;
@@ -26,9 +25,4 @@ export async function handleUpdateDirectMessagesChatTopic(
   if (lastMessage !== null) {
     await recordMessageFiles(files, lastMessage, 'live_update');
   }
-
-  await events.publishTelegramDirectMessagesChatTopicUpdated({
-    chatId: String(topic.chat_id),
-    topicId: String(topic.id)
-  });
 }

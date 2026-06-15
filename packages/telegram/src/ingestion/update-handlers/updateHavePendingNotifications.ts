@@ -1,12 +1,13 @@
-import type { UpdateByType } from '../types.js';
+import type { UpdateByType } from '../../tdlib/shape.js';
 import type { IngestionResources } from '../resources.js';
 
 type HavePendingNotificationsUpdate = UpdateByType<'updateHavePendingNotifications'>;
 
-export async function handleUpdateHavePendingNotifications(
+export function handleUpdateHavePendingNotifications(
   update: HavePendingNotificationsUpdate,
   resources: IngestionResources
 ): Promise<void> {
-  const { events } = resources;
-  await events.publishTelegramPendingNotificationsUpdated(update);
+  void update;
+  void resources;
+  return Promise.resolve();
 }

@@ -1,6 +1,6 @@
 import type { Database } from '../database/client.js';
 import { telegramUsers } from '../database/schema.js';
-import { tdJsonObject } from '../tdlib/value.js';
+import { tdJsonObject } from '../tdlib/shape.js';
 import type { user as User } from 'tdlib-types';
 
 export async function storeUser(database: Database, user: User): Promise<void> {

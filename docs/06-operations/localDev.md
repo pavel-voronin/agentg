@@ -164,7 +164,7 @@ OpenTelemetry traces and RPC duration metrics. Use the procedure name and
 `rpc.service` label to filter client and server spans for a specific call path.
 
 Domain facts still travel over NATS. To inspect state changes, subscribe to
-explicit domain subjects such as `telegram.update.chat.>`.
+explicit domain subjects such as `telegram.message.>` or `telegram.files.>`.
 
 ## Expected Services
 

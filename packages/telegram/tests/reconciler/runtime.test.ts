@@ -64,7 +64,11 @@ vi.mock('../../src/store/message.js', () => store);
 
 vi.mock('../../src/reconciler/telemetry.js', () => ({
   errorType: vi.fn((_error: unknown, stage?: string) =>
-    stage === 'publish' ? 'event_publish_error' : 'unexpected_error'
+    stage === 'publish'
+      ? 'event_publish_error'
+      : stage === 'coverage_check'
+        ? 'coverage_write_error'
+        : 'unexpected_error'
   ),
   recordCoverageIntervals: vi.fn(),
   recordFailure: vi.fn(),
@@ -272,11 +276,43 @@ describe('Telegram history reconciler runtime', () => {
 
   it('schedules the next deferred job wakeup after a restart tick finds no claimable job', async () => {
     const nextRunAt = new Date('2026-06-12T00:00:30.000Z');
+    const database = transactionDatabase();
     jobs.claimNextHistoryJob.mockResolvedValue(null);
     jobs.readNextHistoryJobRunAt.mockResolvedValueOnce(nextRunAt).mockResolvedValue(undefined);
 
     const runtime = useHistoryReconciler({
-      database: transactionDatabase(),
+      database,
+      events: eventBusMock(),
+      files: fileSubsystemMock(),
+      tdlib: {} as never
+    });
+    const close = await runtime.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(jobs.claimNextHistoryJob).toHaveBeenCalledTimes(1);
+    expect(jobs.readNextHistoryJobRunAt).toHaveBeenCalledWith(database, {
+      lockTimeoutMs: 300_000
+    });
+
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(jobs.claimNextHistoryJob).toHaveBeenCalledTimes(2);
+
+    close();
+  });
+
+  it('preempts a future wakeup when a new job is enqueued', async () => {
+    const nextRunAt = new Date('2026-06-12T00:15:00.000Z');
+    const input = getMessagesInput();
+    const requestId = 'telegram.getMessages;selector=page;owner=chat:123;anchor=latest;count=100';
+    const database = transactionDatabase();
+    jobs.claimNextHistoryJob.mockResolvedValue(null);
+    jobs.readNextHistoryJobRunAt.mockResolvedValueOnce(nextRunAt).mockResolvedValue(undefined);
+    jobs.enqueueHistoryJob.mockResolvedValue({
+      requestId,
+      result: 'pending_enqueued'
+    });
+
+    const runtime = useHistoryReconciler({
+      database,
       events: eventBusMock(),
       files: fileSubsystemMock(),
       tdlib: {} as never
@@ -285,8 +321,81 @@ describe('Telegram history reconciler runtime', () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(jobs.claimNextHistoryJob).toHaveBeenCalledTimes(1);
 
-    await vi.advanceTimersByTimeAsync(30_000);
+    await runtime.reconciler.enqueue({
+      ...input,
+      requestId
+    });
+    await vi.advanceTimersByTimeAsync(0);
+
     expect(jobs.claimNextHistoryJob).toHaveBeenCalledTimes(2);
+
+    close();
+  });
+
+  it('writes failed state before publishing a terminal failed event', async () => {
+    const order: string[] = [];
+    const input = getMessagesInput();
+    const job = {
+      ...historyJob(input),
+      attemptCount: 5
+    };
+    const database = transactionDatabase();
+    const events = eventBusMock();
+    events.publish.mockImplementation((type: string) => {
+      if (type === 'telegram.messages.failed') {
+        order.push('publish-failed');
+      }
+    });
+    jobs.failHistoryJob.mockImplementation(() => {
+      order.push('fail-job');
+      return Promise.resolve();
+    });
+    jobs.claimNextHistoryJob.mockResolvedValueOnce(job).mockResolvedValueOnce(null);
+    readiness.checkMessagesReadiness.mockRejectedValue(new Error('unexpected read failure'));
+
+    const runtime = useHistoryReconciler({
+      database,
+      events,
+      files: fileSubsystemMock(),
+      tdlib: {} as never
+    });
+    const close = await runtime.start();
+    await vi.runAllTimersAsync();
+
+    expect(order).toEqual(['fail-job', 'publish-failed']);
+
+    close();
+  });
+
+  it('does not keep a terminal failed job running when failed event publish throws', async () => {
+    const input = getMessagesInput();
+    const job = {
+      ...historyJob(input),
+      attemptCount: 5
+    };
+    const database = transactionDatabase();
+    const events = eventBusMock();
+    events.publish.mockImplementation((type: string) => {
+      if (type === 'telegram.messages.failed') {
+        throw new Error('event bus closed');
+      }
+    });
+    jobs.claimNextHistoryJob.mockResolvedValueOnce(job).mockResolvedValueOnce(null);
+    readiness.checkMessagesReadiness.mockRejectedValue(new Error('unexpected read failure'));
+
+    const runtime = useHistoryReconciler({
+      database,
+      events,
+      files: fileSubsystemMock(),
+      tdlib: {} as never
+    });
+    const close = await runtime.start();
+    await vi.runAllTimersAsync();
+
+    expect(jobs.failHistoryJob).toHaveBeenCalledWith(database, {
+      reason: 'coverage_write_error',
+      requestId: job.requestId
+    });
 
     close();
   });
@@ -320,6 +429,19 @@ function historyInterval(): HistoryInterval {
   return {
     endAt: new Date('2026-06-12T00:00:00.000Z'),
     startAt: new Date('2026-06-11T23:00:00.000Z')
+  };
+}
+
+function getMessagesInput(): GetMessagesInput {
+  return {
+    owner: {
+      chatId: '123',
+      kind: 'chat'
+    },
+    selector: {
+      count: 100,
+      kind: 'page'
+    }
   };
 }
 

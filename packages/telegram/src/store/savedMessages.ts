@@ -4,7 +4,7 @@ import type { JsonValue } from '@agentg/framework';
 
 import type { Database } from '../database/client.js';
 import { telegramSavedMessagesTags, telegramSavedMessagesTopics } from '../database/schema.js';
-import { tdJsonObject, tdJsonValue, type UpdateByType } from '../tdlib/value.js';
+import { tdJsonObject, tdJsonValue, type UpdateByType } from '../tdlib/shape.js';
 import { reactionTypeKey } from './reaction.js';
 
 type SavedMessagesTagsUpdate = UpdateByType<'updateSavedMessagesTags'>;

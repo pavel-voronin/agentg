@@ -1,6 +1,6 @@
 import { upsertTelegramChatFragment } from '../../store/chat.js';
 import { storeMessage } from '../../store/message.js';
-import type { UpdateByType } from '../types.js';
+import type { UpdateByType } from '../../tdlib/shape.js';
 import type { IngestionResources } from '../resources.js';
 
 type ChatReplyMarkupUpdate = UpdateByType<'updateChatReplyMarkup'>;
@@ -10,7 +10,6 @@ export async function handleUpdateChatReplyMarkup(
   resources: IngestionResources
 ): Promise<void> {
   const { database } = resources;
-  const { events } = resources;
   const { files } = resources;
   const chatId = String(update.chat_id);
   const replyMarkupMessage = update.reply_markup_message ?? null;
@@ -29,6 +28,4 @@ export async function handleUpdateChatReplyMarkup(
   if (replyMarkupMessage !== null) {
     await files.recordMessageFiles(replyMarkupMessage, 'live_update');
   }
-
-  await events.publishTelegramChatDirectoryUpdated(chatId);
 }

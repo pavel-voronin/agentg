@@ -1,12 +1,13 @@
-import type { UpdateByType } from '../types.js';
+import type { UpdateByType } from '../../tdlib/shape.js';
 import type { IngestionResources } from '../resources.js';
 
 type PendingTextMessageUpdate = UpdateByType<'updatePendingTextMessage'>;
 
-export async function handleUpdatePendingTextMessage(
+export function handleUpdatePendingTextMessage(
   update: PendingTextMessageUpdate,
   resources: IngestionResources
 ): Promise<void> {
-  const { events } = resources;
-  await events.publishTelegramPendingTextMessageUpdated(update);
+  void update;
+  void resources;
+  return Promise.resolve();
 }

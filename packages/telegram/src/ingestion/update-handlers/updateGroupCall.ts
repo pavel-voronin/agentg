@@ -1,5 +1,5 @@
 import { telegramGroupCalls } from '../../database/schema.js';
-import { tdJsonValue, type UpdateByType } from '../types.js';
+import { tdJsonValue, type UpdateByType } from '../../tdlib/shape.js';
 import type { IngestionResources } from '../resources.js';
 
 type GroupCallUpdate = UpdateByType<'updateGroupCall'>;
@@ -10,13 +10,11 @@ export async function handleUpdateGroupCall(
   resources: IngestionResources
 ): Promise<void> {
   const { database } = resources;
-  const { events } = resources;
   const row = telegramGroupCallRow(groupCall);
   await database.insert(telegramGroupCalls).values(row).onConflictDoUpdate({
     set: row,
     target: telegramGroupCalls.id
   });
-  await events.publishTelegramGroupCallUpdated(groupCall);
 }
 
 function telegramGroupCallRow(groupCall: GroupCall): typeof telegramGroupCalls.$inferInsert {

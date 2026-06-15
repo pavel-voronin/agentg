@@ -1,6 +1,6 @@
 import { telegramForumTopics } from '../../database/schema.js';
 import type { Database } from '../../database/client.js';
-import { tdId, tdJsonObject, tdJsonValue, type UpdateByType } from '../types.js';
+import { tdId, tdJsonObject, tdJsonValue, type UpdateByType } from '../../tdlib/shape.js';
 import type { IngestionResources } from '../resources.js';
 
 type ForumTopicUpdate = UpdateByType<'updateForumTopic'>;
@@ -10,13 +10,7 @@ export async function handleUpdateForumTopic(
   resources: IngestionResources
 ): Promise<void> {
   const { database } = resources;
-  const { events } = resources;
-  const chatId = String(update.chat_id);
   await upsertTelegramForumTopicState(database, update);
-  await events.publishTelegramForumTopicUpdated({
-    chatId,
-    forumTopicId: update.forum_topic_id
-  });
 }
 
 async function upsertTelegramForumTopicState(

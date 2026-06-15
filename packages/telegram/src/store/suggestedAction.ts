@@ -4,7 +4,7 @@ import type { JsonValue } from '@agentg/framework';
 
 import type { Database } from '../database/client.js';
 import { telegramSuggestedActions } from '../database/schema.js';
-import { tdJsonValue, type UpdateByType } from '../tdlib/value.js';
+import { tdJsonValue, type UpdateByType } from '../tdlib/shape.js';
 
 type SuggestedActionsUpdate = UpdateByType<'updateSuggestedActions'>;
 type SuggestedAction = SuggestedActionsUpdate['added_actions'][number];

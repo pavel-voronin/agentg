@@ -1,6 +1,6 @@
 import type { Database } from '../database/client.js';
 import { telegramChatBoosts } from '../database/schema.js';
-import { tdJsonObject, type UpdateByType } from '../tdlib/value.js';
+import { tdJsonObject, type UpdateByType } from '../tdlib/shape.js';
 
 type ChatBoostUpdate = UpdateByType<'updateChatBoost'>;
 

@@ -1,5 +1,5 @@
 import { telegramGroupCallVerificationStates } from '../../database/schema.js';
-import { tdJsonValue, type UpdateByType } from '../types.js';
+import { tdJsonValue, type UpdateByType } from '../../tdlib/shape.js';
 import type { IngestionResources } from '../resources.js';
 
 type GroupCallVerificationStateUpdate = UpdateByType<'updateGroupCallVerificationState'>;
@@ -9,7 +9,6 @@ export async function handleUpdateGroupCallVerificationState(
   resources: IngestionResources
 ): Promise<void> {
   const { database } = resources;
-  const { events } = resources;
   const emojis = tdJsonValue(update.emojis) ?? [];
   const row: typeof telegramGroupCallVerificationStates.$inferInsert = {
     emojis,
@@ -27,6 +26,4 @@ export async function handleUpdateGroupCallVerificationState(
       },
       target: telegramGroupCallVerificationStates.groupCallId
     });
-
-  await events.publishTelegramGroupCallVerificationStateUpdated(update);
 }

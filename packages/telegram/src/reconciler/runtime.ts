@@ -2,6 +2,12 @@ import { createLogger, logError, type EventBus } from '@agentg/framework';
 import type { message as Message } from 'tdlib-types';
 
 import type { Database } from '../database/client.js';
+import {
+  HISTORY_QUEUE_CHANGED_EVENT,
+  publishHistoryQueueChanged,
+  publishMessagesFailed,
+  publishMessagesReady
+} from '../events.js';
 import type { FileSubsystem } from '../files/index.js';
 import { orderHistoryIntervalsClosestToPresent } from '../history/coverage.js';
 import type { HistoryInterval } from '../history/time.js';
@@ -57,7 +63,6 @@ type Options = {
   tdlib: Operations;
 };
 
-const QUEUE_CHANGED_EVENT = 'telegram.history.reconciler.queueChanged';
 const DEFAULT_LOCK_TIMEOUT_MS = 5 * 60 * 1000;
 const MAX_TRANSIENT_ATTEMPTS = 5;
 const BASE_DEFER_MS = 30 * 1000;
@@ -71,6 +76,7 @@ export function useHistoryReconciler(options: Options): HistoryReconcilerRuntime
   let pending = false;
   let pendingDelayMs: number | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let timerDueAt: number | undefined;
   let queueSubscription: { unsubscribe(): void } | undefined;
 
   const schedule = (delayMs = 0): void => {
@@ -82,16 +88,22 @@ export function useHistoryReconciler(options: Options): HistoryReconcilerRuntime
       pendingDelayMs = pendingDelayMs === undefined ? delayMs : Math.min(pendingDelayMs, delayMs);
       return;
     }
+    const normalizedDelayMs = Math.max(0, delayMs);
+    const dueAt = Date.now() + normalizedDelayMs;
     if (timer !== undefined) {
-      return;
+      if (timerDueAt !== undefined && timerDueAt <= dueAt) {
+        return;
+      }
+      clearTimeout(timer);
+      timer = undefined;
+      timerDueAt = undefined;
     }
-    timer = setTimeout(
-      () => {
-        timer = undefined;
-        runTick();
-      },
-      Math.max(0, delayMs)
-    );
+    timerDueAt = dueAt;
+    timer = setTimeout(() => {
+      timer = undefined;
+      timerDueAt = undefined;
+      runTick();
+    }, normalizedDelayMs);
     timer.unref();
   };
 
@@ -254,7 +266,7 @@ export function useHistoryReconciler(options: Options): HistoryReconcilerRuntime
       'telegram.history.reconciler.publish',
       { 'owner.kind': normalizeMessageOwner(job.owner).kind, stage: 'publish' },
       () => {
-        options.events.publish('telegram.messages.ready', {
+        publishMessagesReady(options.events, {
           owner: job.owner,
           requestId: job.requestId,
           selector: job.selector
@@ -262,7 +274,35 @@ export function useHistoryReconciler(options: Options): HistoryReconcilerRuntime
         return Promise.resolve();
       }
     );
-    await completeHistoryJob(options.database, job.requestId);
+    try {
+      await completeHistoryJob(options.database, job.requestId);
+    } catch (failure) {
+      logger.error(
+        {
+          event: 'telegram.history_reconciler.job_complete_failed_after_ready',
+          ownerKey: job.ownerKey,
+          requestId: job.requestId,
+          ...logError(failure)
+        },
+        'telegram history reconciler job complete failed after ready'
+      );
+      try {
+        await releaseHistoryJob(options.database, job.requestId);
+      } catch (releaseFailure) {
+        logger.error(
+          {
+            event: 'telegram.history_reconciler.job_release_failed_after_ready',
+            ownerKey: job.ownerKey,
+            requestId: job.requestId,
+            ...logError(releaseFailure)
+          },
+          'telegram history reconciler job release failed after ready'
+        );
+      }
+      publishQueueChanged();
+      schedule(1000);
+      return;
+    }
     recordTransition(transition);
     recordJobDuration({
       ownerKind: normalizeMessageOwner(job.owner).kind,
@@ -289,16 +329,11 @@ export function useHistoryReconciler(options: Options): HistoryReconcilerRuntime
     startedAt: number
   ): Promise<void> {
     recordFailure(stage, type);
-    options.events.publish('telegram.messages.failed', {
-      owner: job.owner,
-      reason: type,
-      requestId: job.requestId,
-      selector: job.selector
-    });
     await failHistoryJob(options.database, {
       reason: type,
       requestId: job.requestId
     });
+    publishFailed(job, type);
     recordTransition('failed');
     recordJobDuration({
       errorType: type,
@@ -351,7 +386,7 @@ export function useHistoryReconciler(options: Options): HistoryReconcilerRuntime
   }
 
   async function scheduleNextActiveJob(): Promise<void> {
-    const nextRunAt = await readNextHistoryJobRunAt(options.database);
+    const nextRunAt = await readNextHistoryJobRunAt(options.database, { lockTimeoutMs });
     if (nextRunAt !== undefined) {
       schedule(nextRunAt.getTime() - Date.now());
     }
@@ -364,7 +399,7 @@ export function useHistoryReconciler(options: Options): HistoryReconcilerRuntime
 
   function publishQueueChanged(): void {
     try {
-      options.events.publish(QUEUE_CHANGED_EVENT);
+      publishHistoryQueueChanged(options.events);
     } catch (failure) {
       logger.warn(
         {
@@ -372,6 +407,27 @@ export function useHistoryReconciler(options: Options): HistoryReconcilerRuntime
           ...logError(failure)
         },
         'telegram history reconciler queue change publish failed'
+      );
+    }
+  }
+
+  function publishFailed(job: HistoryJob, type: ErrorType): void {
+    try {
+      publishMessagesFailed(options.events, {
+        owner: job.owner,
+        reason: type,
+        requestId: job.requestId,
+        selector: job.selector
+      });
+    } catch (failure) {
+      logger.warn(
+        {
+          event: 'telegram.history_reconciler.failed_publish_failed',
+          ownerKey: job.ownerKey,
+          requestId: job.requestId,
+          ...logError(failure)
+        },
+        'telegram history reconciler failed publish failed'
       );
     }
   }
@@ -384,6 +440,7 @@ export function useHistoryReconciler(options: Options): HistoryReconcilerRuntime
       clearTimeout(timer);
       timer = undefined;
     }
+    timerDueAt = undefined;
     queueSubscription?.unsubscribe();
     queueSubscription = undefined;
     return undefined;
@@ -392,12 +449,12 @@ export function useHistoryReconciler(options: Options): HistoryReconcilerRuntime
   const reconciler: HistoryReconciler = {
     async enqueue(input): Promise<EnqueueResult> {
       const result = await enqueueHistoryJob(options.database, input);
-      if (result === 'pending_enqueued') {
+      if (result.result === 'pending_enqueued') {
         logger.info(
           {
             event: 'telegram.history_reconciler.request_accepted',
             ownerKey: normalizeMessageOwner(input.owner).key,
-            requestId: input.requestId,
+            requestId: result.requestId,
             selectorKind: input.selector.kind
           },
           'telegram history reconciler request accepted'
@@ -410,11 +467,13 @@ export function useHistoryReconciler(options: Options): HistoryReconcilerRuntime
         {
           event: 'telegram.history_reconciler.request_coalesced',
           ownerKey: normalizeMessageOwner(input.owner).key,
-          requestId: input.requestId,
+          requestId: result.requestId,
           selectorKind: input.selector.kind
         },
         'telegram history reconciler request coalesced'
       );
+      publishQueueChanged();
+      schedule(0);
       return result;
     },
     getStats() {
@@ -425,7 +484,7 @@ export function useHistoryReconciler(options: Options): HistoryReconcilerRuntime
   return {
     reconciler,
     async start(): Promise<() => undefined> {
-      queueSubscription = options.events.subscribe(QUEUE_CHANGED_EVENT, () => {
+      queueSubscription = options.events.subscribe(HISTORY_QUEUE_CHANGED_EVENT, () => {
         schedule(0);
       });
       await recordCurrentStats();

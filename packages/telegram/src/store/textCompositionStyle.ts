@@ -2,7 +2,7 @@ import type { JsonValue } from '@agentg/framework';
 
 import type { Database } from '../database/client.js';
 import { telegramTextCompositionStyles } from '../database/schema.js';
-import { tdJsonValue } from '../tdlib/value.js';
+import { tdJsonValue } from '../tdlib/shape.js';
 
 type TextCompositionStyleRuntimeRecord = Record<string, unknown> & {
   readonly creator_user_id?: unknown;

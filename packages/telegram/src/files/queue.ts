@@ -17,7 +17,7 @@ import {
 } from '../database/schema.js';
 import { MESSAGE_MODEL, messageModelParts } from '../model/refs.js';
 import { assertPriority, priorities } from '../tdlib/priority.js';
-import { tdFileOrUndefined, tdJsonObject } from '../tdlib/value.js';
+import { tdFileOrUndefined, tdJsonObject } from '../tdlib/shape.js';
 import { publishAssetOwnersAndQueue, publishFileQueueUpdated } from './events.js';
 import { handleFileSnapshot, refreshMessageFileSlot } from './persistence.js';
 import type {

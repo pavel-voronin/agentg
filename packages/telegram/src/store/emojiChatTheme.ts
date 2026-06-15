@@ -1,5 +1,5 @@
 import type { Database } from '../database/client.js';
-import { type UpdateByType } from '../tdlib/value.js';
+import { type UpdateByType } from '../tdlib/shape.js';
 import { storeTelegramBackground } from './chatBackground.js';
 import { upsertTelegramKv } from './kv.js';
 

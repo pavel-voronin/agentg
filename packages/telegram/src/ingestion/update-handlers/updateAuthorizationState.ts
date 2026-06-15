@@ -1,6 +1,8 @@
 import { storeAuthorizationState } from '../../store/authorizationState.js';
-import type { AuthorizationStateUpdate } from '../types.js';
+import type { UpdateByType } from '../../tdlib/shape.js';
 import type { IngestionResources } from '../resources.js';
+
+type AuthorizationStateUpdate = UpdateByType<'updateAuthorizationState'>;
 
 export async function handleUpdateAuthorizationState(
   update: AuthorizationStateUpdate,

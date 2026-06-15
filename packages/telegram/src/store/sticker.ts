@@ -2,7 +2,7 @@ import type { JsonValue } from '@agentg/framework';
 
 import type { Database } from '../database/client.js';
 import { telegramFiles, telegramStickers } from '../database/schema.js';
-import { tdId, tdJsonObject, tdJsonValue, type UpdateByType } from '../tdlib/value.js';
+import { tdId, tdJsonObject, tdJsonValue, type UpdateByType } from '../tdlib/shape.js';
 import type { file as File } from 'tdlib-types';
 
 type Sticker = UpdateByType<'updateAnimatedEmojiMessageClicked'>['sticker'];

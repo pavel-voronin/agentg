@@ -1,4 +1,4 @@
-import { createLogger, type EventBus } from '@agentg/framework';
+import { createLogger } from '@agentg/framework';
 import type {
   $Function,
   Chat,
@@ -12,13 +12,12 @@ import type {
   error$Input
 } from 'tdlib-types';
 
-import { invokeWithEvents, type InvokeOptions, type Invoker } from './operationEvents.js';
+import type { InvokeOptions, Invoker } from './operationTypes.js';
 
 const logger = createLogger('telegram');
 
 type OperationDeps = {
   client: Invoker;
-  events: EventBus;
 };
 
 export function createOperations(deps: OperationDeps) {
@@ -351,9 +350,7 @@ async function invoke(
 ): Promise<unknown> {
   for (;;) {
     try {
-      return await invokeWithEvents(deps.events, deps.client, request, {
-        ...options
-      });
+      return await deps.client.invoke(request, options);
     } catch (error) {
       const floodWaitSeconds = parseFloodWaitSeconds(error);
       if (floodWaitSeconds === undefined) {

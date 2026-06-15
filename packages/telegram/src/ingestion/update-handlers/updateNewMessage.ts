@@ -1,6 +1,10 @@
+import { publishMessageCreated } from '../../events.js';
 import { recordMessageFiles, storeMessage } from '../../store/message.js';
-import type { NewMessageUpdate } from '../types.js';
+import { createdMessagePayload } from '../messagePayloads.js';
+import type { UpdateByType } from '../../tdlib/shape.js';
 import type { IngestionResources } from '../resources.js';
+
+type NewMessageUpdate = UpdateByType<'updateNewMessage'>;
 
 export async function handleUpdateNewMessage(
   { message }: NewMessageUpdate,
@@ -14,11 +18,11 @@ export async function handleUpdateNewMessage(
     return;
   }
 
-  await recordMessageFiles(files, message, 'live_update');
+  publishMessageCreated(events, { message: createdMessagePayload(message) });
 
   if (message.date > 0) {
     void recordLiveMessage(String(message.chat_id), new Date(message.date * 1000));
   }
 
-  await events.publishTelegramMessageCreated(message);
+  await recordMessageFiles(files, message, 'live_update');
 }

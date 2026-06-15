@@ -1,5 +1,5 @@
 import { telegramManagedBots } from '../../database/schema.js';
-import type { UpdateByType } from '../types.js';
+import type { UpdateByType } from '../../tdlib/shape.js';
 import type { IngestionResources } from '../resources.js';
 
 type ManagedBotUpdate = UpdateByType<'updateManagedBot'>;
@@ -9,7 +9,6 @@ export async function handleUpdateManagedBot(
   resources: IngestionResources
 ): Promise<void> {
   const { database } = resources;
-  const { events } = resources;
   const row = {
     botUserId: String(update.bot_user_id),
     creatorUserId: String(update.user_id)
@@ -18,10 +17,5 @@ export async function handleUpdateManagedBot(
   await database.insert(telegramManagedBots).values(row).onConflictDoUpdate({
     set: row,
     target: telegramManagedBots.botUserId
-  });
-
-  await events.publishTelegramManagedBotUpdated({
-    botUserId: row.botUserId,
-    creatorUserId: row.creatorUserId
   });
 }

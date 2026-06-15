@@ -1,6 +1,6 @@
 import type { Database } from '../database/client.js';
 import { telegramChatInviteLinks, telegramChatMembers } from '../database/schema.js';
-import { tdId, tdJsonObject, tdJsonValue, type UpdateByType } from '../tdlib/value.js';
+import { tdId, tdJsonObject, tdJsonValue, type UpdateByType } from '../tdlib/shape.js';
 
 type ChatMemberUpdate = UpdateByType<'updateChatMember'>;
 export type ChatInviteLink = NonNullable<ChatMemberUpdate['invite_link']>;

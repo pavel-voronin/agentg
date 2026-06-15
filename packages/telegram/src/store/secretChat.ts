@@ -1,6 +1,6 @@
 import type { Database } from '../database/client.js';
 import { telegramSecretChats } from '../database/schema.js';
-import { tdJsonObject, type UpdateByType } from '../tdlib/value.js';
+import { tdJsonObject, type UpdateByType } from '../tdlib/shape.js';
 
 type SecretChat = UpdateByType<'updateSecretChat'>['secret_chat'];
 

@@ -1,6 +1,6 @@
 import type { Database } from '../database/client.js';
 import { telegramBasicGroups } from '../database/schema.js';
-import { tdId, tdJsonObject, type UpdateByType } from '../tdlib/value.js';
+import { tdId, tdJsonObject, type UpdateByType } from '../tdlib/shape.js';
 
 type BasicGroup = UpdateByType<'updateBasicGroup'>['basic_group'];
 

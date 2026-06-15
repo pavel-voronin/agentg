@@ -1,5 +1,5 @@
 import { deleteStory, upsertStory } from '../../store/story.js';
-import type { UpdateByType } from '../types.js';
+import type { UpdateByType } from '../../tdlib/shape.js';
 import type { IngestionResources } from '../resources.js';
 
 type StoryPostSucceededUpdate = UpdateByType<'updateStoryPostSucceeded'>;
@@ -9,7 +9,6 @@ export async function handleUpdateStoryPostSucceeded(
   resources: IngestionResources
 ): Promise<void> {
   const { database } = resources;
-  const { events } = resources;
   const { files } = resources;
   const posterChatId = String(update.story.poster_chat_id);
 
@@ -20,6 +19,4 @@ export async function handleUpdateStoryPostSucceeded(
     await files.deleteStoryFileSlots({ posterChatId, storyId: update.old_story_id });
     await deleteStory(database, { posterChatId, storyId: update.old_story_id });
   }
-
-  await events.publishTelegramStoryPostSucceeded(update);
 }

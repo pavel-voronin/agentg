@@ -9,7 +9,7 @@ import { extractFileSlots } from '../files/extractor.js';
 import { fileAssetKey } from '../files/persistence.js';
 import type { ExtractedFileSlot } from '../files/types.js';
 import { MESSAGE_MODEL, messageModelId } from '../model/refs.js';
-import { tdJsonObject } from '../tdlib/value.js';
+import { tdJsonObject } from '../tdlib/shape.js';
 
 type MessageFileProjection = {
   content: ReturnType<typeof tdJsonObject>;

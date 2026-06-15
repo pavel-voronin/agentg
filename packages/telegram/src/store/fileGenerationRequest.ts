@@ -1,6 +1,6 @@
 import type { Database } from '../database/client.js';
 import { telegramFileGenerationRequests } from '../database/schema.js';
-import { type UpdateByType } from '../tdlib/value.js';
+import { type UpdateByType } from '../tdlib/shape.js';
 
 type FileGenerationStartUpdate = UpdateByType<'updateFileGenerationStart'>;
 

@@ -5,7 +5,7 @@ import {
   telegramActiveNotificationGroups,
   telegramActiveNotifications
 } from '../database/schema.js';
-import { tdDate, tdId, tdJsonValue, type UpdateByType } from '../tdlib/value.js';
+import { tdDate, tdId, tdJsonValue, type UpdateByType } from '../tdlib/shape.js';
 import type { message as Message } from 'tdlib-types';
 import { storeMessage } from './message.js';
 

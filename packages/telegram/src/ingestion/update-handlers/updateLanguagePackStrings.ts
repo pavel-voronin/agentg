@@ -1,7 +1,7 @@
 import { and, eq, sql } from 'drizzle-orm';
 
 import { telegramLanguagePackStrings } from '../../database/schema.js';
-import { tdJsonValue, type UpdateByType } from '../types.js';
+import { tdJsonValue, type UpdateByType } from '../../tdlib/shape.js';
 import type { IngestionResources } from '../resources.js';
 
 type LanguagePackStringsUpdate = UpdateByType<'updateLanguagePackStrings'>;

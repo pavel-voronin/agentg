@@ -40,6 +40,7 @@ import {
   missingOwnerCoverageIntervals
 } from '../../src/reconciler/coverage.js';
 import { getMessagesProcedure } from '../../src/procedures/getMessages.js';
+import type { GetMessagesInput } from '../../src/procedures/get-messages/contract.js';
 import type { ProcedureResources } from '../../src/procedures/resources.js';
 import type { MessageStorageRow } from '../../src/views/message.js';
 import { toReadMessages } from '../../src/views/message.js';
@@ -387,7 +388,12 @@ function procedure(input: FakeDatabaseInput, reconciler = fakeReconciler('pendin
 
 function fakeReconciler(result: 'pending_coalesced' | 'pending_enqueued') {
   return {
-    enqueue: vi.fn(() => Promise.resolve(result)),
+    enqueue: vi.fn((input: GetMessagesInput & { requestId: string }) =>
+      Promise.resolve({
+        requestId: input.requestId,
+        result
+      })
+    ),
     getStats: vi.fn()
   };
 }

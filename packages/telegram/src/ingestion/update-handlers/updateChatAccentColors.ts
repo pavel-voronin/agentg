@@ -1,4 +1,4 @@
-import { tdId, tdJsonValue, type UpdateByType } from '../types.js';
+import { tdId, tdJsonValue, type UpdateByType } from '../../tdlib/shape.js';
 import { upsertTelegramChatFragment, type TelegramChatFragment } from '../../store/chat.js';
 import type { IngestionResources } from '../resources.js';
 
@@ -9,7 +9,6 @@ export async function handleUpdateChatAccentColors(
   resources: IngestionResources
 ): Promise<void> {
   const { database } = resources;
-  const { events } = resources;
   const row: TelegramChatFragment = {
     accentColorId: update.accent_color_id,
     backgroundCustomEmojiId: tdId(update.background_custom_emoji_id),
@@ -20,5 +19,4 @@ export async function handleUpdateChatAccentColors(
   };
 
   await upsertTelegramChatFragment(database, row);
-  await events.publishTelegramChatDirectoryUpdated(String(update.chat_id));
 }

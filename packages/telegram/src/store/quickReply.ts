@@ -8,7 +8,7 @@ import {
   telegramQuickReplyMessages,
   telegramQuickReplyShortcuts
 } from '../database/schema.js';
-import { tdId, tdJsonValue, type UpdateByType } from '../tdlib/value.js';
+import { tdId, tdJsonValue, type UpdateByType } from '../tdlib/shape.js';
 
 type QuickReplyShortcut = UpdateByType<'updateQuickReplyShortcut'>['shortcut'];
 type QuickReplyMessage = UpdateByType<'updateQuickReplyShortcutMessages'>['messages'][number];

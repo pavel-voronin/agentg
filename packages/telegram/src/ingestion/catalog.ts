@@ -1,7 +1,8 @@
 import { createLogger } from '@agentg/framework';
+import type { Update } from 'tdlib-types';
 
 import type { IngestionResources } from './resources.js';
-import type { IngestionUpdate, UpdateByType } from './types.js';
+import type { UpdateByType } from '../tdlib/shape.js';
 import { handleUpdateAccentColors } from './update-handlers/updateAccentColors.js';
 import { handleUpdateActiveEmojiReactions } from './update-handlers/updateActiveEmojiReactions.js';
 import { handleUpdateActiveGiftAuctions } from './update-handlers/updateActiveGiftAuctions.js';
@@ -183,7 +184,7 @@ import { handleUpdateUserStatus } from './update-handlers/updateUserStatus.js';
 import { handleUpdateVideoPublished } from './update-handlers/updateVideoPublished.js';
 import { handleUpdateWebAppMessageSent } from './update-handlers/updateWebAppMessageSent.js';
 
-type UpdateHandler<Type extends IngestionUpdate['_']> = (
+type UpdateHandler<Type extends Update['_']> = (
   update: UpdateByType<Type>,
   resources: IngestionResources
 ) => Promise<void> | void;
@@ -370,17 +371,17 @@ export const updateHandlers = {
   updateUserStatus: handleUpdateUserStatus,
   updateVideoPublished: handleUpdateVideoPublished,
   updateWebAppMessageSent: handleUpdateWebAppMessageSent
-} satisfies { [Type in IngestionUpdate['_']]: UpdateHandler<Type> };
+} satisfies { [Type in Update['_']]: UpdateHandler<Type> };
 
 export const handledUpdateTypes = Object.freeze(
   Object.keys(updateHandlers).sort()
-) as readonly IngestionUpdate['_'][];
+) as readonly Update['_'][];
 
 type RuntimeUpdate = { readonly _: string };
 
 const runtimeUpdateHandlers = updateHandlers as Record<
   string,
-  (nextUpdate: IngestionUpdate, resources: IngestionResources) => Promise<void> | void
+  (nextUpdate: Update, resources: IngestionResources) => Promise<void> | void
 >;
 const logger = createLogger('telegram');
 
@@ -400,5 +401,5 @@ export async function persistLiveUpdate(
     return;
   }
 
-  await handler(update as IngestionUpdate, resources);
+  await handler(update as Update, resources);
 }

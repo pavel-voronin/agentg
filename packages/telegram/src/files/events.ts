@@ -4,6 +4,7 @@ import {
   readFileQueueStats,
   readFileRefsForOwners
 } from './read.js';
+import { publishFileOwnerChanged, publishFileQueueChanged } from '../events.js';
 import type { FileSubsystemOptions } from './runtime.js';
 import { recordQueueStatsTelemetry } from './telemetry.js';
 import type { FileOwnerChangedEvent, FileOwnerKey } from './types.js';
@@ -48,12 +49,12 @@ export async function publishFileOwnersUpdated(
       owner,
       updatedAt
     };
-    options.events.publish('telegram.files.ownerChanged', event);
+    publishFileOwnerChanged(options.events, event);
   }
 }
 
 export async function publishFileQueueUpdated(options: FileEventOptions): Promise<void> {
   const stats = await readFileQueueStats(options.database);
   recordQueueStatsTelemetry(stats);
-  options.events.publish('telegram.files.queueChanged', stats);
+  publishFileQueueChanged(options.events, stats);
 }

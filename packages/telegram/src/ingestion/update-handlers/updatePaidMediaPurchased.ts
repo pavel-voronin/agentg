@@ -1,12 +1,13 @@
-import type { UpdateByType } from '../types.js';
+import type { UpdateByType } from '../../tdlib/shape.js';
 import type { IngestionResources } from '../resources.js';
 
 type PaidMediaPurchasedUpdate = UpdateByType<'updatePaidMediaPurchased'>;
 
-export async function handleUpdatePaidMediaPurchased(
+export function handleUpdatePaidMediaPurchased(
   update: PaidMediaPurchasedUpdate,
   resources: IngestionResources
 ): Promise<void> {
-  const { events } = resources;
-  await events.publishTelegramPaidMediaPurchased(update);
+  void update;
+  void resources;
+  return Promise.resolve();
 }

@@ -1,5 +1,5 @@
 import { storeAutosaveSettings } from '../../store/autosaveSettings.js';
-import type { UpdateByType } from '../types.js';
+import type { UpdateByType } from '../../tdlib/shape.js';
 import type { IngestionResources } from '../resources.js';
 
 type AutosaveSettingsUpdate = UpdateByType<'updateAutosaveSettings'>;
@@ -9,7 +9,5 @@ export async function handleUpdateAutosaveSettings(
   resources: IngestionResources
 ): Promise<void> {
   const { database } = resources;
-  const { events } = resources;
-  const result = await storeAutosaveSettings(database, update);
-  await events.publishTelegramAutosaveSettingsUpdated(result);
+  await storeAutosaveSettings(database, update);
 }

@@ -1,5 +1,5 @@
 import { storeBasicGroup } from '../../store/basicGroup.js';
-import type { UpdateByType } from '../types.js';
+import type { UpdateByType } from '../../tdlib/shape.js';
 import type { IngestionResources } from '../resources.js';
 
 type BasicGroupUpdate = UpdateByType<'updateBasicGroup'>;

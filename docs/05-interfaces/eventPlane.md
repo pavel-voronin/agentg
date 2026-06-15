@@ -57,17 +57,19 @@ Telegram publishes:
 - `telegram.login.started`
 - `telegram.login.completed`
 - `telegram.login.failed`
-- `telegram.update.chat.discovered`
-- `telegram.update.chat.directory.updated`
-- `telegram.chat_folders.updated`
-- `telegram.update.message.created`
-- `telegram.update.message.updated`
-- `telegram.update.message.deleted`
-- `telegram.user.updated`
-- `telegram.history.coverage.changed`
-- `telegram.tdlib.{method}.started`
-- `telegram.tdlib.{method}.completed`
-- `telegram.tdlib.{method}.failed`
+- `telegram.messages.ready`
+- `telegram.messages.failed`
+- `telegram.history.reconciler.queueChanged`
+- `telegram.message.created`
+- `telegram.message.updated`
+- `telegram.message.deleted`
+- `telegram.files.ownerChanged`
+- `telegram.files.queueChanged`
+
+The Telegram module defines its event-bus publication surface in
+`packages/telegram/src/events.ts`. TDLib updates and TDLib operation lifecycle
+details are private Telegram implementation details and are not event-plane
+subjects.
 
 Internal RPC calls are telemetry signals, not NATS facts. The HTTP RPC transport
 records client and server spans and duration metrics. Modules publish NATS facts

@@ -1,4 +1,4 @@
-import type { UpdateByType } from '../types.js';
+import type { UpdateByType } from '../../tdlib/shape.js';
 
 type MessageLiveLocationViewedUpdate = UpdateByType<'updateMessageLiveLocationViewed'>;
 

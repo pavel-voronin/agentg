@@ -16,8 +16,7 @@ import { handleUpdateNewMessage } from '../src/ingestion/update-handlers/updateN
 describe('TDLib update handlers', () => {
   it('persists updateNewMessage through message type operations', async () => {
     const context = createHandlerContext();
-    const { insert, onConflictDoNothing, publishTelegramMessageCreated, recordMessageFiles } =
-      context;
+    const { insert, onConflictDoNothing, recordMessageFiles } = context;
     const message = wireMessage({
       _: 'message',
       author_signature: 'channel admin',
@@ -100,8 +99,40 @@ describe('TDLib update handlers', () => {
     expect(onConflictDoNothing).toHaveBeenCalledWith({
       target: [telegramMessages.chatId, telegramMessages.id]
     });
+    expect(context.events.publish).toHaveBeenCalledWith(
+      'telegram.message.created',
+      expect.anything()
+    );
+    expect(eventData(context, 'telegram.message.created')).toMatchObject({
+      message: {
+        chat: {
+          _model: 'telegram.chat',
+          id: '20'
+        },
+        id: '20:10',
+        media: {
+          files: []
+        },
+        sender: {
+          _model: 'telegram.user',
+          id: '30'
+        },
+        telegramMessageId: '10',
+        text: 'example.com',
+        textEntities: [
+          {
+            kind: 'url',
+            length: 11,
+            offset: 0,
+            url: 'https://example.com/'
+          }
+        ]
+      }
+    });
+    expect(context.events.publish.mock.invocationCallOrder[0]).toBeLessThan(
+      recordMessageFiles.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY
+    );
     expect(recordMessageFiles).toHaveBeenCalledWith(update.message, 'live_update');
-    expect(publishTelegramMessageCreated).toHaveBeenCalledWith(update.message);
   });
 
   it('does not publish side effects when updateNewMessage already exists', async () => {
@@ -133,19 +164,12 @@ describe('TDLib update handlers', () => {
 
     expect(context.recordMessageFiles).not.toHaveBeenCalled();
     expect(context.recordLiveMessage).not.toHaveBeenCalled();
-    expect(context.publishTelegramMessageCreated).not.toHaveBeenCalled();
+    expect(context.events.publish).not.toHaveBeenCalled();
   });
 
   it('persists updateNewChat last_message as a message row and chat last_message_id', async () => {
     const context = createHandlerContext();
-    const {
-      insert,
-      publishTelegramChatDiscovered,
-      publishTelegramChatDirectoryUpdated,
-      recordChatFiles,
-      recordMessageFiles,
-      values
-    } = context;
+    const { insert, recordChatFiles, recordMessageFiles, values } = context;
     const update = {
       _: 'updateNewChat',
       chat: {
@@ -195,13 +219,11 @@ describe('TDLib update handlers', () => {
     );
     expect(recordChatFiles).toHaveBeenCalledWith(update.chat, 'live_update');
     expect(recordMessageFiles).toHaveBeenCalledWith(update.chat.last_message, 'live_update');
-    expect(publishTelegramChatDiscovered).toHaveBeenCalledWith('20');
-    expect(publishTelegramChatDirectoryUpdated).toHaveBeenCalledWith('20');
   });
 
   it('persists updateChatLastMessage message and updates chat last_message_id', async () => {
     const context = createHandlerContext();
-    const { insert, publishTelegramChatDirectoryUpdated, recordMessageFiles, values } = context;
+    const { insert, recordMessageFiles, values } = context;
     const update = {
       _: 'updateChatLastMessage',
       chat_id: 20,
@@ -242,7 +264,6 @@ describe('TDLib update handlers', () => {
       })
     );
     expect(recordMessageFiles).toHaveBeenCalledWith(update.last_message, 'live_update');
-    expect(publishTelegramChatDirectoryUpdated).toHaveBeenCalledWith('20');
   });
 
   it('clears chat last_message_id when updateChatLastMessage has no last_message', async () => {
@@ -268,7 +289,7 @@ describe('TDLib update handlers', () => {
 
   it('hard-deletes stored messages for permanent updateDeleteMessages', async () => {
     const context = createHandlerContext();
-    const { deleteRows, publishTelegramMessageDeleted, transaction } = context;
+    const { deleteRows, transaction } = context;
 
     const update = {
       _: 'updateDeleteMessages',
@@ -283,18 +304,33 @@ describe('TDLib update handlers', () => {
     expect(deleteRows).toHaveBeenCalledWith(telegramFileSlots);
     expect(deleteRows).toHaveBeenCalledWith(telegramActiveLiveLocationMessages);
     expect(deleteRows).toHaveBeenCalledWith(telegramMessages);
-    expect(publishTelegramMessageDeleted).toHaveBeenCalledWith({
-      chatId: '20',
-      deletedAt: expect.any(Date) as unknown,
-      fromCache: false,
-      isPermanent: true,
-      messageIds: ['10', '11']
+    expect(context.events.publish).toHaveBeenCalledWith(
+      'telegram.message.deleted',
+      expect.anything()
+    );
+    expect(eventData(context, 'telegram.message.deleted')).toMatchObject({
+      delete: {
+        chat: {
+          _model: 'telegram.chat',
+          id: '20'
+        },
+        messages: [
+          {
+            _model: 'telegram.message',
+            id: '20:10'
+          },
+          {
+            _model: 'telegram.message',
+            id: '20:11'
+          }
+        ]
+      }
     });
   });
 
   it('ignores cache-only updateDeleteMessages', async () => {
     const context = createHandlerContext();
-    const { publishTelegramMessageDeleted, transaction } = context;
+    const { transaction } = context;
 
     const update = {
       _: 'updateDeleteMessages',
@@ -306,12 +342,12 @@ describe('TDLib update handlers', () => {
     await handleUpdateDeleteMessages(update, resourcesFromContext(context));
 
     expect(transaction).not.toHaveBeenCalled();
-    expect(publishTelegramMessageDeleted).not.toHaveBeenCalled();
+    expect(context.events.publish).not.toHaveBeenCalled();
   });
 
   it('ignores non-permanent updateDeleteMessages', async () => {
     const context = createHandlerContext();
-    const { publishTelegramMessageDeleted, transaction } = context;
+    const { transaction } = context;
 
     const update = {
       _: 'updateDeleteMessages',
@@ -323,7 +359,7 @@ describe('TDLib update handlers', () => {
     await handleUpdateDeleteMessages(update, resourcesFromContext(context));
 
     expect(transaction).not.toHaveBeenCalled();
-    expect(publishTelegramMessageDeleted).not.toHaveBeenCalled();
+    expect(context.events.publish).not.toHaveBeenCalled();
   });
 
   it('does not mark another sender reaction as chosen from existing aggregate rows', async () => {
@@ -383,10 +419,6 @@ describe('TDLib update handlers', () => {
       },
       used_sender_id: null
     });
-    expect(context.publishTelegramStoredMessageUpdated).toHaveBeenCalledWith({
-      chatId: '20',
-      messageId: '10'
-    });
   });
 
   it('marks current account reaction as chosen from account identity resource', async () => {
@@ -439,13 +471,7 @@ function resourcesFromContext(
       senderKey: context.currentAccountSenderKey
     },
     database: context.database,
-    events: {
-      publishTelegramChatDiscovered: context.publishTelegramChatDiscovered,
-      publishTelegramChatDirectoryUpdated: context.publishTelegramChatDirectoryUpdated,
-      publishTelegramMessageCreated: context.publishTelegramMessageCreated,
-      publishTelegramMessageDeleted: context.publishTelegramMessageDeleted,
-      publishTelegramStoredMessageUpdated: context.publishTelegramStoredMessageUpdated
-    },
+    events: context.events,
     files: {
       recordChatFiles: context.recordChatFiles,
       recordMessageFiles: context.recordMessageFiles
@@ -520,27 +546,21 @@ function createHandlerContext(
     ),
     update: updateRows
   };
-  const publishTelegramChatDirectoryUpdated = vi.fn(() => Promise.resolve(undefined));
-  const publishTelegramChatDiscovered = vi.fn(() => Promise.resolve(undefined));
-  const publishTelegramMessageCreated = vi.fn(() => Promise.resolve(undefined));
-  const publishTelegramMessageDeleted = vi.fn(() => Promise.resolve(undefined));
-  const publishTelegramStoredMessageUpdated = vi.fn(() => Promise.resolve(undefined));
   const recordChatFiles = vi.fn(() => Promise.resolve(undefined));
   const recordMessageFiles = vi.fn(() => Promise.resolve(undefined));
   const recordLiveMessage = vi.fn(() => Promise.resolve(undefined));
+  const events: { publish: ReturnType<typeof vi.fn<(type: string, data?: unknown) => void>> } = {
+    publish: vi.fn<(type: string, data?: unknown) => void>()
+  };
 
   return {
     currentAccountSenderKey: vi.fn(() => options.currentAccountSenderKey ?? 'user:30'),
     database: database as unknown as IngestionResources['database'],
     deleteRows,
+    events,
     insert,
     onConflictDoNothing,
     onConflictDoUpdate,
-    publishTelegramChatDiscovered,
-    publishTelegramChatDirectoryUpdated,
-    publishTelegramMessageCreated,
-    publishTelegramMessageDeleted,
-    publishTelegramStoredMessageUpdated,
     recordChatFiles,
     recordLiveMessage,
     recordMessageFiles,
@@ -549,6 +569,11 @@ function createHandlerContext(
     transaction: database.transaction,
     values
   };
+}
+
+function eventData(context: ReturnType<typeof createHandlerContext>, type: string): unknown {
+  const event = context.events.publish.mock.calls.find(([eventType]) => eventType === type);
+  return event?.[1];
 }
 
 function wireMessage(

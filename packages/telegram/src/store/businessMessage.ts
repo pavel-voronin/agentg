@@ -1,6 +1,6 @@
 import { telegramBusinessMessages } from '../database/schema.js';
 import type { Database } from '../database/client.js';
-import { type UpdateByType } from '../tdlib/value.js';
+import { type UpdateByType } from '../tdlib/shape.js';
 import { storeMessage } from './message.js';
 
 type BusinessMessage = UpdateByType<'updateBusinessMessageEdited'>['message'];

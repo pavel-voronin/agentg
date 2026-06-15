@@ -3,7 +3,7 @@ import { rm } from 'node:fs/promises';
 import { createLogger, logError } from '@agentg/framework';
 import type { chat, message, updateFile, updateMessageContent } from 'tdlib-types';
 
-import { tdJsonObject } from '../tdlib/value.js';
+import { tdJsonObject } from '../tdlib/shape.js';
 import { publishAssetOwnersAndQueue } from './events.js';
 import { runFileGeneration } from './generation.js';
 import {
