@@ -47,8 +47,8 @@ asynchronous HistoryReconciler completion.
 
 - `MessageSelector`: the domain shape of the requested messages.
 - `MessageOwner`: the Telegram entity whose message history is being read.
-- `ReadMessage`: the Telegram domain read model defined by
-  `readMessageSchema`.
+- `Message`: the Telegram domain read model defined by
+  `messageSchema`.
 - `PageSelector`: a selector for an interactive chat window.
 - `RangeSelector`: a selector for all messages in a time interval.
 - `MessagePage`: the local read model rows selected for a `PageSelector`.
@@ -126,12 +126,12 @@ TDLib page size and it is not a safety cap.
 ```ts
 type GetMessagesOutput =
   | {
-      messages: ReadMessage[];
+      messages: Message[];
       reachedStart: boolean;
       status: 'ready';
     }
   | {
-      messages: ReadMessage[];
+      messages: Message[];
       status: 'ready';
     }
   | {
@@ -143,7 +143,7 @@ type GetMessagesOutput =
 `pending` returns no messages. It means Telegram accepted responsibility for
 making the selector ready.
 
-`ready` returns `ReadMessage[]`. It must not return raw TDLib messages, storage
+`ready` returns `Message[]`. It must not return raw TDLib messages, storage
 rows, file queue rows, or file readiness state.
 
 `ready` for a `PageSelector` always includes `reachedStart` because chat
@@ -583,7 +583,7 @@ are downloaded.
 
 Future consumers will need explicit content readiness levels:
 
-- `basic`: message history is ready and `ReadMessage[]` can be returned from the
+- `basic`: message history is ready and `Message[]` can be returned from the
   local read model.
 - `complete`: message history is ready, file slots for the selected messages are
   materialized, and every file asset referenced by those slots is locally ready.
@@ -794,16 +794,19 @@ Target layout:
 packages/telegram/src/procedures/getMessages.ts
 packages/telegram/src/procedures/get-messages/contract.ts
 packages/telegram/src/procedures/get-messages/procedure.ts
-packages/telegram/src/procedures/get-messages/read.ts
-packages/telegram/src/procedures/get-messages/readiness.ts
 packages/telegram/src/procedures/get-messages/requestId.ts
 packages/telegram/src/procedures/get-messages/enqueue.ts
 
-packages/telegram/src/reconciler/coverage.ts
-packages/telegram/src/reconciler/jobs.ts
-packages/telegram/src/reconciler/owner.ts
+packages/telegram/src/domain/models/messageSelection.ts
+packages/telegram/src/repositories/messageReadinessRepository.ts
+packages/telegram/src/repositories/messageRepository.ts
+packages/telegram/src/storage/messageReadStorage.ts
+packages/telegram/src/storage/messageRowStorage.ts
+packages/telegram/src/storage/reconcilerCoverageStorage.ts
+packages/telegram/src/storage/reconcilerJobStorage.ts
 packages/telegram/src/reconciler/runtime.ts
-packages/telegram/src/reconciler/tdlib.ts
+packages/telegram/src/reconciler/adapters/historySource.ts
+packages/telegram/src/reconciler/adapters/historyPage.ts
 packages/telegram/src/reconciler/telemetry.ts
 
 packages/telegram/src/files/messageSlots.ts
@@ -817,22 +820,28 @@ Responsibilities:
   public procedure.
 - `procedures/get-messages/procedure.ts` owns the `ready | pending`
   orchestration and must stay thin.
-- `procedures/get-messages/read.ts` owns local `ReadMessage[]` reads by owner
-  and selector.
-- `procedures/get-messages/readiness.ts` owns readiness checks and coverage gap
-  decisions.
 - `procedures/get-messages/requestId.ts` owns canonical request id encoding.
 - `procedures/get-messages/enqueue.ts` owns pending job enqueue/coalescing and
   calls the reconciler subsystem.
-- `reconciler/owner.ts` owns internal owner normalization, owner keys, owner
-  validation, and owner-scoped local filters.
-- `reconciler/coverage.ts` owns owner-scoped coverage reads, writes, live
-  coverage mapping, and interval subtraction for message owners.
-- `reconciler/jobs.ts` owns durable reconciler job persistence and state
-  transitions.
+- `domain/models/messageSelection.ts` owns internal owner normalization,
+  selector validation, owner keys, and owner-scoped selection values.
+- `repositories/messageReadinessRepository.ts` owns readiness checks, coverage
+  gap decisions, and final repository hydration of ready `Message[]`.
+- `repositories/messageRepository.ts` owns `Message` hydration from normalized
+  rows and file/sender facts.
+- `storage/messageReadStorage.ts` owns local message-row reads by owner,
+  selector, and refs.
+- `storage/messageRowStorage.ts` owns SQL selections for normalized message
+  rows and sender display facts.
+- `storage/reconcilerCoverageStorage.ts` owns owner-scoped coverage reads,
+  writes, live coverage mapping, and interval subtraction for message owners.
+- `storage/reconcilerJobStorage.ts` owns durable reconciler job persistence and
+  state transitions.
 - `reconciler/runtime.ts` owns worker lifecycle and completion rules.
-- `reconciler/tdlib.ts` owns private TDLib owner-specific paging and date anchor
-  behavior.
+- `reconciler/adapters/historySource.ts` owns private TDLib owner-specific
+  paging and date anchor behavior.
+- `reconciler/adapters/historyPage.ts` owns TDLib history message conversion to
+  durable message records.
 - `reconciler/telemetry.ts` owns metric, span, and log emission for this
   subsystem.
 - `files/messageSlots.ts` owns async materialization of stored message file
@@ -840,7 +849,7 @@ Responsibilities:
 
 Type placement rules:
 
-- `ReadMessage` stays in `views/schemas.ts`.
+- `Message` stays in `domain/models/message.ts`.
 - Procedure input and output schemas stay in
   `procedures/get-messages/contract.ts`.
 - Internal owner, request id, job, coverage, TDLib cursor, and reconciler types
@@ -863,17 +872,21 @@ Test layout:
 ```text
 packages/telegram/tests/procedures/getMessages.test.ts
 packages/telegram/tests/procedures/get-messages/contract.test.ts
-packages/telegram/tests/procedures/get-messages/read.test.ts
-packages/telegram/tests/procedures/get-messages/readiness.test.ts
 packages/telegram/tests/procedures/get-messages/requestId.test.ts
 
-packages/telegram/tests/reconciler/jobs.test.ts
-packages/telegram/tests/reconciler/owner.test.ts
+packages/telegram/tests/domain/models/messageSelection.test.ts
+packages/telegram/tests/repositories/messageReadinessRepository.test.ts
+
+packages/telegram/tests/historyCoverage.test.ts
+packages/telegram/tests/reconciler/adapters/historySource.test.ts
 packages/telegram/tests/reconciler/runtime.test.ts
-packages/telegram/tests/reconciler/tdlib.test.ts
 packages/telegram/tests/reconciler/telemetry.test.ts
 
-packages/telegram/tests/store/message.test.ts
+packages/telegram/tests/storage/fileReadStorage.test.ts
+packages/telegram/tests/storage/messageReadStorage.test.ts
+packages/telegram/tests/storage/messageStorage.test.ts
+packages/telegram/tests/storage/reconcilerCoverageStorage.test.ts
+packages/telegram/tests/storage/reconcilerJobStorage.test.ts
 ```
 
 ## Test Coverage
@@ -891,7 +904,7 @@ packages/telegram/tests/store/message.test.ts
 - Uncovered `RangeSelector` returns `pending` with deterministic readable
   `requestId`.
 - `pending` returns no messages.
-- `ready` returns `ReadMessage[]`, not TDLib messages, storage rows, or file
+- `ready` returns `Message[]`, not TDLib messages, storage rows, or file
   queue state.
 - A missing local `beforeMessageId` returns `pending`, not a cursor-not-found
   error.

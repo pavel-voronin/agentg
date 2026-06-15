@@ -55,9 +55,10 @@ The subsystem does not own:
 `packages/telegram/src/files` owns file-specific contracts, policy, queue
 behavior, file events, file serving, and file observability.
 
-`packages/telegram/src/store` owns normalized Telegram persistence functions.
-Store code may call the file subsystem through the explicit `FileSubsystem`
-contract. File subsystem code must not depend on store internals.
+`packages/telegram/src/repositories` and `packages/telegram/src/storage` own
+normalized Telegram persistence. Application services and update handlers call
+the file subsystem through the explicit `FileSubsystem` contract. File subsystem
+code must not depend on repository or storage internals.
 
 `packages/telegram/src/database` owns Drizzle schema declarations and migration
 wiring. `storageSchema.ts` is generated TDLib storage schema and must not be
