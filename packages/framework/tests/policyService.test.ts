@@ -12,6 +12,7 @@ import {
   PolicyContractError,
   type PolicyClient,
   type PolicyDocument,
+  type PolicyInstance,
   type PolicyStore,
   type PolicyValue
 } from '../src/policies/index.js';
@@ -172,8 +173,8 @@ describe('policy server', () => {
       id: 'sample.nonJsonRules',
       kind: 'SampleNonJsonRule',
       moduleId: 'sample',
-      resolve(specs) {
-        if (specs.length === 0) {
+      resolve(instances) {
+        if (instances.length === 0) {
           return [];
         }
         return {
@@ -244,16 +245,61 @@ describe('policy server', () => {
     });
   });
 
+  it('passes metadata to custom resolvers without changing the default value shape', async () => {
+    const metadataRule = definePolicy({
+      id: 'sample.metadataRules',
+      kind: 'SampleMetadataRule',
+      moduleId: 'sample',
+      resolve(instances) {
+        return Object.freeze(
+          instances.map(({ metadata, spec }) => ({
+            key: spec.key,
+            source: metadata.name,
+            subsystem: metadata.labels?.subsystem ?? null
+          }))
+        );
+      },
+      spec: z.object({
+        key: z.string()
+      }),
+      version: 1
+    });
+    const server = createPolicyServer({
+      catalog: [metadataRule],
+      store: memoryStore([
+        document({
+          kind: 'SampleMetadataRule',
+          labels: {
+            subsystem: 'files'
+          },
+          name: 'alphaRule',
+          spec: {
+            key: 'alpha'
+          }
+        })
+      ])
+    });
+    await server.start();
+
+    expect(server.procedures.getPolicyValue({ kind: 'SampleMetadataRule' })).toEqual([
+      {
+        key: 'alpha',
+        source: 'alphaRule',
+        subsystem: 'files'
+      }
+    ]);
+  });
+
   it('resolves the full active set before accepting a new instance', async () => {
     const minimumRule = definePolicy({
       id: 'sample.minimumRules',
       kind: 'SampleMinimumRule',
       moduleId: 'sample',
-      resolve(specs: readonly { key: string; mode: string }[]) {
-        if (specs.length < 2) {
+      resolve(instances: readonly PolicyInstance<{ key: string; mode: string }>[]) {
+        if (instances.length < 2) {
           throw new Error('Expected at least two specs');
         }
-        return Object.freeze([...specs]);
+        return Object.freeze(instances.map((instance) => instance.spec));
       },
       spec: z.object({
         key: z.string(),
@@ -307,11 +353,11 @@ describe('policy server', () => {
       id: 'sample.requiredRules',
       kind: 'SampleRequiredRule',
       moduleId: 'sample',
-      resolve(specs: readonly { key: string; mode: string }[]) {
-        if (specs.length === 0) {
+      resolve(instances: readonly PolicyInstance<{ key: string; mode: string }>[]) {
+        if (instances.length === 0) {
           throw new Error('Expected at least one spec');
         }
-        return Object.freeze([...specs]);
+        return Object.freeze(instances.map((instance) => instance.spec));
       },
       spec: z.object({
         key: z.string(),
@@ -579,6 +625,7 @@ describe('usePolicy', () => {
 
 function document(input: {
   kind?: string;
+  labels?: Record<string, string>;
   name: string;
   spec: PolicyDocument['spec'];
 }): PolicyDocument {
@@ -586,6 +633,7 @@ function document(input: {
     apiVersion: POLICY_API_VERSION,
     kind: input.kind ?? 'SampleRule',
     metadata: {
+      ...(input.labels === undefined ? {} : { labels: input.labels }),
       name: input.name
     },
     spec: input.spec

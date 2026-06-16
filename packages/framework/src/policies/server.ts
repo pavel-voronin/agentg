@@ -19,6 +19,7 @@ import {
   type PolicyValue
 } from './types.js';
 import type { EventBus } from '../events/eventBus.js';
+import type { PolicyInstance } from './resolvers.js';
 
 type CreateServerInput = {
   catalog: readonly AnyPolicyDefinition[];
@@ -251,7 +252,7 @@ function resolveDefinition(
   definition: AnyPolicyDefinition,
   documents: readonly PolicyDocument[]
 ): PolicyValue {
-  const specs: unknown[] = [];
+  const instances: PolicyInstance<unknown>[] = [];
   for (const document of documents) {
     const result = definition.spec.safeParse(document.spec);
     if (!result.success) {
@@ -264,12 +265,14 @@ function resolveDefinition(
           issue?.message ?? `Policy spec is invalid: ${document.kind}/${document.metadata.name}`
       });
     }
-    specs.push(result.data);
+    instances.push(policyInstanceOf(document, result.data));
   }
 
   try {
-    const resolve = definition.resolve as unknown as (items: readonly unknown[]) => unknown;
-    return assertPolicyValue(resolve(specs));
+    const resolve = definition.resolve as unknown as (
+      items: readonly PolicyInstance<unknown>[]
+    ) => unknown;
+    return assertPolicyValue(resolve(instances));
   } catch (error) {
     if (error instanceof PolicyContractError) {
       throw error;
@@ -282,6 +285,18 @@ function resolveDefinition(
       message: error instanceof Error ? error.message : String(error)
     });
   }
+}
+
+function policyInstanceOf(document: PolicyDocument, spec: unknown): PolicyInstance<unknown> {
+  return Object.freeze({
+    metadata: Object.freeze({
+      ...(document.metadata.labels === undefined
+        ? {}
+        : { labels: Object.freeze({ ...document.metadata.labels }) }),
+      name: document.metadata.name
+    }),
+    spec
+  });
 }
 
 function prepareSet(

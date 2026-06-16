@@ -1,19 +1,29 @@
 export type PolicyResolvedValue = readonly unknown[] | Readonly<Record<string, unknown>>;
 
+type PolicyInstanceMetadata = {
+  readonly labels?: Readonly<Record<string, string>>;
+  readonly name: string;
+};
+
+export type PolicyInstance<TSpec> = {
+  readonly metadata: PolicyInstanceMetadata;
+  readonly spec: TSpec;
+};
+
 export type PolicyResolver<TSpec, TValue extends PolicyResolvedValue> = (
-  specs: readonly TSpec[]
+  instances: readonly PolicyInstance<TSpec>[]
 ) => TValue;
 
 export function collectSpecs<TSpec>(): PolicyResolver<TSpec, readonly TSpec[]> {
-  return (specs) => Object.freeze([...specs]);
+  return (instances) => Object.freeze(instances.map((instance) => instance.spec));
 }
 
 export function recordBy<TSpec>(
   keyOf: (spec: TSpec) => number | string
 ): PolicyResolver<TSpec, Readonly<Record<string, TSpec>>> {
-  return (specs) => {
+  return (instances) => {
     const output: Record<string, TSpec> = {};
-    for (const spec of specs) {
+    for (const { spec } of instances) {
       const key = String(keyOf(spec));
       if (!isSafeRecordKey(key)) {
         throw new Error(`Unsafe policy record key: ${key}`);
@@ -30,18 +40,18 @@ export function recordBy<TSpec>(
 export function singleSpec<TSpec extends PolicyResolvedValue>(input: {
   empty: TSpec;
 }): PolicyResolver<TSpec, TSpec> {
-  return (specs) => {
-    if (specs.length === 0) {
+  return (instances) => {
+    if (instances.length === 0) {
       return input.empty;
     }
-    if (specs.length > 1) {
-      throw new Error(`Expected at most one policy instance, got ${String(specs.length)}`);
+    if (instances.length > 1) {
+      throw new Error(`Expected at most one policy instance, got ${String(instances.length)}`);
     }
-    const [spec] = specs;
-    if (spec === undefined) {
+    const [instance] = instances;
+    if (instance === undefined) {
       throw new Error('Expected one policy instance');
     }
-    return spec;
+    return instance.spec;
   };
 }
 

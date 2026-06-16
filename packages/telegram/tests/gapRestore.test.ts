@@ -362,7 +362,14 @@ function parseSpec(input: unknown) {
 }
 
 function resolveRules(inputs: unknown[]): HistoryGapRestoreRuleSet {
-  return historyGapRestoreRulesPolicy.resolve(inputs.map(parseSpec));
+  return historyGapRestoreRulesPolicy.resolve(
+    inputs.map((input, index) => ({
+      metadata: {
+        name: `rule${String(index)}`
+      },
+      spec: parseSpec(input)
+    }))
+  );
 }
 
 type RestoreServiceDatabaseInput = {

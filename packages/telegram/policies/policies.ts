@@ -1,4 +1,4 @@
-import { definePolicy } from '@agentg/framework/policies';
+import { definePolicy, type PolicyInstance } from '@agentg/framework/policies';
 import { z } from 'zod';
 
 const historyGapRestoreChatTypes = ['private', 'secret', 'group', 'channel'] as const;
@@ -89,15 +89,20 @@ export const fileDownloadRulesPolicy = definePolicy({
   id: 'telegram.files.downloadRules',
   kind: 'TelegramFileDownloadRule',
   moduleId: 'telegram',
-  resolve(specs: readonly DownloadRuleSpec[]) {
-    const seen = new Set<string>();
-    for (const spec of specs) {
+  resolve(instances: readonly PolicyInstance<DownloadRuleSpec>[]) {
+    const seen = new Map<string, string>();
+    const specs: DownloadRuleSpec[] = [];
+    for (const { metadata, spec } of instances) {
+      specs.push(spec);
       for (const cause of spec.causes) {
         const key = `${spec.mediaKind}:${cause}`;
-        if (seen.has(key)) {
-          throw new Error(`Duplicate Telegram file download rule for ${key}`);
+        const previous = seen.get(key);
+        if (previous !== undefined) {
+          throw new Error(
+            `Duplicate Telegram file download rule for ${key}: ${previous}, ${metadata.name}`
+          );
         }
-        seen.add(key);
+        seen.set(key, metadata.name);
       }
     }
     return Object.freeze([...specs]);
@@ -108,7 +113,9 @@ export const fileDownloadRulesPolicy = definePolicy({
 
 export const policies = [fileDownloadRulesPolicy, historyGapRestoreRulesPolicy] as const;
 
-function resolveGapRestoreRules(specs: readonly GapRestoreRuleSpec[]): HistoryGapRestoreRuleSet {
+function resolveGapRestoreRules(
+  instances: readonly PolicyInstance<GapRestoreRuleSpec>[]
+): HistoryGapRestoreRuleSet {
   const rules: {
     all?: HistoryGapRestoreDecision;
     chatIds: Record<string, HistoryGapRestoreDecision>;
@@ -118,7 +125,7 @@ function resolveGapRestoreRules(specs: readonly GapRestoreRuleSpec[]): HistoryGa
     chatTypes: {}
   };
 
-  for (const spec of specs) {
+  for (const { spec } of instances) {
     const decision = gapRestoreDecision(spec);
     if (spec.chatIds !== undefined) {
       for (const chatId of spec.chatIds) {

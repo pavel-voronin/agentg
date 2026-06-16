@@ -125,8 +125,10 @@ consuming module.
 12. Module code calls the getter and reads the object or array returned by the
     resolver.
 
-Document metadata does not reach the consuming module: the module has already
-selected a concrete policy definition.
+Document metadata can reach the resolver as policy instance envelope data, but
+it does not reach the consuming module unless the resolver explicitly puts it in
+the resolved policy value. The consuming module has already selected a concrete
+policy definition.
 
 ## PolicyDefinition
 
@@ -163,8 +165,8 @@ export const foobarSettingsPolicy = definePolicy({
     value: z.string()
   }),
 
-  resolve(specs) {
-    return Object.fromEntries(specs.map((spec) => [spec.key, spec.value]));
+  resolve(instances) {
+    return Object.fromEntries(instances.map(({ spec }) => [spec.key, spec.value]));
   }
 });
 
@@ -190,7 +192,9 @@ used for catalog diagnostics and form cache invalidation.
 the TypeScript `Spec` type.
 
 `resolve` is a plain function that builds the final policy value from all valid
-`spec` values. The policy value type is inferred from its return type.
+policy instances. Each resolver item contains the validated `spec` and the
+document `metadata`. The policy value type is inferred from the resolver return
+type.
 TypeScript requires a top-level object or array, and the framework checks at
 runtime that the result is JSON-safe.
 
@@ -199,7 +203,7 @@ RPC clients, or other side effects.
 
 ## Resolver Helpers
 
-A resolver builds the final policy value from all active `spec` values of one
+A resolver builds the final policy value from all active policy instances of one
 `kind`.
 
 If `resolve` is omitted, the framework uses the default resolver:
@@ -208,9 +212,13 @@ If `resolve` is omitted, the framework uses the default resolver:
 resolve: collectSpecs();
 ```
 
+The resolver receives items shaped as `{ metadata, spec }`. `metadata` is
+available for diagnostics and provenance while `spec` remains the policy meaning.
+If behavior depends on priority, priority must be a `spec` field, not
+`metadata`.
+
 `collectSpecs` returns all `spec` values in deterministic order. Infrastructure
-defines the base order by `metadata.name`. If a policy needs priority, priority
-must be a `spec` field, not `metadata`.
+defines the base order by `metadata.name`.
 
 The initial helpers are plain resolver functions:
 
@@ -227,8 +235,13 @@ resolver error.
 Custom resolvers are allowed:
 
 ```ts
-resolve(specs) {
-  return Object.fromEntries(specs.map((spec) => [spec.key, spec.value]));
+resolve(instances) {
+  return Object.fromEntries(
+    instances.map(({ metadata, spec }) => [
+      spec.key,
+      { source: metadata.name, value: spec.value }
+    ])
+  );
 }
 ```
 
@@ -273,7 +286,8 @@ the domain `spec` version. The first contract is `agentg.dev/v1`.
 `kind` selects the `PolicyDefinition`. The value must match `definition.kind`.
 
 `metadata` is the service envelope for storage and control-plane operations. It
-does not reach `usePolicy`.
+is visible to resolvers and does not reach `usePolicy` unless the resolver
+explicitly includes it in the resolved policy value.
 
 `metadata.name` is the instance name inside `kind`. Together with `kind`, it
 forms identity: `kind + metadata.name`.
@@ -329,7 +343,8 @@ const getSettings = usePolicy(foobarSettingsPolicy);
 ```
 
 Domain code does not receive `apiVersion`, `kind`, `metadata`, `moduleId`, or
-`policyId`, because it is already operating inside a concrete policy.
+`policyId` unless the resolver explicitly includes that data in its resolved
+value, because the module is already operating inside a concrete policy.
 
 An empty valid store is a valid state:
 
@@ -768,7 +783,7 @@ tables, while safety checks and behavior selection rules stay in domain code.
 - foreign event is ignored;
 - omitted `resolve` uses `collectSpecs()`;
 - empty store gives an empty array for `collectSpecs()`;
-- empty store calls custom resolver with `[]`;
+- empty store calls custom resolver with `[]` policy instances;
 - `recordBy` rejects duplicate key;
 - `singleSpec` rejects more than one instance;
 - reading policy value before successful startup throws a development error;

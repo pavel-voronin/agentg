@@ -4,7 +4,7 @@ export { assertPolicyValue, definePolicy } from './definition.js';
 export type { AnyPolicyDefinition, PolicyDefinition, PolicyValueOf } from './definition.js';
 export { createPolicyServer } from './server.js';
 export { collectSpecs, recordBy, singleSpec } from './resolvers.js';
-export type { PolicyResolver } from './resolvers.js';
+export type { PolicyInstance, PolicyResolver } from './resolvers.js';
 export { POLICY_API_VERSION, POLICY_INSTANCES_CHANGED_EVENT } from './types.js';
 export type {
   PolicyDocument,
