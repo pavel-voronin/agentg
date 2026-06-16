@@ -2,7 +2,11 @@ import { z } from 'zod';
 
 import { fileOwnerModelRefSchema, fileRefSchema } from '../../src/domain/models/fileRef.js';
 import { messageSchema } from '../../src/domain/models/message.js';
-import { nonEmptyStringSchema } from '../../src/domain/models/scalars.js';
+import {
+  isoDateTimeStringSchema,
+  nonEmptyStringSchema,
+  nonNegativeIntegerSchema
+} from '../../src/domain/models/scalars.js';
 import {
   getMessagesInputSchema,
   getMessagesOutputSchema
@@ -36,6 +40,22 @@ export const messageLookupInputSchema = z.object({
 
 export const messageLookupOutputSchema = z.object({
   message: messageSchema.nullable()
+});
+
+export const historyCoverageInputSchema = z.object({
+  chatId: nonEmptyStringSchema
+});
+
+export const historyCoverageSegmentSchema = z.object({
+  coveredAt: isoDateTimeStringSchema,
+  endAt: isoDateTimeStringSchema,
+  messageCount: nonNegativeIntegerSchema,
+  startAt: isoDateTimeStringSchema
+});
+
+export const historyCoverageOutputSchema = z.object({
+  chatId: nonEmptyStringSchema,
+  coverage: z.array(historyCoverageSegmentSchema)
 });
 
 export const fileRequestInputSchema = z.object({

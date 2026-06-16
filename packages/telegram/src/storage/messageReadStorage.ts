@@ -30,6 +30,40 @@ export type MessageSearchRead = {
   query: string;
 };
 
+export type MessageRangeCountInput = {
+  chatId: string;
+  ranges: readonly {
+    endAt: Date;
+    startAt: Date;
+  }[];
+};
+
+export async function countMessageRowsByRanges(
+  database: Database,
+  input: MessageRangeCountInput
+): Promise<number[]> {
+  return Promise.all(
+    input.ranges.map(async (range) => {
+      if (range.startAt >= range.endAt) {
+        return 0;
+      }
+      const [row] = await database
+        .select({
+          messageCount: sql<number>`count(*)::int`
+        })
+        .from(telegramMessages)
+        .where(
+          and(
+            eq(telegramMessages.chatId, input.chatId),
+            gte(telegramMessages.date, range.startAt),
+            lt(telegramMessages.date, range.endAt)
+          )
+        );
+      return row?.messageCount ?? 0;
+    })
+  );
+}
+
 export async function readPageRows(
   database: Database,
   owner: MessageOwner,

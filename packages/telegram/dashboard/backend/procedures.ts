@@ -6,11 +6,14 @@ import type { Database } from '../../src/database/client.js';
 import type { telegramClient } from '../../src/index.js';
 import { createMessageRepository } from '../../src/repositories/messageRepository.js';
 import { createChatDirectoryRepository } from '../../src/repositories/chatDirectoryRepository.js';
+import { createHistoryCoverageRepository } from '../../src/repositories/historyCoverageRepository.js';
 import {
   chatDirectoryInputSchema,
   chatDirectoryOutputSchema,
   fileRequestInputSchema,
   fileRequestOutputSchema,
+  historyCoverageInputSchema,
+  historyCoverageOutputSchema,
   messageLookupInputSchema,
   messageLookupOutputSchema,
   getMessagesInputSchema,
@@ -21,6 +24,8 @@ type ChatDirectoryInput = z.infer<typeof chatDirectoryInputSchema>;
 type ChatDirectoryOutput = z.infer<typeof chatDirectoryOutputSchema>;
 type FileRequestInput = z.infer<typeof fileRequestInputSchema>;
 type FileRequestOutput = z.infer<typeof fileRequestOutputSchema>;
+type HistoryCoverageInput = z.infer<typeof historyCoverageInputSchema>;
+type HistoryCoverageOutput = z.infer<typeof historyCoverageOutputSchema>;
 type MessageLookupInput = z.infer<typeof messageLookupInputSchema>;
 type MessageLookupOutput = z.infer<typeof messageLookupOutputSchema>;
 type GetMessagesInput = z.infer<typeof getMessagesInputSchema>;
@@ -53,6 +58,12 @@ export function createProcedures(resources: Resources) {
     ): Promise<GetMessagesOutput> => {
       const output = await runGetMessages(getMessagesInputSchema.parse(input), resources);
       return getMessagesOutputSchema.parse(output);
+    },
+    [TELEGRAM_DASHBOARD_METHODS.historyCoverage]: async (
+      input: unknown
+    ): Promise<HistoryCoverageOutput> => {
+      const output = await runHistoryCoverage(historyCoverageInputSchema.parse(input), resources);
+      return historyCoverageOutputSchema.parse(output);
     },
     [TELEGRAM_DASHBOARD_METHODS.requestFile]: async (
       input: unknown
@@ -91,6 +102,23 @@ async function runGetMessages(
   resources: Resources
 ): Promise<GetMessagesOutput> {
   return resources.telegram.getMessages(input);
+}
+
+async function runHistoryCoverage(
+  input: HistoryCoverageInput,
+  resources: Resources
+): Promise<HistoryCoverageOutput> {
+  const coverage = await createHistoryCoverageRepository(resources.database).list(input.chatId);
+
+  return {
+    chatId: input.chatId,
+    coverage: coverage.map((interval) => ({
+      coveredAt: interval.coveredAt.toISOString(),
+      endAt: interval.endAt.toISOString(),
+      messageCount: interval.messageCount,
+      startAt: interval.startAt.toISOString()
+    }))
+  };
 }
 
 async function requestFile(
