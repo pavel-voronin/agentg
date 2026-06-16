@@ -45,7 +45,8 @@ describe('Telegram history source adapter', () => {
         offset: 0
       },
       {
-        priority: 8
+        priority: 8,
+        timeoutMs: 60_000
       }
     );
     expect(result.reachedBeginning).toBe(false);
@@ -94,7 +95,8 @@ describe('Telegram history source adapter', () => {
         onlyLocal: false
       },
       {
-        priority: 8
+        priority: 8,
+        timeoutMs: 60_000
       }
     );
     expect(result.coverageInterval).toEqual({
@@ -132,6 +134,59 @@ describe('Telegram history source adapter', () => {
 
     expect(result.reachedBeginning).toBe(false);
     expect(result.coverageInterval).toBeUndefined();
+  });
+
+  it('proves beginning from an empty non-zero cursor page', async () => {
+    const getChatHistory = vi.fn(() =>
+      Promise.resolve({
+        total_count: 0,
+        messages: []
+      })
+    );
+
+    const result = await fetchOwnerHistoryStep({
+      database: historyDatabase({
+        pageRows: [
+          {
+            telegramMessageId: '200'
+          }
+        ]
+      }),
+      interval: interval('2013-08-14T00:00:00.000Z', '2026-05-01T14:00:01.000Z'),
+      owner: {
+        chatId: '123',
+        kind: 'chat'
+      },
+      selector: {
+        count: 100,
+        kind: 'page'
+      },
+      tdlib: {
+        getChatHistory
+      } as unknown as Operations
+    });
+
+    expect(getChatHistory).toHaveBeenCalledWith(
+      {
+        chatId: 123,
+        fromMessageId: 200,
+        limit: 100,
+        offset: 0,
+        onlyLocal: false
+      },
+      {
+        priority: 8,
+        timeoutMs: 60_000
+      }
+    );
+    expect(result).toEqual({
+      coverageInterval: {
+        endAt: new Date('2026-05-01T14:00:01.000Z'),
+        startAt: new Date('2013-08-14T00:00:00.000Z')
+      },
+      fetchedMessages: [],
+      reachedBeginning: true
+    });
   });
 
   it('does not prove beginning from TDLib pages containing null placeholders', async () => {

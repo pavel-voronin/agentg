@@ -2,6 +2,7 @@ import type { Priority } from './priority.js';
 
 export type InvokeOptions = {
   priority?: Priority;
+  timeoutMs?: number;
 };
 
 export type QueueStats = {

@@ -56,6 +56,11 @@ type HistoryCursor =
     };
 
 const PRIVATE_PAGE_SIZE = 100;
+const HISTORY_TDLIB_TIMEOUT_MS = 60 * 1000;
+const HISTORY_INVOKE_OPTIONS = {
+  priority: priorities.low,
+  timeoutMs: HISTORY_TDLIB_TIMEOUT_MS
+};
 
 export async function fetchOwnerHistoryStep(input: {
   database: Database;
@@ -219,7 +224,7 @@ async function fetchOwnerHistory(
           offset: 0,
           onlyLocal: false
         },
-        { priority: priorities.low }
+        HISTORY_INVOKE_OPTIONS
       );
     case 'forumTopic':
       return tdlib.getForumTopicHistory(
@@ -230,7 +235,7 @@ async function fetchOwnerHistory(
           limit: PRIVATE_PAGE_SIZE,
           offset: 0
         },
-        { priority: priorities.low }
+        HISTORY_INVOKE_OPTIONS
       );
     case 'directMessagesTopic':
       return tdlib.getDirectMessagesChatTopicHistory(
@@ -241,7 +246,7 @@ async function fetchOwnerHistory(
           offset: 0,
           topicId: parseTelegramInt53(owner.topicId, 'topicId')
         },
-        { priority: priorities.low }
+        HISTORY_INVOKE_OPTIONS
       );
     case 'savedMessagesTopic':
       return tdlib.getSavedMessagesTopicHistory(
@@ -251,7 +256,7 @@ async function fetchOwnerHistory(
           offset: 0,
           topicId: parseTelegramInt53(owner.topicId, 'topicId')
         },
-        { priority: priorities.low }
+        HISTORY_INVOKE_OPTIONS
       );
     case 'messageThread':
       return tdlib.getMessageThreadHistory(
@@ -262,7 +267,7 @@ async function fetchOwnerHistory(
           messageId: parseTelegramInt53(owner.messageId, 'messageId'),
           offset: 0
         },
-        { priority: priorities.low }
+        HISTORY_INVOKE_OPTIONS
       );
   }
 }
@@ -319,7 +324,7 @@ function readOwnerDateAnchor(
           chatId: parseTelegramInt53(owner.chatId, 'chatId'),
           date
         },
-        { priority: priorities.low }
+        HISTORY_INVOKE_OPTIONS
       );
     case 'directMessagesTopic':
       return tdlib.getDirectMessagesChatTopicMessageByDate(
@@ -328,7 +333,7 @@ function readOwnerDateAnchor(
           date,
           topicId: parseTelegramInt53(owner.topicId, 'topicId')
         },
-        { priority: priorities.low }
+        HISTORY_INVOKE_OPTIONS
       );
     case 'savedMessagesTopic':
       return tdlib.getSavedMessagesTopicMessageByDate(
@@ -336,7 +341,7 @@ function readOwnerDateAnchor(
           date,
           topicId: parseTelegramInt53(owner.topicId, 'topicId')
         },
-        { priority: priorities.low }
+        HISTORY_INVOKE_OPTIONS
       );
     case 'forumTopic':
     case 'messageThread':
@@ -415,10 +420,7 @@ function hasTdlibBeginningProof(
   if (rawMessages.some((message) => message === null)) {
     return false;
   }
-  if (cursor.fromMessageId === 0) {
-    return rawMessages.length === 0;
-  }
-  return false;
+  return rawMessages.length === 0;
 }
 
 function nextHistorySecond(date: Date): Date {

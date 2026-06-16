@@ -74,13 +74,17 @@ vi.mock('../../src/storage/messageStorage.js', async (importOriginal) => {
 });
 
 vi.mock('../../src/reconciler/telemetry.js', () => ({
-  errorType: vi.fn((_error: unknown, stage?: string) =>
-    stage === 'publish'
+  errorType: vi.fn((error: unknown, stage?: string) => {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/\btimeout\b|\btimed out\b/i.test(message)) {
+      return 'timeout';
+    }
+    return stage === 'publish'
       ? 'event_publish_error'
       : stage === 'coverage_check'
         ? 'coverage_write_error'
-        : 'unexpected_error'
-  ),
+        : 'unexpected_error';
+  }),
   recordCoverageIntervals: vi.fn(),
   recordFailure: vi.fn(),
   recordJobDuration: vi.fn(),
@@ -419,6 +423,74 @@ describe('Telegram history reconciler runtime', () => {
       reason: 'coverage_write_error',
       requestId: job.requestId
     });
+
+    close();
+  });
+
+  it('defers a timed-out history fetch and continues to the next queued job', async () => {
+    const input = getMessagesInput();
+    const nextInput: GetMessagesInput = {
+      owner: {
+        chatId: '456',
+        kind: 'chat'
+      },
+      selector: {
+        count: 100,
+        kind: 'page'
+      }
+    };
+    const timedOutJob = {
+      ...historyJob(input),
+      attemptCount: 0
+    };
+    const nextJob = {
+      ...historyJob(nextInput),
+      ownerKey: 'chat:456',
+      requestId: 'telegram.getMessages;selector=page;owner=chat:456;anchor=latest;count=100'
+    };
+    const database = transactionDatabase();
+    const events = eventBusMock();
+    jobs.claimNextHistoryJob
+      .mockResolvedValueOnce(timedOutJob)
+      .mockResolvedValueOnce(nextJob)
+      .mockResolvedValueOnce(null);
+    readiness.checkMessagesReadiness
+      .mockResolvedValueOnce({
+        missing: [historyInterval()],
+        ready: false
+      })
+      .mockResolvedValueOnce({
+        ready: true,
+        rows: {
+          messages: [],
+          reachedStart: true,
+          selectorKind: 'page'
+        }
+      });
+    historySource.fetchOwnerHistoryStep.mockRejectedValueOnce(
+      new Error('TDLib operation timed out after 60000 ms: getChatHistory')
+    );
+
+    const runtime = useHistoryReconciler({
+      database,
+      events,
+      files: fileSubsystemMock(),
+      historySource
+    });
+    const close = await runtime.start();
+    await vi.runAllTimersAsync();
+
+    expect(jobs.deferHistoryJob).toHaveBeenCalledWith(database, {
+      nextRunAt: new Date('2026-06-12T00:00:30.000Z'),
+      requestId: timedOutJob.requestId
+    });
+    expect(jobs.completeHistoryJob).toHaveBeenCalledWith(database, nextJob.requestId);
+    expect(events.publish).toHaveBeenCalledWith(
+      'telegram.messages.ready',
+      expect.objectContaining({
+        requestId: nextJob.requestId
+      })
+    );
 
     close();
   });
