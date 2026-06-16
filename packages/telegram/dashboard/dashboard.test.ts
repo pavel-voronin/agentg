@@ -27,6 +27,37 @@ describe('telegram dashboard contributions', () => {
       }
     ]);
   });
+
+  it('registers the chat-level client tabs', () => {
+    expect(
+      dashboard.contents
+        .filter((content) => hasTag(content, 'telegram.client'))
+        .map((content) => ({
+          contentId: content.contentId,
+          metadata: contentMetadata(content)
+        }))
+    ).toEqual([
+      {
+        contentId: 'telegram.chat.messages',
+        metadata: {
+          tab: {
+            label: 'Messages',
+            order: 10
+          }
+        }
+      },
+      {
+        contentId: 'telegram.chat.historyCoverage',
+        metadata: {
+          tab: {
+            label: 'History Coverage',
+            order: 20,
+            routeSegment: 'history'
+          }
+        }
+      }
+    ]);
+  });
 });
 
 function hasTag(content: DashboardContent, tag: string): boolean {

@@ -26,6 +26,18 @@ const contents = [
     tags: ['telegram.client']
   },
   {
+    contentId: 'telegram.chat.historyCoverage',
+    load: () => import('./frontend/historyCoverageContent.vue'),
+    metadata: {
+      tab: {
+        label: 'History Coverage',
+        order: 20,
+        routeSegment: 'history'
+      }
+    },
+    tags: ['telegram.client']
+  },
+  {
     contentId: 'telegram.status.tdlib',
     load: () => import('./frontend/statusContent.vue'),
     tags: ['dashboard.header.status']
