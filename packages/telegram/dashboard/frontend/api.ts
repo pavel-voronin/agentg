@@ -8,6 +8,7 @@ import type {
   GetMessageResult,
   RequestFileResult
 } from './chat-messages/types.js';
+import type { HistoryCoverageResult } from './historyCoverageState.js';
 
 export type TelegramDirectoryResult = {
   chats?: unknown;
@@ -23,6 +24,10 @@ type ChatDirectoryInput = {
 type MessageInput = {
   chatId: string;
   messageId: string;
+};
+
+type HistoryCoverageInput = {
+  chatId: string;
 };
 
 type RequestFileInput = {
@@ -42,6 +47,9 @@ export function useTelegramDashboardApi() {
     },
     getMessages(input: GetMessagesInput): Promise<GetMessagesResult> {
       return host.rpc<GetMessagesResult>(TELEGRAM_DASHBOARD_METHODS.getMessages, input);
+    },
+    historyCoverage(input: HistoryCoverageInput): Promise<HistoryCoverageResult> {
+      return host.rpc<HistoryCoverageResult>(TELEGRAM_DASHBOARD_METHODS.historyCoverage, input);
     },
     requestFile(input: RequestFileInput): Promise<RequestFileResult> {
       return host.rpc<RequestFileResult>(TELEGRAM_DASHBOARD_METHODS.requestFile, input);
