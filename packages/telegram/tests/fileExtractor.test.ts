@@ -461,62 +461,52 @@ const defaultDownloadRules = [
   {
     causes: ['initialization', 'live_update'],
     maxBytes: null,
-    mediaKind: 'avatar',
-    name: 'chat avatars'
+    mediaKind: 'avatar'
   },
   {
     causes: ['live_update', 'operator_page'],
     maxBytes: 1024 * 1024,
-    mediaKind: 'photo',
-    name: 'photos up to 1 MB'
+    mediaKind: 'photo'
   },
   {
     causes: ['live_update', 'operator_page'],
     maxBytes: 1024 * 1024,
-    mediaKind: 'thumbnail',
-    name: 'media thumbnails up to 1 MB'
+    mediaKind: 'thumbnail'
   },
   {
     causes: ['live_update', 'operator_page'],
     maxBytes: 5 * 1024 * 1024,
-    mediaKind: 'video',
-    name: 'videos up to 5 MB'
+    mediaKind: 'video'
   },
   {
     causes: ['live_update', 'operator_page'],
     maxBytes: 5 * 1024 * 1024,
-    mediaKind: 'voice',
-    name: 'voice messages up to 5 MB'
+    mediaKind: 'voice'
   },
   {
     causes: ['explicit_request'],
     maxBytes: 100 * 1024 * 1024,
-    mediaKind: 'photo',
-    name: 'requested photos up to 100 MB'
+    mediaKind: 'photo'
   },
   {
     causes: ['explicit_request'],
     maxBytes: null,
-    mediaKind: 'thumbnail',
-    name: 'requested thumbnails'
+    mediaKind: 'thumbnail'
   },
   {
     causes: ['explicit_request'],
     maxBytes: null,
-    mediaKind: 'video',
-    name: 'requested videos'
+    mediaKind: 'video'
   },
   {
     causes: ['explicit_request'],
     maxBytes: null,
-    mediaKind: 'document',
-    name: 'requested documents'
+    mediaKind: 'document'
   },
   {
     causes: ['explicit_request'],
     maxBytes: null,
-    mediaKind: 'voice',
-    name: 'requested voice messages'
+    mediaKind: 'voice'
   }
 ] as const satisfies readonly MediaDownloadPolicyRule[];
 

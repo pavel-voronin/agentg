@@ -5,7 +5,6 @@ metadata:
   labels:
     subsystem: files
 spec:
-  name: chat avatars
   causes:
     - initialization
     - live_update

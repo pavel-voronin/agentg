@@ -6,7 +6,6 @@ export type MediaDownloadPolicyRule = {
   causes: readonly MediaDownloadPolicyCause[];
   maxBytes: number | null;
   mediaKind: FileMediaKind;
-  name: string;
 };
 
 export const mediaDownloadPolicyCauses = [

@@ -5,7 +5,6 @@ metadata:
   labels:
     subsystem: files
 spec:
-  name: voice messages up to 5 MB
   causes:
     - live_update
     - operator_page

@@ -5,7 +5,6 @@ metadata:
   labels:
     subsystem: files
 spec:
-  name: requested photos up to 100 MB
   causes:
     - explicit_request
   mediaKind: photo

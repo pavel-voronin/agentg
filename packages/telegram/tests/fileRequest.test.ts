@@ -209,8 +209,7 @@ const requestDownloadRules = [
   {
     causes: ['explicit_request'],
     maxBytes: 100 * 1024 * 1024,
-    mediaKind: 'photo',
-    name: 'requested photos up to 100 MB'
+    mediaKind: 'photo'
   }
 ] as const satisfies readonly MediaDownloadPolicyRule[];
 

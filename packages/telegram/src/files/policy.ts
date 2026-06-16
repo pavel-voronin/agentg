@@ -61,20 +61,21 @@ export function decideFilePolicy(input: FilePolicyInput): FilePolicyDecision {
   }
 
   if (!byteSizeAllowed(input.slot.byteSize, rule.maxBytes)) {
+    const ruleReason = downloadRuleReason(rule, input.cause);
     return input.cause === 'explicit_request'
       ? {
           action: 'deny',
-          reason: `${rule.name} requires a known size at or below ${String(rule.maxBytes)} bytes`
+          reason: `${ruleReason} requires a known size at or below ${String(rule.maxBytes)} bytes`
         }
       : {
           action: 'record',
-          reason: `${rule.name} size limit did not match`
+          reason: `${ruleReason} size limit did not match`
         };
   }
 
   return {
     action: 'enqueue',
-    reason: rule.name
+    reason: downloadRuleReason(rule, input.cause)
   };
 }
 
@@ -91,4 +92,11 @@ function byteSizeAllowed(byteSize: number | null, maxBytes: number | null): bool
     return true;
   }
   return byteSize !== null && byteSize <= maxBytes;
+}
+
+function downloadRuleReason(
+  rule: MediaDownloadPolicyRule,
+  cause: MediaDownloadPolicyCause
+): string {
+  return `${rule.mediaKind} ${cause} download policy`;
 }

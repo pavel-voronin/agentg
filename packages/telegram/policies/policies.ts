@@ -53,8 +53,7 @@ const gapRestoreRuleSpec = z
 const downloadRuleSpec = z.object({
   causes: z.array(z.enum(mediaDownloadPolicyCauses)).nonempty(),
   maxBytes: z.number().int().positive().nullable(),
-  mediaKind: z.enum(fileMediaKinds),
-  name: z.string().min(1)
+  mediaKind: z.enum(fileMediaKinds)
 });
 
 type GapRestoreRuleSpec = z.infer<typeof gapRestoreRuleSpec>;
@@ -91,17 +90,14 @@ export const fileDownloadRulesPolicy = definePolicy({
   kind: 'TelegramFileDownloadRule',
   moduleId: 'telegram',
   resolve(specs: readonly DownloadRuleSpec[]) {
-    const seen = new Map<string, string>();
+    const seen = new Set<string>();
     for (const spec of specs) {
       for (const cause of spec.causes) {
         const key = `${spec.mediaKind}:${cause}`;
-        const previous = seen.get(key);
-        if (previous !== undefined) {
-          throw new Error(
-            `Duplicate Telegram file download rule for ${key}: ${previous}, ${spec.name}`
-          );
+        if (seen.has(key)) {
+          throw new Error(`Duplicate Telegram file download rule for ${key}`);
         }
-        seen.set(key, spec.name);
+        seen.add(key);
       }
     }
     return Object.freeze([...specs]);

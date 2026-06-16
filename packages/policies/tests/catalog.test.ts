@@ -31,7 +31,8 @@ describe('policy catalog', () => {
             rule.causes.includes('initialization') &&
             rule.causes.includes('live_update') &&
             rule.mediaKind === 'avatar' &&
-            rule.name === 'chat avatars'
+            rule.maxBytes === null &&
+            !Object.hasOwn(rule, 'name')
         )
     ).toBe(true);
   });
