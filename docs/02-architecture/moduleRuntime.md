@@ -28,13 +28,14 @@ outbox before they enter an in-memory queue.
 Every module has:
 
 - `module`: stable short name, for example `analysis`
-- `serviceRpcUrl`: internal module RPC service URL
+- `serviceRpcUrl`: internal module RPC service URL when the module exposes
+  public internal RPC procedures
 - `natsUrl`: NATS Core URL
 - `databaseUrl`: Postgres URL
 - `tablePrefix`: owned table prefix, for example `analysis_`
 - `migrationFolder`: module-owned Drizzle migration folder
-- package-local procedure map returned by module `setup()` and exposed by the
-  module runtime
+- package-local procedure map returned by module `setup()`; runtime-only or
+  edge-boundary modules return an empty map
 - a package-owned typed RPC client exported from the package root when another
   package currently consumes that module
 
@@ -95,9 +96,13 @@ export const telegramModule = defineModule('telegram', {
 });
 ```
 
-The framework starts the module RPC server from this returned map after startup
-resources are ready and before background processes start. `ModuleApp` exposes
-only lifecycle methods: `start()` and `stop()`.
+The framework starts the module RPC server from the returned RPC procedure map
+after startup resources are ready and before background processes start. When a
+module returns no public RPC procedures, no RPC connector is required and no
+empty RPC server is started. When a module returns public RPC procedures without
+an RPC connector, startup fails.
+
+`ModuleApp` exposes only lifecycle methods: `start()` and `stop()`.
 
 ## Storage
 
@@ -157,7 +162,10 @@ The audit is part of `npm run check`.
 - Create a package-owned `src/schema.ts`, `drizzle/` folder, migration command,
   and migration journal table.
 - Use only owned tables for writes. Call other domains through module RPC.
-- Return public internal methods directly from module `setup()`.
+- Return public internal methods directly from module `setup()` only for modules
+  that expose an internal RPC surface. Runtime-only or edge-boundary modules
+  return an empty procedure map and register their process through `startup()` or
+  `background()`.
 - Export a typed client from the package root only when a real current consumer
   imports it.
 - Return public internal results directly.

@@ -56,7 +56,7 @@ export type ModuleCreateOptions<TConfig> = {
 export type ModuleConnect = {
   events: EventBusFactory;
   policies?: PolicyClientFactory;
-  rpc: RpcFactory;
+  rpc?: RpcFactory | undefined;
 };
 
 export type ModuleDefinition<
@@ -204,7 +204,7 @@ function createModuleApp<TConfig>(
           startedStartup.push({ name: moduleProcess.name, stop });
         }
         runningStartupProcesses = startedStartup;
-        procedureServer = await options.connect.rpc.start(procedures);
+        procedureServer = await startProcedureServer(name, options.connect.rpc, procedures);
         runningProcedureServer = procedureServer;
         for (const moduleProcess of namedBackgroundProcesses) {
           const stop = normalizeProcessStop(await moduleProcess.start());
@@ -268,6 +268,20 @@ function createModuleApp<TConfig>(
       );
     }
   };
+}
+
+async function startProcedureServer(
+  name: string,
+  rpc: RpcFactory | undefined,
+  procedures: ProcedureMap
+): Promise<ProcedureServer | undefined> {
+  if (Object.keys(procedures).length === 0) {
+    return undefined;
+  }
+  if (rpc === undefined) {
+    throw new Error(`Module ${name} exposes RPC procedures, but connect.rpc is not configured`);
+  }
+  return rpc.start(procedures);
 }
 
 function normalizeProcessStop(result: ProcessStartResult): StopProcess {

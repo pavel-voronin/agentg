@@ -185,7 +185,9 @@ describe('defineModule', () => {
           });
           return {};
         });
-        return {};
+        return {
+          status: () => ({ ready: true })
+        };
       }
     });
     const module = definition({
@@ -207,6 +209,56 @@ describe('defineModule', () => {
       'rpc:stop',
       'events:stop'
     ]);
+  });
+
+  it('starts modules without RPC when no public procedures are exposed', async () => {
+    const calls: string[] = [];
+    const definition = defineModule('sample', {
+      config: readEmptyConfig,
+      setup({ background }) {
+        background('worker', () => {
+          calls.push('background:worker');
+          return () => {
+            calls.push('stop:worker');
+            return undefined;
+          };
+        });
+        return {};
+      }
+    });
+    const module = definition({
+      config: {},
+      connect: {
+        events: () => ({
+          start() {
+            calls.push('events:start');
+            return Promise.resolve();
+          },
+          stop() {
+            calls.push('events:stop');
+            return Promise.resolve();
+          },
+          publish() {
+            return;
+          },
+          subscribe() {
+            return {
+              unsubscribe() {
+                return;
+              }
+            };
+          }
+        })
+      }
+    });
+
+    await module.start();
+
+    expect(calls).toEqual(['events:start', 'background:worker']);
+
+    await module.stop();
+
+    expect(calls).toEqual(['events:start', 'background:worker', 'stop:worker', 'events:stop']);
   });
 
   it('allows duplicate resource background names', async () => {
@@ -508,6 +560,25 @@ describe('defineModule', () => {
     await module.start();
     expect(exposedProcedures).toEqual({ listChats });
     await module.stop();
+  });
+
+  it('rejects public RPC procedures without an RPC connector', async () => {
+    const definition = defineModule('sample', {
+      config: readEmptyConfig,
+      setup: () => ({
+        listChats: () => ['chat']
+      })
+    });
+    const module = definition({
+      config: {},
+      connect: {
+        events: testEventBus()
+      }
+    });
+
+    await expect(module.start()).rejects.toThrow(
+      'Module sample exposes RPC procedures, but connect.rpc is not configured'
+    );
   });
 
   it('serves module procedures through one JSON endpoint', async () => {
