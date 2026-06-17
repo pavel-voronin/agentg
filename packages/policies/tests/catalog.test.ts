@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises';
+
 import { createPolicyServer } from '@agentg/framework/policies';
 import { describe, expect, it } from 'vitest';
 
@@ -5,6 +7,34 @@ import { policyCatalog } from '../src/generated/policyCatalog.js';
 import { createFileStore } from '../src/store.js';
 
 describe('policy catalog', () => {
+  it('loads generated policy descriptors without importing module runtimes', async () => {
+    const source = await readFile(
+      new URL('../src/generated/policyCatalog.ts', import.meta.url),
+      'utf8'
+    );
+
+    expect(source).toContain('../../../telegram/policies/policies.js');
+    expect(source).toContain('../../../triggers/policies/policies.js');
+    expect(source).not.toContain('/src/module');
+    expect(source).not.toContain('/src/main');
+
+    const server = createPolicyServer({
+      catalog: policyCatalog,
+      store: createFileStore({
+        directory: new URL('../../../config/policies', import.meta.url).pathname
+      })
+    });
+
+    await server.start();
+
+    const kinds = await server.procedures.listPolicyKinds();
+    expect(kinds.map((item) => item.kind).sort()).toEqual([
+      'TelegramFileDownloadRule',
+      'TelegramHistoryGapRestoreRule',
+      'TriggerRule'
+    ]);
+  });
+
   it('loads real YAML policy instances and resolves Telegram file download rules', async () => {
     const server = createPolicyServer({
       catalog: policyCatalog,

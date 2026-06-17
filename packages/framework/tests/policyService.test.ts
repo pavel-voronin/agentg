@@ -46,6 +46,138 @@ definePolicy({
 });
 
 describe('policy server', () => {
+  it('lists policy descriptors and rejects duplicate catalog identities', () => {
+    expect(
+      createPolicyServer({
+        catalog: [sampleRule],
+        store: memoryStore([])
+      }).procedures.listPolicyKinds()
+    ).toEqual([
+      {
+        form: sampleRule.form,
+        id: 'sample.rules',
+        kind: 'SampleRule',
+        moduleId: 'sample',
+        version: 1
+      }
+    ]);
+
+    expect(() =>
+      createPolicyServer({
+        catalog: [
+          sampleRule,
+          definePolicy({
+            id: 'sample.rules',
+            kind: 'OtherSampleRule',
+            moduleId: 'sample',
+            spec: z.object({
+              key: z.string()
+            }),
+            version: 1
+          })
+        ],
+        store: memoryStore([])
+      })
+    ).toThrow('Duplicate policy definition id');
+
+    expect(() =>
+      createPolicyServer({
+        catalog: [
+          sampleRule,
+          definePolicy({
+            id: 'sample.otherRules',
+            kind: 'SampleRule',
+            moduleId: 'sample',
+            spec: z.object({
+              key: z.string()
+            }),
+            version: 1
+          })
+        ],
+        store: memoryStore([])
+      })
+    ).toThrow('Duplicate policy definition kind');
+  });
+
+  it('rejects invalid document envelopes before writing to the store', async () => {
+    const store = memoryStore([]);
+    const server = createPolicyServer({
+      catalog: [sampleRule],
+      store
+    });
+
+    await server.start();
+
+    await expect(
+      server.procedures.setInstance({
+        document: {
+          ...document({
+            name: 'alpha',
+            spec: {
+              key: 'alpha',
+              mode: 'enabled'
+            }
+          }),
+          apiVersion: 'agentg.dev/v0' as typeof POLICY_API_VERSION
+        }
+      })
+    ).resolves.toMatchObject({
+      error: {
+        code: 'invalid_api_version'
+      },
+      policyValueChanged: false,
+      status: 'rejected'
+    });
+
+    await expect(
+      server.procedures.setInstance({
+        document: {
+          ...document({
+            name: 'alpha',
+            spec: {
+              key: 'alpha',
+              mode: 'enabled'
+            }
+          }),
+          kind: 'UnknownRule'
+        }
+      })
+    ).resolves.toMatchObject({
+      error: {
+        code: 'unknown_kind'
+      },
+      policyValueChanged: false,
+      status: 'rejected'
+    });
+
+    await expect(
+      server.procedures.setInstance({
+        document: {
+          ...document({
+            name: 'alpha',
+            spec: {
+              key: 'alpha',
+              mode: 'enabled'
+            }
+          }),
+          metadata: {
+            name: ''
+          }
+        }
+      })
+    ).resolves.toMatchObject({
+      error: {
+        code: 'invalid_document',
+        fieldPath: ['metadata', 'name']
+      },
+      policyValueChanged: false,
+      status: 'rejected'
+    });
+
+    expect(store.writes).toEqual([]);
+    expect(server.procedures.getPolicyValue({ kind: 'SampleRule' })).toEqual([]);
+  });
+
   it('rejects invalid specs before writing to the store', async () => {
     const store = memoryStore([]);
     const server = createPolicyServer({
@@ -111,6 +243,187 @@ describe('policy server', () => {
           moduleId: 'sample'
         },
         type: POLICY_INSTANCES_CHANGED_EVENT
+      }
+    ]);
+  });
+
+  it('keeps applied mutations when policy event publishing fails', async () => {
+    const server = createPolicyServer({
+      catalog: [sampleRule],
+      events: failingPublishEvents(),
+      store: memoryStore([])
+    });
+
+    await server.start();
+    await expect(
+      server.procedures.setInstance({
+        document: document({
+          name: 'alpha',
+          spec: {
+            key: 'alpha',
+            mode: 'enabled'
+          }
+        })
+      })
+    ).resolves.toMatchObject({
+      identity: {
+        kind: 'SampleRule',
+        name: 'alpha'
+      },
+      status: 'applied'
+    });
+
+    expect(server.procedures.getPolicyValue({ kind: 'SampleRule' })).toEqual([
+      {
+        key: 'alpha',
+        mode: 'enabled'
+      }
+    ]);
+  });
+
+  it('reports unchanged policy values for idempotent mutations', async () => {
+    const server = createPolicyServer({
+      catalog: [sampleRule],
+      store: memoryStore([
+        document({
+          name: 'alpha',
+          spec: {
+            key: 'alpha',
+            mode: 'enabled'
+          }
+        })
+      ])
+    });
+
+    await server.start();
+    await expect(
+      server.procedures.setInstance({
+        document: document({
+          name: 'alpha',
+          spec: {
+            key: 'alpha',
+            mode: 'enabled'
+          }
+        })
+      })
+    ).resolves.toMatchObject({
+      policyValueChanged: false,
+      status: 'applied'
+    });
+    await expect(
+      server.procedures.deleteInstance({
+        kind: 'SampleRule',
+        name: 'missingRule'
+      })
+    ).resolves.toMatchObject({
+      policyValueChanged: false,
+      status: 'applied'
+    });
+  });
+
+  it('returns store conflicts without changing the active value', async () => {
+    const store = memoryStore([
+      document({
+        name: 'alpha',
+        spec: {
+          key: 'alpha',
+          mode: 'enabled'
+        }
+      })
+    ]);
+    store.failSet = true;
+    store.failDelete = true;
+    const server = createPolicyServer({
+      catalog: [sampleRule],
+      store
+    });
+
+    await server.start();
+
+    await expect(
+      server.procedures.setInstance({
+        document: document({
+          name: 'beta',
+          spec: {
+            key: 'beta',
+            mode: 'disabled'
+          }
+        })
+      })
+    ).resolves.toMatchObject({
+      error: {
+        code: 'store_conflict'
+      },
+      policyValueChanged: false,
+      status: 'rejected'
+    });
+    expect(server.procedures.getPolicyValue({ kind: 'SampleRule' })).toEqual([
+      {
+        key: 'alpha',
+        mode: 'enabled'
+      }
+    ]);
+
+    await expect(
+      server.procedures.deleteInstance({
+        kind: 'SampleRule',
+        name: 'alpha'
+      })
+    ).resolves.toMatchObject({
+      error: {
+        code: 'store_conflict'
+      },
+      policyValueChanged: false,
+      status: 'rejected'
+    });
+    expect(server.procedures.getPolicyValue({ kind: 'SampleRule' })).toEqual([
+      {
+        key: 'alpha',
+        mode: 'enabled'
+      }
+    ]);
+  });
+
+  it('serializes concurrent mutations into consistent store and value state', async () => {
+    const store = memoryStore([]);
+    const server = createPolicyServer({
+      catalog: [sampleRule],
+      store
+    });
+
+    await server.start();
+    const [alpha, beta] = await Promise.all([
+      server.procedures.setInstance({
+        document: document({
+          name: 'alpha',
+          spec: {
+            key: 'alpha',
+            mode: 'enabled'
+          }
+        })
+      }),
+      server.procedures.setInstance({
+        document: document({
+          name: 'beta',
+          spec: {
+            key: 'beta',
+            mode: 'disabled'
+          }
+        })
+      })
+    ]);
+
+    expect(alpha).toMatchObject({ status: 'applied' });
+    expect(beta).toMatchObject({ status: 'applied' });
+    expect(store.writes.map((item) => item.metadata.name).sort()).toEqual(['alpha', 'beta']);
+    expect(server.procedures.getPolicyValue({ kind: 'SampleRule' })).toEqual([
+      {
+        key: 'alpha',
+        mode: 'enabled'
+      },
+      {
+        key: 'beta',
+        mode: 'disabled'
       }
     ]);
   });
@@ -422,6 +735,186 @@ describe('policy server', () => {
       })
     ).toThrow(PolicyContractError);
   });
+
+  it('reads instances and values through the public policy procedures', async () => {
+    const server = createPolicyServer({
+      catalog: [sampleRule],
+      store: memoryStore([
+        document({
+          labels: {
+            area: 'telegram',
+            tier: 'gold'
+          },
+          name: 'alpha',
+          spec: {
+            key: 'alpha',
+            mode: 'enabled'
+          }
+        }),
+        document({
+          labels: {
+            area: 'other'
+          },
+          name: 'beta',
+          spec: {
+            key: 'beta',
+            mode: 'disabled'
+          }
+        })
+      ])
+    });
+
+    await server.start();
+
+    expect(
+      server.procedures.getInstance({
+        kind: 'SampleRule',
+        name: 'alpha'
+      })
+    ).toMatchObject({
+      metadata: {
+        name: 'alpha'
+      },
+      spec: {
+        key: 'alpha',
+        mode: 'enabled'
+      }
+    });
+    expect(() =>
+      server.procedures.getInstance({
+        kind: 'SampleRule',
+        name: 'missingRule'
+      })
+    ).toThrow(PolicyContractError);
+    expect(() => server.procedures.getPolicyValue({ kind: 'UnknownRule' })).toThrow(
+      PolicyContractError
+    );
+    expect(
+      server.procedures.listInstances({
+        kind: 'SampleRule',
+        labels: {
+          area: 'telegram'
+        },
+        moduleId: 'sample'
+      })
+    ).toHaveLength(1);
+  });
+
+  it('rejects unknown delete kinds and applies missing deletes for known kinds', async () => {
+    const server = createPolicyServer({
+      catalog: [sampleRule],
+      store: memoryStore([])
+    });
+
+    await server.start();
+    await expect(
+      server.procedures.deleteInstance({
+        kind: 'UnknownRule',
+        name: 'missingRule'
+      })
+    ).resolves.toMatchObject({
+      error: {
+        code: 'unknown_kind'
+      },
+      status: 'rejected'
+    });
+    await expect(
+      server.procedures.deleteInstance({
+        kind: 'SampleRule',
+        name: 'missingRule'
+      })
+    ).resolves.toMatchObject({
+      operation: 'delete',
+      policyValueChanged: false,
+      status: 'applied'
+    });
+  });
+
+  it('loads and validates stored documents before exposing resolved values', async () => {
+    const store = memoryStore([
+      document({
+        name: 'alpha',
+        spec: {
+          key: 'alpha',
+          mode: 'enabled'
+        }
+      })
+    ]);
+    const firstServer = createPolicyServer({
+      catalog: [sampleRule],
+      store
+    });
+
+    await firstServer.start();
+    expect(firstServer.procedures.getPolicyValue({ kind: 'SampleRule' })).toEqual([
+      {
+        key: 'alpha',
+        mode: 'enabled'
+      }
+    ]);
+
+    const secondServer = createPolicyServer({
+      catalog: [sampleRule],
+      store
+    });
+    await secondServer.start();
+    expect(secondServer.procedures.getPolicyValue({ kind: 'SampleRule' })).toEqual(
+      firstServer.procedures.getPolicyValue({ kind: 'SampleRule' })
+    );
+
+    await expect(
+      createPolicyServer({
+        catalog: [sampleRule],
+        store: memoryStore([
+          document({
+            name: 'alpha',
+            spec: {
+              key: 'alpha',
+              mode: 'broken'
+            }
+          })
+        ])
+      }).start()
+    ).rejects.toThrow(PolicyContractError);
+
+    await expect(
+      createPolicyServer({
+        catalog: [sampleRule],
+        store: memoryStore([
+          document({
+            kind: 'UnknownRule',
+            name: 'alpha',
+            spec: {
+              key: 'alpha',
+              mode: 'enabled'
+            }
+          })
+        ])
+      }).start()
+    ).rejects.toThrow(PolicyContractError);
+
+    await expect(
+      createPolicyServer({
+        catalog: [sampleRule],
+        store: fixedLoadStore([
+          document({
+            name: 'alpha',
+            spec: {
+              key: 'alpha',
+              mode: 'enabled'
+            }
+          }),
+          document({
+            name: 'alpha',
+            spec: {
+              key: 'duplicate',
+              mode: 'disabled'
+            }
+          })
+        ])
+      }).start()
+    ).rejects.toThrow(PolicyContractError);
+  });
 });
 
 describe('usePolicy', () => {
@@ -642,13 +1135,20 @@ function document(input: {
 
 function memoryStore(initial: readonly PolicyDocument[]): PolicyStore & {
   deletes: PolicyDocument['metadata']['name'][];
+  failDelete: boolean;
+  failSet: boolean;
   writes: PolicyDocument[];
 } {
   const documents = new Map(initial.map((item) => [`${item.kind}/${item.metadata.name}`, item]));
   const deletes: PolicyDocument['metadata']['name'][] = [];
   const writes: PolicyDocument[] = [];
   return {
+    failDelete: false,
+    failSet: false,
     delete(identity) {
+      if (this.failDelete) {
+        return Promise.reject(new Error('delete conflict'));
+      }
       deletes.push(identity.name);
       documents.delete(`${identity.kind}/${identity.name}`);
       return Promise.resolve();
@@ -657,12 +1157,50 @@ function memoryStore(initial: readonly PolicyDocument[]): PolicyStore & {
       return Promise.resolve([...documents.values()]);
     },
     set(item) {
+      if (this.failSet) {
+        return Promise.reject(new Error('set conflict'));
+      }
       writes.push(item);
       documents.set(`${item.kind}/${item.metadata.name}`, item);
       return Promise.resolve();
     },
     deletes,
     writes
+  };
+}
+
+function fixedLoadStore(documents: readonly PolicyDocument[]): PolicyStore {
+  return {
+    delete() {
+      return Promise.resolve();
+    },
+    loadAll() {
+      return Promise.resolve(documents);
+    },
+    set() {
+      return Promise.resolve();
+    }
+  };
+}
+
+function failingPublishEvents(): EventBus {
+  return {
+    publish() {
+      throw new Error('publish failed');
+    },
+    start() {
+      return Promise.resolve();
+    },
+    stop() {
+      return Promise.resolve();
+    },
+    subscribe(): EventSubscription {
+      return {
+        unsubscribe() {
+          return undefined;
+        }
+      };
+    }
   };
 }
 
