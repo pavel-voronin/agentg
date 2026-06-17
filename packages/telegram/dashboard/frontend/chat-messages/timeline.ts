@@ -10,6 +10,7 @@ import { providerFileUrl } from '../mediaUrl.js';
 
 type TimelineOptions = {
   messagesByTelegramId: ReadonlyMap<string, Message>;
+  replyMessageLookup?: (target: MessageTarget) => Message | null;
   selectedChatAvatarUrl: string | null;
 };
 
@@ -17,10 +18,10 @@ export function buildTimelineItems(input: Message[], options: TimelineOptions): 
   const items: TimelineItem[] = [];
   let currentDateKey = '';
   for (const message of input) {
-    const messageDateKey = dateKey(message.messageDate);
-    const messageDateLabel = formatDateLabel(message.messageDate);
-    if (messageDateKey !== currentDateKey) {
-      currentDateKey = messageDateKey;
+    const nextDateKey = messageDateKey(message.messageDate);
+    const messageDateLabel = formatMessageDateLabel(message.messageDate);
+    if (nextDateKey !== currentDateKey) {
+      currentDateKey = nextDateKey;
       items.push({
         dateKey: currentDateKey,
         id: `date:${currentDateKey}`,
@@ -44,7 +45,7 @@ export function buildTimelineItems(input: Message[], options: TimelineOptions): 
       id: message.id,
       kind: 'message',
       message,
-      view: messageView(message, options)
+      view: buildMessageView(message, options)
     });
   }
   return items;
@@ -62,10 +63,9 @@ export function upsertMessageFile(files: FileRef[], file: FileRef): FileRef[] {
   return [...files.filter((item) => item.slotKey !== file.slotKey), file].sort(compareFileRefs);
 }
 
-function messageView(message: Message, options: TimelineOptions): MessageView {
+export function buildMessageView(message: Message, options: TimelineOptions): MessageView {
   const replyTarget = message.replyTo === null ? null : replyTargetFromMessage(message);
-  const replyMessage =
-    replyTarget === null ? null : (options.messagesByTelegramId.get(replyTarget.messageId) ?? null);
+  const replyMessage = replyTarget === null ? null : lookupReplyMessage(replyTarget, options);
   const sender = senderLabel(message);
 
   return {
@@ -77,7 +77,7 @@ function messageView(message: Message, options: TimelineOptions): MessageView {
       message.text === null && message.media.files.length === 0
         ? contentLabel(message.contentType)
         : null,
-    dateKey: dateKey(message.messageDate),
+    dateKey: messageDateKey(message.messageDate),
     isReplyLoaded: replyMessage !== null,
     mediaFiles: mediaFileViews(message),
     replyTarget,
@@ -209,7 +209,7 @@ function messageBody(message: Message): string {
   return contentLabel(message.contentType) ?? 'Unsupported message';
 }
 
-function messageServiceLabel(message: Message): string | null {
+export function messageServiceLabel(message: Message): string | null {
   const action = message.serviceAction;
   if (action?.kind !== 'chatMemberLeft') {
     return null;
@@ -350,7 +350,7 @@ function parseMessageId(value: string): bigint | null {
   return /^[0-9]+$/.test(value) ? BigInt(value) : null;
 }
 
-function dateKey(value: string | null): string {
+export function messageDateKey(value: string | null): string {
   const date = dateFromIso(value);
   if (date === null) {
     return 'unknown';
@@ -362,7 +362,7 @@ function dateKey(value: string | null): string {
   ].join('-');
 }
 
-function formatDateLabel(value: string | null): string {
+export function formatMessageDateLabel(value: string | null): string {
   const date = dateFromIso(value);
   if (date === null) {
     return 'Unknown date';
@@ -390,6 +390,14 @@ function dateFromIso(value: string | null): Date | null {
   }
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function lookupReplyMessage(target: MessageTarget, options: TimelineOptions): Message | null {
+  return (
+    options.replyMessageLookup?.(target) ??
+    options.messagesByTelegramId.get(target.messageId) ??
+    null
+  );
 }
 
 function isDefined<T>(value: T | undefined): value is T {

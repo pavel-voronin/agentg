@@ -12,12 +12,14 @@ type ReactionBadge = {
 };
 
 const props = defineProps<{
+  clickable?: boolean;
   message: Message;
   view: MessageView;
 }>();
 
 const emit = defineEmits<{
   mediaRequest: [file: FileRef];
+  open: [];
   replyJump: [target: MessageTarget | null];
 }>();
 
@@ -41,10 +43,25 @@ function reactionLabel(reactionType: string): string {
   }
   return reactionType === 'paid' ? '$' : reactionType;
 }
+
+function openMessage(): void {
+  if (props.clickable === true) {
+    emit('open');
+  }
+}
 </script>
 
 <template>
-  <article class="chat-message-bubble" :data-outgoing="message.isOutgoing ? 'true' : undefined">
+  <article
+    class="chat-message-bubble"
+    :data-clickable="props.clickable === true ? 'true' : undefined"
+    :data-outgoing="message.isOutgoing ? 'true' : undefined"
+    :role="props.clickable === true ? 'link' : undefined"
+    :tabindex="props.clickable === true ? 0 : undefined"
+    @click="openMessage"
+    @keydown.enter="openMessage"
+    @keydown.space.prevent="openMessage"
+  >
     <div v-if="view.sender" class="chat-message-bubble__sender">
       {{ view.sender }}
     </div>
@@ -54,7 +71,7 @@ function reactionLabel(reactionType: string): string {
       type="button"
       class="chat-message-bubble__reply"
       :data-loaded="view.isReplyLoaded ? 'true' : undefined"
-      @click="emit('replyJump', view.replyTarget)"
+      @click.stop="emit('replyJump', view.replyTarget)"
     >
       <span class="chat-message-bubble__reply-label">Reply</span>
       <span class="chat-message-bubble__reply-text">
@@ -69,6 +86,7 @@ function reactionLabel(reactionType: string): string {
     <ChatMessageMediaList
       v-if="view.mediaFiles.length > 0"
       :media-files="view.mediaFiles"
+      @click.stop
       @media-request="(file) => emit('mediaRequest', file)"
     />
 
@@ -80,6 +98,7 @@ function reactionLabel(reactionType: string): string {
           :href="segment.url"
           target="_blank"
           rel="noopener noreferrer"
+          @click.stop
         >
           {{ segment.text }}
         </a>
@@ -115,6 +134,10 @@ function reactionLabel(reactionType: string): string {
 
 .chat-message-bubble[data-outgoing='true'] {
   @apply rounded-bl-2xl rounded-br-md bg-emerald-100;
+}
+
+.chat-message-bubble[data-clickable='true'] {
+  @apply cursor-pointer transition hover:ring-teal-300;
 }
 
 .chat-message-bubble__sender {

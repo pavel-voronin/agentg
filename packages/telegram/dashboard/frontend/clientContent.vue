@@ -14,9 +14,11 @@ import {
 } from '@agentg/framework/dashboard';
 
 import { chatSidebarView } from './chatSidebarView.js';
+import ClientModeNavigation from './components/clientModeNavigation.vue';
 import ChatSidebar from './components/chatSidebar.vue';
 import ChatSidebarResizer from './components/chatSidebarResizer.vue';
 import ClientPrimaryPanel from './components/clientPrimaryPanel.vue';
+import ClientLiveContent from './clientLiveContent.vue';
 import { useTelegramDirectoryState } from './directoryState.js';
 import { readStorage, writeStorage } from './storage.js';
 import { useChatSidebarResize } from './useChatSidebarResize.js';
@@ -32,9 +34,14 @@ import {
   visibleDirectoryChats as filterDirectoryChats
 } from './clientChat.js';
 import {
+  CLIENT_CHAT_ROUTE_PREFIX_LENGTH,
   chatIdFromClientRouteSegments,
+  clientModeFromRouteSegments,
+  clientRouteSegmentsForMode,
   clientRouteSegmentsForChat,
-  tabSegmentFromClientRouteSegments
+  clientRouteSegmentsForLive,
+  tabSegmentFromClientRouteSegments,
+  type ClientMode
 } from './clientRoute.js';
 import {
   compareClientTabs,
@@ -48,6 +55,10 @@ const props = defineProps<{
   slotContext?: SlotContext | undefined;
 }>();
 
+const clientModes = [
+  { id: 'client', label: 'Client' },
+  { id: 'live', label: 'Live' }
+] as const satisfies readonly { id: ClientMode; label: string }[];
 const telegramStoragePrefix = 'agentg.telegram.dashboard';
 const directoryState = useTelegramDirectoryState();
 const slotRuntime = useSlotRuntime();
@@ -76,6 +87,8 @@ const primarySlot = {
 };
 
 const route = computed(() => slotRoute(props.slotContext));
+const routeMode = computed(() => clientModeFromRouteSegments(route.value.segments));
+const activeClientMode = computed<ClientMode>(() => routeMode.value ?? 'client');
 const chatNavigation = computed(() =>
   buildChatNavigation(directoryState.chats.value, directoryState.folders.value)
 );
@@ -85,7 +98,7 @@ const routePrimaryTabSegment = computed(() =>
 );
 const selectedChatId = ref(initialSelectedChatId());
 const selectedChatRoute = computed(() =>
-  selectedChatId.value === null ? route.value : route.value.child(2)
+  selectedChatId.value === null ? route.value : route.value.child(CLIENT_CHAT_ROUTE_PREFIX_LENGTH)
 );
 const visibleDirectoryChats = computed(() =>
   filterDirectoryChats({
@@ -185,9 +198,12 @@ const nestedSlotContext = computed(() => ({
 }));
 
 watch(
-  routeChatId,
-  (chatId) => {
-    if (selectedChatId.value !== chatId) {
+  () => ({
+    chatId: routeChatId.value,
+    mode: activeClientMode.value
+  }),
+  ({ chatId, mode }) => {
+    if (mode === 'client' && selectedChatId.value !== chatId) {
       selectedChatId.value = chatId;
     }
   },
@@ -198,8 +214,20 @@ watch(
   selectedChatId,
   (chatId) => {
     writeStorage(`${telegramStoragePrefix}.selectedChatId`, chatId ?? '');
-    writeSelectedChatRoute(chatId);
+    if (activeClientMode.value === 'client') {
+      writeSelectedChatRoute(chatId);
+    }
   },
+  { immediate: true }
+);
+
+watch(
+  () => ({
+    mode: routeMode.value,
+    routeChatId: routeChatId.value,
+    segments: route.value.segments
+  }),
+  normalizeClientModeRoute,
   { immediate: true }
 );
 
@@ -278,9 +306,19 @@ function searchChats(value: string): void {
   writeStorage(`${telegramStoragePrefix}.chatFilter`, value);
 }
 
+function selectClientMode(mode: ClientMode): void {
+  if (mode === 'live') {
+    route.value.replace(clientRouteSegmentsForLive());
+    return;
+  }
+  route.value.replace(
+    clientRouteSegmentsForChat(selectedChatId.value, routeSegmentForCurrentRoute())
+  );
+}
+
 function selectPrimaryTab(contentId: string): void {
   const tab = primaryTabs.value.find((item) => item.item.contentId === contentId);
-  if (tab === undefined || selectedChatId.value === null) {
+  if (tab === undefined || selectedChatId.value === null || activeClientMode.value !== 'client') {
     return;
   }
   route.value.replace(clientRouteSegmentsForChat(selectedChatId.value, routeSegmentForTab(tab)));
@@ -364,16 +402,42 @@ function initialSelectedChatId(): string | null {
 }
 
 function writeSelectedChatRoute(chatId: string | null): void {
+  if (activeClientMode.value !== 'client') {
+    return;
+  }
   if (routeChatId.value === chatId) {
     return;
   }
   route.value.replace(clientRouteSegmentsForChat(chatId, routeSegmentForCurrentRoute()));
 }
 
+function normalizeClientModeRoute(): void {
+  if (routeMode.value === 'live') {
+    if (route.value.segments.length !== 1) {
+      route.value.replace(clientRouteSegmentsForLive());
+    }
+    return;
+  }
+
+  if (routeMode.value === 'client') {
+    if (route.value.segments.length > 0 && routeChatId.value === null) {
+      route.value.replace(clientRouteSegmentsForMode('client'));
+    }
+    return;
+  }
+
+  route.value.replace(clientRouteSegmentsForMode('client'));
+}
+
 function normalizePrimaryTabRoute(): void {
   const chatId = selectedChatId.value;
   const tab = activePrimaryTab.value;
-  if (chatId === null || tab === null || routeChatId.value !== chatId) {
+  if (
+    activeClientMode.value !== 'client' ||
+    chatId === null ||
+    tab === null ||
+    routeChatId.value !== chatId
+  ) {
     return;
   }
   if (routedPrimaryTab.value !== null && isDefaultPrimaryTab(routedPrimaryTab.value)) {
@@ -498,42 +562,53 @@ function isDefined<T>(value: T | undefined): value is T {
 
 <template>
   <UiPage padding="none" scroll="hidden">
-    <section
-      class="telegram-client__chat-interface"
-      :data-resizing="isResizingChatSidebar ? 'true' : undefined"
-      :style="chatInterfaceStyle"
-    >
-      <ChatSidebar
-        :view="chatSidebar"
-        @archive-open="openArchiveChats"
-        @chat-open="(chatId) => void openChat(chatId).catch(pushLocalError)"
-        @chat-toggle="(chatId) => void toggleChat(chatId).catch(pushLocalError)"
-        @folder-open="openFolderChats"
-        @main-open="openMainChats"
-        @search-clear="clearChatSearch"
-        @search-input="searchChats"
+    <section class="telegram-client">
+      <ClientModeNavigation
+        :active-mode="activeClientMode"
+        :modes="clientModes"
+        @mode-select="selectClientMode"
       />
 
-      <ChatSidebarResizer
-        :max-width="chatSidebarMaxWidth"
-        :min-width="chatSidebarMinWidth"
-        :width="chatSidebarWidth"
-        @keyboard-resize="resizeChatSidebarWithKeyboard"
-        @resize-start="startChatSidebarResize"
-      />
+      <ClientLiveContent v-if="activeClientMode === 'live'" :slot-context="props.slotContext" />
 
-      <ClientPrimaryPanel
-        :active-tab="activePrimaryTab"
-        :active-tab-id="activePrimaryTabId"
-        :chat-header="selectedChatHeader"
-        :content-attrs="emptyContentAttrs"
-        :selected-chat-id="selectedChatId"
-        :slot-context="nestedSlotContext"
-        :tabs="primaryTabs"
-        @close-chat="closeSelectedChat"
-        @select-tab="selectPrimaryTab"
-        @state-change="setActivePrimaryItemState"
-      />
+      <section
+        v-else
+        class="telegram-client__chat-interface"
+        :data-resizing="isResizingChatSidebar ? 'true' : undefined"
+        :style="chatInterfaceStyle"
+      >
+        <ChatSidebar
+          :view="chatSidebar"
+          @archive-open="openArchiveChats"
+          @chat-open="(chatId) => void openChat(chatId).catch(pushLocalError)"
+          @chat-toggle="(chatId) => void toggleChat(chatId).catch(pushLocalError)"
+          @folder-open="openFolderChats"
+          @main-open="openMainChats"
+          @search-clear="clearChatSearch"
+          @search-input="searchChats"
+        />
+
+        <ChatSidebarResizer
+          :max-width="chatSidebarMaxWidth"
+          :min-width="chatSidebarMinWidth"
+          :width="chatSidebarWidth"
+          @keyboard-resize="resizeChatSidebarWithKeyboard"
+          @resize-start="startChatSidebarResize"
+        />
+
+        <ClientPrimaryPanel
+          :active-tab="activePrimaryTab"
+          :active-tab-id="activePrimaryTabId"
+          :chat-header="selectedChatHeader"
+          :content-attrs="emptyContentAttrs"
+          :selected-chat-id="selectedChatId"
+          :slot-context="nestedSlotContext"
+          :tabs="primaryTabs"
+          @close-chat="closeSelectedChat"
+          @select-tab="selectPrimaryTab"
+          @state-change="setActivePrimaryItemState"
+        />
+      </section>
     </section>
   </UiPage>
 </template>
@@ -541,8 +616,12 @@ function isDefined<T>(value: T | undefined): value is T {
 <style scoped>
 @reference "tailwindcss";
 
+.telegram-client {
+  @apply flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden bg-white;
+}
+
 .telegram-client__chat-interface {
-  @apply relative grid h-full min-h-0 w-full min-w-0 grid-cols-[var(--telegram-chat-sidebar-width)_minmax(0,1fr)] overflow-hidden;
+  @apply relative grid min-h-0 w-full min-w-0 flex-1 grid-cols-[var(--telegram-chat-sidebar-width)_minmax(0,1fr)] overflow-hidden;
 }
 
 .telegram-client__chat-interface[data-resizing='true'] {
