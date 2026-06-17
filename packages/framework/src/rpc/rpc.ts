@@ -1,10 +1,8 @@
 import type { ProcedureMap } from '../types.js';
 
-export type RpcMethod<TProcedure> = TProcedure extends () => infer TOutput
-  ? () => Promise<Awaited<TOutput>>
-  : TProcedure extends (input: infer TInput) => infer TOutput
-    ? (input: TInput) => Promise<Awaited<TOutput>>
-    : never;
+export type RpcMethod<TProcedure> = TProcedure extends (...args: infer TArgs) => infer TOutput
+  ? (...args: TArgs) => Promise<Awaited<TOutput>>
+  : never;
 
 export type RpcClient<TProcedures extends ProcedureMap> = {
   readonly [TName in keyof TProcedures]: RpcMethod<TProcedures[TName]>;
