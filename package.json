@@ -9,6 +9,7 @@
     "packages/telemetry",
     "packages/dashboard",
     "packages/policies",
+    "packages/triggers",
     "packages/telegram",
     "packages/tdlib-docs",
     "packages/claude-plugin"
