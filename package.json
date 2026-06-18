@@ -10,6 +10,7 @@
     "packages/dashboard",
     "packages/policies",
     "packages/triggers",
+    "packages/llm-runner",
     "packages/telegram",
     "packages/tdlib-docs",
     "packages/claude-plugin"
