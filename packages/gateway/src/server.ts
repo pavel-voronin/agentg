@@ -7,6 +7,7 @@ import {
   type EventEnvelope,
   type EventSubscription
 } from '@agentg/framework';
+import type { PolicyClient, PolicyDocument, PolicyIdentity } from '@agentg/framework/policies';
 import type { telegramClient } from '@agentg/telegram';
 import { WebSocket, WebSocketServer, type RawData } from 'ws';
 
@@ -20,10 +21,33 @@ type ServerConfig = {
   token?: string | undefined;
 };
 
-type ChatLookup = Pick<ReturnType<typeof telegramClient>, 'getChat'>;
+type TelegramAccess = Pick<
+  ReturnType<typeof telegramClient>,
+  | 'getChat'
+  | 'getMessages'
+  | 'listRecentMessages'
+  | 'requestFile'
+  | 'resolveSourceContent'
+  | 'searchMessages'
+>;
+
+type PolicyAccess = Pick<
+  PolicyClient,
+  | 'deleteInstance'
+  | 'getInstance'
+  | 'getPolicyValue'
+  | 'listInstances'
+  | 'listPolicyKinds'
+  | 'setInstance'
+>;
+
+type GatewayAccess = {
+  policies: PolicyAccess;
+  telegram: TelegramAccess;
+};
 
 export type GatewayServerOptions = {
-  chatLookup: ChatLookup;
+  access: GatewayAccess;
   config: ServerConfig;
   events: EventBus;
 };
@@ -173,11 +197,132 @@ async function callMethod(
   method: string,
   params: unknown
 ): Promise<unknown> {
-  if (method === 'telegram.getChat') {
-    return options.chatLookup.getChat(requireGetChatParams(params));
+  const handler = methodHandlers(options.access)[method];
+  if (handler !== undefined) {
+    return handler(params);
   }
 
   throw new UnknownGatewayMethodError(method);
+}
+
+function methodHandlers(
+  access: GatewayAccess
+): Record<string, (params: unknown) => Promise<unknown>> {
+  return {
+    'policies.deleteInstance': (params) =>
+      access.policies.deleteInstance(
+        requirePolicyIdentityParams(params, 'policies.deleteInstance')
+      ),
+    'policies.getInstance': (params) =>
+      access.policies.getInstance(requirePolicyIdentityParams(params, 'policies.getInstance')),
+    'policies.getPolicyValue': (params) =>
+      access.policies.getPolicyValue(requirePolicyValueParams(params)),
+    'policies.listInstances': (params) =>
+      access.policies.listInstances(requirePolicyListInstancesParams(params)),
+    'policies.listPolicyKinds': (params) => {
+      requireNoParams(params, 'policies.listPolicyKinds');
+      return access.policies.listPolicyKinds();
+    },
+    'policies.setInstance': (params) => access.policies.setInstance(requirePolicySetParams(params)),
+    'telegram.getChat': (params) => access.telegram.getChat(requireGetChatParams(params)),
+    'telegram.getMessages': (params) => access.telegram.getMessages(params),
+    'telegram.listRecentMessages': (params) => access.telegram.listRecentMessages(params),
+    'telegram.requestFile': (params) => access.telegram.requestFile(params),
+    'telegram.resolveSourceContent': (params) => access.telegram.resolveSourceContent(params),
+    'telegram.searchMessages': (params) => access.telegram.searchMessages(params)
+  };
+}
+
+function requireNoParams(params: unknown, method: string): void {
+  if (params === undefined) {
+    return;
+  }
+  if (typeof params === 'object' && params !== null && Object.keys(params).length === 0) {
+    return;
+  }
+
+  throw new Error(`${method} does not accept params`);
+}
+
+function requirePolicyIdentityParams(params: unknown, method: string): PolicyIdentity {
+  const input = requireRecordParams(params, method);
+  return {
+    kind: requireStringField(input, 'kind', method),
+    name: requireStringField(input, 'name', method)
+  };
+}
+
+function requirePolicyListInstancesParams(
+  params: unknown
+): { kind?: string; labels?: Record<string, string>; moduleId?: string } | undefined {
+  if (params === undefined) {
+    return undefined;
+  }
+  const input = requireRecordParams(params, 'policies.listInstances');
+  return {
+    ...(input.kind === undefined
+      ? {}
+      : { kind: requireStringField(input, 'kind', 'policies.listInstances') }),
+    ...(input.labels === undefined
+      ? {}
+      : { labels: requireStringRecord(input.labels, 'labels', 'policies.listInstances') }),
+    ...(input.moduleId === undefined
+      ? {}
+      : { moduleId: requireStringField(input, 'moduleId', 'policies.listInstances') })
+  };
+}
+
+function requirePolicySetParams(params: unknown): { document: PolicyDocument } {
+  const input = requireRecordParams(params, 'policies.setInstance');
+  if (!isRecord(input.document)) {
+    throw new Error('policies.setInstance requires document');
+  }
+  return {
+    document: input.document as PolicyDocument
+  };
+}
+
+function requirePolicyValueParams(params: unknown): { kind: string } {
+  const input = requireRecordParams(params, 'policies.getPolicyValue');
+  return {
+    kind: requireStringField(input, 'kind', 'policies.getPolicyValue')
+  };
+}
+
+function requireRecordParams(params: unknown, method: string): Record<string, unknown> {
+  if (isRecord(params)) {
+    return params;
+  }
+
+  throw new Error(`${method} requires object params`);
+}
+
+function requireStringField(input: Record<string, unknown>, field: string, method: string): string {
+  const value = input[field];
+  if (typeof value === 'string' && value.trim() !== '') {
+    return value;
+  }
+
+  throw new Error(`${method} requires ${field}`);
+}
+
+function requireStringRecord(
+  value: unknown,
+  field: string,
+  method: string
+): Record<string, string> {
+  if (!isRecord(value)) {
+    throw new Error(`${method} requires ${field}`);
+  }
+
+  const output: Record<string, string> = {};
+  for (const [key, item] of Object.entries(value)) {
+    if (typeof item !== 'string') {
+      throw new Error(`${method} requires ${field}.${key}`);
+    }
+    output[key] = item;
+  }
+  return output;
 }
 
 function requireGetChatParams(params: unknown): { chatId: string } {
@@ -274,6 +419,10 @@ function parseRequest(payload: string): RpcRequest | undefined {
   } catch {
     return undefined;
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function rawDataToString(payload: RawData): string {

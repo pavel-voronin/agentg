@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { ProcedureTransportError } from '@agentg/framework';
 import type { EventBus, EventEnvelope, EventSubscription } from '@agentg/framework';
+import type { PolicyClient } from '@agentg/framework/policies';
 import type { telegramClient } from '@agentg/telegram';
 import { WebSocket, type RawData } from 'ws';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -9,17 +10,34 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { startGatewayServer, type GatewayServerHandle } from '../src/server.js';
 
 const gatewayHandles: GatewayServerHandle[] = [];
-type TestChatLookup = Pick<ReturnType<typeof telegramClient>, 'getChat'>;
+type TestTelegramAccess = Pick<
+  ReturnType<typeof telegramClient>,
+  | 'getChat'
+  | 'getMessages'
+  | 'listRecentMessages'
+  | 'requestFile'
+  | 'resolveSourceContent'
+  | 'searchMessages'
+>;
+type TestPolicyAccess = Pick<
+  PolicyClient,
+  | 'deleteInstance'
+  | 'getInstance'
+  | 'getPolicyValue'
+  | 'listInstances'
+  | 'listPolicyKinds'
+  | 'setInstance'
+>;
 
 describe('gateway server', () => {
   afterEach(async () => {
     await Promise.all(gatewayHandles.splice(0).map((handle) => handle.stop()));
   });
 
-  it('exposes only telegram.getChat through WebSocket RPC', async () => {
+  it('routes explicit Telegram methods through WebSocket RPC', async () => {
     const calls: unknown[] = [];
     const gateway = await startGateway({
-      chatLookup: {
+      telegram: {
         getChat(input) {
           if (
             typeof input !== 'object' ||
@@ -43,6 +61,12 @@ describe('gateway server', () => {
               updatedAt: '2026-05-02T00:00:00.000Z'
             }
           });
+        },
+        searchMessages(input) {
+          calls.push(input);
+          return Promise.resolve({
+            messages: []
+          });
         }
       }
     });
@@ -62,16 +86,147 @@ describe('gateway server', () => {
           updatedAt: '2026-05-02T00:00:00.000Z'
         }
       });
-      await expect(request(client, 'telegram.searchMessages', {})).rejects.toThrow(
-        'Unknown method: telegram.searchMessages'
-      );
+      await expect(
+        request(client, 'telegram.searchMessages', {
+          limit: 5,
+          query: 'policy'
+        })
+      ).resolves.toEqual({
+        messages: []
+      });
       await expect(request(client, 'files.request', {})).rejects.toThrow(
         'Unknown method: files.request'
       );
       await expect(request(client, 'capabilities.list', {})).rejects.toThrow(
         'Unknown method: capabilities.list'
       );
-      expect(calls).toEqual([{ chatId: 'chat-a' }]);
+      expect(calls).toEqual([{ chatId: 'chat-a' }, { limit: 5, query: 'policy' }]);
+    } finally {
+      client.close();
+    }
+  });
+
+  it('routes explicit policy control methods through WebSocket RPC', async () => {
+    const calls: unknown[] = [];
+    const gateway = await startGateway({
+      policies: {
+        deleteInstance(input) {
+          calls.push(['deleteInstance', input]);
+          return Promise.resolve({
+            identity: input,
+            operation: 'delete',
+            policyValueChanged: true,
+            status: 'applied'
+          });
+        },
+        getInstance(input) {
+          calls.push(['getInstance', input]);
+          return Promise.resolve({
+            apiVersion: 'agentg.dev/v1',
+            kind: input.kind,
+            metadata: {
+              name: input.name
+            },
+            spec: {}
+          });
+        },
+        getPolicyValue(input) {
+          calls.push(['getPolicyValue', input]);
+          return Promise.resolve([{ enabled: true }]);
+        },
+        listInstances(input) {
+          calls.push(['listInstances', input]);
+          return Promise.resolve([]);
+        },
+        listPolicyKinds() {
+          calls.push(['listPolicyKinds']);
+          return Promise.resolve([
+            {
+              form: {
+                spec: {}
+              },
+              id: 'triggers.rule',
+              kind: 'TriggerRule',
+              moduleId: 'triggers',
+              version: 1
+            }
+          ]);
+        },
+        setInstance(input) {
+          calls.push(['setInstance', input]);
+          return Promise.resolve({
+            identity: {
+              kind: input.document.kind,
+              name: input.document.metadata.name
+            },
+            operation: 'set',
+            policyValueChanged: true,
+            status: 'applied'
+          });
+        }
+      }
+    });
+    const client = await connectGateway(gateway);
+
+    try {
+      await expect(request(client, 'policies.listPolicyKinds', {})).resolves.toEqual([
+        {
+          form: {
+            spec: {}
+          },
+          id: 'triggers.rule',
+          kind: 'TriggerRule',
+          moduleId: 'triggers',
+          version: 1
+        }
+      ]);
+      await expect(
+        request(client, 'policies.setInstance', {
+          document: {
+            apiVersion: 'agentg.dev/v1',
+            kind: 'TriggerRule',
+            metadata: {
+              name: 'digest'
+            },
+            spec: {
+              enabled: true
+            }
+          }
+        })
+      ).resolves.toEqual({
+        identity: {
+          kind: 'TriggerRule',
+          name: 'digest'
+        },
+        operation: 'set',
+        policyValueChanged: true,
+        status: 'applied'
+      });
+      await expect(
+        request(client, 'policies.getPolicyValue', {
+          kind: 'TriggerRule'
+        })
+      ).resolves.toEqual([{ enabled: true }]);
+
+      expect(calls).toEqual([
+        ['listPolicyKinds'],
+        [
+          'setInstance',
+          {
+            document: {
+              apiVersion: 'agentg.dev/v1',
+              kind: 'TriggerRule',
+              metadata: {
+                name: 'digest'
+              },
+              spec: {
+                enabled: true
+              }
+            }
+          }
+        ],
+        ['getPolicyValue', { kind: 'TriggerRule' }]
+      ]);
     } finally {
       client.close();
     }
@@ -100,7 +255,7 @@ describe('gateway server', () => {
 
   it('returns dependency_unavailable for an allowed method when Telegram is absent', async () => {
     const gateway = await startGateway({
-      chatLookup: {
+      telegram: {
         getChat() {
           return Promise.reject(
             new ProcedureTransportError('Procedure transport failed: fetch failed')
@@ -165,7 +320,7 @@ describe('gateway server', () => {
 
   it('returns method_failed when Telegram returns a domain procedure error', async () => {
     const gateway = await startGateway({
-      chatLookup: {
+      telegram: {
         getChat() {
           return Promise.reject(new Error('Telegram chat read failed'));
         }
@@ -201,17 +356,21 @@ describe('gateway server', () => {
 
 async function startGateway(
   options: {
-    chatLookup?: TestChatLookup | undefined;
+    policies?: Partial<TestPolicyAccess> | undefined;
+    telegram?: Partial<TestTelegramAccess> | undefined;
     events?: TestEventBus | undefined;
     token?: string | undefined;
   } = {}
 ): Promise<GatewayServerHandle> {
   const handle = await startGatewayServer({
-    chatLookup: options.chatLookup ?? {
-      getChat() {
-        return Promise.reject(
-          new ProcedureTransportError('Procedure transport failed: fetch failed')
-        );
+    access: {
+      policies: {
+        ...defaultPolicyAccess(),
+        ...options.policies
+      },
+      telegram: {
+        ...defaultTelegramAccess(),
+        ...options.telegram
       }
     },
     config: {
@@ -223,6 +382,32 @@ async function startGateway(
   });
   gatewayHandles.push(handle);
   return handle;
+}
+
+function defaultPolicyAccess(): TestPolicyAccess {
+  return {
+    deleteInstance: unavailableMethod('policies.deleteInstance'),
+    getInstance: unavailableMethod('policies.getInstance'),
+    getPolicyValue: unavailableMethod('policies.getPolicyValue'),
+    listInstances: unavailableMethod('policies.listInstances'),
+    listPolicyKinds: unavailableMethod('policies.listPolicyKinds'),
+    setInstance: unavailableMethod('policies.setInstance')
+  };
+}
+
+function defaultTelegramAccess(): TestTelegramAccess {
+  return {
+    getChat: unavailableMethod('telegram.getChat'),
+    getMessages: unavailableMethod('telegram.getMessages'),
+    listRecentMessages: unavailableMethod('telegram.listRecentMessages'),
+    requestFile: unavailableMethod('telegram.requestFile'),
+    resolveSourceContent: unavailableMethod('telegram.resolveSourceContent'),
+    searchMessages: unavailableMethod('telegram.searchMessages')
+  };
+}
+
+function unavailableMethod(method: string) {
+  return () => Promise.reject(new ProcedureTransportError(`Procedure transport failed: ${method}`));
 }
 
 async function connectGateway(
