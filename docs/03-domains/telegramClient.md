@@ -49,6 +49,14 @@ semantics, not around TDLib functions. A low-level TDLib operation can exist
 inside the Telegram module only as a private implementation helper behind a
 domain procedure.
 
+`resolveSourceContent` is the Telegram source resolver procedure for neutral
+content consumers. Its input carries a Telegram-owned selector. Telegram
+interprets the selector, reads or materializes Telegram content through its own
+domain mechanisms, and returns neutral `SourceRef` and `ContentRef` values plus
+JSON-safe content payload. The first selector set supports recent messages,
+message search, and `getMessages`-shaped message reads. Folder and unread
+semantics belong here when the corresponding Telegram read models are ready.
+
 ## Non-Responsibilities
 
 - Product-level interpretation of messages.

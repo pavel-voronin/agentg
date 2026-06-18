@@ -13,6 +13,7 @@ import { getChatProcedure } from './procedures/getChat.js';
 import { listRecentMessagesProcedure } from './procedures/listRecentMessages.js';
 import { getMessagesProcedure } from './procedures/getMessages.js';
 import { requestFileProcedure } from './procedures/requestFile.js';
+import { resolveSourceContentProcedure } from './procedures/resolveSourceContent.js';
 import { searchMessagesProcedure } from './procedures/searchMessages.js';
 import { createHistorySource } from './reconciler/adapters/historySource.js';
 import { useHistoryReconciler } from './reconciler/runtime.js';
@@ -117,6 +118,7 @@ export const telegramModule = defineModule('telegram', {
       listRecentMessages: listRecentMessagesProcedure(procedureResources),
       getMessages,
       requestFile: requestFileProcedure(procedureResources),
+      resolveSourceContent: resolveSourceContentProcedure(procedureResources),
       searchMessages: searchMessagesProcedure(procedureResources),
       status: () => ({
         ready: status.snapshot().ready
