@@ -263,8 +263,16 @@ function dashboardRpcBoundaryFiles() {
 function auditTablePrefixes() {
   const schemas = [
     {
+      file: join(root, 'packages/llm-runner/src/database/schema.ts'),
+      prefix: 'llm_runner_'
+    },
+    {
       file: join(root, 'packages/telegram/src/database/storageSchema.ts'),
       prefix: 'telegram_'
+    },
+    {
+      file: join(root, 'packages/triggers/src/database/schema.ts'),
+      prefix: 'triggers_'
     }
   ].filter((schema) => existsSync(schema.file));
 
@@ -323,6 +331,8 @@ function isCurrentModuleWorkspace(workspace) {
     workspace === 'packages/gateway' ||
     workspace === 'packages/telemetry' ||
     workspace === 'packages/dashboard' ||
+    workspace === 'packages/llm-runner' ||
+    workspace === 'packages/triggers' ||
     workspace === 'packages/telegram'
   );
 }

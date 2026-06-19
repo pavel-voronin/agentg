@@ -96,6 +96,60 @@ services:
     command: ['npm', 'run', 'dev:telegram']
     healthcheck: *agentg-rpc-healthcheck
 
+  llm-runner:
+    profiles:
+      - container-client
+      - dashboard
+    build:
+      context: .
+      target: runtime
+    depends_on:
+      nats:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      telegram:
+        condition: service_healthy
+    environment:
+      <<: *agentg-telemetry-environment
+      DATABASE_URL: postgres://agentg:agentg@postgres:5432/agentg
+      NATS_URL: nats://nats:4222
+      TELEGRAM_RPC_URL: http://telegram:8080
+      HOST: 0.0.0.0
+      PORT: 8080
+      LLM_RUNNER_PROFILES: ${LLM_RUNNER_PROFILES:-{}}
+    restart: 'no'
+    command: ['npm', 'run', 'dev:llm-runner']
+    healthcheck: *agentg-rpc-healthcheck
+
+  triggers:
+    profiles:
+      - container-client
+      - dashboard
+    build:
+      context: .
+      target: runtime
+    depends_on:
+      llm-runner:
+        condition: service_healthy
+      nats:
+        condition: service_started
+      policies:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      <<: *agentg-telemetry-environment
+      DATABASE_URL: postgres://agentg:agentg@postgres:5432/agentg
+      NATS_URL: nats://nats:4222
+      POLICIES_RPC_URL: http://policies:8080
+      TRIGGERS_ACTION_TARGETS: '{"llm-runner":"http://llm-runner:8080"}'
+      HOST: 0.0.0.0
+      PORT: 8080
+    restart: 'no'
+    command: ['npm', 'run', 'dev:triggers']
+    healthcheck: *agentg-rpc-healthcheck
+
   modulesmoke:
     profiles:
       - module-smoke
@@ -126,7 +180,7 @@ services:
         condition: service_started
       postgres:
         condition: service_healthy
-      telegram:
+      triggers:
         condition: service_healthy
     environment:
       <<: *agentg-telemetry-environment
@@ -176,12 +230,13 @@ services:
     depends_on:
       nats:
         condition: service_started
-      telegram:
+      triggers:
         condition: service_healthy
     environment:
       <<: *agentg-telemetry-environment
       NATS_URL: nats://nats:4222
       TELEGRAM_RPC_URL: http://telegram:8080
+      POLICIES_RPC_URL: http://policies:8080
       HOST: 0.0.0.0
       PORT: 8080
       GATEWAY_HOST: 0.0.0.0

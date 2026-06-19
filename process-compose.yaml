@@ -15,6 +15,7 @@ environment:
   - 'NATS_URL=${NATS_URL:-nats://127.0.0.1:4222}'
   - 'TELEGRAM_RPC_URL=${TELEGRAM_RPC_URL:-http://127.0.0.1:8702}'
   - 'POLICIES_RPC_URL=${POLICIES_RPC_URL:-http://127.0.0.1:8705}'
+  - 'LLM_RUNNER_RPC_URL=${LLM_RUNNER_RPC_URL:-http://127.0.0.1:8707}'
   - 'AGENTG_TELEMETRY=${AGENTG_TELEMETRY:-1}'
   - 'OTEL_BLRP_SCHEDULE_DELAY=${OTEL_BLRP_SCHEDULE_DELAY:-1000}'
   - 'OTEL_BSP_SCHEDULE_DELAY=${OTEL_BSP_SCHEDULE_DELAY:-1000}'
@@ -90,6 +91,47 @@ processes:
       timeout_seconds: 1
       failure_threshold: 300
 
+  llm-runner:
+    namespace: app
+    description: LLM-backed content processing and artifact storage.
+    command: npm run dev:llm-runner
+    environment:
+      - 'OTEL_SERVICE_NAME=llm-runner'
+    availability:
+      restart: always
+      backoff_seconds: 2
+    depends_on:
+      telegram:
+        condition: process_healthy
+    readiness_probe:
+      exec:
+        command: nc -z 127.0.0.1 8707
+      period_seconds: 1
+      timeout_seconds: 1
+      failure_threshold: 120
+
+  triggers:
+    namespace: app
+    description: TriggerRule scheduler and action dispatcher.
+    command: npm run dev:triggers
+    environment:
+      - 'OTEL_SERVICE_NAME=triggers'
+      - 'TRIGGERS_ACTION_TARGETS={"llm-runner":"http://127.0.0.1:8707"}'
+    availability:
+      restart: always
+      backoff_seconds: 2
+    depends_on:
+      policies:
+        condition: process_healthy
+      llm-runner:
+        condition: process_healthy
+    readiness_probe:
+      exec:
+        command: nc -z 127.0.0.1 8706
+      period_seconds: 1
+      timeout_seconds: 1
+      failure_threshold: 120
+
   gateway:
     namespace: app
     description: External agent WebSocket gateway.
@@ -100,7 +142,7 @@ processes:
       restart: always
       backoff_seconds: 2
     depends_on:
-      telegram:
+      triggers:
         condition: process_healthy
     readiness_probe:
       exec:
@@ -119,7 +161,7 @@ processes:
       restart: always
       backoff_seconds: 2
     depends_on:
-      telegram:
+      triggers:
         condition: process_healthy
     readiness_probe:
       exec:

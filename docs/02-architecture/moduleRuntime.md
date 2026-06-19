@@ -27,12 +27,12 @@ outbox before they enter an in-memory queue.
 
 Every module has:
 
-- `module`: stable short name, for example `analysis`
+- `module`: stable short name, for example `llm-runner`
 - `serviceRpcUrl`: internal module RPC service URL when the module exposes
   public internal RPC procedures
 - `natsUrl`: NATS Core URL
 - `databaseUrl`: Postgres URL
-- `tablePrefix`: owned table prefix, for example `analysis_`
+- `tablePrefix`: owned table prefix, for example `llm_runner_`
 - `migrationFolder`: module-owned Drizzle migration folder
 - package-local procedure map returned by module `setup()`; runtime-only or
   edge-boundary modules return an empty map

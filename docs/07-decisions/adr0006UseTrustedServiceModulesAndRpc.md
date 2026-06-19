@@ -64,7 +64,7 @@ state when persistence is part of its own behavior.
 Module means a trusted internal service that can own storage, expose RPC
 methods, and publish or consume NATS events.
 
-Module name means the short stable module identifier, for example `analysis`.
+Module name means the short stable module identifier, for example `llm-runner`.
 
 Procedure means an internal module RPC method exposed by the module runtime and
 called through the serving package's typed client.

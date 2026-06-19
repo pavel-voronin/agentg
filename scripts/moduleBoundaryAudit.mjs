@@ -9,6 +9,8 @@ const packageDirs = [
   'packages/gateway',
   'packages/telemetry',
   'packages/dashboard',
+  'packages/llm-runner',
+  'packages/triggers',
   'packages/telegram'
 ];
 const failures = [];

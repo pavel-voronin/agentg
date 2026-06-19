@@ -6,6 +6,8 @@ COPY packages/gateway/package.json packages/gateway/package.json
 COPY packages/dashboard/package.json packages/dashboard/package.json
 COPY packages/claude-plugin/package.json packages/claude-plugin/package.json
 COPY packages/policies/package.json packages/policies/package.json
+COPY packages/triggers/package.json packages/triggers/package.json
+COPY packages/llm-runner/package.json packages/llm-runner/package.json
 COPY packages/telegram/package.json packages/telegram/package.json
 COPY packages/tdlib-docs/package.json packages/tdlib-docs/package.json
 RUN npm install
@@ -24,6 +26,8 @@ COPY packages/gateway/package.json packages/gateway/package.json
 COPY packages/dashboard/package.json packages/dashboard/package.json
 COPY packages/claude-plugin/package.json packages/claude-plugin/package.json
 COPY packages/policies/package.json packages/policies/package.json
+COPY packages/triggers/package.json packages/triggers/package.json
+COPY packages/llm-runner/package.json packages/llm-runner/package.json
 COPY packages/telegram/package.json packages/telegram/package.json
 COPY packages/tdlib-docs/package.json packages/tdlib-docs/package.json
 RUN npm install --include=dev && npm cache clean --force

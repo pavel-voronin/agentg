@@ -138,11 +138,11 @@ the module slug, and the slug should prefix tables, NATS subjects, and logs.
 
 Module runtime environment:
 
-- `MODULE_SLUG`: stable module slug, for example `analysis`
+- `MODULE_SLUG`: stable module slug, for example `llm-runner`
 - `MODULE_RPC_HOST`: bind host inside the container, usually `0.0.0.0`
 - `MODULE_RPC_PORT`: internal RPC port, usually `8080`
-- `MODULE_RPC_URL`: internal service URL, for example `http://analysis:8080`
-- `MODULE_TABLE_PREFIX`: owned table prefix, for example `analysis_`
+- `MODULE_RPC_URL`: internal service URL, for example `http://llm-runner:8080`
+- `MODULE_TABLE_PREFIX`: owned table prefix, for example `llm_runner_`
 - `MODULE_MIGRATION_FOLDER`: module-owned Drizzle migration folder
 - `DATABASE_URL`: shared Postgres connection string
 - `NATS_URL`: shared NATS connection string

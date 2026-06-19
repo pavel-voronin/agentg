@@ -33,6 +33,8 @@
     "dev:dashboard-server": "sh -c 'set -a; [ ! -f .env ] || . ./.env; set +a; DATABASE_URL=\"${DATABASE_URL:-postgres://agentg:agentg@127.0.0.1:5432/agentg}\" NATS_URL=\"${NATS_URL:-nats://127.0.0.1:4222}\" TELEGRAM_RPC_URL=\"${TELEGRAM_RPC_URL:-http://127.0.0.1:8702}\" DASHBOARD_PORT=\"${DASHBOARD_PORT:-8789}\" npm --workspace @agentg/dashboard run dev:server'",
     "dev:gateway": "sh -c 'set -a; [ ! -f .env ] || . ./.env; set +a; NATS_URL=\"${NATS_URL:-nats://127.0.0.1:4222}\" TELEGRAM_RPC_URL=\"${TELEGRAM_RPC_URL:-http://127.0.0.1:8702}\" POLICIES_RPC_URL=\"${POLICIES_RPC_URL:-http://127.0.0.1:8705}\" PORT=\"${PORT:-8703}\" GATEWAY_PORT=\"${GATEWAY_PORT:-8787}\" npm --workspace @agentg/gateway run dev'",
     "dev:policies": "sh -c 'set -a; [ ! -f .env ] || . ./.env; set +a; NATS_URL=\"${NATS_URL:-nats://127.0.0.1:4222}\" POLICY_CONFIG_DIR=\"${POLICY_CONFIG_DIR:-$PWD/config/policies}\" PORT=\"${PORT:-8705}\" npm --workspace @agentg/policies run dev'",
+    "dev:triggers": "sh -c 'set -a; [ ! -f .env ] || . ./.env; set +a; DATABASE_URL=\"${DATABASE_URL:-postgres://agentg:agentg@127.0.0.1:5432/agentg}\" NATS_URL=\"${NATS_URL:-nats://127.0.0.1:4222}\" POLICIES_RPC_URL=\"${POLICIES_RPC_URL:-http://127.0.0.1:8705}\" TRIGGERS_ACTION_TARGETS=\"${TRIGGERS_ACTION_TARGETS:-{\\\"llm-runner\\\":\\\"http://127.0.0.1:8707\\\"}}\" PORT=\"${PORT:-8706}\" npm --workspace @agentg/triggers run dev'",
+    "dev:llm-runner": "sh -c 'set -a; [ ! -f .env ] || . ./.env; set +a; DATABASE_URL=\"${DATABASE_URL:-postgres://agentg:agentg@127.0.0.1:5432/agentg}\" NATS_URL=\"${NATS_URL:-nats://127.0.0.1:4222}\" TELEGRAM_RPC_URL=\"${TELEGRAM_RPC_URL:-http://127.0.0.1:8702}\" PORT=\"${PORT:-8707}\" npm --workspace @agentg/llm-runner run dev'",
     "dev:claude": "npm --workspace @agentg/claude-plugin run start",
     "dev:telegram": "sh -c 'set -a; [ ! -f .env ] || . ./.env; set +a; DATABASE_URL=\"${DATABASE_URL:-postgres://agentg:agentg@127.0.0.1:5432/agentg}\" NATS_URL=\"${NATS_URL:-nats://127.0.0.1:4222}\" POLICIES_RPC_URL=\"${POLICIES_RPC_URL:-http://127.0.0.1:8705}\" PORT=\"${PORT:-8702}\" TDLIB_DATABASE_DIR=\"$PWD/td-data/database\" TDLIB_FILES_DIR=\"$PWD/td-data/files\" npm --workspace @agentg/telegram run dev'",
     "telegram:auth": "sh -c 'set -a; [ ! -f .env ] || . ./.env; set +a; TDLIB_DATABASE_DIR=\"${TDLIB_DATABASE_DIR:-$PWD/td-data/database}\" TDLIB_FILES_DIR=\"${TDLIB_FILES_DIR:-$PWD/td-data/files}\" tsx scripts/telegramAuth.ts'",
@@ -46,6 +48,7 @@
     "db:ps": "docker compose ps postgres",
     "db:logs": "docker compose logs --tail=50 postgres",
     "infra:up": "sh -c 'set -a; [ ! -f .env ] || . ./.env; set +a; telemetry=\"$(printf \"%s\" \"${AGENTG_TELEMETRY:-0}\" | tr \"[:upper:]\" \"[:lower:]\")\"; case \"$telemetry\" in \"\"|0|false|no|off) docker compose --profile telemetry stop nats-exporter postgres-exporter otel-collector victoria-metrics jaeger loki grafana >/dev/null 2>&1 || true; docker compose --profile telemetry rm -f nats-exporter postgres-extensions postgres-exporter otel-collector victoria-metrics jaeger loki grafana >/dev/null 2>&1 || true; docker compose up -d postgres nats telegram-files --quiet-pull ;; *) docker compose --profile telemetry up -d postgres nats telegram-files nats-exporter postgres-exporter victoria-metrics jaeger loki otel-collector grafana --quiet-pull ;; esac'",
+    "integration:triggers-llm-runner": "npm run infra:up && tsx scripts/runtimeIntegrationTest.ts",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -61,8 +64,10 @@
     "check:telemetry": "npm --workspace @agentg/telemetry run typecheck && npm --workspace @agentg/telemetry --if-present run test && eslint packages/telemetry && prettier --check packages/telemetry",
     "check:dashboard": "npm --workspace @agentg/dashboard run typecheck && npm --workspace @agentg/dashboard --if-present run test && eslint packages/dashboard && prettier --check packages/dashboard",
     "check:policies": "npm run policies:generate && npm --workspace @agentg/policies run typecheck && npm --workspace @agentg/policies --if-present run test && eslint packages/policies && prettier --check packages/policies",
+    "check:triggers": "npm run policies:generate && npm --workspace @agentg/triggers run typecheck && npm --workspace @agentg/triggers run test && eslint packages/triggers && prettier --check packages/triggers",
+    "check:llm-runner": "npm --workspace @agentg/llm-runner run typecheck && npm --workspace @agentg/llm-runner run test && eslint packages/llm-runner && prettier --check packages/llm-runner",
     "check:telegram": "npm --workspace @agentg/telegram run typecheck && npm --workspace @agentg/telegram --if-present run test && eslint packages/telegram && prettier --check packages/telegram",
-    "check:modules": "npm run module-boundary:audit && npm run check:framework && npm run check:gateway && npm run check:telemetry && npm run check:dashboard && npm run check:policies && npm run check:telegram",
+    "check:modules": "npm run module-boundary:audit && npm run check:framework && npm run check:gateway && npm run check:telemetry && npm run check:dashboard && npm run check:policies && npm run check:triggers && npm run check:llm-runner && npm run check:telegram",
     "check": "npm run policies:generate && npm run typecheck && npm run lint && npm run source:audit && npm run format:check && npm run test"
   },
   "devDependencies": {
