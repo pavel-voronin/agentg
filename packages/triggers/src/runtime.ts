@@ -10,6 +10,13 @@ import { registrationView } from './registrations/types.js';
 import { dueTimes } from './scheduler/scheduler.js';
 import type { ListOccurrencesInput } from './schema.js';
 import type { TriggerStore } from './store.js';
+import {
+  recordDispatch,
+  recordOccurrencesCreated,
+  recordTriggerStats,
+  timeTriggerDispatch,
+  timeTriggerRuntime
+} from './telemetry.js';
 
 const logger = createLogger('triggers');
 const defaultClaimLimit = 50;
@@ -61,54 +68,75 @@ export function createTriggerRuntime(input: {
       };
     },
     reconcile(now = new Date()) {
-      return serialize(async () => {
-        const registrations = await materializeRegistrations(input, now);
-        const created = await input.store.createOccurrences({
-          now,
-          registrations: dueRegistrations({
-            lookbackSeconds: input.lookbackSeconds,
+      return serialize(() =>
+        timeTriggerRuntime('reconcile', async () => {
+          const registrations = await materializeRegistrations(input, now);
+          const created = await input.store.createOccurrences({
             now,
-            registrations
-          })
-        });
-        for (const occurrence of created) {
-          input.events.occurrence(occurrenceEvent(occurrence, 'scheduled'));
-        }
-      });
+            registrations: dueRegistrations({
+              lookbackSeconds: input.lookbackSeconds,
+              now,
+              registrations
+            })
+          });
+          recordOccurrencesCreated(created.length);
+          for (const occurrence of created) {
+            input.events.occurrence(occurrenceEvent(occurrence, 'scheduled'));
+          }
+          await refreshStats(input.store, now);
+        })
+      );
     },
     runDueTriggers(now = new Date()) {
-      return serialize(async () => {
-        const registrations = await materializeRegistrations(input, now);
-        const created = await input.store.createOccurrences({
-          now,
-          registrations: dueRegistrations({
-            lookbackSeconds: input.lookbackSeconds,
+      return serialize(() =>
+        timeTriggerRuntime('run_due', async () => {
+          const registrations = await materializeRegistrations(input, now);
+          const created = await input.store.createOccurrences({
             now,
-            registrations
-          })
-        });
-        for (const occurrence of created) {
-          input.events.occurrence(occurrenceEvent(occurrence, 'scheduled'));
-        }
+            registrations: dueRegistrations({
+              lookbackSeconds: input.lookbackSeconds,
+              now,
+              registrations
+            })
+          });
+          recordOccurrencesCreated(created.length);
+          for (const occurrence of created) {
+            input.events.occurrence(occurrenceEvent(occurrence, 'scheduled'));
+          }
 
-        const claimed = await input.store.claimDue({
-          leaseOwner: input.leaseOwner,
-          leaseSeconds: input.leaseSeconds,
-          limit: defaultClaimLimit,
-          now
-        });
-        let dispatched = 0;
-        for (const occurrence of claimed) {
-          await dispatchOccurrence(input, occurrence, now);
-          dispatched += 1;
-        }
-        return {
-          claimed: claimed.length,
-          dispatched
-        };
-      });
+          const claimed = await input.store.claimDue({
+            leaseOwner: input.leaseOwner,
+            leaseSeconds: input.leaseSeconds,
+            limit: defaultClaimLimit,
+            now
+          });
+          let dispatched = 0;
+          for (const occurrence of claimed) {
+            await dispatchOccurrence(input, occurrence, now);
+            dispatched += 1;
+          }
+          return {
+            claimed: claimed.length,
+            dispatched
+          };
+        }).finally(() => refreshStats(input.store, now))
+      );
     }
   };
+}
+
+async function refreshStats(store: TriggerStore, now: Date): Promise<void> {
+  try {
+    recordTriggerStats(await store.readStats({ now }));
+  } catch (error) {
+    logger.error(
+      {
+        event: 'triggers.telemetry_stats_failed',
+        ...logError(error)
+      },
+      'trigger telemetry stats failed'
+    );
+  }
 }
 
 async function materializeRegistrations(
@@ -189,7 +217,7 @@ async function dispatchOccurrence(
   await input.store.markDispatching({ key: occurrence.key, now });
   input.events.occurrence(occurrenceEvent(occurrence, 'dispatching'));
 
-  const outcome = await input.dispatcher.dispatch(occurrence);
+  const outcome = await timeTriggerDispatch(() => input.dispatcher.dispatch(occurrence));
   const attemptNumber = occurrence.attemptCount + 1;
   if (outcome.status === 'result') {
     await recordProviderResult(input, occurrence, outcome, now);
@@ -204,6 +232,7 @@ async function dispatchOccurrence(
       nextAttemptAt: retryAt(now, attemptNumber),
       now
     });
+    recordDispatch('retry_waiting');
     input.events.occurrence(
       occurrenceEvent(occurrence, 'retryWaiting', {
         failureCode: outcome.failure.code
@@ -218,6 +247,7 @@ async function dispatchOccurrence(
     message: outcome.failure.message,
     now
   });
+  recordDispatch('failed');
   input.events.occurrence(
     occurrenceEvent(occurrence, 'failed', {
       failureCode: outcome.failure.code
@@ -240,6 +270,7 @@ async function recordProviderResult(
       now,
       providerRunId: outcome.result.runId
     });
+    recordDispatch('accepted');
     input.events.occurrence(
       occurrenceEvent(occurrence, 'accepted', {
         providerRunId: outcome.result.runId
@@ -254,6 +285,7 @@ async function recordProviderResult(
     message: outcome.result.error.message,
     now
   });
+  recordDispatch('rejected');
   input.events.occurrence(
     occurrenceEvent(occurrence, 'rejected', {
       failureCode: outcome.result.error.code

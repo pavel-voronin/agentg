@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { toJsonValue } from '@agentg/framework';
 
 import type { ArtifactRecord } from './artifacts/types.js';
@@ -34,6 +34,7 @@ export type Store = {
     runId: string;
     snapshot: SourceSnapshot;
   }): Promise<void>;
+  readStats(input: { now: Date }): Promise<RuntimeStats>;
   upsertArtifacts(input: {
     now: Date;
     output: ProcessingOutput;
@@ -41,6 +42,18 @@ export type Store = {
     snapshot: SourceSnapshot;
   }): Promise<readonly ArtifactRecord[]>;
 };
+
+export type RuntimeStats = {
+  artifactCount: number;
+  oldestProcessableRunAgeSeconds: number;
+  processableRunCount: number;
+  runStatusCounts: readonly {
+    count: number;
+    status: RunStatus;
+  }[];
+};
+
+const processableRunStatuses: readonly RunStatus[] = ['accepted', 'waitingForSource'];
 
 export function createPostgresStore(database: Database): Store {
   return {
@@ -118,7 +131,7 @@ export function createPostgresStore(database: Database): Store {
       const rows = await database
         .select()
         .from(runs)
-        .where(inArray(runs.status, ['accepted', 'waitingForSource']))
+        .where(inArray(runs.status, processableRunStatuses))
         .orderBy(runs.updatedAt, runs.runId)
         .limit(input.limit);
       return rows.map(toRun);
@@ -151,6 +164,47 @@ export function createPostgresStore(database: Database): Store {
           updatedAt: input.now
         })
         .where(eq(runs.runId, input.runId));
+    },
+    async readStats(input) {
+      const statusRows = await database
+        .select({
+          count: sql<number>`count(*)::int`,
+          status: runs.status
+        })
+        .from(runs)
+        .groupBy(runs.status);
+      const [processableRow] = await database
+        .select({
+          count: sql<number>`count(*)::int`
+        })
+        .from(runs)
+        .where(inArray(runs.status, processableRunStatuses));
+      const [oldestProcessable] = await database
+        .select({
+          updatedAt: runs.updatedAt
+        })
+        .from(runs)
+        .where(inArray(runs.status, processableRunStatuses))
+        .orderBy(runs.updatedAt, runs.runId)
+        .limit(1);
+      const [artifactRow] = await database
+        .select({
+          count: sql<number>`count(*)::int`
+        })
+        .from(artifacts);
+
+      return {
+        artifactCount: artifactRow?.count ?? 0,
+        oldestProcessableRunAgeSeconds:
+          oldestProcessable === undefined
+            ? 0
+            : secondsBetween(oldestProcessable.updatedAt, input.now),
+        processableRunCount: processableRow?.count ?? 0,
+        runStatusCounts: statusRows.map((row) => ({
+          count: row.count,
+          status: row.status
+        }))
+      };
     },
     async upsertArtifacts(input) {
       const records = artifactRecords(input);
@@ -247,7 +301,7 @@ export function createMemoryStore(): Store {
     listProcessableRuns(input) {
       return Promise.resolve(
         [...runRows.values()]
-          .filter((run) => run.status === 'accepted' || run.status === 'waitingForSource')
+          .filter((run) => processableRunStatuses.includes(run.status))
           .sort((left, right) => left.updatedAt.getTime() - right.updatedAt.getTime())
           .slice(0, input.limit)
       );
@@ -274,6 +328,31 @@ export function createMemoryStore(): Store {
         updatedAt: input.now
       });
       return Promise.resolve();
+    },
+    readStats(input) {
+      const statusCounts = new Map<RunStatus, number>();
+      let processableRunCount = 0;
+      let oldestProcessable: Date | undefined;
+      for (const run of runRows.values()) {
+        statusCounts.set(run.status, (statusCounts.get(run.status) ?? 0) + 1);
+        if (processableRunStatuses.includes(run.status)) {
+          processableRunCount += 1;
+          if (oldestProcessable === undefined || run.updatedAt < oldestProcessable) {
+            oldestProcessable = run.updatedAt;
+          }
+        }
+      }
+
+      return Promise.resolve({
+        artifactCount: artifactsByKey.size,
+        oldestProcessableRunAgeSeconds:
+          oldestProcessable === undefined ? 0 : secondsBetween(oldestProcessable, input.now),
+        processableRunCount,
+        runStatusCounts: [...statusCounts.entries()].map(([status, count]) => ({
+          count,
+          status
+        }))
+      });
     },
     upsertArtifacts(input) {
       const records = artifactRecords(input);
@@ -336,6 +415,10 @@ function artifactRecords(input: {
 
 function artifactStorageKey(artifactKey: string, sourceRef: SourceRef): string {
   return `${artifactKey}:${sourceRef._model}:${sourceRef.id}`;
+}
+
+function secondsBetween(start: Date, end: Date): number {
+  return Math.max(0, (end.getTime() - start.getTime()) / 1000);
 }
 
 function toRun(row: typeof runs.$inferSelect): RunRecord {

@@ -1,4 +1,9 @@
 import { createLogger, logError } from '../log.js';
+import {
+  incrementTelemetryCounter,
+  setTelemetryGauge,
+  timeTelemetrySpan
+} from '../telemetry/index.js';
 import { assertPolicyValue, descriptorOf, type AnyPolicyDefinition } from './definition.js';
 import {
   identityOf,
@@ -32,7 +37,20 @@ type RuntimeState = {
   values: Map<string, PolicyValue>;
 };
 
+type MutationTelemetryLabels = {
+  'error.type': string;
+  'policy.kind': string;
+  'policy.module_id': string;
+  'policy.mutation_status': string;
+  'policy.operation': string;
+};
+
 const logger = createLogger('policies');
+const METRIC_DOCUMENTS = 'policies.documents';
+const METRIC_KINDS = 'policies.kinds';
+const METRIC_MUTATIONS = 'policies.mutations';
+const METRIC_VALUE_CHANGES = 'policies.value_changes';
+const METRIC_START_DURATION = 'policies.start.duration';
 
 export function createPolicyServer(input: CreateServerInput): {
   procedures: PolicyProcedures;
@@ -46,17 +64,32 @@ export function createPolicyServer(input: CreateServerInput): {
   let mutationQueue = Promise.resolve();
 
   async function start(): Promise<void> {
-    const loaded = await input.store.loadAll();
-    state = createState(definitions, loaded);
+    await timeTelemetrySpan(
+      {
+        metric: {
+          name: METRIC_START_DURATION
+        },
+        name: 'policies.start'
+      },
+      async () => {
+        const loaded = await input.store.loadAll();
+        state = createState(definitions, loaded);
+        recordStateTelemetry(definitions, state);
+      }
+    );
   }
 
   const procedures: PolicyProcedures = {
     async deleteInstance(rawInput) {
       const identity = safeIdentity(rawInput);
       if (identity.status === 'rejected') {
-        return identity.result('delete');
+        const result = identity.result('delete');
+        recordMutationTelemetry(definitions, result);
+        return result;
       }
-      return serializeMutation(() => deleteInstance(identity.value));
+      const result = await serializeMutation(() => deleteInstance(identity.value));
+      recordMutationTelemetry(definitions, result);
+      return result;
     },
     getInstance(rawInput) {
       const identity = requirePolicyIdentity(rawInput);
@@ -99,9 +132,13 @@ export function createPolicyServer(input: CreateServerInput): {
     async setInstance(rawInput) {
       const document = safeDocument(isRecord(rawInput) ? rawInput.document : undefined);
       if (document.status === 'rejected') {
-        return document.result('set');
+        const result = document.result('set');
+        recordMutationTelemetry(definitions, result);
+        return result;
       }
-      return serializeMutation(() => setInstance(document.value));
+      const result = await serializeMutation(() => setInstance(document.value));
+      recordMutationTelemetry(definitions, result);
+      return result;
     }
   };
 
@@ -126,6 +163,7 @@ export function createPolicyServer(input: CreateServerInput): {
     state = prepared.state;
     const changed = !sameJson(previousValue, valueFor(document.kind));
     publishChanged(document.kind);
+    recordStateTelemetry(definitions, state);
     return {
       identity,
       operation: 'set',
@@ -154,6 +192,7 @@ export function createPolicyServer(input: CreateServerInput): {
     state = prepared.state;
     const changed = !sameJson(previousValue, valueFor(identity.kind));
     publishChanged(identity.kind);
+    recordStateTelemetry(definitions, state);
     return {
       identity,
       operation: 'delete',
@@ -205,6 +244,46 @@ export function createPolicyServer(input: CreateServerInput): {
   return {
     procedures,
     start
+  };
+}
+
+function recordStateTelemetry(definitions: Catalog, state: RuntimeState): void {
+  setTelemetryGauge(METRIC_KINDS, definitions.all.length);
+  for (const definition of definitions.all) {
+    const count = [...state.documents.values()].filter(
+      (document) => document.kind === definition.kind
+    ).length;
+    setTelemetryGauge(METRIC_DOCUMENTS, count, {
+      'policy.kind': definition.kind,
+      'policy.module_id': definition.moduleId
+    });
+  }
+}
+
+function recordMutationTelemetry(definitions: Catalog, result: PolicyMutationResult): void {
+  const labels = mutationLabels(definitions, result);
+  incrementTelemetryCounter(METRIC_MUTATIONS, 1, labels);
+  if (result.status === 'applied' && result.policyValueChanged) {
+    incrementTelemetryCounter(METRIC_VALUE_CHANGES, 1, {
+      'policy.kind': labels['policy.kind'],
+      'policy.module_id': labels['policy.module_id'],
+      'policy.operation': result.operation
+    });
+  }
+}
+
+function mutationLabels(
+  definitions: Catalog,
+  result: PolicyMutationResult
+): MutationTelemetryLabels {
+  const definition =
+    result.identity === undefined ? undefined : definitions.byKind.get(result.identity.kind);
+  return {
+    'error.type': result.status === 'rejected' ? result.error.code : 'none',
+    'policy.kind': definition?.kind ?? 'unknown',
+    'policy.module_id': definition?.moduleId ?? 'unknown',
+    'policy.mutation_status': result.status,
+    'policy.operation': result.operation
   };
 }
 

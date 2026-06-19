@@ -21,6 +21,9 @@ type TabView = {
 
 const tabs: TabView[] = [
   { id: 'overview', label: 'Overview' },
+  { id: 'policies', label: 'Policies' },
+  { id: 'triggers', label: 'Triggers' },
+  { id: 'llm-runner', label: 'LLM Runner' },
   { id: 'telegram', label: 'Telegram' },
   { id: 'get-messages', label: 'Get Messages' },
   { id: 'history-reconciler', label: 'History Reconciler' },
@@ -78,6 +81,45 @@ function selectTab(tabId: TelemetryTabId): void {
     <div v-if="error" class="telemetry-page__error">{{ error }}</div>
 
     <section v-if="activeTab === 'overview'" class="telemetry-page__section"></section>
+
+    <section v-if="activeTab === 'policies'" class="telemetry-page__section">
+      <UiGrafanaDashboard
+        v-if="links"
+        :key="activeViewKey"
+        :base-url="links.grafanaUi"
+        dashboard-slug="agentg-policies"
+        dashboard-uid="agentg-policies"
+        kiosk
+        title="Policies"
+      />
+      <div v-else class="telemetry-page__empty">No Grafana link</div>
+    </section>
+
+    <section v-if="activeTab === 'triggers'" class="telemetry-page__section">
+      <UiGrafanaDashboard
+        v-if="links"
+        :key="activeViewKey"
+        :base-url="links.grafanaUi"
+        dashboard-slug="agentg-triggers"
+        dashboard-uid="agentg-triggers"
+        kiosk
+        title="Triggers"
+      />
+      <div v-else class="telemetry-page__empty">No Grafana link</div>
+    </section>
+
+    <section v-if="activeTab === 'llm-runner'" class="telemetry-page__section">
+      <UiGrafanaDashboard
+        v-if="links"
+        :key="activeViewKey"
+        :base-url="links.grafanaUi"
+        dashboard-slug="agentg-llm-runner"
+        dashboard-uid="agentg-llm-runner"
+        kiosk
+        title="LLM Runner"
+      />
+      <div v-else class="telemetry-page__empty">No Grafana link</div>
+    </section>
 
     <section v-if="activeTab === 'telegram'" class="telemetry-page__section">
       <UiGrafanaDashboard

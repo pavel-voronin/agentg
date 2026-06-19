@@ -10,7 +10,15 @@ const processComposeArgs = ['-U', '-u', '.tmp/process-compose.sock'];
 const composeProfiles = ['telemetry', 'container-client', 'dashboard'];
 const localEnv = readLocalEnv();
 const localHost = '127.0.0.1';
-const appProcesses = ['policies', 'telegram', 'gateway', 'dashboard-server', 'dashboard'];
+const appProcesses = [
+  'policies',
+  'telegram',
+  'llm-runner',
+  'triggers',
+  'gateway',
+  'dashboard-server',
+  'dashboard'
+];
 const setupProcesses = ['infra-up', 'db-migrate', 'telegram-files-ready'];
 const telemetryEnabled = enabled(configValue('AGENTG_TELEMETRY', '1'));
 const expectedInfraServices = [
@@ -33,6 +41,8 @@ const expectedInfraServices = [
 const productEndpoints = [
   endpoint('policies', 'http', 8705),
   endpoint('telegram', 'http', 8702),
+  endpoint('llm-runner', 'http', 8707),
+  endpoint('triggers', 'http', 8706),
   endpoint('gateway', 'http', 8787),
   endpoint('dashboard-server', 'http', 8789),
   endpoint('dashboard', 'http', 8788)

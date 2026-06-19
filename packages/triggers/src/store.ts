@@ -42,6 +42,17 @@ export type TriggerStore = {
     now: Date;
     rules: readonly TriggerRule[];
   }): Promise<readonly TriggerRegistration[]>;
+  readStats(input: { now: Date }): Promise<TriggerStats>;
+};
+
+export type TriggerStats = {
+  dueOccurrenceCount: number;
+  occurrenceStatusCounts: readonly {
+    count: number;
+    status: OccurrenceStatus;
+  }[];
+  oldestDueOccurrenceAgeSeconds: number;
+  registrationCount: number;
 };
 
 export function createPostgresTriggerStore(database: Database): TriggerStore {
@@ -232,6 +243,46 @@ export function createPostgresTriggerStore(database: Database): TriggerStore {
       }
 
       return store.listRegistrations();
+    },
+    async readStats(input) {
+      const [registrationRow] = await database
+        .select({
+          count: sql<number>`count(*)::int`
+        })
+        .from(triggerRegistrations);
+      const statusRows = await database
+        .select({
+          count: sql<number>`count(*)::int`,
+          status: triggerOccurrences.status
+        })
+        .from(triggerOccurrences)
+        .groupBy(triggerOccurrences.status);
+      const dueWhere = dueOccurrenceCondition(input.now);
+      const [dueRow] = await database
+        .select({
+          count: sql<number>`count(*)::int`
+        })
+        .from(triggerOccurrences)
+        .where(dueWhere);
+      const [oldestDue] = await database
+        .select({
+          nextAttemptAt: triggerOccurrences.nextAttemptAt
+        })
+        .from(triggerOccurrences)
+        .where(dueWhere)
+        .orderBy(triggerOccurrences.nextAttemptAt, triggerOccurrences.key)
+        .limit(1);
+
+      return {
+        dueOccurrenceCount: dueRow?.count ?? 0,
+        occurrenceStatusCounts: statusRows.map((row) => ({
+          count: row.count,
+          status: row.status
+        })),
+        oldestDueOccurrenceAgeSeconds:
+          oldestDue === undefined ? 0 : secondsBetween(oldestDue.nextAttemptAt, input.now),
+        registrationCount: registrationRow?.count ?? 0
+      };
     }
   };
 
@@ -381,6 +432,31 @@ export function createMemoryTriggerStore(): TriggerStore {
         }
       }
       return store.listRegistrations();
+    },
+    readStats(input) {
+      const statusCounts = new Map<OccurrenceStatus, number>();
+      let dueOccurrenceCount = 0;
+      let oldestDue: Date | undefined;
+      for (const occurrence of occurrences.values()) {
+        statusCounts.set(occurrence.status, (statusCounts.get(occurrence.status) ?? 0) + 1);
+        if (isDueOccurrence(occurrence, input.now)) {
+          dueOccurrenceCount += 1;
+          if (oldestDue === undefined || occurrence.nextAttemptAt < oldestDue) {
+            oldestDue = occurrence.nextAttemptAt;
+          }
+        }
+      }
+
+      return Promise.resolve({
+        dueOccurrenceCount,
+        occurrenceStatusCounts: [...statusCounts.entries()].map(([status, count]) => ({
+          count,
+          status
+        })),
+        oldestDueOccurrenceAgeSeconds:
+          oldestDue === undefined ? 0 : secondsBetween(oldestDue, input.now),
+        registrationCount: registrations.size
+      });
     }
   };
 
@@ -400,6 +476,28 @@ export function createMemoryTriggerStore(): TriggerStore {
       ...patch
     });
   }
+}
+
+function dueOccurrenceCondition(now: Date) {
+  return and(
+    inArray(triggerOccurrences.status, ['scheduled', 'claimed', 'retryWaiting']),
+    lte(triggerOccurrences.nextAttemptAt, now),
+    or(isNull(triggerOccurrences.leaseExpiresAt), lte(triggerOccurrences.leaseExpiresAt, now))
+  );
+}
+
+function isDueOccurrence(occurrence: TriggerOccurrence, now: Date): boolean {
+  return (
+    (occurrence.status === 'scheduled' ||
+      occurrence.status === 'claimed' ||
+      occurrence.status === 'retryWaiting') &&
+    occurrence.nextAttemptAt <= now &&
+    (occurrence.leaseExpiresAt === undefined || occurrence.leaseExpiresAt <= now)
+  );
+}
+
+function secondsBetween(start: Date, end: Date): number {
+  return Math.max(0, (end.getTime() - start.getTime()) / 1000);
 }
 
 async function cancelInactiveOccurrences(

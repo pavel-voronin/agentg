@@ -13,6 +13,14 @@ import type {
 import type { RunRecord } from './runs/types.js';
 import type { SourceResolver, SourceResolution } from './sources/types.js';
 import type { Store } from './store.js';
+import {
+  recordArtifactsUpdated,
+  recordRunRequest,
+  recordStats,
+  timeRun,
+  timeStage,
+  timeWorker
+} from './telemetry.js';
 
 const logger = createLogger('llm-runner');
 const processLimit = 10;
@@ -65,7 +73,7 @@ export function createRuntime(input: {
       };
     },
     processQueuedRuns(now = new Date()) {
-      return serialize(() => processQueuedRuns(input, now));
+      return serialize(() => timeWorker('process_queued', () => processQueuedRuns(input, now)));
     },
     run(payload, now = new Date()) {
       return serialize(() =>
@@ -146,6 +154,10 @@ async function acceptRun(
   }
 ): Promise<LlmRunOutput> {
   if (!input.profiles.hasProfile(runInput.payload.profile)) {
+    recordRunRequest({
+      source: runInput.trigger === undefined ? 'direct' : 'triggered',
+      status: 'rejected'
+    });
     return {
       error: {
         code: 'unknown_profile',
@@ -156,9 +168,14 @@ async function acceptRun(
   }
 
   const result = await input.store.createRun(runInput);
+  recordRunRequest({
+    source: runInput.trigger === undefined ? 'direct' : 'triggered',
+    status: result.created ? 'created' : 'deduplicated'
+  });
   if (result.created) {
     input.events.runAccepted(runEvent(result.run));
   }
+  await refreshStats(input.store, runInput.now);
 
   return {
     runId: result.run.runId,
@@ -179,12 +196,26 @@ async function processQueuedRuns(
   for (const run of runs) {
     await processRun(input, run, now);
   }
+  await refreshStats(input.store, now);
   return {
     processed: runs.length
   };
 }
 
 async function processRun(
+  input: {
+    events: EventPublisher;
+    profiles: ProfileRunner;
+    sources: SourceResolver;
+    store: Store;
+  },
+  run: RunRecord,
+  now: Date
+): Promise<void> {
+  await timeRun(() => processRunBody(input, run, now));
+}
+
+async function processRunBody(
   input: {
     events: EventPublisher;
     profiles: ProfileRunner;
@@ -202,9 +233,11 @@ async function processRun(
 
   let resolution: SourceResolution;
   try {
-    resolution = await input.sources.resolve({
-      sourceSelector: run.payload.sourceSelector
-    });
+    resolution = await timeStage('source_resolution', () =>
+      input.sources.resolve({
+        sourceSelector: run.payload.sourceSelector
+      })
+    );
   } catch (error) {
     await failRun(input, run, now, 'source_resolution_failed', errorMessage(error));
     return;
@@ -256,26 +289,31 @@ async function processRun(
       })
     );
     const output = requireProcessingOutput(
-      await input.profiles.process({
-        artifactKey: run.artifactKey,
-        contentRefs: resolution.snapshot.contentRefs,
-        instructions: run.payload.instructions,
-        payload: resolution.snapshot.payload,
-        profile: run.profile,
-        sourceRefs: resolution.snapshot.sourceRefs
-      })
+      await timeStage('profile_processing', () =>
+        input.profiles.process({
+          artifactKey: run.artifactKey,
+          contentRefs: resolution.snapshot.contentRefs,
+          instructions: run.payload.instructions,
+          payload: resolution.snapshot.payload,
+          profile: run.profile,
+          sourceRefs: resolution.snapshot.sourceRefs
+        })
+      )
     );
     await input.store.markStatus({
       now,
       runId: run.runId,
       status: 'storingArtifact'
     });
-    const artifacts = await input.store.upsertArtifacts({
-      now,
-      output,
-      run,
-      snapshot: resolution.snapshot
-    });
+    const artifacts = await timeStage('artifact_storage', () =>
+      input.store.upsertArtifacts({
+        now,
+        output,
+        run,
+        snapshot: resolution.snapshot
+      })
+    );
+    recordArtifactsUpdated(artifacts.length);
     await input.store.markStatus({
       now,
       runId: run.runId,
@@ -299,6 +337,20 @@ async function processRun(
     );
   } catch (error) {
     await failRun(input, run, now, 'processing_failed', errorMessage(error));
+  }
+}
+
+async function refreshStats(store: Store, now: Date): Promise<void> {
+  try {
+    recordStats(await store.readStats({ now }));
+  } catch (error) {
+    logger.error(
+      {
+        event: 'llm_runner.telemetry_stats_failed',
+        ...logError(error)
+      },
+      'llm runner telemetry stats failed'
+    );
   }
 }
 
