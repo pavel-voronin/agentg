@@ -13,7 +13,8 @@
     "packages/llm-runner",
     "packages/telegram",
     "packages/tdlib-docs",
-    "packages/claude-plugin"
+    "packages/claude-plugin",
+    "packages/codex-mcp"
   ],
   "engines": {
     "node": ">=24.0.0",

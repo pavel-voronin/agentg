@@ -5,6 +5,7 @@ COPY packages/framework/package.json packages/framework/package.json
 COPY packages/gateway/package.json packages/gateway/package.json
 COPY packages/dashboard/package.json packages/dashboard/package.json
 COPY packages/claude-plugin/package.json packages/claude-plugin/package.json
+COPY packages/codex-mcp/package.json packages/codex-mcp/package.json
 COPY packages/policies/package.json packages/policies/package.json
 COPY packages/triggers/package.json packages/triggers/package.json
 COPY packages/llm-runner/package.json packages/llm-runner/package.json
@@ -25,6 +26,7 @@ COPY packages/framework/package.json packages/framework/package.json
 COPY packages/gateway/package.json packages/gateway/package.json
 COPY packages/dashboard/package.json packages/dashboard/package.json
 COPY packages/claude-plugin/package.json packages/claude-plugin/package.json
+COPY packages/codex-mcp/package.json packages/codex-mcp/package.json
 COPY packages/policies/package.json packages/policies/package.json
 COPY packages/triggers/package.json packages/triggers/package.json
 COPY packages/llm-runner/package.json packages/llm-runner/package.json

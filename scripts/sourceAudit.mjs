@@ -977,6 +977,7 @@ function ignoredDirectory(directory) {
     rel === 'node_modules' ||
     rel === '.claude' ||
     rel === '.codegraph' ||
+    rel === '.codex' ||
     rel === '.tmp' ||
     rel === 'dist' ||
     rel === 'dist-dashboard' ||
@@ -990,6 +991,7 @@ function ignoredDirectory(directory) {
     rel.endsWith('/node_modules') ||
     rel.endsWith('/.claude') ||
     rel.endsWith('/.codegraph') ||
+    rel.endsWith('/.codex') ||
     rel.endsWith('/.tmp') ||
     rel.endsWith('/dist') ||
     rel.endsWith('/dist-dashboard') ||
@@ -1011,6 +1013,7 @@ function ignored(file) {
     rel.includes('/node_modules/') ||
     rel.includes('/.claude/') ||
     rel.includes('/.codegraph/') ||
+    rel.includes('/.codex/') ||
     rel.includes('/.tmp/') ||
     rel.includes('/dist/') ||
     rel.includes('/dist-dashboard/') ||
@@ -1024,6 +1027,7 @@ function ignored(file) {
     rel.startsWith('node_modules/') ||
     rel.startsWith('.claude/') ||
     rel.startsWith('.codegraph/') ||
+    rel.startsWith('.codex/') ||
     rel.startsWith('.tmp/') ||
     rel.startsWith('dist/') ||
     rel.startsWith('dist-dashboard/') ||
