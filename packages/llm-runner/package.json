@@ -12,8 +12,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@agentg/data": "file:../data",
     "@agentg/framework": "file:../framework",
     "drizzle-orm": "^0.45.2",
+    "yaml": "^2.8.2",
     "zod": "^4.4.1"
   },
   "devDependencies": {

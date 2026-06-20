@@ -1,112 +1,214 @@
-import { createLogger, logError } from '@agentg/framework';
+import { performance } from 'node:perf_hooks';
 
-import { artifactView } from './artifacts/types.js';
+import type { Dataset, DatasetRow } from '@agentg/data';
+import { createLogger, logError, toJsonValue, type JsonValue } from '@agentg/framework';
+
 import type { EventPublisher } from './events.js';
 import type { ProcessingOutput, ProfileRunner } from './profiles/types.js';
-import type {
-  GetCurrentArtifactInput,
-  ListArtifactsInput,
-  LlmRunOutput,
-  LlmRunPayload,
-  TriggerProvenance
-} from './schema.js';
 import type { RunRecord } from './runs/types.js';
-import type { SourceResolver, SourceResolution } from './sources/types.js';
-import type { Store } from './store.js';
+import type { LlmRunActionRequest, LlmRunActionResult, LlmRunResult } from './schema.js';
+import { inputMetadata, type Store } from './store.js';
 import {
-  recordArtifactsUpdated,
-  recordRunRequest,
-  recordStats,
-  timeRun,
-  timeStage,
-  timeWorker
+  recordCurrentStats,
+  recordRowsProcessed,
+  recordRunDuration,
+  recordRunStarted,
+  timeProviderCall
 } from './telemetry.js';
 
 const logger = createLogger('llm-runner');
-const processLimit = 10;
+const defaultClaimStaleMs = 60_000;
 
 export type Runtime = {
-  getCurrentArtifact(input: GetCurrentArtifactInput): Promise<{
-    artifact: ReturnType<typeof artifactView> | null;
+  getRunResult(input: { runId: string }): Promise<LlmRunResult | null>;
+  recoverActiveRuns(now?: Date): Promise<{
+    failed: number;
+    started: number;
   }>;
-  listArtifacts(input: ListArtifactsInput): Promise<{
-    artifacts: ReturnType<typeof artifactView>[];
-  }>;
-  processQueuedRuns(now?: Date): Promise<{ processed: number }>;
-  run(input: LlmRunPayload, now?: Date): Promise<LlmRunOutput>;
-  runTriggered(
-    input: {
-      payload: LlmRunPayload;
-      provenance: TriggerProvenance;
-    },
-    now?: Date
-  ): Promise<LlmRunOutput>;
+  run(input: LlmRunActionRequest, now?: Date): Promise<LlmRunActionResult>;
 };
 
 export function createRuntime(input: {
+  claimStaleMs?: number | undefined;
   events: EventPublisher;
   profiles: ProfileRunner;
-  sources: SourceResolver;
   store: Store;
 }): Runtime {
-  let queue = Promise.resolve();
-
-  function serialize<T>(operation: () => Promise<T>): Promise<T> {
-    const next = queue.catch(() => undefined).then(operation);
-    queue = next.then(
-      () => undefined,
-      () => undefined
-    );
-    return next;
-  }
-
+  const activeRuns = new Set<string>();
+  const claimStaleMs = Math.max(1, input.claimStaleMs ?? defaultClaimStaleMs);
   return {
-    async getCurrentArtifact(readInput) {
-      const artifact = await input.store.getCurrentArtifact(readInput);
+    async getRunResult(readInput) {
+      const run = await input.store.getRun(readInput.runId);
+      if (run === null) {
+        return null;
+      }
+      if (run.status === 'completed') {
+        if (run.outputDataset === undefined) {
+          throw new Error(`Completed LLM run has no output dataset: ${run.runId}`);
+        }
+        return {
+          dataset: run.outputDataset,
+          runId: run.runId,
+          status: 'completed'
+        };
+      }
+      if (run.status === 'failed') {
+        return {
+          error: {
+            code: run.failureCode ?? 'llm_run_failed',
+            message: run.failureMessage ?? 'LLM run failed'
+          },
+          runId: run.runId,
+          status: 'failed'
+        };
+      }
       return {
-        artifact: artifact === null ? null : artifactView(artifact)
+        runId: run.runId,
+        status: run.status === 'accepted' ? 'accepted' : 'processing'
       };
     },
-    async listArtifacts(readInput) {
-      return {
-        artifacts: (await input.store.listArtifacts(readInput)).map(artifactView)
-      };
-    },
-    processQueuedRuns(now = new Date()) {
-      return serialize(() => timeWorker('process_queued', () => processQueuedRuns(input, now)));
-    },
-    run(payload, now = new Date()) {
-      return serialize(() =>
-        acceptRun(input, {
+    async recoverActiveRuns(now = new Date()) {
+      let failed = 0;
+      let started = 0;
+      for (const run of await input.store.listActiveRuns()) {
+        if (activeRuns.has(run.runId)) {
+          continue;
+        }
+        const claimed = await input.store.claimActiveRun({
           now,
-          payload
-        })
-      );
+          runId: run.runId,
+          staleBefore: claimStaleBefore(now, claimStaleMs)
+        });
+        if (claimed === null) {
+          continue;
+        }
+        if (!input.profiles.hasProfile(claimed.profile)) {
+          await input.store.markFailed({
+            code: 'unknown_profile',
+            message: `LLM profile is not configured: ${claimed.profile}`,
+            metadata: inputMetadata(
+              claimed.inputDataset.rows.length,
+              outputFormatFromMetadata(claimed)
+            ),
+            now,
+            runId: claimed.runId
+          });
+          await recordCurrentStats(() => input.store.readStats());
+          publishRunEvent(input.events, 'failed', claimed, 'unknown_profile');
+          failed += 1;
+          continue;
+        }
+        if (startProcessing(input, requestFromRun(claimed), claimed, activeRuns, claimStaleMs)) {
+          started += 1;
+        }
+      }
+      return { failed, started };
     },
-    runTriggered(triggered, now = new Date()) {
-      return serialize(() =>
-        acceptRun(input, {
-          deduplicationKey: triggered.provenance.occurrence.idempotencyKey,
-          now,
-          payload: triggered.payload,
-          trigger: triggered.provenance
-        })
-      );
+    run(request, now = new Date()) {
+      return runAction(input, request, now, activeRuns, claimStaleMs);
     }
   };
 }
 
-export function startRuntimeLoop(input: {
+async function runAction(
+  input: {
+    events: EventPublisher;
+    profiles: ProfileRunner;
+    store: Store;
+  },
+  request: LlmRunActionRequest,
+  now: Date,
+  activeRuns: Set<string>,
+  claimStaleMs: number
+): Promise<LlmRunActionResult> {
+  if (!input.profiles.hasProfile(request.with.profile)) {
+    return rejected('unknown_profile', `LLM profile is not configured: ${request.with.profile}`);
+  }
+
+  const run = await input.store.createRun({
+    inputDataset: request.input,
+    inputMetadata: inputMetadata(request.input.rows.length, outputFormat(request)),
+    nodeId: request.node.id,
+    now,
+    pipelineRunId: request.node.runId,
+    profile: request.with.profile,
+    prompt: request.with.prompt,
+    status: 'accepted'
+  });
+  recordRunStarted(request.with.profile);
+  await recordCurrentStats(() => input.store.readStats());
+  publishRunEvent(input.events, 'accepted', run);
+  const claimed = await input.store.claimActiveRun({
+    now,
+    runId: run.runId,
+    staleBefore: claimStaleBefore(now, claimStaleMs)
+  });
+  if (claimed !== null) {
+    startProcessing(input, request, claimed, activeRuns, claimStaleMs);
+  }
+  return {
+    runId: run.runId,
+    status: 'accepted'
+  };
+}
+
+function startProcessing(
+  input: {
+    events: EventPublisher;
+    profiles: ProfileRunner;
+    store: Store;
+  },
+  request: LlmRunActionRequest,
+  run: RunIdentity,
+  activeRuns: Set<string>,
+  claimStaleMs: number
+): boolean {
+  if (activeRuns.has(run.runId)) {
+    return false;
+  }
+  activeRuns.add(run.runId);
+  processActiveRun(input, request, run, activeRuns, claimStaleMs);
+  return true;
+}
+
+function processActiveRun(
+  input: {
+    events: EventPublisher;
+    profiles: ProfileRunner;
+    store: Store;
+  },
+  request: LlmRunActionRequest,
+  run: RunIdentity,
+  activeRuns: Set<string>,
+  claimStaleMs: number
+): void {
+  void processRun(input, request, run, claimStaleMs)
+    .catch((error: unknown) => {
+      logger.error(
+        {
+          event: 'llm_runner.background_processing_failed',
+          runId: run.runId,
+          ...logError(error)
+        },
+        'LLM background processing failed'
+      );
+    })
+    .finally(() => {
+      activeRuns.delete(run.runId);
+    });
+}
+
+export function startRunRecoveryLoop(input: {
   intervalMs: number;
-  runtime: Runtime;
+  runtime: Pick<Runtime, 'recoverActiveRuns'>;
 }): () => Promise<undefined> {
   let active = true;
-  let currentTick: Promise<undefined> | undefined;
+  let currentTick: Promise<unknown> | undefined;
   const tick = () => {
     if (!active || currentTick !== undefined) {
       return;
     }
-    currentTick = runTick(input.runtime).finally(() => {
+    currentTick = recoverTick(input.runtime).finally(() => {
       currentTick = undefined;
     });
   };
@@ -125,318 +227,238 @@ export function startRuntimeLoop(input: {
   };
 }
 
-async function runTick(runtime: Runtime): Promise<undefined> {
+async function recoverTick(runtime: Pick<Runtime, 'recoverActiveRuns'>): Promise<undefined> {
   try {
-    await runtime.processQueuedRuns();
+    await runtime.recoverActiveRuns();
   } catch (error) {
     logger.error(
       {
-        event: 'llm_runner.worker_failed',
+        event: 'llm_runner.recovery_failed',
         ...logError(error)
       },
-      'llm runner worker failed'
+      'LLM run recovery failed'
     );
   }
   return undefined;
 }
 
-async function acceptRun(
-  input: {
-    events: EventPublisher;
-    profiles: ProfileRunner;
-    store: Store;
-  },
-  runInput: {
-    deduplicationKey?: string | undefined;
-    now: Date;
-    payload: LlmRunPayload;
-    trigger?: TriggerProvenance | undefined;
-  }
-): Promise<LlmRunOutput> {
-  if (!input.profiles.hasProfile(runInput.payload.profile)) {
-    recordRunRequest({
-      source: runInput.trigger === undefined ? 'direct' : 'triggered',
-      status: 'rejected'
-    });
-    return {
-      error: {
-        code: 'unknown_profile',
-        message: `LLM profile is not configured: ${runInput.payload.profile}`
-      },
-      status: 'rejected'
-    };
-  }
-
-  const result = await input.store.createRun(runInput);
-  recordRunRequest({
-    source: runInput.trigger === undefined ? 'direct' : 'triggered',
-    status: result.created ? 'created' : 'deduplicated'
-  });
-  if (result.created) {
-    input.events.runAccepted(runEvent(result.run));
-  }
-  await refreshStats(input.store, runInput.now);
-
-  return {
-    runId: result.run.runId,
-    status: 'accepted'
-  };
-}
-
-async function processQueuedRuns(
-  input: {
-    events: EventPublisher;
-    profiles: ProfileRunner;
-    sources: SourceResolver;
-    store: Store;
-  },
-  now: Date
-): Promise<{ processed: number }> {
-  const runs = await input.store.listProcessableRuns({ limit: processLimit });
-  for (const run of runs) {
-    await processRun(input, run, now);
-  }
-  await refreshStats(input.store, now);
-  return {
-    processed: runs.length
-  };
-}
+type RunIdentity = {
+  nodeId: string;
+  pipelineRunId: string;
+  profile: string;
+  runId: string;
+};
 
 async function processRun(
   input: {
     events: EventPublisher;
     profiles: ProfileRunner;
-    sources: SourceResolver;
     store: Store;
   },
-  run: RunRecord,
-  now: Date
+  request: LlmRunActionRequest,
+  run: RunIdentity,
+  claimStaleMs: number
 ): Promise<void> {
-  await timeRun(() => processRunBody(input, run, now));
+  const startedAt = performance.now();
+  const stopLeaseRefresh = startLeaseRefresh(input.store, run.runId, claimStaleMs);
+  try {
+    await recordCurrentStats(() => input.store.readStats());
+    publishRunEvent(input.events, 'processing', run);
+
+    const dataset = await processRows(input.profiles, request);
+    await input.store.markCompleted({
+      dataset,
+      metadata: toJsonValue({
+        rowCount: dataset.rows.length
+      }),
+      now: new Date(),
+      runId: run.runId
+    });
+    recordRowsProcessed(run.profile, 'completed', dataset.rows.length);
+    recordRunDuration(run.profile, 'completed', startedAt);
+    await recordCurrentStats(() => input.store.readStats());
+    publishRunEvent(input.events, 'completed', run);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await input.store.markFailed({
+      code: 'provider_failed',
+      message,
+      metadata: toJsonValue({
+        rowCount: request.input.rows.length
+      }),
+      now: new Date(),
+      runId: run.runId
+    });
+    recordRunDuration(run.profile, 'failed', startedAt, error);
+    await recordCurrentStats(() => input.store.readStats());
+    publishRunEvent(input.events, 'failed', run, 'provider_failed');
+  } finally {
+    stopLeaseRefresh();
+  }
 }
 
-async function processRunBody(
-  input: {
-    events: EventPublisher;
-    profiles: ProfileRunner;
-    sources: SourceResolver;
-    store: Store;
-  },
-  run: RunRecord,
-  now: Date
-): Promise<void> {
-  await input.store.markStatus({
-    now,
-    runId: run.runId,
-    status: 'resolvingSource'
-  });
-
-  let resolution: SourceResolution;
-  try {
-    resolution = await timeStage('source_resolution', () =>
-      input.sources.resolve({
-        sourceSelector: run.payload.sourceSelector
+function startLeaseRefresh(store: Store, runId: string, claimStaleMs: number): () => void {
+  const refreshMs = Math.max(1, Math.floor(claimStaleMs / 3));
+  const timer = setInterval(() => {
+    void store
+      .refreshProcessingRun({
+        now: new Date(),
+        runId
       })
-    );
-  } catch (error) {
-    await failRun(input, run, now, 'source_resolution_failed', errorMessage(error));
-    return;
-  }
-  if (resolution.status !== 'ready') {
-    await recordUnreadyResolution(input, run, resolution, now);
-    return;
-  }
-
-  try {
-    if (resolution.snapshot.sourceRefs.length === 0) {
-      await failRun(
-        input,
-        run,
-        now,
-        'source_refs_empty',
-        'Source resolution returned no source refs'
-      );
-      return;
-    }
-    await input.store.recordSourceSnapshot({
-      now,
-      runId: run.runId,
-      snapshot: resolution.snapshot
-    });
-    if (resolution.snapshot.contentRefs.length === 0) {
-      await input.store.markStatus({
-        now,
-        runId: run.runId,
-        status: 'completed'
+      .catch((error: unknown) => {
+        logger.warn(
+          {
+            event: 'llm_runner.lease_refresh_failed',
+            runId,
+            ...logError(error)
+          },
+          'LLM run lease refresh failed'
+        );
       });
-      input.events.runCompleted(
-        runEvent(run, {
-          contentRefs: resolution.snapshot.contentRefs,
-          sourceRefs: resolution.snapshot.sourceRefs
-        })
-      );
-      return;
-    }
-    await input.store.markStatus({
-      now,
-      runId: run.runId,
-      status: 'processing'
-    });
-    input.events.runProcessing(
-      runEvent(run, {
-        contentRefs: resolution.snapshot.contentRefs,
-        sourceRefs: resolution.snapshot.sourceRefs
-      })
-    );
-    const output = requireProcessingOutput(
-      await timeStage('profile_processing', () =>
-        input.profiles.process({
-          artifactKey: run.artifactKey,
-          contentRefs: resolution.snapshot.contentRefs,
-          instructions: run.payload.instructions,
-          payload: resolution.snapshot.payload,
-          profile: run.profile,
-          sourceRefs: resolution.snapshot.sourceRefs
-        })
-      )
-    );
-    await input.store.markStatus({
-      now,
-      runId: run.runId,
-      status: 'storingArtifact'
-    });
-    const artifacts = await timeStage('artifact_storage', () =>
-      input.store.upsertArtifacts({
-        now,
-        output,
-        run,
-        snapshot: resolution.snapshot
-      })
-    );
-    recordArtifactsUpdated(artifacts.length);
-    await input.store.markStatus({
-      now,
-      runId: run.runId,
-      status: 'completed'
-    });
-    for (const artifact of artifacts) {
-      input.events.artifactUpdated({
-        artifactId: artifact.artifactId,
-        artifactKey: artifact.artifactKey,
-        contentRefs: artifact.contentRefs,
-        runId: artifact.runId,
-        sourceRefs: artifact.sourceRefs,
-        trigger: run.trigger
-      });
-    }
-    input.events.runCompleted(
-      runEvent(run, {
-        contentRefs: resolution.snapshot.contentRefs,
-        sourceRefs: resolution.snapshot.sourceRefs
-      })
-    );
-  } catch (error) {
-    await failRun(input, run, now, 'processing_failed', errorMessage(error));
-  }
-}
-
-async function refreshStats(store: Store, now: Date): Promise<void> {
-  try {
-    recordStats(await store.readStats({ now }));
-  } catch (error) {
-    logger.error(
-      {
-        event: 'llm_runner.telemetry_stats_failed',
-        ...logError(error)
-      },
-      'llm runner telemetry stats failed'
-    );
-  }
-}
-
-async function recordUnreadyResolution(
-  input: {
-    events: EventPublisher;
-    store: Store;
-  },
-  run: RunRecord,
-  resolution: Exclude<SourceResolution, { status: 'ready' }>,
-  now: Date
-): Promise<void> {
-  if (resolution.status === 'pending') {
-    await input.store.markStatus({
-      now,
-      runId: run.runId,
-      status: 'waitingForSource'
-    });
-    input.events.runWaitingForSource(
-      runEvent(run, {
-        contentRefs: resolution.contentRefs,
-        sourceRefs: resolution.sourceRefs
-      })
-    );
-    return;
-  }
-
-  await failRun(input, run, now, resolution.error.code, resolution.error.message);
-}
-
-async function failRun(
-  input: {
-    events: EventPublisher;
-    store: Store;
-  },
-  run: RunRecord,
-  now: Date,
-  code: string,
-  message: string
-): Promise<void> {
-  await input.store.markFailed({
-    code,
-    message,
-    now,
-    runId: run.runId
-  });
-  input.events.runFailed(
-    runEvent(run, {
-      failureCode: code
-    })
-  );
-}
-
-function runEvent(
-  run: RunRecord,
-  extra: {
-    contentRefs?: RunEventRefs['contentRefs'] | undefined;
-    failureCode?: string | undefined;
-    sourceRefs?: RunEventRefs['sourceRefs'] | undefined;
-  } = {}
-) {
-  return {
-    artifactKey: run.artifactKey,
-    contentRefs: extra.contentRefs,
-    failureCode: extra.failureCode,
-    runId: run.runId,
-    sourceRefs: extra.sourceRefs,
-    trigger: run.trigger
+  }, refreshMs);
+  timer.unref();
+  return () => {
+    clearInterval(timer);
   };
 }
 
-type RunEventRefs = {
-  contentRefs: NonNullable<Parameters<EventPublisher['runProcessing']>[0]['contentRefs']>;
-  sourceRefs: NonNullable<Parameters<EventPublisher['runProcessing']>[0]['sourceRefs']>;
-};
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+function claimStaleBefore(now: Date, claimStaleMs: number): Date {
+  return new Date(now.getTime() - claimStaleMs);
 }
 
-function requireProcessingOutput(value: ProcessingOutput): ProcessingOutput {
-  if (typeof value.body !== 'string') {
-    throw new Error('LLM provider output body must be a string');
+function requestFromRun(run: RunRecord): LlmRunActionRequest {
+  const format = outputFormatFromMetadata(run);
+  return {
+    input: run.inputDataset,
+    node: {
+      id: run.nodeId,
+      runId: run.pipelineRunId
+    },
+    with: {
+      ...(format === 'text' ? {} : { output: { format } }),
+      profile: run.profile,
+      prompt: run.prompt
+    }
+  };
+}
+
+function outputFormatFromMetadata(run: RunRecord): 'json' | 'text' {
+  const metadata = run.inputMetadata;
+  if (
+    metadata !== null &&
+    typeof metadata === 'object' &&
+    !Array.isArray(metadata) &&
+    (metadata.outputFormat === 'json' || metadata.outputFormat === 'text')
+  ) {
+    return metadata.outputFormat;
   }
-  if (value.title !== undefined && typeof value.title !== 'string') {
-    throw new Error('LLM provider output title must be a string');
+  return 'text';
+}
+
+function publishRunEvent(
+  events: EventPublisher,
+  status: 'accepted' | 'completed' | 'failed' | 'processing',
+  run: {
+    nodeId: string;
+    pipelineRunId: string;
+    profile: string;
+    runId: string;
+  },
+  failureCode?: string
+): void {
+  try {
+    const event = {
+      ...(failureCode === undefined ? {} : { failureCode }),
+      nodeId: run.nodeId,
+      pipelineRunId: run.pipelineRunId,
+      profile: run.profile,
+      runId: run.runId,
+      status
+    };
+    if (status === 'accepted') {
+      events.runAccepted(event);
+      return;
+    }
+    if (status === 'completed') {
+      events.runCompleted(event);
+      return;
+    }
+    if (status === 'failed') {
+      events.runFailed(event);
+      return;
+    }
+    events.runProcessing(event);
+  } catch (error) {
+    logger.warn(
+      {
+        event: 'llm_runner.event_publish_failed',
+        eventStatus: status,
+        runId: run.runId,
+        ...logError(error)
+      },
+      'LLM run event publication failed'
+    );
   }
-  return value;
+}
+
+async function processRows(
+  profiles: ProfileRunner,
+  request: LlmRunActionRequest
+): Promise<Dataset> {
+  if (request.input.rows.length === 0) {
+    return {
+      rows: []
+    };
+  }
+  const format = outputFormat(request);
+  const rows: DatasetRow[] = [];
+  for (const row of request.input.rows) {
+    const output = await timeProviderCall(request.with.profile, format, () =>
+      profiles.process({
+        profile: request.with.profile,
+        prompt: request.with.prompt,
+        row
+      })
+    );
+    rows.push(outputRow(row, output, format));
+  }
+  return {
+    rows
+  };
+}
+
+function outputRow(row: DatasetRow, output: ProcessingOutput, format: 'json' | 'text'): DatasetRow {
+  return {
+    lineage: row.lineage,
+    refs: row.refs,
+    value: format === 'json' ? parseJsonOutput(output.text) : output.text
+  };
+}
+
+function outputFormat(request: LlmRunActionRequest): 'json' | 'text' {
+  return request.with.output?.format ?? 'text';
+}
+
+function parseJsonOutput(text: string): JsonValue {
+  try {
+    return toJsonValue(JSON.parse(text) as unknown);
+  } catch (error) {
+    throw new Error(
+      `LLM output is not valid JSON: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error }
+    );
+  }
+}
+
+function rejected(
+  code: string,
+  message: string
+): Extract<LlmRunActionResult, { status: 'rejected' }> {
+  return {
+    error: {
+      code,
+      message
+    },
+    status: 'rejected'
+  };
 }

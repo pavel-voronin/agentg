@@ -4,15 +4,13 @@ import { readConfig } from './config.js';
 import { createDatabase } from './database/client.js';
 import { createEventPublisher } from './events.js';
 import { createConfiguredProfileRunner } from './profiles/openaiCompatible.js';
+import { createRuntime, startRunRecoveryLoop } from './runtime.js';
 import {
-  getCurrentArtifactInputSchema,
-  listArtifactsInputSchema,
-  llmRunPayloadSchema,
-  runOutputSchema,
-  runTriggeredInputSchema
+  getRunResultInputSchema,
+  runActionRequestSchema,
+  runActionResultSchema,
+  runResultSchema
 } from './schema.js';
-import { createRpcSourceResolver } from './sources/rpcResolver.js';
-import { createRuntime, startRuntimeLoop } from './runtime.js';
 import { createPostgresStore } from './store.js';
 
 export const moduleDefinition = defineModule('llm-runner', {
@@ -31,41 +29,25 @@ export const moduleDefinition = defineModule('llm-runner', {
         profiles: createConfiguredProfileRunner({
           profiles: config.profiles
         }),
-        sources: createRpcSourceResolver({
-          resolvers: config.sourceResolvers
-        }),
         store: createPostgresStore(database)
       });
 
-      background('worker', () => {
-        return startRuntimeLoop({
+      background('worker', () =>
+        startRunRecoveryLoop({
           intervalMs: config.workerIntervalMs,
           runtime: value
-        });
-      });
+        })
+      );
 
       return value;
     });
 
     return {
-      getCurrentArtifact: async (input: unknown) => {
-        return runtime.getCurrentArtifact(getCurrentArtifactInputSchema.parse(input));
-      },
-      listArtifacts: (input: unknown) =>
-        runtime.listArtifacts(listArtifactsInputSchema.parse(input)),
-      run: async (input: unknown) =>
-        runOutputSchema.parse(await runtime.run(llmRunPayloadSchema.parse(input))),
-      runTriggered: async (input: unknown) => {
-        const parsed = runTriggeredInputSchema.parse(input);
-        return runOutputSchema.parse(
-          await runtime.runTriggered({
-            payload: parsed.actionInput,
-            provenance: {
-              occurrence: parsed.occurrence,
-              trigger: parsed.trigger
-            }
-          })
-        );
+      'llm.run': async (input: unknown) =>
+        runActionResultSchema.parse(await runtime.run(runActionRequestSchema.parse(input))),
+      getRunResult: async (input: unknown) => {
+        const result = await runtime.getRunResult(getRunResultInputSchema.parse(input));
+        return result === null ? null : runResultSchema.parse(result);
       }
     };
   }

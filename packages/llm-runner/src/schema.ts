@@ -1,114 +1,77 @@
-import type { JsonValue } from '@agentg/framework';
+import {
+  actionRequestSchema,
+  actionResultSchema,
+  datasetSchema,
+  type ActionResult,
+  type Dataset
+} from '@agentg/data';
 import { z } from 'zod';
 
-export const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
-  z.union([
-    z.null(),
-    z.string(),
-    z.number(),
-    z.boolean(),
-    z.array(jsonValueSchema),
-    z.record(z.string(), jsonValueSchema)
-  ])
-);
-
-export const sourceRefSchema = z
+const actionInputSchema = z
   .object({
-    _model: z.string().trim().min(1),
-    id: z.string().trim().min(1)
-  })
-  .strict();
-
-export const contentRefSchema = z
-  .object({
-    _model: z.string().trim().min(1),
-    id: z.string().trim().min(1),
-    sourceRef: sourceRefSchema.optional()
-  })
-  .strict();
-
-export const sourceSelectorSchema = z
-  .object({
-    domain: z.string().regex(/^[a-z][a-z0-9-]*$/),
-    selector: jsonValueSchema
-  })
-  .strict();
-
-export const llmRunPayloadSchema = z
-  .object({
-    artifactKey: z.string().trim().min(1),
-    instructions: z.string().trim().min(1),
-    profile: z.string().trim().min(1),
-    sourceSelector: sourceSelectorSchema
-  })
-  .strict();
-
-export const triggerProvenanceSchema = z
-  .object({
-    occurrence: z
+    output: z
       .object({
-        idempotencyKey: z.string().trim().min(1),
-        registrationKey: z.string().trim().min(1),
-        scheduledAt: z.iso.datetime()
-      })
-      .strict(),
-    trigger: z
-      .object({
-        kind: z.literal('trigger'),
-        requestId: z.string().trim().min(1)
+        format: z.enum(['text', 'json']).optional()
       })
       .strict()
+      .optional(),
+    profile: z.string().trim().min(1),
+    prompt: z.string().trim().min(1)
   })
   .strict();
 
-export const runTriggeredInputSchema = z
-  .object({
-    actionInput: llmRunPayloadSchema,
-    occurrence: triggerProvenanceSchema.shape.occurrence,
-    trigger: triggerProvenanceSchema.shape.trigger
-  })
-  .strict();
+export const runActionRequestSchema = actionRequestSchema.extend({
+  with: actionInputSchema
+});
 
-export const listArtifactsInputSchema = z
-  .object({
-    artifactKey: z.string().trim().min(1).optional(),
-    sourceRef: sourceRefSchema
-  })
-  .strict();
-
-export const getCurrentArtifactInputSchema = z
-  .object({
-    artifactKey: z.string().trim().min(1),
-    sourceRef: sourceRefSchema
-  })
-  .strict();
-
-export const runOutputSchema = z.union([
+export const runActionResultSchema = z.union([
   z
     .object({
       runId: z.string().trim().min(1),
       status: z.literal('accepted')
     })
     .strict(),
+  actionResultSchema.options[1]
+]);
+
+export const getRunResultInputSchema = z
+  .object({
+    runId: z.string().trim().min(1)
+  })
+  .strict();
+
+export const runResultSchema = z.union([
+  z
+    .object({
+      runId: z.string(),
+      status: z.union([z.literal('accepted'), z.literal('processing')])
+    })
+    .strict(),
+  z
+    .object({
+      dataset: datasetSchema,
+      runId: z.string(),
+      status: z.literal('completed')
+    })
+    .strict(),
   z
     .object({
       error: z
         .object({
-          code: z.string().trim().min(1),
+          code: z.string(),
           message: z.string()
         })
         .strict(),
-      status: z.literal('rejected')
+      runId: z.string(),
+      status: z.literal('failed')
     })
     .strict()
 ]);
 
-export type LlmRunPayload = z.infer<typeof llmRunPayloadSchema>;
-export type SourceSelector = z.infer<typeof sourceSelectorSchema>;
-export type SourceRef = z.infer<typeof sourceRefSchema>;
-export type ContentRef = z.infer<typeof contentRefSchema>;
-export type TriggerProvenance = z.infer<typeof triggerProvenanceSchema>;
-export type RunTriggeredInput = z.infer<typeof runTriggeredInputSchema>;
-export type ListArtifactsInput = z.infer<typeof listArtifactsInputSchema>;
-export type GetCurrentArtifactInput = z.infer<typeof getCurrentArtifactInputSchema>;
-export type LlmRunOutput = z.infer<typeof runOutputSchema>;
+export type LlmActionInput = z.infer<typeof actionInputSchema>;
+export type LlmRunActionRequest = z.infer<typeof runActionRequestSchema>;
+export type LlmRunActionResult =
+  | { runId: string; status: 'accepted' }
+  | Extract<ActionResult, { status: 'rejected' }>;
+export type LlmRunResult = z.infer<typeof runResultSchema>;
+export type { Dataset };

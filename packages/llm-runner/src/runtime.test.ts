@@ -1,739 +1,514 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import type { JsonValue } from '@agentg/framework';
 
 import type { EventPublisher } from './events.js';
-import type { ProcessingInput, ProcessingOutput, ProfileRunner } from './profiles/types.js';
-import { createRuntime, startRuntimeLoop } from './runtime.js';
-import {
-  llmRunPayloadSchema,
-  runTriggeredInputSchema,
-  type LlmRunPayload,
-  type SourceRef
-} from './schema.js';
-import type { SourceResolver, SourceResolution, SourceSnapshot } from './sources/types.js';
-import { createMemoryStore, type Store } from './store.js';
+import type { ProfileRunner } from './profiles/types.js';
+import { createRuntime, type Runtime } from './runtime.js';
+import { createMemoryStore, inputMetadata, type Store } from './store.js';
 
-describe('LLM run payload', () => {
-  it('validates the direct run shape', () => {
-    expect(() => llmRunPayloadSchema.parse(payload())).not.toThrow();
-    expect(() =>
-      llmRunPayloadSchema.parse({
-        ...payload(),
-        profile: ''
-      })
-    ).toThrow();
-  });
-
-  it('validates the triggered action-provider shape', () => {
-    expect(() =>
-      runTriggeredInputSchema.parse({
-        actionInput: payload(),
-        occurrence: {
-          idempotencyKey: 'occurrence-1',
-          registrationKey: 'TriggerRule:daily',
-          scheduledAt: '2026-01-01T00:00:00.000Z'
-        },
-        trigger: {
-          kind: 'trigger',
-          requestId: 'occurrence-1'
-        }
-      })
-    ).not.toThrow();
-
-    expect(() =>
-      runTriggeredInputSchema.parse({
-        actionInput: {
-          ...payload(),
-          instructions: ''
-        },
-        occurrence: {
-          idempotencyKey: 'occurrence-1',
-          registrationKey: 'TriggerRule:daily',
-          scheduledAt: '2026-01-01T00:00:00.000Z'
-        },
-        trigger: {
-          kind: 'trigger',
-          requestId: 'occurrence-1'
-        }
-      })
-    ).toThrow();
-  });
-});
-
-describe('LLM runner runtime', () => {
-  it('rejects an unknown profile before resolving source content', async () => {
-    let resolverCalls = 0;
+describe('LLM action runtime', () => {
+  it('completes an empty input without provider calls', async () => {
+    const profiles = profileRunner();
     const runtime = createRuntime({
-      events: eventRecorder(),
-      profiles: profileRunner({ profiles: [] }),
-      sources: {
-        resolve() {
-          resolverCalls += 1;
-          return Promise.resolve(readyResolution());
-        }
-      },
+      events: events(),
+      profiles,
       store: createMemoryStore()
     });
 
-    await expect(runtime.run(payload())).resolves.toEqual({
+    const result = await runtime.run(request({ rows: [] }));
+    const runId = acceptedRunId(result);
+
+    expect(result).toMatchObject({
+      status: 'accepted'
+    });
+    expect(await expectCompleted(runtime, runId)).toMatchObject({
+      dataset: {
+        rows: []
+      },
+      status: 'completed'
+    });
+    expect(profiles.process).not.toHaveBeenCalled();
+  });
+
+  it('uses one run id and one provider call per input row', async () => {
+    const profiles = profileRunner(['first', 'second']);
+    const runtime = createRuntime({
+      events: events(),
+      profiles,
+      store: createMemoryStore()
+    });
+
+    const result = await runtime.run(
+      request({
+        rows: [
+          {
+            lineage: [{ _model: 'telegram.chat', id: '10' }],
+            refs: {
+              chat: { _model: 'telegram.chat', id: '10' }
+            },
+            value: 'hello'
+          },
+          {
+            lineage: [{ _model: 'telegram.chat', id: '20' }],
+            refs: {
+              chat: { _model: 'telegram.chat', id: '20' }
+            },
+            value: 'world'
+          }
+        ]
+      })
+    );
+    const runId = acceptedRunId(result);
+
+    expect(result.status).toBe('accepted');
+    const completed = await expectCompleted(runtime, runId);
+    expect(completed.dataset.rows).toEqual([
+      {
+        lineage: [{ _model: 'telegram.chat', id: '10' }],
+        refs: {
+          chat: { _model: 'telegram.chat', id: '10' }
+        },
+        value: 'first'
+      },
+      {
+        lineage: [{ _model: 'telegram.chat', id: '20' }],
+        refs: {
+          chat: { _model: 'telegram.chat', id: '20' }
+        },
+        value: 'second'
+      }
+    ]);
+    expect(profiles.process).toHaveBeenCalledTimes(2);
+    expect(await runtime.getRunResult({ runId })).toEqual({
+      dataset: completed.dataset,
+      runId,
+      status: 'completed'
+    });
+  });
+
+  it('rejects unknown profiles before provider calls', async () => {
+    const profiles = profileRunner();
+    profiles.hasProfile = vi.fn(() => false);
+    const runtime = createRuntime({
+      events: events(),
+      profiles,
+      store: createMemoryStore()
+    });
+
+    await expect(runtime.run(request())).resolves.toEqual({
       error: {
         code: 'unknown_profile',
         message: 'LLM profile is not configured: default'
       },
       status: 'rejected'
     });
-    expect(resolverCalls).toBe(0);
-    await expect(
-      runtime.getCurrentArtifact({
-        artifactKey: 'daily',
-        sourceRef: chatSource('10')
-      })
-    ).resolves.toEqual({
-      artifact: null
-    });
+    expect(profiles.process).not.toHaveBeenCalled();
   });
 
-  it('processes a direct run and stores the current artifact by source ref', async () => {
-    const runtime = createRuntime({
-      events: eventRecorder(),
-      profiles: profileRunner({ output: 'summary' }),
-      sources: sourceResolver([readyResolution()]),
-      store: createMemoryStore()
-    });
-
-    const accepted = await runtime.run(payload(), new Date('2026-01-01T00:00:00.000Z'));
-    expect(accepted).toEqual({
-      runId: 'run_1',
-      status: 'accepted'
-    });
-    await expect(runtime.processQueuedRuns(new Date('2026-01-01T00:00:01.000Z'))).resolves.toEqual({
-      processed: 1
-    });
-
-    await expect(
-      runtime.getCurrentArtifact({
-        artifactKey: 'daily',
-        sourceRef: chatSource('10')
-      })
-    ).resolves.toMatchObject({
-      artifact: {
-        artifactKey: 'daily',
-        body: 'summary',
-        contentRefs: [
-          {
-            _model: 'telegram.message',
-            id: '10:100',
-            sourceRef: chatSource('10')
-          }
-        ],
-        profile: 'default',
-        runId: 'run_1',
-        sourceRef: chatSource('10'),
-        sourceRefs: [chatSource('10')],
-        status: 'current'
-      }
-    });
-  });
-
-  it('passes source selectors to the source domain resolver and profile instructions to the provider', async () => {
+  it('fails the whole action when one provider call fails', async () => {
     const profiles = profileRunner();
-    const sources = sourceResolver([readyResolution()]);
+    profiles.process = vi
+      .fn()
+      .mockResolvedValueOnce({ text: 'ok' })
+      .mockRejectedValueOnce(new Error('provider down'));
     const runtime = createRuntime({
-      events: eventRecorder(),
+      events: events(),
       profiles,
-      sources,
       store: createMemoryStore()
     });
 
-    await runtime.run(payload());
-    await runtime.processQueuedRuns();
-
-    expect(sources.calls).toEqual([
-      {
-        sourceSelector: {
-          domain: 'telegram',
-          selector: {
-            chatId: '10',
-            kind: 'recentMessages',
-            limit: 20
-          }
-        }
-      }
-    ]);
-    expect(profiles.calls[0]).toMatchObject({
-      artifactKey: 'daily',
-      instructions: 'Summarize important unread signals.',
-      profile: 'default',
-      sourceRefs: [chatSource('10')]
-    });
-  });
-
-  it('deduplicates triggered dispatch by occurrence idempotency key', async () => {
-    const events = eventRecorder();
-    const runtime = createRuntime({
-      events,
-      profiles: profileRunner(),
-      sources: sourceResolver([readyResolution()]),
-      store: createMemoryStore()
-    });
-    const triggered = {
-      payload: payload(),
-      provenance: {
-        occurrence: {
-          idempotencyKey: 'occurrence-1',
-          registrationKey: 'TriggerRule:daily',
-          scheduledAt: '2026-01-01T00:00:00.000Z'
-        },
-        trigger: {
-          kind: 'trigger' as const,
-          requestId: 'occurrence-1'
-        }
-      }
-    };
-
-    await expect(runtime.runTriggered(triggered)).resolves.toEqual({
-      runId: 'run_1',
-      status: 'accepted'
-    });
-    await expect(runtime.runTriggered(triggered)).resolves.toEqual({
-      runId: 'run_1',
-      status: 'accepted'
-    });
-    await expect(runtime.processQueuedRuns()).resolves.toEqual({
-      processed: 1
-    });
-    expect(events.accepted).toHaveLength(1);
-    expect(events.artifacts[0]).toMatchObject({
-      runId: 'run_1',
-      trigger: triggered.provenance
-    });
-  });
-
-  it('keeps the same run while source readiness moves from pending to ready', async () => {
-    const profiles = profileRunner({ output: 'ready summary' });
-    const runtime = createRuntime({
-      events: eventRecorder(),
-      profiles,
-      sources: sourceResolver([
-        {
-          requestId: 'source-request-1',
-          status: 'pending'
-        },
-        readyResolution()
-      ]),
-      store: createMemoryStore()
-    });
-
-    await expect(runtime.run(payload())).resolves.toEqual({
-      runId: 'run_1',
-      status: 'accepted'
-    });
-    await expect(runtime.processQueuedRuns()).resolves.toEqual({
-      processed: 1
-    });
-    await expect(
-      runtime.getCurrentArtifact({
-        artifactKey: 'daily',
-        sourceRef: chatSource('10')
+    const result = await runtime.run(
+      request({
+        rows: [
+          { lineage: [], refs: {}, value: 'first' },
+          { lineage: [], refs: {}, value: 'second' }
+        ]
       })
-    ).resolves.toEqual({
-      artifact: null
-    });
-    expect(profiles.calls).toHaveLength(0);
-    await expect(runtime.processQueuedRuns()).resolves.toEqual({
-      processed: 1
-    });
-    await expect(
-      runtime.getCurrentArtifact({
-        artifactKey: 'daily',
-        sourceRef: chatSource('10')
-      })
-    ).resolves.toMatchObject({
-      artifact: {
-        body: 'ready summary',
-        runId: 'run_1'
-      }
-    });
-  });
+    );
+    const runId = acceptedRunId(result);
 
-  it('resumes durable accepted and waiting runs after runtime restart', async () => {
-    const store = createMemoryStore();
-    const first = createRuntime({
-      events: eventRecorder(),
-      profiles: profileRunner(),
-      sources: sourceResolver([
-        {
-          requestId: 'source-request-1',
-          status: 'pending'
-        }
-      ]),
-      store
-    });
-
-    await expect(first.run(payload())).resolves.toEqual({
-      runId: 'run_1',
-      status: 'accepted'
-    });
-    await expect(first.processQueuedRuns()).resolves.toEqual({
-      processed: 1
-    });
-
-    const second = createRuntime({
-      events: eventRecorder(),
-      profiles: profileRunner({ output: 'after restart' }),
-      sources: sourceResolver([readyResolution()]),
-      store
-    });
-    await expect(second.processQueuedRuns()).resolves.toEqual({
-      processed: 1
-    });
-    await expect(
-      second.getCurrentArtifact({
-        artifactKey: 'daily',
-        sourceRef: chatSource('10')
-      })
-    ).resolves.toMatchObject({
-      artifact: {
-        body: 'after restart',
-        runId: 'run_1'
-      }
-    });
-    await expect(second.processQueuedRuns()).resolves.toEqual({
-      processed: 0
-    });
-  });
-
-  it('fails source resolution before provider processing', async () => {
-    const events = eventRecorder();
-    const profiles = profileRunner();
-    const runtime = createRuntime({
-      events,
-      profiles,
-      sources: {
-        resolve() {
-          throw new Error('source down');
-        }
+    expect(result.status).toBe('accepted');
+    expect(typeof runId).toBe('string');
+    expect(await expectFailed(runtime, runId)).toEqual({
+      error: {
+        code: 'provider_failed',
+        message: 'provider down'
       },
-      store: createMemoryStore()
+      runId,
+      status: 'failed'
     });
-
-    await runtime.run(payload());
-    await runtime.processQueuedRuns();
-
-    expect(profiles.calls).toHaveLength(0);
-    expect(events.failed).toMatchObject([
-      {
-        failureCode: 'source_resolution_failed',
-        runId: 'run_1'
-      }
-    ]);
+    expect(profiles.process).toHaveBeenCalledTimes(2);
   });
 
-  it('fails zero-source ready resolutions before provider processing', async () => {
-    const events = eventRecorder();
-    const profiles = profileRunner();
+  it('parses JSON output when requested', async () => {
+    const profiles = profileRunner(['{"summary":"ok"}']);
     const runtime = createRuntime({
-      events,
+      events: events(),
       profiles,
-      sources: sourceResolver([
-        readyResolution({
-          contentRefs: [],
-          sourceRefs: []
-        })
-      ]),
       store: createMemoryStore()
     });
 
-    await runtime.run(payload());
-    await runtime.processQueuedRuns();
-
-    expect(profiles.calls).toHaveLength(0);
-    expect(events.failed).toMatchObject([
-      {
-        failureCode: 'source_refs_empty',
-        runId: 'run_1'
-      }
-    ]);
-  });
-
-  it('completes empty ready content without provider processing or artifact update', async () => {
-    const events = eventRecorder();
-    const profiles = profileRunner();
-    const runtime = createRuntime({
-      events,
-      profiles,
-      sources: sourceResolver([
-        readyResolution({
-          contentRefs: [],
-          payload: {
-            messages: []
-          },
-          sourceRefs: [chatSource('10')]
-        })
-      ]),
-      store: createMemoryStore()
-    });
-
-    await runtime.run(payload());
-    await runtime.processQueuedRuns();
-
-    expect(profiles.calls).toHaveLength(0);
-    expect(events.completed).toMatchObject([
-      {
-        contentRefs: [],
-        runId: 'run_1',
-        sourceRefs: [chatSource('10')]
-      }
-    ]);
-    expect(events.artifacts).toEqual([]);
-    await expect(
-      runtime.getCurrentArtifact({
-        artifactKey: 'daily',
-        sourceRef: chatSource('10')
+    const result = await runtime.run(
+      request({
+        output: { format: 'json' },
+        rows: [{ lineage: [], refs: {}, value: 'input' }]
       })
-    ).resolves.toEqual({
-      artifact: null
+    );
+    const runId = acceptedRunId(result);
+
+    expect(result).toMatchObject({
+      status: 'accepted'
     });
-  });
-
-  it('records provider and artifact failures without writing artifacts', async () => {
-    const providerEvents = eventRecorder();
-    const providerRuntime = createRuntime({
-      events: providerEvents,
-      profiles: profileRunner({ failure: new Error('provider down') }),
-      sources: sourceResolver([readyResolution()]),
-      store: createMemoryStore()
-    });
-
-    await providerRuntime.run(payload());
-    await providerRuntime.processQueuedRuns();
-    expect(providerEvents.failed).toMatchObject([
-      {
-        failureCode: 'processing_failed',
-        runId: 'run_1'
-      }
-    ]);
-    await expect(
-      providerRuntime.getCurrentArtifact({
-        artifactKey: 'daily',
-        sourceRef: chatSource('10')
-      })
-    ).resolves.toEqual({
-      artifact: null
-    });
-
-    const artifactEvents = eventRecorder();
-    const artifactRuntime = createRuntime({
-      events: artifactEvents,
-      profiles: profileRunner(),
-      sources: sourceResolver([readyResolution()]),
-      store: failingArtifactStore()
-    });
-    await artifactRuntime.run(payload());
-    await artifactRuntime.processQueuedRuns();
-    expect(artifactEvents.failed).toMatchObject([
-      {
-        failureCode: 'processing_failed',
-        runId: 'run_1'
-      }
-    ]);
-  });
-
-  it('rejects invalid provider output before artifact storage', async () => {
-    const events = eventRecorder();
-    const runtime = createRuntime({
-      events,
-      profiles: profileRunner({
-        output: {
-          body: undefined
-        } as unknown as ProcessingOutput
-      }),
-      sources: sourceResolver([readyResolution()]),
-      store: createMemoryStore()
-    });
-
-    await runtime.run(payload());
-    await runtime.processQueuedRuns();
-
-    expect(events.failed).toMatchObject([
-      {
-        failureCode: 'processing_failed',
-        runId: 'run_1'
-      }
-    ]);
-    await expect(
-      runtime.getCurrentArtifact({
-        artifactKey: 'daily',
-        sourceRef: chatSource('10')
-      })
-    ).resolves.toEqual({
-      artifact: null
-    });
-  });
-
-  it('indexes current artifacts by each associated source ref and replaces newer output', async () => {
-    const runtime = createRuntime({
-      events: eventRecorder(),
-      profiles: profileRunner({ output: 'first summary' }),
-      sources: sourceResolver([
-        readyResolution({
-          sourceRefs: [chatSource('10'), chatSource('20')]
-        }),
-        readyResolution({
-          sourceRefs: [chatSource('10'), chatSource('20')]
-        })
-      ]),
-      store: createMemoryStore()
-    });
-
-    await runtime.run(payload());
-    await runtime.processQueuedRuns();
-    await expect(
-      runtime.listArtifacts({
-        sourceRef: chatSource('20')
-      })
-    ).resolves.toMatchObject({
-      artifacts: [
-        {
-          artifactKey: 'daily',
-          body: 'first summary',
-          sourceRef: chatSource('20'),
-          sourceRefs: [chatSource('10'), chatSource('20')]
-        }
-      ]
-    });
-
-    await runtime.run({
-      ...payload(),
-      instructions: 'Summarize again.'
-    });
-    await runtime.processQueuedRuns();
-    await expect(
-      runtime.getCurrentArtifact({
-        artifactKey: 'daily',
-        sourceRef: chatSource('10')
-      })
-    ).resolves.toMatchObject({
-      artifact: {
-        body: 'first summary',
-        runId: 'run_2'
-      }
-    });
-  });
-
-  it('publishes lifecycle events without raw instructions or source payload', async () => {
-    const events = eventRecorder();
-    const runtime = createRuntime({
-      events,
-      profiles: profileRunner(),
-      sources: sourceResolver([readyResolution()]),
-      store: createMemoryStore()
-    });
-
-    await runtime.run(payload());
-    await runtime.processQueuedRuns();
-
-    expect(events.accepted).toHaveLength(1);
-    expect(events.processing).toHaveLength(1);
-    expect(events.completed).toHaveLength(1);
-    expect(events.artifacts).toHaveLength(1);
-    expect(JSON.stringify(events)).not.toContain('Summarize important unread signals.');
-    expect(JSON.stringify(events)).not.toContain('hello');
-  });
-
-  it('waits for the active processing tick during shutdown', async () => {
-    let finish: (() => void) | undefined;
-    let stopped = false;
-    const stop = startRuntimeLoop({
-      intervalMs: 60_000,
-      runtime: {
-        getCurrentArtifact: () =>
-          Promise.resolve({
-            artifact: null
-          }),
-        listArtifacts: () =>
-          Promise.resolve({
-            artifacts: []
-          }),
-        processQueuedRuns: () =>
-          new Promise((resolve) => {
-            finish = () => {
-              resolve({
-                processed: 0
-              });
-            };
-          }),
-        run: () =>
-          Promise.resolve({
-            runId: 'run_1',
-            status: 'accepted'
-          }),
-        runTriggered: () =>
-          Promise.resolve({
-            runId: 'run_1',
-            status: 'accepted'
-          })
-      }
-    });
-
-    const stopPromise = stop().then(() => {
-      stopped = true;
-    });
-    await nextTick();
-    expect(stopped).toBe(false);
-
-    finish?.();
-    await stopPromise;
-    expect(stopped).toBe(true);
-  });
-});
-
-function payload(): LlmRunPayload {
-  return {
-    artifactKey: 'daily',
-    instructions: 'Summarize important unread signals.',
-    profile: 'default',
-    sourceSelector: {
-      domain: 'telegram',
-      selector: {
-        chatId: '10',
-        kind: 'recentMessages',
-        limit: 20
-      }
-    }
-  };
-}
-
-function readyResolution(snapshot: Partial<SourceSnapshot> = {}): SourceResolution {
-  return {
-    snapshot: {
-      contentRefs: snapshot.contentRefs ?? [
-        {
-          _model: 'telegram.message',
-          id: '10:100',
-          sourceRef: chatSource('10')
-        }
-      ],
-      payload: snapshot.payload ?? {
-        messages: [
+    expect(await expectCompleted(runtime, runId)).toMatchObject({
+      dataset: {
+        rows: [
           {
-            chatId: '10',
-            messageId: '100',
-            text: 'hello'
+            lineage: [],
+            refs: {},
+            value: {
+              summary: 'ok'
+            }
           }
         ]
       },
-      sourceRefs: snapshot.sourceRefs ?? [chatSource('10')]
-    },
-    status: 'ready'
-  };
-}
+      status: 'completed'
+    });
+  });
 
-function profileRunner(
+  it('keeps completed state when processing event publication fails', async () => {
+    const runtime = createRuntime({
+      events: events({
+        runProcessing: vi.fn(() => {
+          throw new Error('nats down');
+        })
+      }),
+      profiles: profileRunner(),
+      store: createMemoryStore()
+    });
+
+    const result = await runtime.run(request());
+    const runId = acceptedRunId(result);
+
+    expect(await expectCompleted(runtime, runId)).toMatchObject({
+      status: 'completed'
+    });
+  });
+
+  it('keeps completed state when completed event publication fails', async () => {
+    const runtime = createRuntime({
+      events: events({
+        runCompleted: vi.fn(() => {
+          throw new Error('nats down');
+        })
+      }),
+      profiles: profileRunner(),
+      store: createMemoryStore()
+    });
+
+    const result = await runtime.run(request());
+    const runId = acceptedRunId(result);
+
+    expect(await expectCompleted(runtime, runId)).toMatchObject({
+      status: 'completed'
+    });
+  });
+
+  it('keeps failed state when failed event publication fails', async () => {
+    const profiles = profileRunner();
+    profiles.process = vi.fn().mockRejectedValue(new Error('provider down'));
+    const runtime = createRuntime({
+      events: events({
+        runFailed: vi.fn(() => {
+          throw new Error('nats down');
+        })
+      }),
+      profiles,
+      store: createMemoryStore()
+    });
+
+    const result = await runtime.run(request());
+    const runId = acceptedRunId(result);
+
+    expect(await expectFailed(runtime, runId)).toMatchObject({
+      error: {
+        code: 'provider_failed',
+        message: 'provider down'
+      },
+      status: 'failed'
+    });
+  });
+
+  it('recovers stored accepted runs after runtime restart', async () => {
+    const store = createMemoryStore();
+    const run = await store.createRun({
+      inputDataset: {
+        rows: [{ lineage: [], refs: {}, value: 'input' }]
+      },
+      inputMetadata: inputMetadata(1, 'json'),
+      nodeId: 'summary',
+      now: new Date('2026-06-21T00:00:00.000Z'),
+      pipelineRunId: 'pipeline-run-1',
+      profile: 'default',
+      prompt: 'Summarize.',
+      status: 'accepted'
+    });
+    const profiles = profileRunner(['{"summary":"recovered"}']);
+    const runCompleted = vi.fn();
+    const runProcessing = vi.fn();
+    const runtime = createRuntime({
+      events: events({ runCompleted, runProcessing }),
+      profiles,
+      store
+    });
+
+    await expect(runtime.recoverActiveRuns()).resolves.toEqual({
+      failed: 0,
+      started: 1
+    });
+
+    await expect(expectCompleted(runtime, run.runId)).resolves.toMatchObject({
+      dataset: {
+        rows: [
+          {
+            lineage: [],
+            refs: {},
+            value: {
+              summary: 'recovered'
+            }
+          }
+        ]
+      },
+      status: 'completed'
+    });
+    expect(profiles.process).toHaveBeenCalledTimes(1);
+    expect(runProcessing).toHaveBeenCalledWith(
+      expect.objectContaining({ runId: run.runId, status: 'processing' })
+    );
+    expect(runCompleted).toHaveBeenCalledWith(
+      expect.objectContaining({ runId: run.runId, status: 'completed' })
+    );
+  });
+
+  it('claims recovered accepted runs once across runtime instances', async () => {
+    const baseStore = createMemoryStore();
+    const store = racingCandidateStore(baseStore);
+    const run = await baseStore.createRun({
+      inputDataset: {
+        rows: [{ lineage: [], refs: {}, value: 'input' }]
+      },
+      inputMetadata: inputMetadata(1, 'text'),
+      nodeId: 'summary',
+      now: new Date('2026-06-21T00:00:00.000Z'),
+      pipelineRunId: 'pipeline-run-1',
+      profile: 'default',
+      prompt: 'Summarize.',
+      status: 'accepted'
+    });
+    let finish: (() => void) | undefined;
+    const profiles = profileRunner();
+    profiles.process = vi.fn(
+      () =>
+        new Promise<{ text: string }>((resolve) => {
+          finish = () => resolve({ text: 'done' });
+        })
+    );
+    const first = createRuntime({
+      events: events(),
+      profiles,
+      store
+    });
+    const second = createRuntime({
+      events: events(),
+      profiles,
+      store
+    });
+
+    const results = await Promise.all([
+      first.recoverActiveRuns(new Date('2026-06-21T00:00:01.000Z')),
+      second.recoverActiveRuns(new Date('2026-06-21T00:00:01.000Z'))
+    ]);
+
+    expect(results.reduce((sum, result) => sum + result.started, 0)).toBe(1);
+    expect(results.reduce((sum, result) => sum + result.failed, 0)).toBe(0);
+    await delay();
+    expect(profiles.process).toHaveBeenCalledTimes(1);
+
+    finish?.();
+    await expect(expectCompleted(first, run.runId)).resolves.toMatchObject({
+      status: 'completed'
+    });
+  });
+
+  it('does not recover runs already active in the current process', async () => {
+    let finish: (() => void) | undefined;
+    const profiles = profileRunner();
+    profiles.process = vi.fn(
+      () =>
+        new Promise<{ text: string }>((resolve) => {
+          finish = () => resolve({ text: 'done' });
+        })
+    );
+    const runtime = createRuntime({
+      events: events(),
+      profiles,
+      store: createMemoryStore()
+    });
+
+    const result = await runtime.run(request());
+    const runId = acceptedRunId(result);
+
+    await expect(runtime.recoverActiveRuns()).resolves.toEqual({
+      failed: 0,
+      started: 0
+    });
+    expect(profiles.process).toHaveBeenCalledTimes(1);
+
+    finish?.();
+    await expect(expectCompleted(runtime, runId)).resolves.toMatchObject({
+      status: 'completed'
+    });
+  });
+
+  it('fails active stored runs whose profile no longer exists', async () => {
+    const store = createMemoryStore();
+    const run = await store.createRun({
+      inputDataset: {
+        rows: [{ lineage: [], refs: {}, value: 'input' }]
+      },
+      inputMetadata: inputMetadata(1, 'text'),
+      nodeId: 'summary',
+      now: new Date('2026-06-21T00:00:00.000Z'),
+      pipelineRunId: 'pipeline-run-1',
+      profile: 'deleted',
+      prompt: 'Summarize.',
+      status: 'processing'
+    });
+    const profiles = profileRunner();
+    profiles.hasProfile = vi.fn(() => false);
+    const runtime = createRuntime({
+      claimStaleMs: 1_000,
+      events: events(),
+      profiles,
+      store
+    });
+
+    await expect(runtime.recoverActiveRuns(new Date('2026-06-21T00:00:02.000Z'))).resolves.toEqual({
+      failed: 1,
+      started: 0
+    });
+
+    await expect(runtime.getRunResult({ runId: run.runId })).resolves.toEqual({
+      error: {
+        code: 'unknown_profile',
+        message: 'LLM profile is not configured: deleted'
+      },
+      runId: run.runId,
+      status: 'failed'
+    });
+    expect(profiles.process).not.toHaveBeenCalled();
+  });
+});
+
+function request(
   input: {
-    failure?: Error | undefined;
-    output?: ProcessingOutput | string | undefined;
-    profiles?: string[] | undefined;
+    output?: { format: 'json' | 'text' } | undefined;
+    rows?: {
+      lineage: { _model: string; id: string }[];
+      refs: Record<string, { _model: string; id: string }>;
+      value: JsonValue;
+    }[];
   } = {}
-): ProfileRunner & { calls: ProcessingInput[] } {
-  const profiles = new Set(input.profiles ?? ['default']);
-  const calls: ProcessingInput[] = [];
+) {
   return {
-    calls,
-    hasProfile(profile) {
-      return profiles.has(profile);
+    input: {
+      rows: input.rows ?? [{ lineage: [], refs: {}, value: 'hello' }]
     },
-    process(request) {
-      calls.push(request);
-      if (input.failure !== undefined) {
-        return Promise.reject(input.failure);
-      }
-      if (typeof input.output === 'object') {
-        return Promise.resolve(input.output);
-      }
+    node: {
+      id: 'summary',
+      runId: 'pipeline-run-1'
+    },
+    with: {
+      ...(input.output === undefined ? {} : { output: input.output }),
+      profile: 'default',
+      prompt: 'Summarize.'
+    }
+  };
+}
+
+function profileRunner(outputs: readonly string[] = ['summary']): ProfileRunner {
+  let index = 0;
+  return {
+    hasProfile: vi.fn(() => true),
+    process: vi.fn(() => {
+      const text = outputs[index] ?? outputs.at(-1) ?? '';
+      index += 1;
       return Promise.resolve({
-        body: input.output ?? 'summary'
+        text
       });
-    }
+    })
   };
 }
 
-function sourceResolver(
-  resolutions: SourceResolution[]
-): SourceResolver & { calls: Parameters<SourceResolver['resolve']>[0][] } {
-  const calls: Parameters<SourceResolver['resolve']>[0][] = [];
+function events(overrides: Partial<EventPublisher> = {}): EventPublisher {
   return {
-    calls,
-    resolve(input) {
-      calls.push(input);
-      const next = resolutions.shift();
-      if (next === undefined) {
-        throw new Error('Source resolver was called too many times');
-      }
-      return Promise.resolve(next);
-    }
+    runAccepted: vi.fn(),
+    runCompleted: vi.fn(),
+    runFailed: vi.fn(),
+    runProcessing: vi.fn(),
+    ...overrides
   };
 }
 
-function eventRecorder(): EventPublisher & {
-  accepted: Parameters<EventPublisher['runAccepted']>[0][];
-  artifacts: Parameters<EventPublisher['artifactUpdated']>[0][];
-  completed: Parameters<EventPublisher['runCompleted']>[0][];
-  failed: Parameters<EventPublisher['runFailed']>[0][];
-  processing: Parameters<EventPublisher['runProcessing']>[0][];
-  waiting: Parameters<EventPublisher['runWaitingForSource']>[0][];
-} {
-  const accepted: Parameters<EventPublisher['runAccepted']>[0][] = [];
-  const artifacts: Parameters<EventPublisher['artifactUpdated']>[0][] = [];
-  const completed: Parameters<EventPublisher['runCompleted']>[0][] = [];
-  const failed: Parameters<EventPublisher['runFailed']>[0][] = [];
-  const processing: Parameters<EventPublisher['runProcessing']>[0][] = [];
-  const waiting: Parameters<EventPublisher['runWaitingForSource']>[0][] = [];
-  return {
-    accepted,
-    artifactUpdated: (event) => {
-      artifacts.push(event);
-    },
-    artifacts,
-    completed,
-    failed,
-    processing,
-    runAccepted: (event) => {
-      accepted.push(event);
-    },
-    runCompleted: (event) => {
-      completed.push(event);
-    },
-    runFailed: (event) => {
-      failed.push(event);
-    },
-    runProcessing: (event) => {
-      processing.push(event);
-    },
-    runWaitingForSource: (event) => {
-      waiting.push(event);
-    },
-    waiting
-  };
-}
-
-function chatSource(id: string): SourceRef {
-  return {
-    _model: 'telegram.chat',
-    id
-  };
-}
-
-function failingArtifactStore(): Store {
-  const store = createMemoryStore();
+function racingCandidateStore(store: Store): Store {
+  let listed = 0;
+  let release: () => void = () => undefined;
+  const bothListed = new Promise<void>((resolve) => {
+    release = resolve;
+  });
   return {
     ...store,
-    upsertArtifacts() {
-      throw new Error('artifact store failed');
+    async listActiveRuns() {
+      const snapshot = await store.listActiveRuns();
+      listed += 1;
+      if (listed === 2) {
+        release();
+      }
+      await bothListed;
+      return snapshot;
     }
   };
 }
 
-function nextTick(): Promise<void> {
+function acceptedRunId(result: Awaited<ReturnType<Runtime['run']>>): string {
+  if (result.status !== 'accepted') {
+    throw new Error(`Expected accepted run result: ${JSON.stringify(result)}`);
+  }
+  return result.runId;
+}
+
+async function expectCompleted(runtime: Runtime, runId: string) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const result = await runtime.getRunResult({ runId });
+    if (result?.status === 'completed') {
+      return result;
+    }
+    await delay();
+  }
+  throw new Error(`LLM run did not complete: ${runId}`);
+}
+
+async function expectFailed(runtime: Runtime, runId: string) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const result = await runtime.getRunResult({ runId });
+    if (result?.status === 'failed') {
+      return result;
+    }
+    await delay();
+  }
+  throw new Error(`LLM run did not fail: ${runId}`);
+}
+
+function delay(): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, 0);
   });

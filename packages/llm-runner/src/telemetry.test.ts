@@ -2,117 +2,115 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@agentg/framework', () => ({
   incrementTelemetryCounter: vi.fn(),
+  recordTelemetryHistogram: vi.fn(),
   setTelemetryGauge: vi.fn(),
-  timeTelemetrySpan: vi.fn((_input: unknown, operation: () => Promise<unknown>) => operation())
+  telemetryEnabled: vi.fn(() => true)
 }));
 
-import { incrementTelemetryCounter, setTelemetryGauge, timeTelemetrySpan } from '@agentg/framework';
 import {
-  recordArtifactsUpdated,
-  recordRunRequest,
+  incrementTelemetryCounter,
+  recordTelemetryHistogram,
+  setTelemetryGauge,
+  telemetryEnabled
+} from '@agentg/framework';
+import {
+  recordCurrentStats,
+  recordRowsProcessed,
+  recordRunDuration,
+  recordRunStarted,
   recordStats,
-  timeRun,
-  timeStage,
-  timeWorker
+  timeProviderCall
 } from './telemetry.js';
 
 describe('LLM runner telemetry', () => {
   beforeEach(() => {
     vi.mocked(incrementTelemetryCounter).mockReset();
+    vi.mocked(recordTelemetryHistogram).mockReset();
     vi.mocked(setTelemetryGauge).mockReset();
-    vi.mocked(timeTelemetrySpan).mockClear();
+    vi.mocked(telemetryEnabled).mockReset();
+    vi.mocked(telemetryEnabled).mockReturnValue(true);
   });
 
-  it('records bounded current-state gauges for all run statuses', () => {
+  it('records current run gauges for every status', () => {
     recordStats({
-      artifactCount: 5,
-      oldestProcessableRunAgeSeconds: 60,
-      processableRunCount: 2,
       runStatusCounts: [
-        {
-          count: 2,
-          status: 'accepted'
-        },
-        {
-          count: 1,
-          status: 'failed'
-        }
+        { count: 2, status: 'processing' },
+        { count: 1, status: 'failed' }
       ]
     });
 
-    expect(setTelemetryGauge).toHaveBeenCalledWith('llm_runner.processable_runs', 2);
-    expect(setTelemetryGauge).toHaveBeenCalledWith('llm_runner.oldest_processable_age', 60);
-    expect(setTelemetryGauge).toHaveBeenCalledWith('llm_runner.artifacts', 5);
     expect(setTelemetryGauge).toHaveBeenCalledWith('llm_runner.runs', 2, {
+      'llm.run.status': 'processing'
+    });
+    expect(setTelemetryGauge).toHaveBeenCalledWith('llm_runner.runs', 0, {
       'llm.run.status': 'accepted'
     });
     expect(setTelemetryGauge).toHaveBeenCalledWith('llm_runner.runs', 0, {
-      'llm.run.status': 'processing'
+      'llm.run.status': 'cancelled'
     });
 
     const calls = JSON.stringify(vi.mocked(setTelemetryGauge).mock.calls);
     expect(calls).not.toContain('run_');
-    expect(calls).not.toContain('profile');
-    expect(calls).not.toContain('telegram.message');
+    expect(calls).not.toContain('pipelineRunId');
+    expect(calls).not.toContain('prompt');
   });
 
-  it('records run request, artifact, worker, run, and stage telemetry', async () => {
-    recordRunRequest({
-      source: 'triggered',
-      status: 'created'
+  it('records run and row counters with profile as the only dynamic business label', () => {
+    recordRunStarted('openrouterFree');
+    recordRowsProcessed('openrouterFree', 'completed', 3);
+
+    expect(incrementTelemetryCounter).toHaveBeenCalledWith('llm_runner.runs.started', 1, {
+      'llm.profile': 'openrouterFree'
     });
-    recordArtifactsUpdated(3);
-    await expect(timeWorker('process_queued', () => Promise.resolve('worker'))).resolves.toBe(
-      'worker'
+    expect(incrementTelemetryCounter).toHaveBeenCalledWith('llm_runner.rows.processed', 3, {
+      'llm.profile': 'openrouterFree',
+      'llm.run.result': 'completed'
+    });
+  });
+
+  it('records provider and run duration with bounded result labels', async () => {
+    await expect(
+      timeProviderCall('openrouterFree', 'json', () => Promise.resolve({ text: '{"ok":true}' }))
+    ).resolves.toEqual({ text: '{"ok":true}' });
+    recordRunDuration('openrouterFree', 'completed', 0);
+
+    expect(recordTelemetryHistogram).toHaveBeenCalledWith(
+      'llm_runner.provider.duration',
+      expect.any(Number),
+      {
+        'llm.output.format': 'json',
+        'llm.profile': 'openrouterFree',
+        'llm.provider.result': 'completed'
+      },
+      {
+        description: 'LLM provider call duration by profile, output format, and result.',
+        unit: 's'
+      }
     );
-    await expect(timeRun(() => Promise.resolve('run'))).resolves.toBe('run');
-    await expect(timeStage('profile_processing', () => Promise.resolve('stage'))).resolves.toBe(
-      'stage'
+    expect(recordTelemetryHistogram).toHaveBeenCalledWith(
+      'llm_runner.run.duration',
+      expect.any(Number),
+      {
+        'llm.profile': 'openrouterFree',
+        'llm.run.result': 'completed'
+      },
+      {
+        description: 'LLM action run processing duration by profile and terminal result.',
+        unit: 's'
+      }
+    );
+  });
+
+  it('does not read storage stats when telemetry is disabled', async () => {
+    vi.mocked(telemetryEnabled).mockReturnValue(false);
+    const read = vi.fn(() =>
+      Promise.resolve({
+        runStatusCounts: []
+      })
     );
 
-    expect(incrementTelemetryCounter).toHaveBeenCalledWith('llm_runner.run_requests', 1, {
-      'llm.run.request_source': 'triggered',
-      'llm.run.request_status': 'created'
-    });
-    expect(incrementTelemetryCounter).toHaveBeenCalledWith('llm_runner.artifacts.updated', 3);
-    expect(timeTelemetrySpan).toHaveBeenCalledWith(
-      {
-        attributes: {
-          'llm.runner.operation': 'process_queued'
-        },
-        metric: {
-          attributes: {
-            'llm.runner.operation': 'process_queued'
-          },
-          name: 'llm_runner.worker.duration'
-        },
-        name: 'llm_runner.process_queued'
-      },
-      expect.any(Function)
-    );
-    expect(timeTelemetrySpan).toHaveBeenCalledWith(
-      {
-        metric: {
-          name: 'llm_runner.run.duration'
-        },
-        name: 'llm_runner.process_run'
-      },
-      expect.any(Function)
-    );
-    expect(timeTelemetrySpan).toHaveBeenCalledWith(
-      {
-        attributes: {
-          'llm.runner.stage': 'profile_processing'
-        },
-        metric: {
-          attributes: {
-            'llm.runner.stage': 'profile_processing'
-          },
-          name: 'llm_runner.stage.duration'
-        },
-        name: 'llm_runner.profile_processing'
-      },
-      expect.any(Function)
-    );
+    await recordCurrentStats(read);
+
+    expect(read).not.toHaveBeenCalled();
   });
 });

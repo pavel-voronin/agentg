@@ -1,23 +1,18 @@
+import type { DatasetRow } from '@agentg/data';
 import type { JsonValue } from '@agentg/framework';
 
-import type { ContentRef, SourceRef } from '../schema.js';
-
 export type ProcessingInput = Readonly<{
-  artifactKey: string;
-  contentRefs: readonly ContentRef[];
-  instructions: string;
-  payload: JsonValue;
   profile: string;
-  sourceRefs: readonly SourceRef[];
+  prompt: string;
+  row: DatasetRow;
 }>;
 
 export type ProcessingOutput = Readonly<{
-  body: string;
   payload?: JsonValue | undefined;
-  title?: string | undefined;
+  text: string;
 }>;
 
 export type ProfileRunner = {
-  hasProfile(profile: string): boolean;
-  process(input: ProcessingInput): Promise<ProcessingOutput>;
+  hasProfile: (profile: string) => boolean;
+  process: (input: ProcessingInput) => Promise<ProcessingOutput>;
 };

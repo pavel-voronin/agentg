@@ -24,7 +24,6 @@ describe('OpenAI-compatible profile runner', () => {
     });
 
     await expect(runner.process(processingRequest())).resolves.toEqual({
-      body: 'summary',
       payload: {
         choices: [
           {
@@ -33,7 +32,8 @@ describe('OpenAI-compatible profile runner', () => {
             }
           }
         ]
-      }
+      },
+      text: 'summary'
     });
 
     const call = fetchCall(fetchMock);
@@ -61,21 +61,11 @@ describe('OpenAI-compatible profile runner', () => {
       throw new Error('Expected provider user message');
     }
     expect(JSON.parse(userMessage.content)).toEqual({
-      contentRefs: [
-        {
-          _model: 'telegram.message',
-          id: '10:100'
-        }
-      ],
-      payload: {
-        messages: ['hello']
+      lineage: [{ _model: 'telegram.chat', id: '10' }],
+      refs: {
+        chat: { _model: 'telegram.chat', id: '10' }
       },
-      sourceRefs: [
-        {
-          _model: 'telegram.chat',
-          id: '10'
-        }
-      ]
+      value: 'hello'
     });
   });
 
@@ -96,7 +86,7 @@ describe('OpenAI-compatible profile runner', () => {
     });
 
     await expect(runner.process(processingRequest())).resolves.toMatchObject({
-      body: 'retry summary'
+      text: 'retry summary'
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -121,28 +111,57 @@ describe('OpenAI-compatible profile runner', () => {
       'LLM provider response has no message content'
     );
   });
+
+  it('reports provider HTTP status before parsing provider body as JSON', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('<html>bad gateway</html>', { status: 502 })
+    );
+    const runner = createConfiguredProfileRunner({
+      profiles: {
+        default: {
+          adapter: 'openai-compatible',
+          baseUrl: 'http://provider.test/v1',
+          model: 'gpt-test'
+        }
+      }
+    });
+
+    await expect(runner.process(processingRequest())).rejects.toThrow(
+      'LLM provider returned HTTP 502: <html>bad gateway</html>'
+    );
+  });
+
+  it('rejects profile calls with unresolved secret references', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch');
+    const runner = createConfiguredProfileRunner({
+      profiles: {
+        default: {
+          adapter: 'openai-compatible',
+          apiKeyEnv: 'TEST_LLM_API_KEY',
+          baseUrl: 'http://provider.test/v1',
+          model: 'gpt-test'
+        }
+      }
+    });
+
+    await expect(runner.process(processingRequest())).rejects.toThrow(
+      'LLM profile secret is not configured: TEST_LLM_API_KEY'
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });
 
 function processingRequest() {
   return {
-    artifactKey: 'daily',
-    contentRefs: [
-      {
-        _model: 'telegram.message',
-        id: '10:100'
-      }
-    ],
-    instructions: 'Summarize only these messages.',
-    payload: {
-      messages: ['hello']
-    },
     profile: 'default',
-    sourceRefs: [
-      {
-        _model: 'telegram.chat',
-        id: '10'
-      }
-    ]
+    prompt: 'Summarize only these messages.',
+    row: {
+      lineage: [{ _model: 'telegram.chat', id: '10' }],
+      refs: {
+        chat: { _model: 'telegram.chat', id: '10' }
+      },
+      value: 'hello'
+    }
   };
 }
 

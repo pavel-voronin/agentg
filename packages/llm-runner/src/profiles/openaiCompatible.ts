@@ -43,6 +43,10 @@ async function runOpenAiCompatibleAttempt(
   profile: ProfileConfig,
   request: ProcessingInput
 ): Promise<ProcessingOutput> {
+  if (profile.apiKeyEnv !== undefined && profile.apiKey === undefined) {
+    throw new Error(`LLM profile secret is not configured: ${profile.apiKeyEnv}`);
+  }
+
   const controller = new AbortController();
   const timeout = setTimeout(() => {
     controller.abort();
@@ -54,15 +58,11 @@ async function runOpenAiCompatibleAttempt(
       body: JSON.stringify({
         messages: [
           {
-            content: request.instructions,
+            content: request.prompt,
             role: 'system'
           },
           {
-            content: JSON.stringify({
-              contentRefs: request.contentRefs,
-              payload: request.payload,
-              sourceRefs: request.sourceRefs
-            }),
+            content: JSON.stringify(request.row),
             role: 'user'
           }
         ],
@@ -78,12 +78,13 @@ async function runOpenAiCompatibleAttempt(
       signal: controller.signal
     });
 
-    const body = await response.json();
+    const rawBody = await response.text();
     if (!response.ok) {
-      throw new Error(`LLM provider returned HTTP ${String(response.status)}`);
+      throw new Error(providerHttpError(response.status, rawBody));
     }
+    const body = parseProviderJson(rawBody);
     return {
-      body: extractContent(body),
+      text: extractContent(body),
       payload: toJsonValue(body)
     };
   } finally {
@@ -93,6 +94,63 @@ async function runOpenAiCompatibleAttempt(
 
 function endpoint(baseUrl: string): string {
   return new URL('chat/completions', baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`).toString();
+}
+
+function providerHttpError(status: number, rawBody: string): string {
+  const summary = bodySummary(rawBody);
+  return summary.length === 0
+    ? `LLM provider returned HTTP ${String(status)}`
+    : `LLM provider returned HTTP ${String(status)}: ${summary}`;
+}
+
+function parseProviderJson(rawBody: string): unknown {
+  try {
+    return JSON.parse(rawBody) as unknown;
+  } catch (error) {
+    throw new Error(
+      `LLM provider response is not valid JSON: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+      { cause: error }
+    );
+  }
+}
+
+function bodySummary(rawBody: string): string {
+  const trimmed = rawBody.trim();
+  if (trimmed.length === 0) {
+    return '';
+  }
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    const message = providerErrorMessage(parsed);
+    return bounded(message ?? JSON.stringify(parsed));
+  } catch {
+    return bounded(trimmed);
+  }
+}
+
+function providerErrorMessage(value: unknown): string | undefined {
+  if (typeof value !== 'object' || value === null) {
+    return undefined;
+  }
+  const error = (value as { error?: unknown }).error;
+  if (typeof error === 'string') {
+    return error;
+  }
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    typeof (error as { message?: unknown }).message === 'string'
+  ) {
+    return (error as { message: string }).message;
+  }
+  return undefined;
+}
+
+function bounded(value: string): string {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  return normalized.length <= 300 ? normalized : `${normalized.slice(0, 300)}...`;
 }
 
 function extractContent(value: unknown): string {

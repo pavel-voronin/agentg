@@ -8,6 +8,20 @@
       "when": 1800000020000,
       "tag": "0000_llmRunner",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1800000040000,
+      "tag": "0001_llmRunnerActionRuns",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1800000060000,
+      "tag": "0002_llmRunnerInputDataset",
+      "breakpoints": true
     }
   ]
 }

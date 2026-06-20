@@ -1,18 +1,21 @@
+import type { Dataset } from '@agentg/data';
+import type { JsonValue } from '@agentg/framework';
+
 import type { RunStatus } from '../database/schema.js';
-import type { LlmRunPayload, TriggerProvenance } from '../schema.js';
-import type { SourceSnapshot } from '../sources/types.js';
 
 export type RunRecord = Readonly<{
-  artifactKey: string;
   createdAt: Date;
-  deduplicationKey?: string | undefined;
   failureCode?: string | undefined;
   failureMessage?: string | undefined;
-  payload: LlmRunPayload;
+  inputDataset: Dataset;
+  inputMetadata: JsonValue;
+  nodeId: string;
+  outputDataset?: Dataset | undefined;
+  outputMetadata?: JsonValue | undefined;
+  pipelineRunId: string;
   profile: string;
+  prompt: string;
   runId: string;
-  sourceSnapshot?: SourceSnapshot | undefined;
   status: RunStatus;
-  trigger?: TriggerProvenance | undefined;
   updatedAt: Date;
 }>;

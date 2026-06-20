@@ -1,33 +1,42 @@
+import { performance } from 'node:perf_hooks';
+
 import {
   incrementTelemetryCounter,
+  recordTelemetryHistogram,
   setTelemetryGauge,
-  timeTelemetrySpan,
+  telemetryEnabled,
   type TelemetryAttributes
 } from '@agentg/framework';
 
-import { runStatuses } from './database/schema.js';
-import type { RuntimeStats } from './store.js';
+import { runStatuses, type RunStatus } from './database/schema.js';
+import type { ProcessingOutput } from './profiles/types.js';
+import type { Stats } from './store.js';
 
-type RequestSource = 'direct' | 'triggered';
-type RequestStatus = 'created' | 'deduplicated' | 'rejected';
-type Stage = 'artifact_storage' | 'profile_processing' | 'source_resolution';
-type WorkerOperation = 'process_queued';
+type OutputFormat = 'json' | 'text';
+type ProviderResult = 'completed' | 'failed';
+type RunResult = 'completed' | 'failed';
 
-const METRIC_RUNS = 'llm_runner.runs';
-const METRIC_PROCESSABLE_RUNS = 'llm_runner.processable_runs';
-const METRIC_OLDEST_PROCESSABLE_AGE = 'llm_runner.oldest_processable_age';
-const METRIC_ARTIFACTS = 'llm_runner.artifacts';
-const METRIC_RUN_REQUESTS = 'llm_runner.run_requests';
-const METRIC_ARTIFACTS_UPDATED = 'llm_runner.artifacts.updated';
-const METRIC_WORKER_DURATION = 'llm_runner.worker.duration';
+const METRIC_PROVIDER_DURATION = 'llm_runner.provider.duration';
+const METRIC_ROWS_PROCESSED = 'llm_runner.rows.processed';
 const METRIC_RUN_DURATION = 'llm_runner.run.duration';
-const METRIC_STAGE_DURATION = 'llm_runner.stage.duration';
+const METRIC_RUNS = 'llm_runner.runs';
+const METRIC_RUNS_STARTED = 'llm_runner.runs.started';
 
-export function recordStats(stats: RuntimeStats): void {
-  setTelemetryGauge(METRIC_PROCESSABLE_RUNS, stats.processableRunCount);
-  setTelemetryGauge(METRIC_OLDEST_PROCESSABLE_AGE, stats.oldestProcessableRunAgeSeconds);
-  setTelemetryGauge(METRIC_ARTIFACTS, stats.artifactCount);
-  const counts = new Map(stats.runStatusCounts.map((item) => [item.status, item.count]));
+export function recordRunStarted(profile: string): void {
+  incrementTelemetryCounter(METRIC_RUNS_STARTED, 1, {
+    'llm.profile': profile
+  });
+}
+
+export function recordRowsProcessed(profile: string, result: RunResult, count: number): void {
+  incrementTelemetryCounter(METRIC_ROWS_PROCESSED, count, {
+    'llm.profile': profile,
+    'llm.run.result': result
+  });
+}
+
+export function recordStats(stats: Stats): void {
+  const counts = new Map(stats.runStatusCounts.map((row) => [row.status, row.count]));
   for (const status of runStatuses) {
     setTelemetryGauge(METRIC_RUNS, counts.get(status) ?? 0, {
       'llm.run.status': status
@@ -35,59 +44,80 @@ export function recordStats(stats: RuntimeStats): void {
   }
 }
 
-export function recordRunRequest(input: { source: RequestSource; status: RequestStatus }): void {
-  incrementTelemetryCounter(METRIC_RUN_REQUESTS, 1, {
-    'llm.run.request_source': input.source,
-    'llm.run.request_status': input.status
-  });
+export async function recordCurrentStats(read: () => Promise<Stats>): Promise<void> {
+  if (!telemetryEnabled()) {
+    return;
+  }
+  recordStats(await read());
 }
 
-export function recordArtifactsUpdated(count: number): void {
-  incrementTelemetryCounter(METRIC_ARTIFACTS_UPDATED, count);
+export function recordRunDuration(
+  profile: string,
+  result: RunResult,
+  startedAt: number,
+  error?: unknown
+): void {
+  recordTelemetryHistogram(
+    METRIC_RUN_DURATION,
+    Math.max(0, performance.now() - startedAt) / 1000,
+    {
+      'llm.profile': profile,
+      'llm.run.result': result,
+      ...errorAttributes(error)
+    },
+    {
+      description: 'LLM action run processing duration by profile and terminal result.',
+      unit: 's'
+    }
+  );
 }
 
-export function timeWorker<T>(operation: WorkerOperation, work: () => Promise<T>): Promise<T> {
-  const attributes: TelemetryAttributes = {
-    'llm.runner.operation': operation
+export async function timeProviderCall(
+  profile: string,
+  format: OutputFormat,
+  work: () => Promise<ProcessingOutput>
+): Promise<ProcessingOutput> {
+  const startedAt = performance.now();
+  try {
+    const result = await work();
+    recordProviderDuration(profile, format, 'completed', startedAt);
+    return result;
+  } catch (error) {
+    recordProviderDuration(profile, format, 'failed', startedAt, error);
+    throw error;
+  }
+}
+
+function recordProviderDuration(
+  profile: string,
+  format: OutputFormat,
+  result: ProviderResult,
+  startedAt: number,
+  error?: unknown
+): void {
+  recordTelemetryHistogram(
+    METRIC_PROVIDER_DURATION,
+    Math.max(0, performance.now() - startedAt) / 1000,
+    {
+      'llm.output.format': format,
+      'llm.profile': profile,
+      'llm.provider.result': result,
+      ...errorAttributes(error)
+    },
+    {
+      description: 'LLM provider call duration by profile, output format, and result.',
+      unit: 's'
+    }
+  );
+}
+
+function errorAttributes(error: unknown): TelemetryAttributes {
+  if (error === undefined) {
+    return {};
+  }
+  return {
+    'error.type': error instanceof Error && error.name.length > 0 ? error.name : typeof error
   };
-  return timeTelemetrySpan(
-    {
-      attributes,
-      metric: {
-        attributes,
-        name: METRIC_WORKER_DURATION
-      },
-      name: `llm_runner.${operation}`
-    },
-    work
-  );
 }
 
-export function timeRun<T>(work: () => Promise<T>): Promise<T> {
-  return timeTelemetrySpan(
-    {
-      metric: {
-        name: METRIC_RUN_DURATION
-      },
-      name: 'llm_runner.process_run'
-    },
-    work
-  );
-}
-
-export function timeStage<T>(stage: Stage, work: () => Promise<T>): Promise<T> {
-  const attributes: TelemetryAttributes = {
-    'llm.runner.stage': stage
-  };
-  return timeTelemetrySpan(
-    {
-      attributes,
-      metric: {
-        attributes,
-        name: METRIC_STAGE_DURATION
-      },
-      name: `llm_runner.${stage}`
-    },
-    work
-  );
-}
+export type { RunStatus };
