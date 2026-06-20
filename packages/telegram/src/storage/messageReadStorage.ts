@@ -1,7 +1,7 @@
-import { and, asc, desc, eq, gte, ilike, lt, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, ilike, inArray, lt, or, sql } from 'drizzle-orm';
 
 import type { Database } from '../database/client.js';
-import { telegramMessages } from '../database/schema.js';
+import { telegramChats, telegramMessages } from '../database/schema.js';
 import {
   parseTelegramInt53,
   type MessageOwner,
@@ -28,6 +28,15 @@ export type MessageSearchRead = {
   chatId?: string | undefined;
   limit: number;
   query: string;
+};
+
+export type MessageListRead = {
+  chatId?: string | undefined;
+  endAt?: Date | string | undefined;
+  limit: number;
+  messageIds?: readonly string[] | undefined;
+  readState?: 'read' | 'unread' | undefined;
+  startAt?: Date | string | undefined;
 };
 
 export type MessageRangeCountInput = {
@@ -153,6 +162,39 @@ export async function searchMessageRows(
   return toMessageStorageRows(rows);
 }
 
+export async function readMessageRows(
+  database: Database,
+  input: MessageListRead
+): Promise<MessageStorageRow[]> {
+  if (input.messageIds?.length === 0) {
+    return [];
+  }
+  const startAt = dateBound(input.startAt);
+  const endAt = dateBound(input.endAt);
+  if (startAt !== undefined && endAt !== undefined && startAt >= endAt) {
+    return [];
+  }
+
+  const where = andSql(
+    input.chatId === undefined ? undefined : eq(telegramMessages.chatId, input.chatId),
+    input.messageIds === undefined
+      ? undefined
+      : inArray(telegramMessages.id, [...input.messageIds]),
+    startAt === undefined ? undefined : gte(telegramMessages.date, startAt),
+    endAt === undefined ? undefined : lt(telegramMessages.date, endAt),
+    messageReadStateWhere(input.readState)
+  );
+
+  const rows = await database
+    .select(readMessageSelection())
+    .from(telegramMessages)
+    .leftJoin(telegramChats, eq(telegramChats.id, telegramMessages.chatId))
+    .where(where)
+    .orderBy(desc(telegramMessages.date), sql`${telegramMessages.id}::bigint desc`)
+    .limit(input.limit);
+  return toMessageStorageRows(rows);
+}
+
 export async function readMessageRowsByRefs(
   database: Database,
   refs: readonly {
@@ -228,4 +270,30 @@ export async function readPageEndAt(
 
 function nextHistorySecond(date: Date): Date {
   return new Date(Math.floor(date.getTime() / HISTORY_TICK_MS) * HISTORY_TICK_MS + HISTORY_TICK_MS);
+}
+
+function dateBound(value: Date | string | undefined): Date | undefined {
+  return value === undefined ? undefined : new Date(value);
+}
+
+function messageReadStateWhere(readState: MessageListRead['readState']) {
+  if (readState === undefined) {
+    return undefined;
+  }
+  if (readState === 'unread') {
+    return and(
+      sql`coalesce(${telegramMessages.isOutgoing}, false) = false`,
+      or(
+        sql`${telegramChats.lastReadInboxMessageId} is null`,
+        sql`${telegramMessages.id}::bigint > ${telegramChats.lastReadInboxMessageId}::bigint`
+      )
+    );
+  }
+  return or(
+    eq(telegramMessages.isOutgoing, true),
+    and(
+      sql`${telegramChats.lastReadInboxMessageId} is not null`,
+      sql`${telegramMessages.id}::bigint <= ${telegramChats.lastReadInboxMessageId}::bigint`
+    )
+  );
 }

@@ -8,10 +8,12 @@ import type { MessageState, MessagePatch } from '../domain/models/messageState.j
 import type { FileOwnerKey } from '../files/types.js';
 import { ownerKey, readFileRefsForOwners } from '../storage/fileReadStorage.js';
 import {
+  readMessageRows,
   readMessageRow,
   readMessageRowsByRefs,
   readRecentMessageRows,
   searchMessageRows,
+  type MessageListRead,
   type MessageSearchRead,
   type RecentMessageRead
 } from '../storage/messageReadStorage.js';
@@ -42,6 +44,7 @@ export type MessageRepository = {
   clearSchedulingState(input: { chatId: string; messageId: string }): Promise<boolean>;
   clearSendAcknowledgement(input: { chatId: string; messageId: string }): Promise<void>;
   delete(input: { chatId: string; messageIds: string[] }): Promise<void>;
+  list(input: MessageListRead): Promise<Message[]>;
   listRecent(input: RecentMessageRead): Promise<Message[]>;
   markContentOpened(input: { chatId: string; messageId: string }): Promise<boolean>;
   markSendAcknowledged(input: { chatId: string; messageId: string }): Promise<boolean>;
@@ -84,6 +87,9 @@ export function createMessageRepository(database: Database): MessageRepository {
     },
     delete(input) {
       return deleteMessageStates(database, input);
+    },
+    async list(input) {
+      return hydrateMessageRows(database, await readMessageRows(database, input));
     },
     async listRecent(input) {
       return hydrateMessageRows(database, await readRecentMessageRows(database, input));

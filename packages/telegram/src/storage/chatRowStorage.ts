@@ -8,6 +8,7 @@ import { orSql } from './sqlCondition.js';
 export type ChatStorageRow = {
   isMarkedAsUnread: boolean | null;
   lastMessageId: string | null;
+  lastReadInboxMessageId: string | null;
   lastReadOutboxMessageId: string | null;
   notificationMuteFor: number | null;
   privateUserId: string | null;
@@ -62,6 +63,7 @@ export function toChatStorageRow(row: {
   return {
     isMarkedAsUnread: row.isMarkedAsUnread ?? null,
     lastMessageId: row.lastMessageId ?? null,
+    lastReadInboxMessageId: row.lastReadInboxMessageId ?? null,
     lastReadOutboxMessageId: row.lastReadOutboxMessageId ?? null,
     notificationMuteFor: notificationMuteFor(row.notificationSettings),
     privateUserId: chatPrivateUserId(row.type),

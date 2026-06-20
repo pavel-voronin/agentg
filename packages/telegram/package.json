@@ -14,6 +14,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@agentg/data": "file:../data",
     "@agentg/framework": "file:../framework",
     "@prebuilt-tdlib/types": "0.1008064.0",
     "drizzle-orm": "^0.45.2",

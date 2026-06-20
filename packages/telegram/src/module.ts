@@ -9,11 +9,16 @@ import { createRestoreService } from './gap-restore/runtime.js';
 import { createLiveCoverageObserver } from './history/liveCoverage.js';
 import { createIngestionOperations } from './ingestion/adapters/operations.js';
 import { useIngestion } from './ingestion/index.js';
+import {
+  dataExpandProcedure,
+  dataGetProcedure,
+  dataRenderProcedure,
+  dataSelectProcedure
+} from './procedures/dataProvider.js';
 import { getChatProcedure } from './procedures/getChat.js';
 import { listRecentMessagesProcedure } from './procedures/listRecentMessages.js';
 import { getMessagesProcedure } from './procedures/getMessages.js';
 import { requestFileProcedure } from './procedures/requestFile.js';
-import { resolveSourceContentProcedure } from './procedures/resolveSourceContent.js';
 import { searchMessagesProcedure } from './procedures/searchMessages.js';
 import { createHistorySource } from './reconciler/adapters/historySource.js';
 import { useHistoryReconciler } from './reconciler/runtime.js';
@@ -114,11 +119,14 @@ export const telegramModule = defineModule('telegram', {
     });
 
     return {
+      dataExpand: dataExpandProcedure(procedureResources),
+      dataGet: dataGetProcedure(procedureResources),
+      dataRender: dataRenderProcedure(),
+      dataSelect: dataSelectProcedure(procedureResources),
       getChat: getChatProcedure(procedureResources),
       listRecentMessages: listRecentMessagesProcedure(procedureResources),
       getMessages,
       requestFile: requestFileProcedure(procedureResources),
-      resolveSourceContent: resolveSourceContentProcedure(procedureResources),
       searchMessages: searchMessagesProcedure(procedureResources),
       status: () => ({
         ready: status.snapshot().ready

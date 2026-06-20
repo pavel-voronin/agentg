@@ -1,8 +1,8 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
-import { handledUpdateTypes } from '../src/ingestion/adapters/catalog.js';
+import { handledUpdateTypes, updateHandlers } from '../src/ingestion/adapters/catalog.js';
 
 type TdlibUpdate = {
   fields: { name: string }[];
@@ -34,7 +34,18 @@ describe('TDLib update catalog coverage', () => {
     const designUpdateTypes = sorted(Object.keys(storageReview.updateDesigns ?? {}));
 
     expect(sorted([...handledUpdateTypes])).toEqual(schemaUpdateTypes);
+    expect(sorted(Object.keys(updateHandlers))).toEqual(schemaUpdateTypes);
     expect(designUpdateTypes).toEqual(schemaUpdateTypes);
+  });
+
+  it('keeps one handler file for every TDLib update type', () => {
+    const files = readdirSync(new URL('../src/ingestion/adapters/update-handlers', import.meta.url))
+      .filter((file) => file.endsWith('.ts'))
+      .filter((file) => !file.endsWith('.test.ts'))
+      .filter((file) => file !== 'AGENTS.md')
+      .map((file) => file.slice(0, -'.ts'.length));
+
+    expect(sorted(files)).toEqual(sorted(schema.updates.map((update) => update.name)));
   });
 
   it('covers every TDLib update root field in handler plans', () => {
