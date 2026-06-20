@@ -5,6 +5,7 @@
   "type": "module",
   "workspaces": [
     "packages/framework",
+    "packages/data",
     "packages/gateway",
     "packages/telemetry",
     "packages/dashboard",
@@ -65,10 +66,11 @@
     "check:telemetry": "npm --workspace @agentg/telemetry run typecheck && npm --workspace @agentg/telemetry --if-present run test && eslint packages/telemetry && prettier --check packages/telemetry",
     "check:dashboard": "npm --workspace @agentg/dashboard run typecheck && npm --workspace @agentg/dashboard --if-present run test && eslint packages/dashboard && prettier --check packages/dashboard",
     "check:policies": "npm run policies:generate && npm --workspace @agentg/policies run typecheck && npm --workspace @agentg/policies --if-present run test && eslint packages/policies && prettier --check packages/policies",
+    "check:data": "npm --workspace @agentg/data run typecheck && npm --workspace @agentg/data run test && eslint packages/data && prettier --check packages/data",
     "check:triggers": "npm run policies:generate && npm --workspace @agentg/triggers run typecheck && npm --workspace @agentg/triggers run test && eslint packages/triggers && prettier --check packages/triggers",
     "check:llm-runner": "npm --workspace @agentg/llm-runner run typecheck && npm --workspace @agentg/llm-runner run test && eslint packages/llm-runner && prettier --check packages/llm-runner",
     "check:telegram": "npm --workspace @agentg/telegram run typecheck && npm --workspace @agentg/telegram --if-present run test && eslint packages/telegram && prettier --check packages/telegram",
-    "check:modules": "npm run module-boundary:audit && npm run check:framework && npm run check:gateway && npm run check:telemetry && npm run check:dashboard && npm run check:policies && npm run check:triggers && npm run check:llm-runner && npm run check:telegram",
+    "check:modules": "npm run module-boundary:audit && npm run check:framework && npm run check:data && npm run check:gateway && npm run check:telemetry && npm run check:dashboard && npm run check:policies && npm run check:triggers && npm run check:llm-runner && npm run check:telegram",
     "check": "npm run policies:generate && npm run typecheck && npm run lint && npm run source:audit && npm run format:check && npm run test"
   },
   "devDependencies": {
