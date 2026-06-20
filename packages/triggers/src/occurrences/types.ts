@@ -1,4 +1,4 @@
-import type { TriggerAction } from '../../policies/policies.js';
+import type { TriggerAction } from '../registrations/types.js';
 import type { OccurrenceStatus } from '../schema.js';
 
 export type TriggerOccurrence = Readonly<{
@@ -12,7 +12,7 @@ export type TriggerOccurrence = Readonly<{
   nextAttemptAt: Date;
   providerRunId?: string | undefined;
   registrationKey: string;
-  ruleName: string;
+  registrationName: string;
   scheduledAt: Date;
   status: OccurrenceStatus;
 }>;
@@ -27,7 +27,7 @@ export type TriggerOccurrenceView = Readonly<{
   nextAttemptAt: string;
   providerRunId?: string | undefined;
   registrationKey: string;
-  ruleName: string;
+  registrationName: string;
   scheduledAt: string;
   status: OccurrenceStatus;
 }>;
@@ -49,7 +49,7 @@ export function occurrenceView(occurrence: TriggerOccurrence): TriggerOccurrence
     nextAttemptAt: occurrence.nextAttemptAt.toISOString(),
     ...(occurrence.providerRunId === undefined ? {} : { providerRunId: occurrence.providerRunId }),
     registrationKey: occurrence.registrationKey,
-    ruleName: occurrence.ruleName,
+    registrationName: occurrence.registrationName,
     scheduledAt: occurrence.scheduledAt.toISOString(),
     status: occurrence.status
   };

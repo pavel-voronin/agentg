@@ -1,14 +1,15 @@
 import type { EventBus, JsonValue } from '@agentg/framework';
 
 import type { OccurrenceStatus } from './schema.js';
+import type { RegistrationOwner } from './registrations/types.js';
 
-export const TRIGGER_REGISTRATION_CHANGED_EVENT = 'triggers.registration.changed';
-export const TRIGGER_OCCURRENCE_SCHEDULED_EVENT = 'triggers.occurrence.scheduled';
-export const TRIGGER_OCCURRENCE_DISPATCHING_EVENT = 'triggers.occurrence.dispatching';
-export const TRIGGER_OCCURRENCE_ACCEPTED_EVENT = 'triggers.occurrence.accepted';
-export const TRIGGER_OCCURRENCE_REJECTED_EVENT = 'triggers.occurrence.rejected';
-export const TRIGGER_OCCURRENCE_RETRY_WAITING_EVENT = 'triggers.occurrence.retryWaiting';
-export const TRIGGER_OCCURRENCE_FAILED_EVENT = 'triggers.occurrence.failed';
+const TRIGGER_REGISTRATION_CHANGED_EVENT = 'triggers.registration.changed';
+const TRIGGER_OCCURRENCE_SCHEDULED_EVENT = 'triggers.occurrence.scheduled';
+const TRIGGER_OCCURRENCE_DISPATCHING_EVENT = 'triggers.occurrence.dispatching';
+const TRIGGER_OCCURRENCE_ACCEPTED_EVENT = 'triggers.occurrence.accepted';
+const TRIGGER_OCCURRENCE_REJECTED_EVENT = 'triggers.occurrence.rejected';
+const TRIGGER_OCCURRENCE_RETRY_WAITING_EVENT = 'triggers.occurrence.retryWaiting';
+const TRIGGER_OCCURRENCE_FAILED_EVENT = 'triggers.occurrence.failed';
 
 export type TriggerEventPublisher = {
   occurrence(input: TriggerOccurrenceEventInput): void;
@@ -18,14 +19,20 @@ export type TriggerEventPublisher = {
 type TriggerRegistrationEventInput = {
   actionModule: string;
   actionProcedure: string;
+  operation: 'removed' | 'upserted';
+  owner: RegistrationOwner;
   registrationKey: string;
-  ruleName: string;
+  registrationName: string;
 };
 
-type TriggerOccurrenceEventInput = TriggerRegistrationEventInput & {
+type TriggerOccurrenceEventInput = {
+  actionModule: string;
+  actionProcedure: string;
   failureCode?: string | undefined;
   occurrenceKey: string;
   providerRunId?: string | undefined;
+  registrationKey: string;
+  registrationName: string;
   scheduledAt: string;
   status: OccurrenceStatus;
 };
@@ -69,8 +76,10 @@ function eventData(input: TriggerRegistrationEventInput | TriggerOccurrenceEvent
   return {
     actionModule: input.actionModule,
     actionProcedure: input.actionProcedure,
+    ...('operation' in input ? { operation: input.operation } : {}),
+    ...('owner' in input ? { owner: input.owner } : {}),
     registrationKey: input.registrationKey,
-    ruleName: input.ruleName,
+    registrationName: input.registrationName,
     ...('occurrenceKey' in input
       ? {
           occurrenceKey: input.occurrenceKey,

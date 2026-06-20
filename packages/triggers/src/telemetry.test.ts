@@ -26,14 +26,8 @@ describe('trigger telemetry', () => {
     recordTriggerStats({
       dueOccurrenceCount: 2,
       occurrenceStatusCounts: [
-        {
-          count: 3,
-          status: 'scheduled'
-        },
-        {
-          count: 1,
-          status: 'accepted'
-        }
+        { count: 3, status: 'scheduled' },
+        { count: 1, status: 'accepted' }
       ],
       oldestDueOccurrenceAgeSeconds: 42,
       registrationCount: 4
@@ -51,8 +45,8 @@ describe('trigger telemetry', () => {
 
     const calls = JSON.stringify(vi.mocked(setTelemetryGauge).mock.calls);
     expect(calls).not.toContain('registrationKey');
-    expect(calls).not.toContain('TriggerRule:daily');
-    expect(calls).not.toContain('llm-runner');
+    expect(calls).not.toContain('pipelines:sample:minute');
+    expect(calls).not.toContain('pipelineName');
   });
 
   it('records dispatch counters and duration spans with bounded labels', async () => {

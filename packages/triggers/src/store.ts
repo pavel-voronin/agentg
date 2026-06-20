@@ -1,15 +1,16 @@
-import { and, eq, inArray, isNull, lte, notInArray, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, lte, or, sql } from 'drizzle-orm';
 
-import type { TriggerRule } from '../policies/policies.js';
 import { triggerOccurrences, triggerRegistrations } from './database/schema.js';
 import type { Database } from './database/client.js';
 import { occurrenceKey, type TriggerOccurrence } from './occurrences/types.js';
 import {
-  registrationFromRule,
+  registrationFromInput,
   registrationKey,
-  type TriggerRegistration
+  type RegistrationOwner,
+  type TriggerRegistration,
+  type TriggerRegistrationInput
 } from './registrations/types.js';
-import type { ListOccurrencesInput, OccurrenceStatus } from './schema.js';
+import type { ListOccurrencesInput, ListRegistrationsInput, OccurrenceStatus } from './schema.js';
 
 export type TriggerStore = {
   claimDue(input: {
@@ -26,7 +27,7 @@ export type TriggerStore = {
     }[];
   }): Promise<readonly TriggerOccurrence[]>;
   listOccurrences(input?: ListOccurrencesInput): Promise<readonly TriggerOccurrence[]>;
-  listRegistrations(): Promise<readonly TriggerRegistration[]>;
+  listRegistrations(input?: ListRegistrationsInput): Promise<readonly TriggerRegistration[]>;
   markAccepted(input: { key: string; now: Date; providerRunId: string }): Promise<void>;
   markDispatching(input: { key: string; now: Date }): Promise<void>;
   markFailed(input: { code: string; key: string; message: string; now: Date }): Promise<void>;
@@ -40,7 +41,8 @@ export type TriggerStore = {
   }): Promise<void>;
   replaceRegistrations(input: {
     now: Date;
-    rules: readonly TriggerRule[];
+    owner: RegistrationOwner;
+    registrations: readonly TriggerRegistrationInput[];
   }): Promise<readonly TriggerRegistration[]>;
   readStats(input: { now: Date }): Promise<TriggerStats>;
 };
@@ -55,6 +57,14 @@ export type TriggerStats = {
   registrationCount: number;
 };
 
+type StoreDatabase = Pick<Database, 'delete' | 'insert' | 'select' | 'update'>;
+const claimableOccurrenceStatuses = [
+  'scheduled',
+  'claimed',
+  'dispatching',
+  'retryWaiting'
+] as const;
+
 export function createPostgresTriggerStore(database: Database): TriggerStore {
   const store: TriggerStore = {
     async claimDue(input) {
@@ -63,7 +73,7 @@ export function createPostgresTriggerStore(database: Database): TriggerStore {
         .from(triggerOccurrences)
         .where(
           and(
-            inArray(triggerOccurrences.status, ['scheduled', 'claimed', 'retryWaiting']),
+            inArray(triggerOccurrences.status, claimableOccurrenceStatuses),
             lte(triggerOccurrences.nextAttemptAt, input.now),
             or(
               isNull(triggerOccurrences.leaseExpiresAt),
@@ -87,7 +97,7 @@ export function createPostgresTriggerStore(database: Database): TriggerStore {
           .where(
             and(
               eq(triggerOccurrences.key, row.key),
-              inArray(triggerOccurrences.status, ['scheduled', 'claimed', 'retryWaiting']),
+              inArray(triggerOccurrences.status, claimableOccurrenceStatuses),
               or(
                 isNull(triggerOccurrences.leaseExpiresAt),
                 lte(triggerOccurrences.leaseExpiresAt, input.now)
@@ -107,7 +117,7 @@ export function createPostgresTriggerStore(database: Database): TriggerStore {
         key: occurrenceKey({ registrationKey: registration.key, scheduledAt }),
         nextAttemptAt: scheduledAt,
         registrationKey: registration.key,
-        ruleName: registration.rule.name,
+        registrationName: registration.name,
         scheduledAt,
         status: 'scheduled' as const
       }));
@@ -136,12 +146,8 @@ export function createPostgresTriggerStore(database: Database): TriggerStore {
         .orderBy(triggerOccurrences.scheduledAt, triggerOccurrences.key);
       return rows.map(toOccurrence);
     },
-    async listRegistrations() {
-      const rows = await database
-        .select()
-        .from(triggerRegistrations)
-        .orderBy(triggerRegistrations.key);
-      return rows.map(toRegistration);
+    async listRegistrations(input = {}) {
+      return listRegistrationsFromDatabase(database, input);
     },
     markAccepted(input) {
       return updateTerminal(database, {
@@ -194,55 +200,9 @@ export function createPostgresTriggerStore(database: Database): TriggerStore {
         .where(eq(triggerOccurrences.key, input.key));
     },
     async replaceRegistrations(input) {
-      const current = new Map((await store.listRegistrations()).map((item) => [item.key, item]));
-      const activeKeys: string[] = [];
-      for (const rule of input.rules) {
-        const key = registrationKey(rule);
-        activeKeys.push(key);
-        const existing = current.get(key);
-        const configuredStart =
-          rule.spec.condition.startAt === undefined
-            ? undefined
-            : new Date(rule.spec.condition.startAt);
-        const registration = registrationFromRule(
-          rule,
-          configuredStart ?? existing?.anchorAt ?? input.now
-        );
-        await database
-          .insert(triggerRegistrations)
-          .values({
-            action: registration.action,
-            anchorAt: registration.anchorAt,
-            key: registration.key,
-            ruleKind: registration.rule.kind,
-            ruleName: registration.rule.name,
-            schedule: registration.schedule,
-            updatedAt: input.now
-          })
-          .onConflictDoUpdate({
-            set: {
-              action: registration.action,
-              anchorAt: registration.anchorAt,
-              ruleKind: registration.rule.kind,
-              ruleName: registration.rule.name,
-              schedule: registration.schedule,
-              updatedAt: input.now
-            },
-            target: triggerRegistrations.key
-          });
-      }
-
-      if (activeKeys.length === 0) {
-        await database.delete(triggerRegistrations);
-        await cancelInactiveOccurrences(database, input.now);
-      } else {
-        await database
-          .delete(triggerRegistrations)
-          .where(notInArray(triggerRegistrations.key, activeKeys));
-        await cancelInactiveOccurrences(database, input.now, activeKeys);
-      }
-
-      return store.listRegistrations();
+      return database.transaction((transaction) =>
+        replaceRegistrationsInDatabase(transaction, input)
+      );
     },
     async readStats(input) {
       const [registrationRow] = await database
@@ -289,6 +249,71 @@ export function createPostgresTriggerStore(database: Database): TriggerStore {
   return store;
 }
 
+async function replaceRegistrationsInDatabase(
+  database: StoreDatabase,
+  input: {
+    now: Date;
+    owner: RegistrationOwner;
+    registrations: readonly TriggerRegistrationInput[];
+  }
+): Promise<readonly TriggerRegistration[]> {
+  const current = new Map(
+    (await listRegistrationsFromDatabase(database, { owner: input.owner })).map((item) => [
+      item.key,
+      item
+    ])
+  );
+  const activeKeys: string[] = [];
+  for (const item of input.registrations) {
+    const key = registrationKey({ name: item.name, owner: input.owner });
+    activeKeys.push(key);
+    const existing = current.get(key);
+    const configuredStart =
+      item.condition.startAt === undefined ? undefined : new Date(item.condition.startAt);
+    const registration = registrationFromInput(
+      item,
+      input.owner,
+      configuredStart ?? existing?.anchorAt ?? input.now
+    );
+    await database
+      .insert(triggerRegistrations)
+      .values({
+        action: registration.action,
+        anchorAt: registration.anchorAt,
+        key: registration.key,
+        name: registration.name,
+        owner: registration.owner,
+        ownerKey: registration.owner.key,
+        ownerModule: registration.owner.module,
+        schedule: registration.schedule,
+        updatedAt: input.now
+      })
+      .onConflictDoUpdate({
+        set: {
+          action: registration.action,
+          anchorAt: registration.anchorAt,
+          name: registration.name,
+          owner: registration.owner,
+          ownerKey: registration.owner.key,
+          ownerModule: registration.owner.module,
+          schedule: registration.schedule,
+          updatedAt: input.now
+        },
+        target: triggerRegistrations.key
+      });
+  }
+
+  const removedKeys = [...current.keys()].filter((key) => !activeKeys.includes(key));
+  if (removedKeys.length > 0) {
+    await database
+      .delete(triggerRegistrations)
+      .where(inArray(triggerRegistrations.key, removedKeys));
+    await cancelRemovedOccurrences(database, input.now, removedKeys);
+  }
+
+  return listRegistrationsFromDatabase(database, { owner: input.owner });
+}
+
 export function createMemoryTriggerStore(): TriggerStore {
   const registrations = new Map<string, TriggerRegistration>();
   const occurrences = new Map<string, TriggerOccurrence>();
@@ -297,14 +322,7 @@ export function createMemoryTriggerStore(): TriggerStore {
     claimDue(input) {
       const claimed: TriggerOccurrence[] = [];
       const due = [...occurrences.values()]
-        .filter(
-          (item) =>
-            (item.status === 'scheduled' ||
-              item.status === 'claimed' ||
-              item.status === 'retryWaiting') &&
-            item.nextAttemptAt <= input.now &&
-            (item.leaseExpiresAt === undefined || item.leaseExpiresAt <= input.now)
-        )
+        .filter((item) => isDueOccurrence(item, input.now))
         .sort(compareOccurrences)
         .slice(0, input.limit);
       for (const occurrence of due) {
@@ -332,7 +350,7 @@ export function createMemoryTriggerStore(): TriggerStore {
           key,
           nextAttemptAt: scheduledAt,
           registrationKey: registration.key,
-          ruleName: registration.rule.name,
+          registrationName: registration.name,
           scheduledAt,
           status: 'scheduled'
         } satisfies TriggerOccurrence;
@@ -353,9 +371,16 @@ export function createMemoryTriggerStore(): TriggerStore {
           .sort(compareOccurrences)
       );
     },
-    listRegistrations() {
+    listRegistrations(input = {}) {
       return Promise.resolve(
-        [...registrations.values()].sort((left, right) => left.key.localeCompare(right.key))
+        [...registrations.values()]
+          .filter(
+            (item) =>
+              input.owner === undefined ||
+              (item.owner.module === input.owner.module &&
+                (input.owner.key === undefined || item.owner.key === input.owner.key))
+          )
+          .sort((left, right) => left.key.localeCompare(right.key))
       );
     },
     markAccepted(input) {
@@ -402,27 +427,37 @@ export function createMemoryTriggerStore(): TriggerStore {
       return Promise.resolve();
     },
     replaceRegistrations(input) {
-      const activeKeys = new Set(input.rules.map(registrationKey));
-      for (const rule of input.rules) {
-        const key = registrationKey(rule);
+      const activeKeys = new Set(
+        input.registrations.map((item) => registrationKey({ name: item.name, owner: input.owner }))
+      );
+      for (const item of input.registrations) {
+        const key = registrationKey({ name: item.name, owner: input.owner });
         const existing = registrations.get(key);
         const configuredStart =
-          rule.spec.condition.startAt === undefined
-            ? undefined
-            : new Date(rule.spec.condition.startAt);
+          item.condition.startAt === undefined ? undefined : new Date(item.condition.startAt);
         registrations.set(
           key,
-          registrationFromRule(rule, configuredStart ?? existing?.anchorAt ?? input.now)
+          registrationFromInput(
+            item,
+            input.owner,
+            configuredStart ?? existing?.anchorAt ?? input.now
+          )
         );
       }
-      for (const key of registrations.keys()) {
-        if (!activeKeys.has(key)) {
+      const removedKeys: string[] = [];
+      for (const [key, registration] of registrations) {
+        if (
+          registration.owner.module === input.owner.module &&
+          registration.owner.key === input.owner.key &&
+          !activeKeys.has(key)
+        ) {
           registrations.delete(key);
+          removedKeys.push(key);
         }
       }
       for (const occurrence of occurrences.values()) {
         if (
-          !activeKeys.has(occurrence.registrationKey) &&
+          removedKeys.includes(occurrence.registrationKey) &&
           (occurrence.status === 'scheduled' || occurrence.status === 'retryWaiting')
         ) {
           occurrences.set(occurrence.key, {
@@ -431,7 +466,7 @@ export function createMemoryTriggerStore(): TriggerStore {
           });
         }
       }
-      return store.listRegistrations();
+      return store.listRegistrations({ owner: input.owner });
     },
     readStats(input) {
       const statusCounts = new Map<OccurrenceStatus, number>();
@@ -478,9 +513,30 @@ export function createMemoryTriggerStore(): TriggerStore {
   }
 }
 
+async function listRegistrationsFromDatabase(
+  database: StoreDatabase,
+  input: ListRegistrationsInput
+): Promise<readonly TriggerRegistration[]> {
+  const rows = await database
+    .select()
+    .from(triggerRegistrations)
+    .where(
+      input.owner === undefined
+        ? undefined
+        : and(
+            eq(triggerRegistrations.ownerModule, input.owner.module),
+            input.owner.key === undefined
+              ? undefined
+              : eq(triggerRegistrations.ownerKey, input.owner.key)
+          )
+    )
+    .orderBy(triggerRegistrations.key);
+  return rows.map(toRegistration);
+}
+
 function dueOccurrenceCondition(now: Date) {
   return and(
-    inArray(triggerOccurrences.status, ['scheduled', 'claimed', 'retryWaiting']),
+    inArray(triggerOccurrences.status, claimableOccurrenceStatuses),
     lte(triggerOccurrences.nextAttemptAt, now),
     or(isNull(triggerOccurrences.leaseExpiresAt), lte(triggerOccurrences.leaseExpiresAt, now))
   );
@@ -490,6 +546,7 @@ function isDueOccurrence(occurrence: TriggerOccurrence, now: Date): boolean {
   return (
     (occurrence.status === 'scheduled' ||
       occurrence.status === 'claimed' ||
+      occurrence.status === 'dispatching' ||
       occurrence.status === 'retryWaiting') &&
     occurrence.nextAttemptAt <= now &&
     (occurrence.leaseExpiresAt === undefined || occurrence.leaseExpiresAt <= now)
@@ -500,10 +557,10 @@ function secondsBetween(start: Date, end: Date): number {
   return Math.max(0, (end.getTime() - start.getTime()) / 1000);
 }
 
-async function cancelInactiveOccurrences(
-  database: Database,
+async function cancelRemovedOccurrences(
+  database: StoreDatabase,
   now: Date,
-  activeKeys?: readonly string[]
+  removedKeys: readonly string[]
 ): Promise<void> {
   await database
     .update(triggerOccurrences)
@@ -514,9 +571,7 @@ async function cancelInactiveOccurrences(
     .where(
       and(
         inArray(triggerOccurrences.status, ['scheduled', 'retryWaiting']),
-        activeKeys === undefined
-          ? undefined
-          : notInArray(triggerOccurrences.registrationKey, [...activeKeys])
+        inArray(triggerOccurrences.registrationKey, [...removedKeys])
       )
     );
 }
@@ -551,10 +606,8 @@ function toRegistration(row: typeof triggerRegistrations.$inferSelect): TriggerR
     action: row.action,
     anchorAt: row.anchorAt,
     key: row.key,
-    rule: {
-      kind: 'TriggerRule',
-      name: row.ruleName
-    },
+    name: row.name,
+    owner: row.owner,
     schedule: row.schedule
   };
 }
@@ -571,7 +624,7 @@ function toOccurrence(row: typeof triggerOccurrences.$inferSelect): TriggerOccur
     nextAttemptAt: row.nextAttemptAt,
     ...(row.providerRunId === null ? {} : { providerRunId: row.providerRunId }),
     registrationKey: row.registrationKey,
-    ruleName: row.ruleName,
+    registrationName: row.registrationName,
     scheduledAt: row.scheduledAt,
     status: row.status
   };

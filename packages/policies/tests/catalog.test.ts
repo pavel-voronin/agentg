@@ -14,7 +14,7 @@ describe('policy catalog', () => {
     );
 
     expect(source).toContain('../../../telegram/policies/policies.js');
-    expect(source).toContain('../../../triggers/policies/policies.js');
+    expect(source).not.toContain('../../../triggers/policies/policies.js');
     expect(source).not.toContain('/src/module');
     expect(source).not.toContain('/src/main');
 
@@ -30,8 +30,7 @@ describe('policy catalog', () => {
     const kinds = await server.procedures.listPolicyKinds();
     expect(kinds.map((item) => item.kind).sort()).toEqual([
       'TelegramFileDownloadRule',
-      'TelegramHistoryGapRestoreRule',
-      'TriggerRule'
+      'TelegramHistoryGapRestoreRule'
     ]);
   });
 

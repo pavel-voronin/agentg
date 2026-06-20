@@ -1,6 +1,5 @@
 import { createLogger, logError } from '@agentg/framework';
 
-import type { TriggerRule } from '../policies/policies.js';
 import type { Dispatcher, DispatchOutcome } from './dispatcher/dispatcher.js';
 import type { TriggerEventPublisher } from './events.js';
 import type { TriggerOccurrence } from './occurrences/types.js';
@@ -8,7 +7,11 @@ import { occurrenceView } from './occurrences/types.js';
 import type { TriggerRegistration, TriggerRegistrationView } from './registrations/types.js';
 import { registrationView } from './registrations/types.js';
 import { dueTimes } from './scheduler/scheduler.js';
-import type { ListOccurrencesInput } from './schema.js';
+import type {
+  ListOccurrencesInput,
+  ListRegistrationsInput,
+  ReplaceRegistrationsInput
+} from './schema.js';
 import type { TriggerStore } from './store.js';
 import {
   recordDispatch,
@@ -25,7 +28,13 @@ export type TriggerRuntime = {
   listOccurrences(input?: ListOccurrencesInput): Promise<{
     occurrences: ReturnType<typeof occurrenceView>[];
   }>;
-  listTriggerRegistrations(): Promise<{
+  listTriggerRegistrations(input?: ListRegistrationsInput): Promise<{
+    registrations: TriggerRegistrationView[];
+  }>;
+  replaceRegistrations(
+    input: ReplaceRegistrationsInput,
+    now?: Date
+  ): Promise<{
     registrations: TriggerRegistrationView[];
   }>;
   reconcile(now?: Date): Promise<void>;
@@ -38,7 +47,6 @@ export type TriggerRuntime = {
 export function createTriggerRuntime(input: {
   dispatcher: Dispatcher;
   events: TriggerEventPublisher;
-  getRules: () => readonly TriggerRule[];
   leaseOwner: string;
   leaseSeconds: number;
   lookbackSeconds: number;
@@ -62,15 +70,47 @@ export function createTriggerRuntime(input: {
         occurrences: (await input.store.listOccurrences(rawInput)).map(occurrenceView)
       };
     },
-    async listTriggerRegistrations() {
+    async listTriggerRegistrations(rawInput) {
       return {
-        registrations: (await input.store.listRegistrations()).map(registrationView)
+        registrations: (await input.store.listRegistrations(rawInput)).map(registrationView)
       };
+    },
+    replaceRegistrations(rawInput, now = new Date()) {
+      return serialize(async () => {
+        const previous = new Map(
+          (await input.store.listRegistrations({ owner: rawInput.owner })).map((registration) => [
+            registration.key,
+            registration
+          ])
+        );
+        const registrations = await input.store.replaceRegistrations({
+          now,
+          owner: rawInput.owner,
+          registrations: rawInput.registrations
+        });
+        const current = new Map(
+          registrations.map((registration) => [registration.key, registration])
+        );
+        for (const registration of registrations) {
+          if (!sameRegistration(previous.get(registration.key), registration)) {
+            input.events.registration(registrationEvent(registration, 'upserted'));
+          }
+        }
+        for (const registration of previous.values()) {
+          if (!current.has(registration.key)) {
+            input.events.registration(registrationEvent(registration, 'removed'));
+          }
+        }
+        await refreshStats(input.store, now);
+        return {
+          registrations: registrations.map(registrationView)
+        };
+      });
     },
     reconcile(now = new Date()) {
       return serialize(() =>
         timeTriggerRuntime('reconcile', async () => {
-          const registrations = await materializeRegistrations(input, now);
+          const registrations = await input.store.listRegistrations();
           const created = await input.store.createOccurrences({
             now,
             registrations: dueRegistrations({
@@ -90,7 +130,7 @@ export function createTriggerRuntime(input: {
     runDueTriggers(now = new Date()) {
       return serialize(() =>
         timeTriggerRuntime('run_due', async () => {
-          const registrations = await materializeRegistrations(input, now);
+          const registrations = await input.store.listRegistrations();
           const created = await input.store.createOccurrences({
             now,
             registrations: dueRegistrations({
@@ -137,27 +177,6 @@ async function refreshStats(store: TriggerStore, now: Date): Promise<void> {
       'trigger telemetry stats failed'
     );
   }
-}
-
-async function materializeRegistrations(
-  input: {
-    events: TriggerEventPublisher;
-    getRules: () => readonly TriggerRule[];
-    store: TriggerStore;
-  },
-  now: Date
-): Promise<readonly TriggerRegistration[]> {
-  const previous = new Map((await input.store.listRegistrations()).map((item) => [item.key, item]));
-  const registrations = await input.store.replaceRegistrations({
-    now,
-    rules: input.getRules()
-  });
-  for (const registration of registrations) {
-    if (!sameRegistration(previous.get(registration.key), registration)) {
-      input.events.registration(registrationEvent(registration));
-    }
-  }
-  return registrations;
 }
 
 export function startTriggerRuntimeLoop(input: {
@@ -324,19 +343,21 @@ function occurrenceEvent(
     failureCode: extra.failureCode,
     occurrenceKey: occurrence.key,
     providerRunId: extra.providerRunId,
+    registrationName: occurrence.registrationName,
     registrationKey: occurrence.registrationKey,
-    ruleName: occurrence.ruleName,
     scheduledAt: occurrence.scheduledAt.toISOString(),
     status
   };
 }
 
-function registrationEvent(registration: TriggerRegistration) {
+function registrationEvent(registration: TriggerRegistration, operation: 'removed' | 'upserted') {
   return {
     actionModule: registration.action.module,
     actionProcedure: registration.action.procedure,
+    operation,
+    owner: registration.owner,
     registrationKey: registration.key,
-    ruleName: registration.rule.name
+    registrationName: registration.name
   };
 }
 
@@ -347,6 +368,8 @@ function sameRegistration(
   return (
     left?.anchorAt.getTime() === right.anchorAt.getTime() &&
     JSON.stringify(left.action) === JSON.stringify(right.action) &&
+    JSON.stringify(left.owner) === JSON.stringify(right.owner) &&
+    left.name === right.name &&
     JSON.stringify(left.schedule) === JSON.stringify(right.schedule)
   );
 }

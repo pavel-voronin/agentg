@@ -1,439 +1,302 @@
 import { httpRpc } from '@agentg/framework';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import type { TriggerRule } from '../policies/policies.js';
-import { triggerRulePolicy, triggerRuleSpec } from '../policies/policies.js';
-import { createRpcDispatcher, type Dispatcher } from './dispatcher/dispatcher.js';
+import {
+  createRpcDispatcher,
+  type DispatchOutcome,
+  type Dispatcher
+} from './dispatcher/dispatcher.js';
 import type { TriggerEventPublisher } from './events.js';
+import type { TriggerRegistrationInput } from './registrations/types.js';
 import { createTriggerRuntime, startTriggerRuntimeLoop } from './runtime.js';
-import { createMemoryTriggerStore } from './store.js';
+import { replaceRegistrationsInputSchema } from './schema.js';
+import { createMemoryTriggerStore, type TriggerStore } from './store.js';
 
-describe('TriggerRule policy', () => {
-  it('validates schedule and action in the policy spec', () => {
+describe('trigger registration contract', () => {
+  it('validates registration inputs and rejects non-procedure names', () => {
     expect(() =>
-      triggerRuleSpec.parse({
-        action: {
-          input: {
-            artifactKey: 'daily',
-            instructions: 'Summarize unread signals.',
-            profile: 'default',
-            sourceSelector: {
-              domain: 'telegram',
-              selector: {
-                chatId: '10'
-              }
-            }
-          },
-          module: 'llm-runner',
-          procedure: 'runTriggered'
-        },
-        condition: {
-          everySeconds: 60,
-          kind: 'periodic'
-        }
+      replaceRegistrationsInputSchema.parse({
+        owner: { key: 'daily-digest', module: 'pipelines' },
+        registrations: [registration('hourly')]
       })
     ).not.toThrow();
 
     expect(() =>
-      triggerRuleSpec.parse({
-        action: {
-          input: null,
-          module: 'llm-runner',
-          procedure: 'runTriggered'
-        },
-        condition: {
-          everySeconds: 0,
-          kind: 'periodic'
-        }
-      })
-    ).toThrow();
-
-    expect(() =>
-      triggerRuleSpec.parse({
-        action: {
-          module: 'llm-runner',
-          procedure: 'runTriggered'
-        },
-        condition: {
-          everySeconds: 60,
-          kind: 'periodic'
-        }
-      })
-    ).toThrow();
-
-    expect(() =>
-      triggerRuleSpec.parse({
-        action: {
-          input: {},
-          module: 'llm-runner',
-          procedure: 'run-triggered'
-        },
-        condition: {
-          everySeconds: 60,
-          kind: 'periodic'
-        }
+      replaceRegistrationsInputSchema.parse({
+        owner: { key: 'daily-digest', module: 'pipelines' },
+        registrations: [
+          registration('hourly', {}, { module: 'pipelines', procedure: 'run-triggered' })
+        ]
       })
     ).toThrow();
   });
 
-  it('resolves policy instances into named trigger rules', () => {
-    expect(
-      triggerRulePolicy.resolve([
-        {
-          metadata: {
-            labels: {
-              area: 'telegram'
-            },
-            name: 'daily'
-          },
-          spec: rule('daily').spec
-        }
-      ])
-    ).toEqual([
+  it('uses unambiguous keys when owner keys or names contain separators', async () => {
+    const runtime = runtimeWithMemory();
+
+    await runtime.replaceRegistrations(
       {
-        labels: {
-          area: 'telegram'
-        },
-        name: 'daily',
-        spec: rule('daily').spec
-      }
+        owner: { key: 'a:b', module: 'pipelines' },
+        registrations: [registration('c')]
+      },
+      date('2026-06-20T00:00:00.000Z')
+    );
+    await runtime.replaceRegistrations(
+      {
+        owner: { key: 'a', module: 'pipelines' },
+        registrations: [registration('b:c')]
+      },
+      date('2026-06-20T00:00:00.000Z')
+    );
+
+    const result = await runtime.listTriggerRegistrations();
+
+    expect(result.registrations.map((item) => item.key).sort()).toEqual([
+      'pipelines:a%3Ab:c',
+      'pipelines:a:b%3Ac'
     ]);
+  });
+
+  it('replaces registrations by owner without touching another owner', async () => {
+    const runtime = runtimeWithMemory();
+
+    await runtime.replaceRegistrations(
+      {
+        owner: { key: 'first', module: 'pipelines' },
+        registrations: [registration('hourly')]
+      },
+      date('2026-06-20T00:00:00.000Z')
+    );
+    await runtime.replaceRegistrations(
+      {
+        owner: { key: 'second', module: 'pipelines' },
+        registrations: [registration('daily')]
+      },
+      date('2026-06-20T00:00:00.000Z')
+    );
+    await runtime.replaceRegistrations(
+      {
+        owner: { key: 'first', module: 'pipelines' },
+        registrations: []
+      },
+      date('2026-06-20T00:01:00.000Z')
+    );
+
+    await expect(runtime.listTriggerRegistrations()).resolves.toEqual({
+      registrations: [
+        {
+          action: {
+            input: { pipelineName: 'sample', triggerName: 'daily' },
+            module: 'pipelines',
+            procedure: 'runTriggered'
+          },
+          anchorAt: '2026-06-20T00:00:00.000Z',
+          key: 'pipelines:second:daily',
+          name: 'daily',
+          owner: { key: 'second', module: 'pipelines' },
+          schedule: { everySeconds: 60, kind: 'periodic' }
+        }
+      ]
+    });
+  });
+
+  it('preserves anchors, honors explicit startAt changes, and cancels removed future work', async () => {
+    const start = date('2026-06-20T00:00:00.000Z');
+    const shifted = date('2026-06-20T01:00:00.000Z');
+    const runtime = runtimeWithMemory();
+
+    await runtime.replaceRegistrations(
+      {
+        owner: owner('sample'),
+        registrations: [registration('daily', { startAt: start.toISOString() })]
+      },
+      start
+    );
+    await runtime.replaceRegistrations(
+      {
+        owner: owner('sample'),
+        registrations: [registration('daily', { everySeconds: 120 })]
+      },
+      date('2026-06-20T00:00:01.000Z')
+    );
+    await expect(runtime.listTriggerRegistrations()).resolves.toMatchObject({
+      registrations: [{ anchorAt: start.toISOString(), schedule: { everySeconds: 120 } }]
+    });
+
+    await runtime.replaceRegistrations(
+      {
+        owner: owner('sample'),
+        registrations: [
+          registration('daily', { everySeconds: 120, startAt: shifted.toISOString() })
+        ]
+      },
+      date('2026-06-20T00:00:02.000Z')
+    );
+    await expect(runtime.listTriggerRegistrations()).resolves.toMatchObject({
+      registrations: [{ anchorAt: shifted.toISOString() }]
+    });
+
+    await runtime.reconcile(shifted);
+    await runtime.replaceRegistrations({ owner: owner('sample'), registrations: [] }, shifted);
+
+    await expect(runtime.listOccurrences()).resolves.toMatchObject({
+      occurrences: [{ status: 'cancelled' }]
+    });
   });
 });
 
-describe('trigger runtime', () => {
-  it('materializes, updates, and removes trigger registrations', async () => {
-    const start = new Date('2026-01-01T00:00:00.000Z');
-    let rules: readonly TriggerRule[] = [rule('daily', { startAt: start.toISOString() })];
-    const runtime = createTriggerRuntime({
-      dispatcher: dispatcher(),
-      events: eventRecorder(),
-      getRules: () => rules,
-      leaseOwner: 'test',
-      leaseSeconds: 30,
-      lookbackSeconds: 3600,
-      maxDispatchAttempts: 3,
-      store: createMemoryTriggerStore()
-    });
-
-    await runtime.reconcile(start);
-    await expect(runtime.listTriggerRegistrations()).resolves.toMatchObject({
-      registrations: [
-        {
-          anchorAt: start.toISOString(),
-          key: 'TriggerRule:daily',
-          rule: {
-            kind: 'TriggerRule',
-            name: 'daily'
-          }
-        }
-      ]
-    });
-
-    rules = [rule('daily', { everySeconds: 120 })];
-    await runtime.reconcile(new Date(start.getTime() + 1000));
-    await expect(runtime.listTriggerRegistrations()).resolves.toMatchObject({
-      registrations: [
-        {
-          anchorAt: start.toISOString(),
-          key: 'TriggerRule:daily',
-          schedule: {
-            everySeconds: 120
-          }
-        }
-      ]
-    });
-
-    const shifted = new Date('2026-01-01T01:00:00.000Z');
-    rules = [rule('daily', { everySeconds: 120, startAt: shifted.toISOString() })];
-    await runtime.reconcile(new Date(start.getTime() + 2000));
-    await expect(runtime.listTriggerRegistrations()).resolves.toMatchObject({
-      registrations: [
-        {
-          anchorAt: shifted.toISOString(),
-          key: 'TriggerRule:daily'
-        }
-      ]
-    });
-
-    rules = [];
-    await runtime.reconcile(new Date(start.getTime() + 3000));
-    await expect(runtime.listTriggerRegistrations()).resolves.toEqual({
-      registrations: []
-    });
-  });
-
+describe('trigger occurrence runtime', () => {
   it('bounds missed periodic occurrences by lookback', async () => {
-    const start = new Date('2026-01-01T00:00:00.000Z');
-    const now = new Date('2026-01-01T00:10:00.000Z');
-    const runtime = createTriggerRuntime({
-      dispatcher: dispatcher(),
-      events: eventRecorder(),
-      getRules: () => [rule('daily', { everySeconds: 60, startAt: start.toISOString() })],
-      leaseOwner: 'test',
-      leaseSeconds: 30,
-      lookbackSeconds: 180,
-      maxDispatchAttempts: 3,
-      store: createMemoryTriggerStore()
-    });
+    const runtime = runtimeWithMemory({ lookbackSeconds: 180 });
+    await runtime.replaceRegistrations(
+      {
+        owner: owner('sample'),
+        registrations: [registration('minute', { startAt: '2026-06-20T00:00:00.000Z' })]
+      },
+      date('2026-06-20T00:00:00.000Z')
+    );
 
-    await runtime.reconcile(now);
+    await runtime.reconcile(date('2026-06-20T00:10:00.000Z'));
 
     await expect(runtime.listOccurrences()).resolves.toMatchObject({
       occurrences: [
-        {
-          scheduledAt: '2026-01-01T00:07:00.000Z'
-        },
-        {
-          scheduledAt: '2026-01-01T00:08:00.000Z'
-        },
-        {
-          scheduledAt: '2026-01-01T00:09:00.000Z'
-        },
-        {
-          scheduledAt: '2026-01-01T00:10:00.000Z'
-        }
+        { scheduledAt: '2026-06-20T00:07:00.000Z' },
+        { scheduledAt: '2026-06-20T00:08:00.000Z' },
+        { scheduledAt: '2026-06-20T00:09:00.000Z' },
+        { scheduledAt: '2026-06-20T00:10:00.000Z' }
       ]
     });
   });
 
   it('dispatches one due occurrence and keeps occurrence idempotency', async () => {
-    const now = new Date('2026-01-01T00:00:00.000Z');
-    const calls: unknown[] = [];
-    const runtime = createTriggerRuntime({
+    const calls: string[] = [];
+    const runtime = runtimeWithMemory({
       dispatcher: dispatcher(() => {
         calls.push('called');
-        return Promise.resolve({
-          result: {
-            runId: 'run_1',
-            status: 'accepted'
-          },
-          status: 'result'
-        });
-      }),
-      events: eventRecorder(),
-      getRules: () => [rule('daily', { startAt: now.toISOString() })],
-      leaseOwner: 'test',
-      leaseSeconds: 30,
-      lookbackSeconds: 3600,
-      maxDispatchAttempts: 3,
-      store: createMemoryTriggerStore()
+        return accepted('run_1');
+      })
     });
+    const now = date('2026-06-20T00:00:00.000Z');
+    await runtime.replaceRegistrations(
+      {
+        owner: owner('sample'),
+        registrations: [registration('minute', { startAt: now.toISOString() })]
+      },
+      now
+    );
 
-    await expect(runtime.runDueTriggers(now)).resolves.toEqual({
-      claimed: 1,
-      dispatched: 1
-    });
-    await expect(runtime.runDueTriggers(now)).resolves.toEqual({
-      claimed: 0,
-      dispatched: 0
-    });
+    await expect(runtime.runDueTriggers(now)).resolves.toEqual({ claimed: 1, dispatched: 1 });
+    await expect(runtime.runDueTriggers(now)).resolves.toEqual({ claimed: 0, dispatched: 0 });
 
     expect(calls).toHaveLength(1);
     await expect(runtime.listOccurrences()).resolves.toMatchObject({
-      occurrences: [
-        {
-          providerRunId: 'run_1',
-          status: 'accepted'
-        }
-      ]
-    });
-  });
-
-  it('cancels future occurrences when a rule is removed', async () => {
-    const now = new Date('2026-01-01T00:00:00.000Z');
-    let rules: readonly TriggerRule[] = [rule('daily', { startAt: now.toISOString() })];
-    const runtime = createTriggerRuntime({
-      dispatcher: dispatcher(),
-      events: eventRecorder(),
-      getRules: () => rules,
-      leaseOwner: 'test',
-      leaseSeconds: 30,
-      lookbackSeconds: 3600,
-      maxDispatchAttempts: 3,
-      store: createMemoryTriggerStore()
-    });
-
-    await runtime.reconcile(now);
-    rules = [];
-    await runtime.reconcile(now);
-    await runtime.reconcile(new Date(now.getTime() + 60_000));
-
-    await expect(runtime.listOccurrences()).resolves.toMatchObject({
-      occurrences: [
-        {
-          status: 'cancelled'
-        }
-      ]
+      occurrences: [{ providerRunId: 'run_1', status: 'accepted' }]
     });
   });
 
   it('keeps stored occurrence action snapshots when registrations change', async () => {
-    const start = new Date('2026-01-01T00:00:00.000Z');
     const calls: unknown[] = [];
-    let rules: readonly TriggerRule[] = [
-      rule('daily', { startAt: start.toISOString() }, { input: { version: 1 } })
-    ];
-    const runtime = createTriggerRuntime({
+    const now = date('2026-06-20T00:00:00.000Z');
+    const runtime = runtimeWithMemory({
       dispatcher: dispatcher((occurrence) => {
         calls.push(occurrence.action.input);
-        return Promise.resolve({
-          result: {
-            runId: 'run_1',
-            status: 'accepted'
-          },
-          status: 'result'
-        });
-      }),
-      events: eventRecorder(),
-      getRules: () => rules,
-      leaseOwner: 'test',
-      leaseSeconds: 30,
-      lookbackSeconds: 3600,
-      maxDispatchAttempts: 3,
-      store: createMemoryTriggerStore()
+        return accepted('run_1');
+      })
     });
 
-    await runtime.reconcile(start);
-    rules = [rule('daily', { startAt: start.toISOString() }, { input: { version: 2 } })];
-    await runtime.runDueTriggers(start);
+    await runtime.replaceRegistrations(
+      {
+        owner: owner('sample'),
+        registrations: [
+          registration('minute', { startAt: now.toISOString() }, { input: { version: 1 } })
+        ]
+      },
+      now
+    );
+    await runtime.reconcile(now);
+    await runtime.replaceRegistrations(
+      {
+        owner: owner('sample'),
+        registrations: [
+          registration('minute', { startAt: now.toISOString() }, { input: { version: 2 } })
+        ]
+      },
+      now
+    );
+    await runtime.runDueTriggers(now);
 
     expect(calls).toEqual([{ version: 1 }]);
   });
 
   it('retries transport failures before accepting the occurrence', async () => {
-    const start = new Date('2026-01-01T00:00:00.000Z');
-    const outcomes: Dispatcher['dispatch'][] = [
-      () =>
-        Promise.resolve({
-          failure: {
-            code: 'procedure_transport_failed',
-            message: 'network',
-            retryable: true
-          },
-          status: 'failure'
-        }),
-      () =>
-        Promise.resolve({
-          result: {
-            runId: 'run_2',
-            status: 'accepted'
-          },
-          status: 'result'
-        })
-    ];
-    const runtime = createTriggerRuntime({
-      dispatcher: dispatcher((occurrence) => {
-        const next = outcomes.shift();
-        if (next === undefined) {
-          throw new Error(`Unexpected occurrence: ${occurrence.key}`);
-        }
-        return next(occurrence);
-      }),
-      events: eventRecorder(),
-      getRules: () => [rule('daily', { startAt: start.toISOString() })],
-      leaseOwner: 'test',
-      leaseSeconds: 30,
-      lookbackSeconds: 3600,
-      maxDispatchAttempts: 2,
-      store: createMemoryTriggerStore()
+    const outcomes = [retryableFailure('network'), accepted('run_2')];
+    const runtime = runtimeWithMemory({
+      dispatcher: dispatcher(() => outcomes.shift() ?? accepted('unexpected')),
+      maxDispatchAttempts: 2
     });
+    const now = date('2026-06-20T00:00:00.000Z');
+    await runtime.replaceRegistrations(
+      {
+        owner: owner('sample'),
+        registrations: [registration('minute', { startAt: now.toISOString() })]
+      },
+      now
+    );
 
-    await expect(runtime.runDueTriggers(start)).resolves.toEqual({
-      claimed: 1,
-      dispatched: 1
-    });
-    await expect(runtime.runDueTriggers(new Date(start.getTime() + 1500))).resolves.toEqual({
-      claimed: 1,
-      dispatched: 1
-    });
+    await runtime.runDueTriggers(now);
+    await runtime.runDueTriggers(date('2026-06-20T00:00:01.500Z'));
 
     await expect(runtime.listOccurrences()).resolves.toMatchObject({
-      occurrences: [
-        {
-          attemptCount: 2,
-          providerRunId: 'run_2',
-          status: 'accepted'
-        }
-      ]
+      occurrences: [{ attemptCount: 2, providerRunId: 'run_2', status: 'accepted' }]
     });
   });
 
   it('fails an occurrence after retry attempts are exhausted', async () => {
-    const start = new Date('2026-01-01T00:00:00.000Z');
-    const runtime = createTriggerRuntime({
-      dispatcher: dispatcher(() =>
-        Promise.resolve({
-          failure: {
-            code: 'procedure_transport_failed',
-            message: 'network',
-            retryable: true
-          },
-          status: 'failure'
-        })
-      ),
-      events: eventRecorder(),
-      getRules: () => [rule('daily', { startAt: start.toISOString() })],
-      leaseOwner: 'test',
-      leaseSeconds: 30,
-      lookbackSeconds: 3600,
-      maxDispatchAttempts: 2,
-      store: createMemoryTriggerStore()
+    const runtime = runtimeWithMemory({
+      dispatcher: dispatcher(() => retryableFailure('network')),
+      maxDispatchAttempts: 2
     });
+    const now = date('2026-06-20T00:00:00.000Z');
+    await runtime.replaceRegistrations(
+      {
+        owner: owner('sample'),
+        registrations: [registration('minute', { startAt: now.toISOString() })]
+      },
+      now
+    );
 
-    await runtime.runDueTriggers(start);
-    await runtime.runDueTriggers(new Date(start.getTime() + 1500));
+    await runtime.runDueTriggers(now);
+    await runtime.runDueTriggers(date('2026-06-20T00:00:01.500Z'));
 
     await expect(runtime.listOccurrences()).resolves.toMatchObject({
       occurrences: [
-        {
-          attemptCount: 2,
-          failureCode: 'procedure_transport_failed',
-          status: 'failed'
-        }
+        { attemptCount: 2, failureCode: 'procedure_transport_failed', status: 'failed' }
       ]
     });
   });
 
   it('records provider rejections as terminal occurrences', async () => {
-    const start = new Date('2026-01-01T00:00:00.000Z');
-    const runtime = createTriggerRuntime({
-      dispatcher: dispatcher(() =>
-        Promise.resolve({
-          result: {
-            error: {
-              code: 'bad_request',
-              message: 'payload rejected'
-            },
-            status: 'rejected'
-          },
-          status: 'result'
-        })
-      ),
-      events: eventRecorder(),
-      getRules: () => [rule('daily', { startAt: start.toISOString() })],
-      leaseOwner: 'test',
-      leaseSeconds: 30,
-      lookbackSeconds: 3600,
-      maxDispatchAttempts: 3,
-      store: createMemoryTriggerStore()
+    const runtime = runtimeWithMemory({
+      dispatcher: dispatcher(() => rejected('bad_request', 'payload rejected'))
     });
+    const now = date('2026-06-20T00:00:00.000Z');
+    await runtime.replaceRegistrations(
+      {
+        owner: owner('sample'),
+        registrations: [registration('minute', { startAt: now.toISOString() })]
+      },
+      now
+    );
 
-    await runtime.runDueTriggers(start);
+    await runtime.runDueTriggers(now);
 
     await expect(runtime.listOccurrences()).resolves.toMatchObject({
-      occurrences: [
-        {
-          failureCode: 'bad_request',
-          status: 'rejected'
-        }
-      ]
+      occurrences: [{ failureCode: 'bad_request', status: 'rejected' }]
     });
   });
 
   it('fails non-retryable dispatch failures without retrying', async () => {
-    const start = new Date('2026-01-01T00:00:00.000Z');
-    const runtime = createTriggerRuntime({
+    const runtime = runtimeWithMemory({
       dispatcher: dispatcher(() =>
         Promise.resolve({
           failure: {
@@ -443,57 +306,107 @@ describe('trigger runtime', () => {
           },
           status: 'failure'
         })
-      ),
-      events: eventRecorder(),
-      getRules: () => [rule('daily', { startAt: start.toISOString() })],
-      leaseOwner: 'test',
-      leaseSeconds: 30,
-      lookbackSeconds: 3600,
-      maxDispatchAttempts: 3,
-      store: createMemoryTriggerStore()
+      )
     });
+    const now = date('2026-06-20T00:00:00.000Z');
+    await runtime.replaceRegistrations(
+      {
+        owner: owner('sample'),
+        registrations: [registration('minute', { startAt: now.toISOString() })]
+      },
+      now
+    );
 
-    await runtime.runDueTriggers(start);
+    await runtime.runDueTriggers(now);
 
     await expect(runtime.listOccurrences()).resolves.toMatchObject({
-      occurrences: [
-        {
-          attemptCount: 1,
-          failureCode: 'unknown_action_module',
-          status: 'failed'
-        }
-      ]
+      occurrences: [{ attemptCount: 1, failureCode: 'unknown_action_module', status: 'failed' }]
     });
   });
 
-  it('uses leases so only one worker dispatches one due occurrence', async () => {
-    const start = new Date('2026-01-01T00:00:00.000Z');
+  it('filters occurrence reads by registration key and status', async () => {
+    const now = date('2026-06-20T00:00:00.000Z');
+    const runtime = runtimeWithMemory();
+    await runtime.replaceRegistrations(
+      {
+        owner: owner('sample'),
+        registrations: [
+          registration('daily', { startAt: now.toISOString() }),
+          registration('hourly', { startAt: now.toISOString() })
+        ]
+      },
+      now
+    );
+
+    await runtime.runDueTriggers(now);
+
+    await expect(
+      runtime.listOccurrences({
+        registrationKey: 'pipelines:sample:daily',
+        status: 'accepted'
+      })
+    ).resolves.toMatchObject({
+      occurrences: [{ registrationKey: 'pipelines:sample:daily', status: 'accepted' }]
+    });
+  });
+
+  it('reuses stored registration and occurrence state after runtime restart', async () => {
+    const now = date('2026-06-20T00:00:00.000Z');
     const store = createMemoryTriggerStore();
+    const first = runtimeWithMemory({ store });
+    await first.replaceRegistrations(
+      {
+        owner: owner('sample'),
+        registrations: [registration('minute', { startAt: now.toISOString() })]
+      },
+      now
+    );
+    await first.reconcile(now);
+
+    const second = runtimeWithMemory({ leaseOwner: 'second', store });
+    await second.reconcile(now);
+
+    await expect(second.listTriggerRegistrations()).resolves.toHaveProperty(
+      'registrations.length',
+      1
+    );
+    await expect(second.listOccurrences()).resolves.toMatchObject({
+      occurrences: [
+        { key: 'pipelines:sample:minute:2026-06-20T00:00:00.000Z', status: 'scheduled' }
+      ]
+    });
+  });
+});
+
+describe('trigger leases, events, and loop behavior', () => {
+  it('uses leases so only one worker dispatches one due occurrence', async () => {
+    const now = date('2026-06-20T00:00:00.000Z');
+    const store = createMemoryTriggerStore();
+    await store.replaceRegistrations({
+      now,
+      owner: owner('sample'),
+      registrations: [registration('minute', { startAt: now.toISOString() })]
+    });
+    const [stored] = await store.listRegistrations();
+    if (stored === undefined) throw new Error('Expected stored registration');
+    await store.createOccurrences({
+      now,
+      registrations: [{ registration: stored, scheduledAt: now }]
+    });
+
     const calls: string[] = [];
     const create = (leaseOwner: string) =>
-      createTriggerRuntime({
+      runtimeWithMemory({
         dispatcher: dispatcher(() => {
           calls.push(leaseOwner);
-          return Promise.resolve({
-            result: {
-              runId: `run_${leaseOwner}`,
-              status: 'accepted'
-            },
-            status: 'result'
-          });
+          return accepted(`run_${leaseOwner}`);
         }),
-        events: eventRecorder(),
-        getRules: () => [rule('daily', { startAt: start.toISOString() })],
         leaseOwner,
-        leaseSeconds: 30,
-        lookbackSeconds: 3600,
-        maxDispatchAttempts: 3,
         store
       });
-
     const [left, right] = await Promise.all([
-      create('left').runDueTriggers(start),
-      create('right').runDueTriggers(start)
+      create('left').runDueTriggers(now),
+      create('right').runDueTriggers(now)
     ]);
 
     expect(left.claimed + right.claimed).toBe(1);
@@ -502,157 +415,125 @@ describe('trigger runtime', () => {
   });
 
   it('reclaims expired leases for the same stored occurrence', async () => {
-    const start = new Date('2026-01-01T00:00:00.000Z');
+    const now = date('2026-06-20T00:00:00.000Z');
     const store = createMemoryTriggerStore();
     await store.replaceRegistrations({
-      now: start,
-      rules: [rule('daily', { startAt: start.toISOString() })]
+      now,
+      owner: owner('sample'),
+      registrations: [registration('minute', { startAt: now.toISOString() })]
     });
-    const [registration] = await store.listRegistrations();
-    if (registration === undefined) {
-      throw new Error('Expected trigger registration');
-    }
+    const [stored] = await store.listRegistrations();
+    if (stored === undefined) throw new Error('Expected stored registration');
     await store.createOccurrences({
-      now: start,
-      registrations: [
-        {
-          registration,
-          scheduledAt: start
-        }
-      ]
+      now,
+      registrations: [{ registration: stored, scheduledAt: now }]
     });
 
     await expect(
-      store.claimDue({
-        leaseOwner: 'first',
-        leaseSeconds: 30,
-        limit: 1,
-        now: start
-      })
+      store.claimDue({ leaseOwner: 'first', leaseSeconds: 30, limit: 1, now })
     ).resolves.toHaveLength(1);
     await expect(
-      store.claimDue({
-        leaseOwner: 'second',
-        leaseSeconds: 30,
-        limit: 1,
-        now: start
-      })
+      store.claimDue({ leaseOwner: 'second', leaseSeconds: 30, limit: 1, now })
     ).resolves.toHaveLength(0);
     await expect(
       store.claimDue({
         leaseOwner: 'second',
         leaseSeconds: 30,
         limit: 1,
-        now: new Date(start.getTime() + 31_000)
+        now: date('2026-06-20T00:00:31.000Z')
       })
     ).resolves.toMatchObject([
       {
-        key: 'TriggerRule:daily:2026-01-01T00:00:00.000Z',
+        key: 'pipelines:sample:minute:2026-06-20T00:00:00.000Z',
+        status: 'claimed'
+      }
+    ]);
+  });
+
+  it('reclaims dispatching occurrences after their lease expires', async () => {
+    const now = date('2026-06-20T00:00:00.000Z');
+    const store = createMemoryTriggerStore();
+    await store.replaceRegistrations({
+      now,
+      owner: owner('sample'),
+      registrations: [registration('minute', { startAt: now.toISOString() })]
+    });
+    const [stored] = await store.listRegistrations();
+    if (stored === undefined) throw new Error('Expected stored registration');
+    await store.createOccurrences({
+      now,
+      registrations: [{ registration: stored, scheduledAt: now }]
+    });
+    const [claimed] = await store.claimDue({
+      leaseOwner: 'first',
+      leaseSeconds: 30,
+      limit: 1,
+      now
+    });
+    if (claimed === undefined) throw new Error('Expected claimed occurrence');
+    await store.markDispatching({ key: claimed.key, now });
+
+    await expect(
+      store.claimDue({ leaseOwner: 'second', leaseSeconds: 30, limit: 1, now })
+    ).resolves.toHaveLength(0);
+    await expect(
+      store.claimDue({
+        leaseOwner: 'second',
+        leaseSeconds: 30,
+        limit: 1,
+        now: date('2026-06-20T00:00:31.000Z')
+      })
+    ).resolves.toMatchObject([
+      {
+        attemptCount: 1,
+        key: 'pipelines:sample:minute:2026-06-20T00:00:00.000Z',
         status: 'claimed'
       }
     ]);
   });
 
   it('publishes registration and occurrence events without raw action input', async () => {
-    const start = new Date('2026-01-01T00:00:00.000Z');
-    const events = eventRecorder();
-    const runtime = createTriggerRuntime({
-      dispatcher: dispatcher(),
-      events,
-      getRules: () => [rule('daily', { startAt: start.toISOString() })],
-      leaseOwner: 'test',
-      leaseSeconds: 30,
-      lookbackSeconds: 3600,
-      maxDispatchAttempts: 3,
-      store: createMemoryTriggerStore()
-    });
+    const now = date('2026-06-20T00:00:00.000Z');
+    const recorder = eventRecorder();
+    const runtime = runtimeWithMemory({ events: recorder });
 
-    await runtime.runDueTriggers(start);
+    await runtime.replaceRegistrations(
+      {
+        owner: owner('sample'),
+        registrations: [
+          registration(
+            'minute',
+            { startAt: now.toISOString() },
+            { input: { secret: 'do not emit' } }
+          )
+        ]
+      },
+      now
+    );
+    await runtime.replaceRegistrations(
+      {
+        owner: owner('sample'),
+        registrations: [
+          registration(
+            'minute',
+            { startAt: now.toISOString() },
+            { input: { secret: 'do not emit' } }
+          )
+        ]
+      },
+      now
+    );
+    await runtime.runDueTriggers(now);
+    await runtime.replaceRegistrations({ owner: owner('sample'), registrations: [] }, now);
 
-    expect(events.registrations).toHaveLength(1);
-    expect(events.occurrences.map((event) => event.status)).toEqual([
+    expect(recorder.registrations.map((event) => event.operation)).toEqual(['upserted', 'removed']);
+    expect(recorder.occurrences.map((event) => event.status)).toEqual([
       'scheduled',
       'dispatching',
       'accepted'
     ]);
-    expect(JSON.stringify(events)).not.toContain('Summarize unread signals');
-    expect(JSON.stringify(events)).not.toContain('sourceSelector');
-  });
-
-  it('filters occurrence reads by registration key and status', async () => {
-    const start = new Date('2026-01-01T00:00:00.000Z');
-    const runtime = createTriggerRuntime({
-      dispatcher: dispatcher(),
-      events: eventRecorder(),
-      getRules: () => [
-        rule('daily', { startAt: start.toISOString() }),
-        rule('hourly', { startAt: start.toISOString() })
-      ],
-      leaseOwner: 'test',
-      leaseSeconds: 30,
-      lookbackSeconds: 3600,
-      maxDispatchAttempts: 3,
-      store: createMemoryTriggerStore()
-    });
-
-    await runtime.runDueTriggers(start);
-
-    await expect(
-      runtime.listOccurrences({
-        registrationKey: 'TriggerRule:daily',
-        status: 'accepted'
-      })
-    ).resolves.toMatchObject({
-      occurrences: [
-        {
-          registrationKey: 'TriggerRule:daily',
-          status: 'accepted'
-        }
-      ]
-    });
-  });
-
-  it('reuses stored registration and occurrence state after runtime restart', async () => {
-    const start = new Date('2026-01-01T00:00:00.000Z');
-    const store = createMemoryTriggerStore();
-    const rules = [rule('daily', { startAt: start.toISOString() })];
-    const first = createTriggerRuntime({
-      dispatcher: dispatcher(),
-      events: eventRecorder(),
-      getRules: () => rules,
-      leaseOwner: 'first',
-      leaseSeconds: 30,
-      lookbackSeconds: 3600,
-      maxDispatchAttempts: 3,
-      store
-    });
-
-    await first.reconcile(start);
-
-    const second = createTriggerRuntime({
-      dispatcher: dispatcher(),
-      events: eventRecorder(),
-      getRules: () => rules,
-      leaseOwner: 'second',
-      leaseSeconds: 30,
-      lookbackSeconds: 3600,
-      maxDispatchAttempts: 3,
-      store
-    });
-    await second.reconcile(start);
-
-    await expect(second.listTriggerRegistrations()).resolves.toHaveProperty(
-      'registrations.length',
-      1
-    );
-    await expect(second.listOccurrences()).resolves.toMatchObject({
-      occurrences: [
-        {
-          key: 'TriggerRule:daily:2026-01-01T00:00:00.000Z',
-          status: 'scheduled'
-        }
-      ]
-    });
+    expect(JSON.stringify(recorder)).not.toContain('do not emit');
+    expect(JSON.stringify(recorder)).not.toContain('actionInput');
   });
 
   it('waits for the active scheduler tick during shutdown', async () => {
@@ -663,12 +544,7 @@ describe('trigger runtime', () => {
       runtime: {
         runDueTriggers() {
           return new Promise((resolve) => {
-            finish = () => {
-              resolve({
-                claimed: 0,
-                dispatched: 0
-              });
-            };
+            finish = () => resolve({ claimed: 0, dispatched: 0 });
           });
         }
       }
@@ -684,20 +560,14 @@ describe('trigger runtime', () => {
     await stopPromise;
     expect(stopped).toBe(true);
   });
+});
 
+describe('trigger RPC dispatch', () => {
   it('maps RPC action target failures into terminal or retryable occurrences', async () => {
-    const provider = await httpRpc({
-      port: 0,
-      service: 'action-provider'
-    }).start({
-      invalidResult: () => ({
-        status: 'invalid'
-      }),
+    const provider = await httpRpc({ port: 0, service: 'action-provider' }).start({
+      invalidResult: () => ({ status: 'invalid' }),
       rejectAction: () => ({
-        error: {
-          code: 'rejected_by_provider',
-          message: 'rejected'
-        },
+        error: { code: 'rejected_by_provider', message: 'rejected' },
         status: 'rejected'
       })
     });
@@ -717,9 +587,7 @@ describe('trigger runtime', () => {
         runSingleRpcDispatch({
           module: 'action-provider',
           procedure: 'missingProcedure',
-          targets: {
-            'action-provider': provider.url
-          }
+          targets: { 'action-provider': provider.url }
         })
       ).resolves.toMatchObject({
         attemptCount: 1,
@@ -730,9 +598,7 @@ describe('trigger runtime', () => {
         runSingleRpcDispatch({
           module: 'action-provider',
           procedure: 'invalidResult',
-          targets: {
-            'action-provider': provider.url
-          }
+          targets: { 'action-provider': provider.url }
         })
       ).resolves.toMatchObject({
         attemptCount: 1,
@@ -743,9 +609,7 @@ describe('trigger runtime', () => {
         runSingleRpcDispatch({
           module: 'action-provider',
           procedure: 'rejectAction',
-          targets: {
-            'action-provider': provider.url
-          }
+          targets: { 'action-provider': provider.url }
         })
       ).resolves.toMatchObject({
         failureCode: 'rejected_by_provider',
@@ -757,36 +621,50 @@ describe('trigger runtime', () => {
   });
 });
 
-function rule(
+function runtimeWithMemory(
+  input: {
+    dispatcher?: Dispatcher | undefined;
+    events?: TriggerEventPublisher | undefined;
+    leaseOwner?: string | undefined;
+    leaseSeconds?: number | undefined;
+    lookbackSeconds?: number | undefined;
+    maxDispatchAttempts?: number | undefined;
+    store?: TriggerStore | undefined;
+  } = {}
+) {
+  return createTriggerRuntime({
+    dispatcher: input.dispatcher ?? dispatcher(),
+    events: input.events ?? eventRecorder(),
+    leaseOwner: input.leaseOwner ?? 'test',
+    leaseSeconds: input.leaseSeconds ?? 30,
+    lookbackSeconds: input.lookbackSeconds ?? 3600,
+    maxDispatchAttempts: input.maxDispatchAttempts ?? 3,
+    store: input.store ?? createMemoryTriggerStore()
+  });
+}
+
+function owner(key: string) {
+  return { key, module: 'pipelines' };
+}
+
+function registration(
   name: string,
-  condition: Partial<TriggerRule['spec']['condition']> = {},
-  action: Partial<TriggerRule['spec']['action']> = {}
-): TriggerRule {
+  condition: Partial<TriggerRegistrationInput['condition']> = {},
+  action: Partial<TriggerRegistrationInput['action']> = {}
+): TriggerRegistrationInput {
   return {
-    name,
-    spec: {
-      action: {
-        input: {
-          artifactKey: 'daily',
-          instructions: 'Summarize unread signals.',
-          profile: 'default',
-          sourceSelector: {
-            domain: 'telegram',
-            selector: {
-              chatId: '10'
-            }
-          }
-        },
-        module: 'llm-runner',
-        procedure: 'runTriggered',
-        ...action
-      },
-      condition: {
-        everySeconds: 60,
-        kind: 'periodic',
-        ...condition
-      }
-    }
+    action: {
+      input: { pipelineName: 'sample', triggerName: name },
+      module: 'pipelines',
+      procedure: 'runTriggered',
+      ...action
+    },
+    condition: {
+      everySeconds: 60,
+      kind: 'periodic',
+      ...condition
+    },
+    name
   };
 }
 
@@ -794,14 +672,12 @@ function dispatcher(dispatch?: Dispatcher['dispatch']): Dispatcher {
   return {
     dispatch:
       dispatch ??
-      (() =>
+      vi.fn(() =>
         Promise.resolve({
-          result: {
-            runId: 'run_default',
-            status: 'accepted'
-          },
-          status: 'result'
-        }))
+          result: { runId: 'pipeline-run', status: 'accepted' as const },
+          status: 'result' as const
+        })
+      )
   };
 }
 
@@ -823,39 +699,66 @@ function eventRecorder(): TriggerEventPublisher & {
   };
 }
 
+function accepted(runId: string): Promise<DispatchOutcome> {
+  return Promise.resolve({
+    result: { runId, status: 'accepted' },
+    status: 'result'
+  });
+}
+
+function rejected(code: string, message: string): Promise<DispatchOutcome> {
+  return Promise.resolve({
+    result: {
+      error: { code, message },
+      status: 'rejected'
+    },
+    status: 'result'
+  });
+}
+
+function retryableFailure(message: string): Promise<DispatchOutcome> {
+  return Promise.resolve({
+    failure: {
+      code: 'procedure_transport_failed',
+      message,
+      retryable: true
+    },
+    status: 'failure'
+  });
+}
+
 async function runSingleRpcDispatch(input: {
   module: string;
   procedure: string;
   targets: Record<string, string>;
 }) {
-  const start = new Date('2026-01-01T00:00:00.000Z');
-  const runtime = createTriggerRuntime({
-    dispatcher: createRpcDispatcher({
-      targets: input.targets,
-      timeoutMs: 1000
-    }),
-    events: eventRecorder(),
-    getRules: () => [
-      rule(
-        'daily',
-        {
-          startAt: start.toISOString()
-        },
-        {
-          module: input.module,
-          procedure: input.procedure
-        }
-      )
-    ],
-    leaseOwner: 'test',
-    leaseSeconds: 30,
-    lookbackSeconds: 3600,
-    maxDispatchAttempts: 3,
-    store: createMemoryTriggerStore()
+  const now = date('2026-06-20T00:00:00.000Z');
+  const runtime = runtimeWithMemory({
+    dispatcher: createRpcDispatcher({ targets: input.targets, timeoutMs: 1000 })
   });
+  await runtime.replaceRegistrations(
+    {
+      owner: owner('sample'),
+      registrations: [
+        registration(
+          'minute',
+          { startAt: now.toISOString() },
+          {
+            module: input.module,
+            procedure: input.procedure
+          }
+        )
+      ]
+    },
+    now
+  );
 
-  await runtime.runDueTriggers(start);
+  await runtime.runDueTriggers(now);
   return (await runtime.listOccurrences()).occurrences[0];
+}
+
+function date(value: string): Date {
+  return new Date(value);
 }
 
 function nextTick(): Promise<void> {

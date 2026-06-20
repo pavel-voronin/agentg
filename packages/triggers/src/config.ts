@@ -2,7 +2,7 @@ import { defineConfig, number, string, type ConfigOf } from '@agentg/framework';
 
 const rawConfig = defineConfig({
   actionTargetsJson: string('TRIGGERS_ACTION_TARGETS').default(
-    '{"llm-runner":"http://127.0.0.1:8707"}'
+    '{"pipelines":"http://127.0.0.1:8709"}'
   ),
   databaseUrl: string('DATABASE_URL'),
   dispatchTimeoutMs: number('TRIGGERS_DISPATCH_TIMEOUT_MS').default(30_000),
@@ -11,7 +11,6 @@ const rawConfig = defineConfig({
   lookbackSeconds: number('TRIGGERS_LOOKBACK_SECONDS').default(86_400),
   maxDispatchAttempts: number('TRIGGERS_MAX_DISPATCH_ATTEMPTS').default(3),
   natsUrl: string('NATS_URL'),
-  policiesRpcUrl: string('POLICIES_RPC_URL'),
   port: number('PORT').default(8706),
   schedulerIntervalMs: number('TRIGGERS_SCHEDULER_INTERVAL_MS').default(1_000)
 });

@@ -1,7 +1,9 @@
 CREATE TABLE IF NOT EXISTS "triggers_registrations" (
   "key" text PRIMARY KEY NOT NULL,
-  "rule_kind" text NOT NULL,
-  "rule_name" text NOT NULL,
+  "owner" jsonb NOT NULL,
+  "owner_module" text NOT NULL,
+  "owner_key" text NOT NULL,
+  "name" text NOT NULL,
   "schedule" jsonb NOT NULL,
   "action" jsonb NOT NULL,
   "anchor_at" timestamp with time zone NOT NULL,
@@ -9,13 +11,13 @@ CREATE TABLE IF NOT EXISTS "triggers_registrations" (
   "updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS "triggers_registrations_rule_idx"
-  ON "triggers_registrations" ("rule_kind", "rule_name");
+CREATE INDEX IF NOT EXISTS "triggers_registrations_owner_idx"
+  ON "triggers_registrations" ("owner_module", "owner_key");
 
 CREATE TABLE IF NOT EXISTS "triggers_occurrences" (
   "key" text PRIMARY KEY NOT NULL,
   "registration_key" text NOT NULL,
-  "rule_name" text NOT NULL,
+  "registration_name" text NOT NULL,
   "scheduled_at" timestamp with time zone NOT NULL,
   "status" text NOT NULL,
   "action" jsonb NOT NULL,

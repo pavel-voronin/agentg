@@ -4,13 +4,13 @@ vi.mock('./telemetry.js', () => ({
   recordDispatch: vi.fn(),
   recordOccurrencesCreated: vi.fn(),
   recordTriggerStats: vi.fn(),
-  timeTriggerDispatch: vi.fn((_operation: () => Promise<unknown>) => _operation()),
+  timeTriggerDispatch: vi.fn((operation: () => Promise<unknown>) => operation()),
   timeTriggerRuntime: vi.fn((_operation: string, work: () => Promise<unknown>) => work())
 }));
 
-import type { TriggerRule } from '../policies/policies.js';
 import type { Dispatcher } from './dispatcher/dispatcher.js';
 import type { TriggerEventPublisher } from './events.js';
+import type { TriggerRegistrationInput } from './registrations/types.js';
 import { createTriggerRuntime } from './runtime.js';
 import { createMemoryTriggerStore } from './store.js';
 import * as telemetry from './telemetry.js';
@@ -25,17 +25,23 @@ describe('trigger runtime telemetry', () => {
   });
 
   it('records runtime, queue, and dispatch telemetry from a real store tick', async () => {
-    const now = new Date('2026-01-01T00:00:00.000Z');
+    const now = new Date('2026-06-20T00:00:00.000Z');
     const runtime = createTriggerRuntime({
       dispatcher: dispatcher(),
       events: eventRecorder(),
-      getRules: () => [rule('daily', { startAt: now.toISOString() })],
       leaseOwner: 'test',
       leaseSeconds: 30,
       lookbackSeconds: 3600,
       maxDispatchAttempts: 3,
       store: createMemoryTriggerStore()
     });
+    await runtime.replaceRegistrations(
+      {
+        owner: { key: 'sample', module: 'pipelines' },
+        registrations: [registration('minute', { startAt: now.toISOString() })]
+      },
+      now
+    );
 
     await expect(runtime.runDueTriggers(now)).resolves.toEqual({
       claimed: 1,
@@ -48,50 +54,33 @@ describe('trigger runtime telemetry', () => {
     expect(telemetry.recordDispatch).toHaveBeenCalledWith('accepted');
     expect(telemetry.recordTriggerStats).toHaveBeenLastCalledWith({
       dueOccurrenceCount: 0,
-      occurrenceStatusCounts: [
-        {
-          count: 1,
-          status: 'accepted'
-        }
-      ],
+      occurrenceStatusCounts: [{ count: 1, status: 'accepted' }],
       oldestDueOccurrenceAgeSeconds: 0,
       registrationCount: 1
     });
 
     const calls = JSON.stringify(vi.mocked(telemetry.recordTriggerStats).mock.calls);
-    expect(calls).not.toContain('TriggerRule:daily');
-    expect(calls).not.toContain('run_1');
+    expect(calls).not.toContain('pipelines:sample:minute');
+    expect(calls).not.toContain('pipeline-run');
   });
 });
 
-function rule(
+function registration(
   name: string,
-  condition: Partial<TriggerRule['spec']['condition']> = {}
-): TriggerRule {
+  condition: Partial<TriggerRegistrationInput['condition']> = {}
+): TriggerRegistrationInput {
   return {
-    name,
-    spec: {
-      action: {
-        input: {
-          artifactKey: 'daily',
-          instructions: 'Summarize unread signals.',
-          profile: 'default',
-          sourceSelector: {
-            domain: 'telegram',
-            selector: {
-              chatId: '10'
-            }
-          }
-        },
-        module: 'llm-runner',
-        procedure: 'runTriggered'
-      },
-      condition: {
-        everySeconds: 60,
-        kind: 'periodic',
-        ...condition
-      }
-    }
+    action: {
+      input: { pipelineName: 'sample', triggerName: name },
+      module: 'pipelines',
+      procedure: 'runTriggered'
+    },
+    condition: {
+      everySeconds: 60,
+      kind: 'periodic',
+      ...condition
+    },
+    name
   };
 }
 
@@ -99,10 +88,7 @@ function dispatcher(): Dispatcher {
   return {
     dispatch: () =>
       Promise.resolve({
-        result: {
-          runId: 'run_1',
-          status: 'accepted'
-        },
+        result: { runId: 'pipeline-run', status: 'accepted' },
         status: 'result'
       })
   };
