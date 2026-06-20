@@ -83,6 +83,17 @@ Metrics:
 - Telegram file queue asset/job/byte gauges
 - Telegram file worker wake, job outcome, and recovery outcome counters
 - Telegram file worker stage duration histogram
+- Data operation duration histogram
+- Data write counter
+- Pipeline definition, run, and node state gauges
+- Pipeline run-start and node-dispatch counters
+- Pipeline node dispatch duration histogram
+- LLM runner run state gauge
+- LLM runner run-start and processed-row counters
+- LLM runner provider-call and run-processing duration histograms
+- Trigger registration, occurrence, due-occurrence, and oldest-due-age gauges
+- Trigger occurrence-created and dispatch counters
+- Trigger runtime and dispatch duration histograms
 - prometheus-nats-exporter metrics scraped by VictoriaMetrics from NATS
   monitoring endpoints
 - postgres_exporter metrics scraped by VictoriaMetrics from Postgres statistics
@@ -151,10 +162,10 @@ The telemetry page is a thin read and navigation surface:
 
 - `telemetry.links` is a Dashboard backend procedure that reads backend UI
   links for embedded dashboards and debug tools.
-- The Operations, Telegram, Files, TDLib Updates, Postgres, and NATS tabs embed
-  provisioned Grafana dashboards. Dashboard UIDs and slugs are fixed in the
-  Dashboard component; backend-provided links cover only external observability
-  tool base URLs.
+- The Operations, Data, Pipelines, LLM Runner, Triggers, Telegram, Files, TDLib
+  Updates, Postgres, and NATS tabs embed provisioned Grafana dashboards.
+  Dashboard UIDs and slugs are fixed in the Dashboard component;
+  backend-provided links cover only external observability tool base URLs.
 - The NATS dashboard is backed by prometheus-nats-exporter metrics.
 - The Postgres dashboard is backed by postgres_exporter metrics and app-level
   `db.client.operation.duration` metrics.
@@ -187,6 +198,37 @@ The provisioned `Operations` dashboard reads RPC call rate and p95 latency,
 Postgres query p95 latency, Telegram domain-stage p95 latency, and recent traces
 from Grafana data sources. Jaeger UI is configured with outbound links back to
 Grafana for RPC methods and TDLib update types.
+
+The provisioned `Data` dashboard is the operator readback surface for
+addressable data operations. It reads `data_operation_duration_seconds_*`,
+`data_writes_total`, Data RPC server duration, and Data Postgres client duration.
+It must answer whether Data calls are failing, which operation is slow, whether
+derived writes are happening, and whether DB latency is the bottleneck.
+
+The provisioned `Pipelines` dashboard is the operator readback surface for YAML
+pipeline execution. It reads `pipelines_definitions`, `pipelines_runs`,
+`pipelines_nodes`, `pipelines_runs_started_total`,
+`pipelines_node_dispatches_total`, `pipelines_node_duration_seconds_*`,
+Pipelines RPC server duration, and Pipelines Postgres client duration. It must
+answer whether runs are stuck waiting, failing, dispatching actions, or blocked
+by DB/RPC latency.
+
+The provisioned `LLM Runner` dashboard is the operator readback surface for LLM
+action execution. It reads `llm_runner_runs`, `llm_runner_runs_started_total`,
+`llm_runner_provider_duration_seconds_*`,
+`llm_runner_run_duration_seconds_*`, `llm_runner_rows_processed_total`, LLM
+Runner RPC server duration, and LLM Runner Postgres client duration. It must
+answer whether accepted runs are processing, failing, calling providers, or
+blocked by provider/DB/RPC latency.
+
+The provisioned `Triggers` dashboard is the operator readback surface for
+scheduled action wakeups. It reads `triggers_registrations`,
+`triggers_occurrences`, `triggers_due_occurrences`, `triggers_oldest_due_age`,
+`triggers_occurrences_created_total`, `triggers_dispatches_total`,
+`triggers_runtime_duration_seconds_*`, `triggers_dispatch_duration_seconds_*`,
+Triggers RPC server duration, and Triggers Postgres client duration. It must
+answer whether registrations are present, due work is accumulating, dispatches
+are rejected or failing, or runtime latency is delaying scheduled actions.
 
 The provisioned `Telegram` dashboard groups module telemetry by internal
 subsystem: ingestion, read path, storage, and events. It reads Telegram queue

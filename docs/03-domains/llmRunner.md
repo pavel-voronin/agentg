@@ -2,331 +2,336 @@
 
 ## Purpose
 
-`llm-runner` owns LLM-backed processing over domain content.
+`llm-runner` owns LLM action execution for pipeline nodes.
 
-It resolves requested source content through the owning domain, runs a
-configured profile, stores derived artifacts, and publishes run and
-artifact events while hiding source-domain mechanics, provider adapters,
-connection details, retries, and artifact storage details.
+It receives an input dataset from `pipelines`, calls a configured LLM profile,
+returns an output dataset, records LLM run lifecycle, and hides provider
+adapters, connection details, retries, and profile loading.
 
-`llm-runner` is a regular module and can act as an action provider when
-`triggers` calls one of its procedures.
+`llm-runner` does not own source selection and does not own final semantic
+storage. Pipelines select and render content through `data`; pipelines write
+results through `data.writeAnnotation` or `data.writeCollectionItem`.
 
 ## Goals
 
-- Run LLM-backed processing over domain content.
-- Keep source-domain semantics private to the source domain.
-- Support direct RPC runs and triggered runs through one run lifecycle.
-- Store derived artifacts so consumers can query results through source
-  references.
-- Configure LLM connection profiles for providers, models, endpoints,
-  credentials, adapter protocols, timeouts, and retries.
-- Publish live run and artifact events.
-- Keep current artifact storage as the first implementation slice while keeping
-  the model compatible with multiple artifacts per source later.
+- Provide the `llm.run` pipeline action.
+- Configure LLM provider profiles from files.
+- Keep provider credentials out of profile files.
+- Execute provider calls with bounded retry and timeout settings.
+- Return LLM output as a dataset that later pipeline nodes can consume.
+- Record LLM run state for inspection and retry diagnostics.
+
+## Non-Goals
+
+- Do not resolve Telegram selectors.
+- Do not materialize source content.
+- Do not write final annotations or collections.
+- Do not store the main addressable derived-data model.
+- Do not make profile files carry prompts or pipeline instructions.
 
 ## Ubiquitous Language
 
-- `LlmRunPayload`: the request body for one LLM-backed processing run.
-- `Profile`: named module configuration that knows how to connect to one LLM
-  backend through a provider adapter.
-- `Instructions`: domain-level processing instructions supplied by a user or
-  run input.
-- `SourceSelector`: a declarative selector for source-domain content.
-- `SourceRef`: a neutral reference to a selected source object.
-- `ContentRef`: a neutral reference to concrete content used by a run.
-- `SourceSnapshot`: the resolved `SourceRef` and `ContentRef` set used by one
-  run.
-- `LlmRun`: a durable lifecycle record for one execution attempt.
-- `LlmArtifact`: the derived result produced by a run.
-- `ActionProvider`: the regular module procedure role used when `triggers`
-  calls `llm-runner`.
+- `Profile`: named file-backed configuration for one provider/model endpoint.
+- `LlmActionInput`: the `with` payload for one `llm.run` pipeline node.
+- `Prompt`: the node-owned instruction text.
+- `InputDataset`: rows supplied by the upstream pipeline node.
+- `OutputDataset`: rows produced from the provider response.
+- `LlmRun`: one durable lifecycle record for one `llm.run` action execution.
+- `ProviderCall`: one provider request for one input row and one attempt.
+- `ActionProvider`: the role `llm-runner` plays when `pipelines` invokes
+  `llm.run`.
 
 ## Boundary Contract
 
-### LLM Runner Boundary
-
 `llm-runner` owns:
 
-- LLM run procedures;
-- action-provider procedure handling for triggered runs;
-- `LlmRunPayload` validation;
+- `llm.run` action validation;
 - profile configuration and adapter selection;
-- source resolver ports;
-- source snapshot persistence;
-- run lifecycle;
-- current artifact persistence;
-- artifact read procedures indexed by source references;
-- run and artifact events;
-- observability for processing lifecycle.
+- provider request construction;
+- provider retry and timeout behavior;
+- LLM run lifecycle storage;
+- LLM run events.
 
-### Related Ownership
+Related ownership:
 
-- `triggers` owns `TriggerRule` policies, schedules, occurrences, leases, and
-  dispatch.
-- Source domains own selector semantics, storage, read models, readiness, and
-  source materialization.
-- Telegram owns Telegram history readiness, coverage, TDLib access, file slots,
-  file queues, and Telegram read models.
-- Gateway owns external protocol compatibility.
-- Dashboard owns shell behavior and user interaction state.
-
-## Run Payload
-
-`llm-runner` defines the payload shape for direct runs and triggered runs:
-
-```ts
-type LlmRunPayload = {
-  artifactKey: string;
-  instructions: string;
-  profile: string;
-  sourceSelector: SourceSelector;
-};
-```
-
-Example `TriggerRule` policy that calls `llm-runner`:
-
-```yaml
-apiVersion: agentg.dev/v1
-kind: TriggerRule
-metadata:
-  name: unreadDigestDaily
-spec:
-  condition:
-    kind: periodic
-    everySeconds: 86400
-  action:
-    module: llm-runner
-    procedure: runTriggered
-    input:
-      artifactKey: dailyUnreadDigest
-      profile: default
-      instructions: Summarize important unread signals.
-      sourceSelector:
-        domain: telegram
-        selector:
-          unread: true
-```
-
-`triggers` owns the surrounding `TriggerRule` semantics. `llm-runner` owns only
-the `action.input` payload when `action.module` is `llm-runner`.
-
-## Source Domain Boundary
-
-The source domain owns selector interpretation. For Telegram sources, Telegram
-interprets Telegram selectors, reads Telegram read models, checks readiness and
-coverage, requests missing materialization through Telegram-owned capabilities,
-and returns neutral `SourceRef` and `ContentRef` values for `llm-runner`.
-
-`llm-runner` stores and passes source selectors as source-domain data until it
-calls the source-domain resolver.
+- `pipelines` owns pipeline definitions, node dependency graph, run lifecycle,
+  and action dispatch.
+- `data` owns model refs, provider routing, annotations, collections, and data
+  write actions.
+- Telegram owns Telegram content readiness, coverage, storage, TDLib access, and
+  Telegram data-provider procedures.
 
 ## Profile Boundary
 
-A profile is named runtime configuration owned by `llm-runner`.
+A profile is named file-backed configuration owned by `llm-runner`.
 
-It includes LLM provider, model, endpoint, credential, adapter protocol,
-timeout, and retry settings. The first retry setting is `maxAttempts`, a
-positive integer that defaults to one provider attempt. Direct run inputs and
-triggered run inputs reference the profile by name.
+Profiles are loaded from `config/llm-runner/profiles.yaml` unless
+`LLM_RUNNER_PROFILES_PATH` points at another profile file.
 
-## Public Contract
+The profile file includes LLM provider, model, endpoint, secret reference,
+adapter protocol, timeout, retry, and generation settings. Direct provider
+credentials must not be stored in the profile file. A profile references a
+secret through `apiKeyEnv`, and runtime reads the secret value from that
+environment variable before making the provider call.
 
-Direct run payload:
+Profile file shape:
 
-```ts
-type RunInput = LlmRunPayload;
+```yaml
+profiles:
+  openrouterFree:
+    adapter: openai-compatible
+    apiKeyEnv: OPENROUTER_API_KEY
+    baseUrl: https://openrouter.ai/api/v1
+    model: openrouter/free
+    timeoutMs: 60000
+    maxAttempts: 1
+    maxOutputTokens: 300
+    temperature: 0.2
 ```
 
-Triggered run payload:
+Supported profile fields:
+
+- `adapter`: currently only `openai-compatible`.
+- `baseUrl`: provider API base URL.
+- `model`: provider model identifier.
+- `apiKeyEnv`: optional environment variable containing the bearer token.
+- `timeoutMs`: optional provider request timeout.
+- `maxAttempts`: optional provider retry count.
+- `maxOutputTokens`: optional output token limit.
+- `temperature`: optional provider temperature.
+
+`apiKey` is not a supported profile file field.
+
+## Pipeline Action Contract
+
+Pipeline node:
+
+```yaml
+summary:
+  use: llm.run
+  from: promptInput
+  with:
+    profile: openrouterFree
+    prompt: Summarize the input in one sentence.
+```
+
+Action input:
 
 ```ts
-type RunTriggeredInput = {
-  actionInput: LlmRunPayload;
-  occurrence: {
-    idempotencyKey: string;
-    registrationKey: string;
-    scheduledAt: string;
-  };
-  trigger: {
-    kind: 'trigger';
-    requestId: string;
+type LlmActionInput = {
+  profile: string;
+  prompt: string;
+  output?: {
+    format?: 'text' | 'json';
   };
 };
 ```
 
-Run result:
+The first implementation treats `prompt` as literal instruction text. Prompt
+template lookup is not part of `llm-runner`.
+
+Action execution input:
 
 ```ts
-type LlmRunOutput =
+type LlmRunActionRequest = {
+  input: Dataset;
+  node: {
+    id: string;
+    runId: string;
+  };
+  with: LlmActionInput;
+};
+```
+
+Action result:
+
+```ts
+type LlmRunActionResult =
   | {
       runId: string;
       status: 'accepted';
     }
   | {
-      error: LlmRunError;
+      error: {
+        code: string;
+        message: string;
+      };
       status: 'rejected';
     };
 ```
 
-`accepted` means `llm-runner` accepted responsibility for the run lifecycle.
-Artifact readiness is reported through run state, artifact events, and artifact
-read procedures.
+`llm.run` creates a durable run, stores it as `accepted`, publishes the accepted
+event, starts provider work outside the action response path, and returns the
+run id. Pipelines resume from LLM runner events and read the terminal provider
+result through `getRunResult`.
 
-Triggered runs use `occurrence.idempotencyKey` as the deduplication key.
-Duplicate dispatch for the same key returns the existing accepted run.
+The action returns `rejected` only when the action request is rejected before a
+durable run is accepted, such as an unknown profile. Provider failures after
+acceptance are stored as failed runs and are visible through `getRunResult`.
 
-Artifact reads are indexed by source references and artifact keys:
+## Dataset Semantics
 
-```ts
-type ListArtifactsInput = {
-  artifactKey?: string;
-  sourceRef: SourceRef;
-};
+`llm.run` consumes a dataset produced by a previous node. For text prompts,
+`data.render` should prepare the input dataset before the LLM node.
 
-type GetCurrentArtifactInput = {
-  artifactKey: string;
-  sourceRef: SourceRef;
-};
+`llm.run` treats each input dataset row as one prompt context and makes one LLM
+call per input row. If the caller needs one LLM call for many source rows, the
+upstream `data.render` node must aggregate those rows into one rendered input
+row. If the caller needs one LLM call per chat, `data.render` should return one
+row per chat, for example with `options.groupByRef: 'chat'`.
+
+One `llm.run` node execution has one `LlmRun` id. Multi-row input creates
+multiple provider calls under that run id. If any row reaches a terminal provider
+failure, the whole accepted run fails and no partial output dataset is exposed
+through `getRunResult`.
+
+`llm.run` with an empty input dataset returns an accepted run id, makes no
+provider calls, stores a completed empty output dataset, and publishes the
+completed run event.
+
+Input example:
+
+```yaml
+promptInput:
+  use: data.render
+  from: messages
+  with:
+    format: text
+    sourceRef: message
+    options:
+      groupByRef: chat
+
+summary:
+  use: llm.run
+  from: promptInput
+  with:
+    profile: openrouterFree
+    prompt: Summarize the input in one sentence.
 ```
 
-## Source Reference Semantics
-
-```ts
-type SourceSelector = {
-  domain: string;
-  selector: JsonValue;
-};
-
-type SourceRef = {
-  _model: string;
-  id: string;
-};
-
-type ContentRef = {
-  _model: string;
-  id: string;
-  sourceRef?: SourceRef;
-};
-```
-
-The source domain owns `_model` and `id` values. `llm-runner` stores and indexes
-these values as opaque identifiers.
-
-The source resolver returns:
-
-- `SourceRef[]`: selected source scopes;
-- `ContentRef[]`: concrete content references to process;
-- optional source-domain read payload required by the run;
-- readiness state if source materialization is still in progress.
-
-If readiness is pending, `llm-runner` records the run as waiting for source
-readiness and resumes through the run lifecycle after source completion.
+`llm-runner` carries each input row's refs and lineage into the corresponding
+output row so a later `data.write*` node can address the result.
 
 ## Run Lifecycle
 
-Allowed run states:
+Allowed LLM run states:
 
 ```text
 accepted
-resolvingSource
-waitingForSource
 processing
-storingArtifact
 completed
 failed
 cancelled
 ```
 
-Transitions:
-
-- `accepted -> resolvingSource`
-- `resolvingSource -> waitingForSource`
-- `resolvingSource -> processing`
-- `waitingForSource -> resolvingSource`
-- `processing -> storingArtifact`
-- `storingArtifact -> completed`
-- any non-terminal state -> `failed`
-- any non-terminal state -> `cancelled`
-
 Rules:
 
-- A direct run stores the request snapshot that created it.
-- A triggered run stores trigger provenance and the accepted run request needed
-  to resume execution.
-- A run stores the profile name. Provider and model details remain in module
-  configuration.
-- A run stores the resolved source snapshot before processing starts.
-- `TriggerRule` changes affect new triggered runs. Accepted runs keep their
-  stored run request.
-- Processing retries are idempotent for the same run id and source snapshot.
-- Artifact writes are idempotent for the same run id.
-
-## Artifact Model
-
-The first implementation stores the current artifact for a source and artifact
-key.
-
-Minimum artifact fields:
-
-- artifact id;
-- artifact key;
-- source refs;
-- content refs;
-- profile;
-- run id;
-- status;
-- title or summary metadata;
-- body or structured payload;
-- created timestamp;
-- updated timestamp.
-
-The model supports later storage of multiple artifacts for one source, such as
-artifacts produced by different runs, profiles, or instructions.
+- A run stores the profile name, prompt, input metadata, output metadata, and
+  provider failure code when present.
+- Provider and model details remain in profile configuration.
+- Provider credentials are not copied into run records.
+- Provider retries use the same LLM run id.
+- A failed provider call records a failed run and publishes a failed run event.
 
 ## Event Contract
 
-`llm-runner` publishes live, non-durable events:
+`llm-runner` publishes live events:
 
 - `llmRunner.run.accepted`
-- `llmRunner.run.waitingForSource`
 - `llmRunner.run.processing`
 - `llmRunner.run.completed`
 - `llmRunner.run.failed`
-- `llmRunner.artifact.updated`
 
 Event payloads may include:
 
-- `runId`;
-- `artifactId`;
-- `artifactKey`;
-- `sourceRefs`;
-- `contentRefs`;
-- trigger provenance;
-- timestamps;
-- failure code for failed runs.
-
-Events are live facts. Consumers recover state through read procedures after
-live event loss.
-
-## Observability Contract
-
-Allowed low-cardinality labels:
-
+- LLM run id;
+- pipeline run id;
+- pipeline node id;
+- profile;
 - run state;
 - failure code;
-- source domain;
-- profile when configured cardinality is bounded.
+- timestamps.
 
-Forbidden high-cardinality labels:
+Completed and failed events for pipeline action runs include the pipeline run id
+and pipeline node id from the action execution input. Events are live facts.
+Consumers recover state through read procedures after live event loss.
+
+## Storage Model
+
+The first implementation stores LLM run records:
 
 - run id;
-- artifact id;
-- chat id;
-- message id;
-- file id;
-- raw selector;
-- raw instructions text.
+- pipeline run id;
+- pipeline node id;
+- profile;
+- prompt;
+- input metadata;
+- output metadata;
+- output dataset for completed action runs;
+- status;
+- failure code;
+- timestamps.
+
+Final semantic outputs are stored by `data` write nodes, not by `llm-runner`.
+The stored action output dataset is action-run state, not addressable semantic
+storage.
+
+## Read Procedures
+
+Consumers can read LLM run state through:
+
+```ts
+getRunResult(input: { runId: string }): LlmRunResult | null;
+
+type LlmRunResult =
+  | {
+      runId: string;
+      status: 'accepted' | 'processing';
+    }
+  | {
+      dataset: Dataset;
+      runId: string;
+      status: 'completed';
+    }
+  | {
+      error: {
+        code: string;
+        message: string;
+      };
+      runId: string;
+      status: 'failed';
+    };
+```
+
+`getRunResult` returns the current run state, the completed output dataset when
+the run completed, and the failure code when the run failed. Provider credentials
+are never returned.
+
+## Observability
+
+`llm-runner` emits bounded domain metrics:
+
+- `llm_runner.runs`: current durable run count by `llm.run.status`.
+- `llm_runner.runs.started`: accepted action runs by `llm.profile`.
+- `llm_runner.provider.duration`: provider call duration by `llm.profile`,
+  `llm.output.format`, `llm.provider.result`, and `error.type` on failures.
+- `llm_runner.run.duration`: accepted run processing duration by `llm.profile`,
+  `llm.run.result`, and `error.type` on failures.
+- `llm_runner.rows.processed`: rows emitted by completed LLM runs by
+  `llm.profile` and `llm.run.result`.
+
+Metric labels must not include run ids, pipeline run ids, node ids, prompts,
+input text, provider secrets, message ids, or chat ids.
+
+Operator path:
+
+- AgentG Dashboard: `/telemetry/llm-runner`
+- Grafana dashboard UID: `agentg-llm-runner`
+- Jaeger service: `llm-runner`
+
+The dashboard must show current runs by status, processing runs, failed runs,
+started runs by profile, provider call volume, provider p95, run p95, rows
+processed, RPC call rate, and Postgres p95.
 
 ## File Structure Constraints
 
@@ -338,10 +343,9 @@ packages/llm-runner/
     module.ts
     client.ts
     config.ts
-    artifacts/
+    actions/
     profiles/
     runs/
-    sources/
     events.ts
     schema.ts
   drizzle/
@@ -351,99 +355,65 @@ packages/llm-runner/
 The package root exports a typed internal client when another current package
 imports it. Internal tests use relative imports.
 
-## Acceptance Test Contract
+## Test Contract
 
-An `llm-runner` implementation is accepted only when the feature-owned tests
-prove the behavior below.
-
-### Run Input
-
-- Direct `run` validates `LlmRunPayload`.
-- Triggered `runTriggered` validates `TriggeredActionInput`.
-- `runTriggered` validates `actionInput` as `LlmRunPayload`.
-- Missing or invalid `artifactKey`, `profile`, `instructions`, or
-  `sourceSelector` rejects the run.
-- An unknown profile rejects the run before source processing starts.
-- Rejected runs do not create artifacts.
-
-### Run Lifecycle
-
-- A direct run creates a durable run record in `accepted`.
-- A triggered run creates the same run lifecycle as a direct run.
-- A triggered run stores trigger provenance and the accepted run request needed
-  to resume execution.
-- Duplicate trigger dispatch with the same occurrence idempotency key returns
-  the existing accepted run.
-- Restart resumes durable accepted and waiting runs without creating duplicate
-  runs or duplicate artifacts.
-- A run stores the profile name and does not copy provider credentials into the
-  run record.
-- A failed source, provider, or artifact step records a failed run with a
-  failure code.
-- Shutdown waits for the active run tick to finish before the module stop
-  completes.
-
-### Source Resolution
-
-- Source selectors pass to the owning domain resolver as source-domain data.
-- Telegram selectors are resolved only through the Telegram source resolver
-  port.
-- A ready source result stores `SourceRef` and `ContentRef` values in the
-  source snapshot before provider processing starts.
-- A pending source result leaves artifact storage unchanged.
-- A pending source result does not call the provider.
-- Source readiness completion resumes the same run id.
-- A source resolver result with zero `SourceRef` values fails the run before the
-  provider is called.
-- A ready source result with source refs and no content refs completes the run
-  without provider processing and without artifact update.
-- Source references and content references are stored and indexed as opaque
-  identifiers.
-
-### Profile And Provider Call
-
+- `llm.run` validates `LlmActionInput`.
+- Unknown profiles are rejected before provider calls.
+- Referenced `apiKeyEnv` secret values that are missing or empty are rejected
+  before provider calls.
 - Provider, model, endpoint, timeout, retry, and adapter settings come from the
-  named profile configuration.
+  named profile file configuration.
+- Provider secrets are referenced by environment variable name and are not
+  stored in profile files.
 - `maxAttempts` controls provider retry count and defaults to one attempt.
-- The provider request contains the run instructions and resolved source
-  content.
+- `timeoutMs` bounds one provider request attempt.
+- Provider retry attempts reuse the same LLM run id.
+- The provider request contains the node prompt and upstream dataset content.
 - The provider request uses the configured profile and does not read provider
-  settings from the run payload.
+  settings from the pipeline node beyond the profile name.
 - The profile is connection and provider configuration only; it does not supply
-  or override run instructions.
-- Provider retry uses the same run id and source snapshot.
-- A provider failure records a failed run and publishes
-  `llmRunner.run.failed`.
-- An invalid provider response rejects artifact storage and records a failed
+  or override node prompts.
+- Multi-row input uses one LLM run id and one provider call per input row.
+- Empty input returns an accepted LLM run id, makes no provider calls, and later
+  exposes a completed empty output dataset through `getRunResult`.
+- Successful provider output records a completed LLM run and exposes one output
+  dataset row for each input row through `getRunResult`.
+- Output dataset rows preserve the corresponding input row refs and lineage.
+- A terminal provider failure for one row fails the whole accepted run and
+  exposes no partial output dataset through `getRunResult`.
+- `output.format: text` returns provider text as a JSON-safe text value.
+- `output.format: json` parses provider text as JSON and rejects invalid JSON.
+- Provider timeout records a failed LLM run and publishes a failed run event.
+- Provider terminal failure records a failed LLM run and publishes a failed run
+  event.
+- LLM run records never store provider credentials.
+- Completed and failed runs publish corresponding LLM runner events.
+- Completed and failed events for pipeline action runs include pipeline run id
+  and pipeline node id.
+- `getRunResult` returns the completed output dataset for a completed action
   run.
+- `getRunResult` returns failed state and failure code for a failed action run.
+- Consumers can recover LLM run state through read procedures after live event
+  loss.
+- `llm-runner` does not write data annotations or collections.
+- LLM runner telemetry records durable run state, run starts, provider duration,
+  run duration, and processed rows without run ids, node ids, prompts, message
+  ids, chat ids, input text, or secrets as metric labels.
+- `/telemetry/llm-runner` embeds the `agentg-llm-runner` Grafana dashboard for
+  operator readback.
 
-### Artifact Storage And Reads
+## Implementation Sequence
 
-- Successful processing writes current artifact records indexed by every
-  associated `SourceRef` and `artifactKey`.
-- Artifact writes are idempotent for the same run id.
-- A newer successful run for the same source and artifact key replaces the
-  current artifact.
-- Artifact records store `artifactKey`, source refs, content refs, profile,
-  run id, status, body or structured payload, and timestamps.
-- `listArtifacts` can query by source reference and optional artifact key.
-- `getCurrentArtifact` returns the current artifact for a source reference and
-  artifact key.
-- `getCurrentArtifact` returns `null` when no artifact exists for a source
-  reference and artifact key.
-- Artifact read procedures recover state from storage after live event loss.
+1. Keep file-backed profile loading.
+2. Add `llm.run` action provider procedure for `pipelines`.
+3. Store LLM run records keyed by pipeline run and node id.
+4. Return provider output as a dataset.
+5. Keep the target LLM action path as prepared dataset input, dataset output, and
+   separate persistence through a following `data.write*` node.
 
-### Events
+## Removal Notes
 
-- Accepted, waiting-for-source, processing, completed, and failed run events are
-  published at the matching lifecycle transitions.
-- `llmRunner.artifact.updated` is published after a successful artifact write.
-- Event payloads include identifiers needed for consumers to read state.
-- Event payloads do not expose raw provider credentials, raw instructions, or
-  raw source payload.
-
-### Feature Gate
-
-The scoped verification command for this feature is `npm run check:llm-runner`.
-The triggered action-provider integration gate is
-`npm run integration:triggers-llm-runner`.
+The artifact/source-selector execution path is replaced by pipeline dataset
+action execution. Remove artifact storage/read procedures, source resolver
+configuration, `LlmRunPayload`, and `runTriggered`-specific artifact payload
+handling as part of this implementation. Do not keep a compatibility path.

@@ -68,41 +68,28 @@ Example:
 
 ```yaml
 apiVersion: agentg.dev/v1
-kind: TriggerRule
+kind: ExampleRule
 metadata:
-  name: unreadDigestDaily
+  name: example
   labels:
-    area: telegram
+    area: local
 spec:
-  condition:
-    kind: periodic
-    everySeconds: 86400
-  action:
-    module: llm-runner
-    procedure: runTriggered
-    input:
-      artifactKey: dailyUnreadDigest
-      profile: default
-      instructions: Summarize important unread signals.
-      sourceSelector:
-        domain: telegram
-        selector:
-          unread: true
+  enabled: true
 ```
 
 For this example, `policies` validates only the document envelope and delegates
-`spec` validation to the `TriggerRule` definition owned by `triggers`.
+`spec` validation to the `ExampleRule` definition owned by its module.
 
 ## Policy Definition
 
 The definition lives in the module that owns the meaning of `spec`.
 
 ```ts
-export const triggerRulePolicy = definePolicy({
-  id: 'triggers.rule',
-  kind: 'TriggerRule',
-  moduleId: 'triggers',
-  spec: triggerRuleSpec,
+export const exampleRulePolicy = definePolicy({
+  id: 'example.rule',
+  kind: 'ExampleRule',
+  moduleId: 'example',
+  spec: exampleRuleSpec,
   version: 1,
   resolve: collectSpecs()
 });
@@ -137,6 +124,10 @@ Mutation flow:
 
 The file store is the source of truth for active policy documents. Derived
 runtime state belongs to the module that consumes the resolved policy value.
+
+Pipeline definitions are not policy documents in the target architecture.
+`pipelines` stores pipeline YAML, validates pipeline nodes, and registers
+compiled schedules in `triggers`.
 
 ## Endpoint API
 
@@ -190,16 +181,16 @@ module setup:
 
 ```ts
 setup({ resource, usePolicy }) {
-  const getRules = usePolicy(triggerRulePolicy);
+  const getExamples = usePolicy(exampleRulePolicy);
 
-  const scheduler = resource('scheduler', () =>
-    createScheduler({
-      getRules
+  const service = resource('exampleConsumer', () =>
+    createExampleConsumer({
+      getExamples
     })
   );
 
   return {
-    runDueTriggers: runDueTriggersProcedure({ scheduler })
+    getExampleState: getExampleStateProcedure({ service })
   };
 }
 ```
@@ -282,6 +273,8 @@ the behavior below.
 
 - `setInstance` rejects a document with an unsupported `apiVersion`.
 - `setInstance` rejects a document with an unknown `kind`.
+- `setInstance` rejects a `Pipeline` document because pipeline definitions are
+  stored by `pipelines`, not by `policies`.
 - `setInstance` rejects missing or invalid `metadata.name`.
 - `setInstance` validates `spec` through the `PolicyDefinition` selected by
   `kind`.
@@ -327,17 +320,3 @@ the behavior below.
   `policies.instances.changed`.
 - Modules receive only resolver output, not policy endpoint internals, file
   paths, raw events, or unrelated policy documents.
-
-### Startup And File Store Integrity
-
-- Startup loads all active documents from `config/policies`.
-- Startup fails when a document path does not match `kind + metadata.name`.
-- Startup fails when two documents define the same identity.
-- Startup validates each stored document with the current catalog before modules
-  consume resolved values.
-- Startup exposes the same resolved values as the values returned before a clean
-  shutdown.
-
-### Feature Gate
-
-The scoped verification command for this feature is `npm run check:policies`.

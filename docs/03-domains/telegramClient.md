@@ -2,7 +2,8 @@
 
 ## Responsibility
 
-The Telegram Client domain is the foundation of AgenTG. It owns the user-client behavior, Telegram event model, Telegram-shaped state, and Telegram API surface.
+The Telegram Client domain is the foundation of AgenTG. It owns the user-client
+behavior, Telegram event model, Telegram-shaped state, and Telegram API surface.
 
 AgenTG should be useful as a Telegram client first.
 
@@ -10,7 +11,8 @@ AgenTG should be useful as a Telegram client first.
 
 - Telegram API / TDLib updates.
 - User account session.
-- Telegram chats, users, messages, media, reactions, topics, permissions, service events, and API responses.
+- Telegram chats, users, messages, media, reactions, topics, service events, and
+  API responses.
 
 ## Outputs
 
@@ -38,7 +40,8 @@ AgenTG should be useful as a Telegram client first.
 
 ## API Surface Direction
 
-The long-term direction is broad Telegram API support, not only the subset needed for initial text message ingestion.
+The long-term direction is broad Telegram API support, not only the subset needed
+for initial text message ingestion.
 
 The first implementation can use a narrow operational subset, but the
 architecture should not block later support for richer Telegram client
@@ -49,13 +52,49 @@ semantics, not around TDLib functions. A low-level TDLib operation can exist
 inside the Telegram module only as a private implementation helper behind a
 domain procedure.
 
-`resolveSourceContent` is the Telegram source resolver procedure for neutral
-content consumers. Its input carries a Telegram-owned selector. Telegram
-interprets the selector, reads or materializes Telegram content through its own
-domain mechanisms, and returns neutral `SourceRef` and `ContentRef` values plus
-JSON-safe content payload. The first selector set supports recent messages,
-message search, and `getMessages`-shaped message reads. Folder and unread
-semantics belong here when the corresponding Telegram read models are ready.
+For the target pipeline architecture, Telegram exposes data-provider
+capabilities for `telegram.chat`, `telegram.message`, and `telegram.user`.
+`data` calls those provider procedures for model-level `select`, `get`,
+`expand`, and `render` actions. Telegram interprets Telegram model filters such
+as chat type, folder placement, pinned state, unread chat state, unread message
+state, and message time ranges.
+
+Telegram still owns Telegram readiness, coverage, storage, TDLib access, and
+materialization. Pipeline YAML names `telegram.*` models through `data`; it does
+not call Telegram storage or TDLib directly.
+
+## Test Contract
+
+- Telegram registers provider capabilities for `telegram.chat`,
+  `telegram.message`, and `telegram.user`.
+- Telegram provider procedures expose model-level `select`, `get`, `expand`,
+  and `render` capabilities without exposing TDLib calls, storage table names,
+  coverage internals, page cursors, or materialization strategy switches.
+- `select` for `telegram.chat` supports chat id, chat type, folder placement,
+  pinned state, and unread chat filters.
+- `get` returns one dataset row for an existing `telegram.chat`,
+  `telegram.message`, or `telegram.user` ref and returns `null` for a missing
+  ref.
+- `expand` with relation `messages` from `telegram.chat` rows supports unread
+  message filters, message time ranges, and limit.
+- `render` for `telegram.message` rows returns deterministic text suitable for
+  an LLM input node.
+- `render` for `telegram.message` rows supports `options.groupByRef: 'chat'` and
+  returns one rendered row per chat ref.
+- `render` for `telegram.message` rows without grouping rejects input rows that
+  contain multiple distinct refs for the same carried ref key.
+- `telegram.chat` rows carry `refs.chat`.
+- `telegram.message` rows carry `refs.chat` and `refs.message`.
+- `telegram.user` rows carry `refs.user`.
+- Provider output rows include stable `ModelRef` values for the returned
+  Telegram objects and preserve Telegram identifiers.
+- Provider output lineage includes the source chat ref for message expansions.
+- Provider procedures reject unsupported model names, unsupported relations, and
+  unsupported render formats.
+- Provider procedures do not let callers choose TDLib methods, page cursors,
+  storage tables, coverage jobs, or file reconciliation behavior.
+- Telegram remains the lifecycle owner for readiness and materialization; `data`
+  only receives model-level provider results.
 
 ## Non-Responsibilities
 

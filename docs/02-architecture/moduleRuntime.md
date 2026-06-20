@@ -6,22 +6,17 @@ Core domains own their own models, procedures, storage, and fact events.
 
 ## Target Runtime Stack
 
-The recommended long-term runtime stack is a Rust core runtime with Tokio and
-WebAssembly plugins.
+The current target runtime is TypeScript/Node.js packages running as trusted
+internal services inside one local contour.
 
-The Rust core owns the supervisor tree, module lifecycle, typed local ports,
-scheduling, bounded queues, durable event journal, configuration, health, and
-shutdown. Tokio provides the multi-threaded async runtime for I/O, timers, and
-work scheduling across CPU cores.
+Modules communicate through typed internal RPC clients, publish live events
+through NATS Core, and persist owned state in Postgres through package-owned
+Drizzle schemas and migrations. Scheduling, durable run state, retries, and
+idempotency are owned by the module that defines that lifecycle, not by a
+separate plugin platform.
 
-Hot-path core domains can be compiled into the binary. Extension modules should
-use WebAssembly components with explicit host capabilities, not native dynamic
-libraries. Plugin contracts should be described through typed component
-interfaces so module boundaries remain explicit and portable.
-
-Bounded queues are the runtime backpressure mechanism. Events that must survive
-process crashes or restarts must be written to a durable inbox, journal, or
-outbox before they enter an in-memory queue.
+The runtime does not introduce a separate plugin ABI, WebAssembly layer, durable
+event journal, or cross-module capability registry for this implementation.
 
 ## Runtime Contract
 
@@ -110,8 +105,19 @@ The database package provides Postgres and Drizzle infrastructure only. Domains
 and modules own schemas and migrations in their own packages:
 
 - `@agentg/telegram`: `telegram_*`, journal `__drizzle_migrations_telegram`
-  Cross-domain table reads and writes are a boundary violation. A module that
-  needs another domain's data calls that domain's module RPC surface.
+- `@agentg/data`: `data_*`, journal `__drizzle_migrations_data`
+- `@agentg/pipelines`: `pipelines_*`, journal `__drizzle_migrations_pipelines`
+- `@agentg/llm-runner`: `llm_runner_*`, journal
+  `__drizzle_migrations_llm_runner`
+- `@agentg/triggers`: `triggers_*`, journal `__drizzle_migrations_triggers`
+
+Cross-domain table reads and writes are a boundary violation. A module that
+needs another domain's data calls that domain's module RPC surface.
+
+Shared model access goes through `data` provider capabilities. A provider module
+keeps lifecycle ownership for its models and exposes model-level procedures to
+`data`; `data` routes `select`, `get`, `expand`, and `render` calls without
+reading provider-owned tables.
 
 ## RPC Results
 
@@ -148,6 +154,7 @@ implemented in Gateway code.
 
 - cross-domain storage schema imports are rejected
 - domain and module table names must use their owner prefix
+- provider-owned model access goes through `data` provider capabilities
 - Gateway's external RPC and event surface stays covered by source and tests
 - domain runtime code cannot reintroduce `enriched`
 - Dashboard frontend code keeps `host.rpc(...)` calls inside local `api.ts`

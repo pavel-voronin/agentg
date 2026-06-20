@@ -71,6 +71,23 @@ Does not own:
 - Telegram history coverage writes.
 - Module-owned module RPC implementation.
 
+## Codex MCP
+
+Owns:
+
+- Explicit Codex-facing MCP tools for allowed Agent Gateway methods.
+- MCP input schemas for those tools.
+- Connection, authentication forwarding, request timeout, and event buffering for
+  the Gateway WebSocket client used by Codex.
+
+Does not own:
+
+- Gateway method semantics or compatibility.
+- Direct module RPC access.
+- Telegram TDLib, storage, coverage, or provider routing.
+- Data, Pipeline, Policy, or Telegram domain behavior.
+- Generic arbitrary Gateway method dispatch.
+
 ## Trusted Modules
 
 Own:
@@ -88,6 +105,77 @@ Do not own:
 - Core domain base models.
 - Core domain table writes.
 - Gateway external protocol compatibility.
+
+## Data
+
+Owns:
+
+- Shared `ModelRef` addressing.
+- Model catalog entries and provider routing.
+- Schema-free annotations.
+- Schema-free collections.
+- Data pipeline actions `data.select`, `data.get`, `data.expand`, `data.render`,
+  `data.writeAnnotation`, and `data.writeCollectionItem`.
+- Postgres tables for data-owned annotations and collection items.
+
+Does not own:
+
+- Telegram ingestion.
+- Telegram history coverage.
+- Telegram edits, deletes, files, or TDLib reconciliation.
+- The meaning or lifecycle of provider-owned models.
+- Provider-owned storage tables.
+
+## Pipelines
+
+Owns:
+
+- Named YAML pipeline definitions.
+- Pipeline document validation.
+- Pipeline DAG execution.
+- Pipeline run and node run state.
+- Registration of pipeline schedules in `triggers`.
+- Pipeline action dispatch to provider modules.
+
+Does not own:
+
+- Trigger occurrence scheduling and leases.
+- LLM provider adapters.
+- Telegram reads or materialization.
+- Data annotations or collections.
+- Semantic lifecycle of provider-owned models.
+
+## LLM Runner
+
+Owns:
+
+- LLM profile configuration.
+- LLM provider adapters.
+- LLM action execution for pipeline nodes.
+- LLM run lifecycle and provider call records.
+
+Does not own:
+
+- Pipeline definitions.
+- Source selection.
+- Final semantic storage for derived data.
+- Telegram readiness, coverage, or content materialization.
+
+## Triggers
+
+Owns:
+
+- Trigger registration runtime state.
+- Periodic schedule computation.
+- Due occurrence creation.
+- Occurrence leases and dispatch.
+
+Does not own:
+
+- Pipeline definitions.
+- Pipeline node execution.
+- Action input semantics.
+- Target module run lifecycle after an action is accepted.
 
 ## Storage Layer
 
@@ -115,3 +203,22 @@ Does not own:
 
 - Non-Telegram abstractions.
 - Attachment payload processing beyond initial metadata.
+
+## Boundary Acceptance Contract
+
+- No package imports another domain's storage schema to satisfy a product read
+  or write.
+- Telegram-owned data is accessed outside Telegram only through Telegram domain
+  procedures or through `data` provider capabilities backed by Telegram.
+- `data` stores only data-owned annotations and collection items; it does not
+  store canonical Telegram chats, messages, users, files, history coverage, or
+  TDLib state.
+- `pipelines` stores pipeline definitions and run state; it does not store
+  semantic data, trigger occurrences, LLM provider details, or Telegram
+  materialization state.
+- `llm-runner` stores LLM run records; it does not store final annotations or
+  collections.
+- `triggers` stores trigger registrations and occurrences; it does not store
+  pipeline YAML or target module run state after an action is accepted.
+- Gateway calls Data, Pipelines, Policies, and Telegram through typed internal
+  clients and does not become a generic module RPC proxy.
