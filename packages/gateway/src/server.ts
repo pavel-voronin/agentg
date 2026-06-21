@@ -8,6 +8,8 @@ import {
   type EventSubscription
 } from '@agentg/framework';
 import type { PolicyClient, PolicyDocument, PolicyIdentity } from '@agentg/framework/policies';
+import type { dataClient } from '@agentg/data';
+import type { pipelinesClient } from '@agentg/pipelines';
 import type { telegramClient } from '@agentg/telegram';
 import { WebSocket, WebSocketServer, type RawData } from 'ws';
 
@@ -23,12 +25,33 @@ type ServerConfig = {
 
 type TelegramAccess = Pick<
   ReturnType<typeof telegramClient>,
-  | 'getChat'
-  | 'getMessages'
-  | 'listRecentMessages'
-  | 'requestFile'
-  | 'resolveSourceContent'
-  | 'searchMessages'
+  'getChat' | 'getMessages' | 'listRecentMessages' | 'requestFile' | 'searchMessages'
+>;
+
+type DataAccess = Pick<
+  ReturnType<typeof dataClient>,
+  | 'expand'
+  | 'get'
+  | 'getAnnotation'
+  | 'getCollectionItem'
+  | 'listAnnotations'
+  | 'listCollection'
+  | 'listModels'
+  | 'render'
+  | 'select'
+  | 'writeAnnotation'
+  | 'writeCollectionItem'
+>;
+
+type PipelineAccess = Pick<
+  ReturnType<typeof pipelinesClient>,
+  | 'deletePipeline'
+  | 'getPipeline'
+  | 'getRun'
+  | 'listPipelines'
+  | 'listRuns'
+  | 'runPipeline'
+  | 'setPipeline'
 >;
 
 type PolicyAccess = Pick<
@@ -42,6 +65,8 @@ type PolicyAccess = Pick<
 >;
 
 type GatewayAccess = {
+  data: DataAccess;
+  pipelines: PipelineAccess;
   policies: PolicyAccess;
   telegram: TelegramAccess;
 };
@@ -224,11 +249,34 @@ function methodHandlers(
       return access.policies.listPolicyKinds();
     },
     'policies.setInstance': (params) => access.policies.setInstance(requirePolicySetParams(params)),
+    'data.expand': (params) => access.data.expand(params),
+    'data.get': (params) => access.data.get(params),
+    'data.getAnnotation': (params) => access.data.getAnnotation(params),
+    'data.getCollectionItem': (params) => access.data.getCollectionItem(params),
+    'data.listAnnotations': (params) => access.data.listAnnotations(params),
+    'data.listCollection': (params) => access.data.listCollection(params),
+    'data.listModels': (params) => {
+      requireNoParams(params, 'data.listModels');
+      return access.data.listModels();
+    },
+    'data.render': (params) => access.data.render(params),
+    'data.select': (params) => access.data.select(params),
+    'data.writeAnnotation': (params) => access.data.writeAnnotation(params),
+    'data.writeCollectionItem': (params) => access.data.writeCollectionItem(params),
+    'pipelines.deletePipeline': (params) => access.pipelines.deletePipeline(params),
+    'pipelines.getPipeline': (params) => access.pipelines.getPipeline(params),
+    'pipelines.getRun': (params) => access.pipelines.getRun(params),
+    'pipelines.listPipelines': (params) => {
+      requireNoParams(params, 'pipelines.listPipelines');
+      return access.pipelines.listPipelines();
+    },
+    'pipelines.listRuns': (params) => access.pipelines.listRuns(params),
+    'pipelines.runPipeline': (params) => access.pipelines.runPipeline(params),
+    'pipelines.setPipeline': (params) => access.pipelines.setPipeline(params),
     'telegram.getChat': (params) => access.telegram.getChat(requireGetChatParams(params)),
     'telegram.getMessages': (params) => access.telegram.getMessages(params),
     'telegram.listRecentMessages': (params) => access.telegram.listRecentMessages(params),
     'telegram.requestFile': (params) => access.telegram.requestFile(params),
-    'telegram.resolveSourceContent': (params) => access.telegram.resolveSourceContent(params),
     'telegram.searchMessages': (params) => access.telegram.searchMessages(params)
   };
 }

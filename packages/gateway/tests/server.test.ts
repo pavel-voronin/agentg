@@ -3,6 +3,8 @@ import { randomUUID } from 'node:crypto';
 import { ProcedureTransportError } from '@agentg/framework';
 import type { EventBus, EventEnvelope, EventSubscription } from '@agentg/framework';
 import type { PolicyClient } from '@agentg/framework/policies';
+import type { dataClient } from '@agentg/data';
+import type { pipelinesClient } from '@agentg/pipelines';
 import type { telegramClient } from '@agentg/telegram';
 import { WebSocket, type RawData } from 'ws';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -12,12 +14,31 @@ import { startGatewayServer, type GatewayServerHandle } from '../src/server.js';
 const gatewayHandles: GatewayServerHandle[] = [];
 type TestTelegramAccess = Pick<
   ReturnType<typeof telegramClient>,
-  | 'getChat'
-  | 'getMessages'
-  | 'listRecentMessages'
-  | 'requestFile'
-  | 'resolveSourceContent'
-  | 'searchMessages'
+  'getChat' | 'getMessages' | 'listRecentMessages' | 'requestFile' | 'searchMessages'
+>;
+type TestDataAccess = Pick<
+  ReturnType<typeof dataClient>,
+  | 'expand'
+  | 'get'
+  | 'getAnnotation'
+  | 'getCollectionItem'
+  | 'listAnnotations'
+  | 'listCollection'
+  | 'listModels'
+  | 'render'
+  | 'select'
+  | 'writeAnnotation'
+  | 'writeCollectionItem'
+>;
+type TestPipelineAccess = Pick<
+  ReturnType<typeof pipelinesClient>,
+  | 'deletePipeline'
+  | 'getPipeline'
+  | 'getRun'
+  | 'listPipelines'
+  | 'listRuns'
+  | 'runPipeline'
+  | 'setPipeline'
 >;
 type TestPolicyAccess = Pick<
   PolicyClient,
@@ -106,6 +127,94 @@ describe('gateway server', () => {
     }
   });
 
+  it('routes Data and Pipeline methods through WebSocket RPC', async () => {
+    const calls: unknown[] = [];
+    const gateway = await startGateway({
+      data: {
+        listModels() {
+          calls.push(['data.listModels']);
+          return Promise.resolve([
+            {
+              capabilities: ['select', 'get', 'expand', 'render'],
+              model: 'telegram.chat',
+              provider: 'telegram'
+            }
+          ]);
+        },
+        select(input) {
+          calls.push(['data.select', input]);
+          return Promise.resolve({
+            rows: [
+              {
+                lineage: [{ _model: 'telegram.chat', id: '10' }],
+                refs: { chat: { _model: 'telegram.chat', id: '10' } },
+                value: { id: '10' }
+              }
+            ]
+          });
+        }
+      },
+      pipelines: {
+        runPipeline(input) {
+          calls.push(['pipelines.runPipeline', input]);
+          return Promise.resolve({
+            runId: 'run-1',
+            status: 'accepted'
+          });
+        },
+        setPipeline(input) {
+          calls.push(['pipelines.setPipeline', input]);
+          return Promise.resolve({
+            name: 'digest',
+            operation: 'set',
+            status: 'applied'
+          });
+        }
+      }
+    });
+    const client = await connectGateway(gateway);
+
+    try {
+      await expect(request(client, 'data.listModels', {})).resolves.toEqual([
+        {
+          capabilities: ['select', 'get', 'expand', 'render'],
+          model: 'telegram.chat',
+          provider: 'telegram'
+        }
+      ]);
+      await expect(
+        request(client, 'data.select', {
+          model: 'telegram.chat',
+          where: { readState: 'unread' }
+        })
+      ).resolves.toEqual({
+        rows: [
+          {
+            lineage: [{ _model: 'telegram.chat', id: '10' }],
+            refs: { chat: { _model: 'telegram.chat', id: '10' } },
+            value: { id: '10' }
+          }
+        ]
+      });
+      await expect(
+        request(client, 'pipelines.runPipeline', {
+          name: 'digest'
+        })
+      ).resolves.toEqual({
+        runId: 'run-1',
+        status: 'accepted'
+      });
+
+      expect(calls).toEqual([
+        ['data.listModels'],
+        ['data.select', { model: 'telegram.chat', where: { readState: 'unread' } }],
+        ['pipelines.runPipeline', { name: 'digest' }]
+      ]);
+    } finally {
+      client.close();
+    }
+  });
+
   it('routes explicit policy control methods through WebSocket RPC', async () => {
     const calls: unknown[] = [];
     const gateway = await startGateway({
@@ -145,9 +254,9 @@ describe('gateway server', () => {
               form: {
                 spec: {}
               },
-              id: 'triggers.rule',
-              kind: 'TriggerRule',
-              moduleId: 'triggers',
+              id: 'telegram.historyGapRestoreRule',
+              kind: 'TelegramHistoryGapRestoreRule',
+              moduleId: 'telegram',
               version: 1
             }
           ]);
@@ -174,9 +283,9 @@ describe('gateway server', () => {
           form: {
             spec: {}
           },
-          id: 'triggers.rule',
-          kind: 'TriggerRule',
-          moduleId: 'triggers',
+          id: 'telegram.historyGapRestoreRule',
+          kind: 'TelegramHistoryGapRestoreRule',
+          moduleId: 'telegram',
           version: 1
         }
       ]);
@@ -184,7 +293,7 @@ describe('gateway server', () => {
         request(client, 'policies.setInstance', {
           document: {
             apiVersion: 'agentg.dev/v1',
-            kind: 'TriggerRule',
+            kind: 'TelegramHistoryGapRestoreRule',
             metadata: {
               name: 'digest'
             },
@@ -195,7 +304,7 @@ describe('gateway server', () => {
         })
       ).resolves.toEqual({
         identity: {
-          kind: 'TriggerRule',
+          kind: 'TelegramHistoryGapRestoreRule',
           name: 'digest'
         },
         operation: 'set',
@@ -204,7 +313,7 @@ describe('gateway server', () => {
       });
       await expect(
         request(client, 'policies.getPolicyValue', {
-          kind: 'TriggerRule'
+          kind: 'TelegramHistoryGapRestoreRule'
         })
       ).resolves.toEqual([{ enabled: true }]);
 
@@ -215,7 +324,7 @@ describe('gateway server', () => {
           {
             document: {
               apiVersion: 'agentg.dev/v1',
-              kind: 'TriggerRule',
+              kind: 'TelegramHistoryGapRestoreRule',
               metadata: {
                 name: 'digest'
               },
@@ -225,7 +334,7 @@ describe('gateway server', () => {
             }
           }
         ],
-        ['getPolicyValue', { kind: 'TriggerRule' }]
+        ['getPolicyValue', { kind: 'TelegramHistoryGapRestoreRule' }]
       ]);
     } finally {
       client.close();
@@ -356,6 +465,8 @@ describe('gateway server', () => {
 
 async function startGateway(
   options: {
+    data?: Partial<TestDataAccess> | undefined;
+    pipelines?: Partial<TestPipelineAccess> | undefined;
     policies?: Partial<TestPolicyAccess> | undefined;
     telegram?: Partial<TestTelegramAccess> | undefined;
     events?: TestEventBus | undefined;
@@ -364,6 +475,14 @@ async function startGateway(
 ): Promise<GatewayServerHandle> {
   const handle = await startGatewayServer({
     access: {
+      data: {
+        ...defaultDataAccess(),
+        ...options.data
+      },
+      pipelines: {
+        ...defaultPipelineAccess(),
+        ...options.pipelines
+      },
       policies: {
         ...defaultPolicyAccess(),
         ...options.policies
@@ -384,6 +503,34 @@ async function startGateway(
   return handle;
 }
 
+function defaultDataAccess(): TestDataAccess {
+  return {
+    expand: unavailableMethod('data.expand'),
+    get: unavailableMethod('data.get'),
+    getAnnotation: unavailableMethod('data.getAnnotation'),
+    getCollectionItem: unavailableMethod('data.getCollectionItem'),
+    listAnnotations: unavailableMethod('data.listAnnotations'),
+    listCollection: unavailableMethod('data.listCollection'),
+    listModels: unavailableMethod('data.listModels'),
+    render: unavailableMethod('data.render'),
+    select: unavailableMethod('data.select'),
+    writeAnnotation: unavailableMethod('data.writeAnnotation'),
+    writeCollectionItem: unavailableMethod('data.writeCollectionItem')
+  };
+}
+
+function defaultPipelineAccess(): TestPipelineAccess {
+  return {
+    deletePipeline: unavailableMethod('pipelines.deletePipeline'),
+    getPipeline: unavailableMethod('pipelines.getPipeline'),
+    getRun: unavailableMethod('pipelines.getRun'),
+    listPipelines: unavailableMethod('pipelines.listPipelines'),
+    listRuns: unavailableMethod('pipelines.listRuns'),
+    runPipeline: unavailableMethod('pipelines.runPipeline'),
+    setPipeline: unavailableMethod('pipelines.setPipeline')
+  };
+}
+
 function defaultPolicyAccess(): TestPolicyAccess {
   return {
     deleteInstance: unavailableMethod('policies.deleteInstance'),
@@ -401,7 +548,6 @@ function defaultTelegramAccess(): TestTelegramAccess {
     getMessages: unavailableMethod('telegram.getMessages'),
     listRecentMessages: unavailableMethod('telegram.listRecentMessages'),
     requestFile: unavailableMethod('telegram.requestFile'),
-    resolveSourceContent: unavailableMethod('telegram.resolveSourceContent'),
     searchMessages: unavailableMethod('telegram.searchMessages')
   };
 }

@@ -1,8 +1,10 @@
 import { defineConfig, number, string, type ConfigOf } from '@agentg/framework';
 
 export const readConfig = defineConfig({
+  dataRpcUrl: string('DATA_RPC_URL'),
   host: string('GATEWAY_HOST').default('127.0.0.1'),
   natsUrl: string('NATS_URL'),
+  pipelinesRpcUrl: string('PIPELINES_RPC_URL'),
   policiesRpcUrl: string('POLICIES_RPC_URL'),
   port: number('GATEWAY_PORT').default(8787),
   rpcHost: string('HOST').optional(),

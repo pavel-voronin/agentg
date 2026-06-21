@@ -9,7 +9,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@agentg/data": "file:../data",
     "@agentg/framework": "file:../framework",
+    "@agentg/pipelines": "file:../pipelines",
     "@agentg/telegram": "file:../telegram",
     "ws": "^8.20.0"
   },
