@@ -43,7 +43,7 @@
         "type": "prometheus",
         "uid": "victoria-metrics"
       },
-      "description": "Current durable trigger registrations materialized from TriggerRule policies.",
+      "description": "Current durable trigger registrations materialized from owner module registrations.",
       "fieldConfig": {
         "defaults": {
           "decimals": 0,

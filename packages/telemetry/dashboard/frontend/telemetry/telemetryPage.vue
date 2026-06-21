@@ -23,6 +23,8 @@ const tabs: TabView[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'policies', label: 'Policies' },
   { id: 'triggers', label: 'Triggers' },
+  { id: 'data', label: 'Data' },
+  { id: 'pipelines', label: 'Pipelines' },
   { id: 'llm-runner', label: 'LLM Runner' },
   { id: 'telegram', label: 'Telegram' },
   { id: 'get-messages', label: 'Get Messages' },
@@ -117,6 +119,32 @@ function selectTab(tabId: TelemetryTabId): void {
         dashboard-uid="agentg-llm-runner"
         kiosk
         title="LLM Runner"
+      />
+      <div v-else class="telemetry-page__empty">No Grafana link</div>
+    </section>
+
+    <section v-if="activeTab === 'data'" class="telemetry-page__section">
+      <UiGrafanaDashboard
+        v-if="links"
+        :key="activeViewKey"
+        :base-url="links.grafanaUi"
+        dashboard-slug="agentg-data"
+        dashboard-uid="agentg-data"
+        kiosk
+        title="Data"
+      />
+      <div v-else class="telemetry-page__empty">No Grafana link</div>
+    </section>
+
+    <section v-if="activeTab === 'pipelines'" class="telemetry-page__section">
+      <UiGrafanaDashboard
+        v-if="links"
+        :key="activeViewKey"
+        :base-url="links.grafanaUi"
+        dashboard-slug="agentg-pipelines"
+        dashboard-uid="agentg-pipelines"
+        kiosk
+        title="Pipelines"
       />
       <div v-else class="telemetry-page__empty">No Grafana link</div>
     </section>

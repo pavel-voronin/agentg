@@ -1,10 +1,12 @@
 export type TelemetryTabId =
+  | 'data'
   | 'files'
   | 'get-messages'
   | 'history-reconciler'
   | 'llm-runner'
   | 'nats'
   | 'overview'
+  | 'pipelines'
   | 'policies'
   | 'postgres'
   | 'telegram'
@@ -13,12 +15,14 @@ export type TelemetryTabId =
 
 const defaultTab: TelemetryTabId = 'overview';
 const tabs = new Set<TelemetryTabId>([
+  'data',
   'files',
   'get-messages',
   'history-reconciler',
   'llm-runner',
   'nats',
   'overview',
+  'pipelines',
   'policies',
   'postgres',
   'telegram',

@@ -15,6 +15,8 @@ describe('telemetry route', () => {
     expect(telemetryTabFromSegment('overview')).toBe('overview');
     expect(telemetryTabFromSegment('policies')).toBe('policies');
     expect(telemetryTabFromSegment('triggers')).toBe('triggers');
+    expect(telemetryTabFromSegment('data')).toBe('data');
+    expect(telemetryTabFromSegment('pipelines')).toBe('pipelines');
     expect(telemetryTabFromSegment('llm-runner')).toBe('llm-runner');
     expect(telemetryTabFromSegment('telegram')).toBe('telegram');
     expect(telemetryTabFromSegment('get-messages')).toBe('get-messages');
@@ -36,6 +38,8 @@ describe('telemetry route', () => {
     expect(telemetryRouteSegments('telegram')).toEqual(['telegram']);
     expect(telemetryRouteSegments('policies')).toEqual(['policies']);
     expect(telemetryRouteSegments('triggers')).toEqual(['triggers']);
+    expect(telemetryRouteSegments('data')).toEqual(['data']);
+    expect(telemetryRouteSegments('pipelines')).toEqual(['pipelines']);
     expect(telemetryRouteSegments('llm-runner')).toEqual(['llm-runner']);
     expect(telemetryRouteSegments('get-messages')).toEqual(['get-messages']);
     expect(telemetryRouteSegments('history-reconciler')).toEqual(['history-reconciler']);
