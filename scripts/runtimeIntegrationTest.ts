@@ -1,22 +1,38 @@
 import { randomUUID } from 'node:crypto';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { Server } from 'node:net';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import { defineInternalRpcDomain, defineModule, httpRpc, nats } from '@agentg/framework';
-import { createPolicyClient, POLICY_API_VERSION } from '@agentg/framework/policies';
 
+import { readConfig as readDataConfig } from '../packages/data/src/config.js';
+import { moduleDefinition as dataModule } from '../packages/data/src/module.js';
 import { readConfig as readRunnerConfig } from '../packages/llm-runner/src/config.js';
 import { moduleDefinition as runnerModule } from '../packages/llm-runner/src/module.js';
-import { readConfig as readPoliciesConfig } from '../packages/policies/src/config.js';
-import { endpointModule as policiesModule } from '../packages/policies/src/module.js';
+import { readConfig as readPipelineConfig } from '../packages/pipelines/src/config.js';
+import { moduleDefinition as pipelineModule } from '../packages/pipelines/src/module.js';
 import { readConfig as readTriggerConfig } from '../packages/triggers/src/config.js';
 import { moduleDefinition as triggerModule } from '../packages/triggers/src/module.js';
 
 type App = {
   stop(): Promise<void>;
+};
+
+type Dataset = {
+  rows: DatasetRow[];
+};
+
+type DatasetRow = {
+  lineage: ModelRef[];
+  refs: Record<string, ModelRef>;
+  value: unknown;
+};
+
+type ModelRef = {
+  _model: string;
+  id: string;
 };
 
 type TriggerProcedures = {
@@ -25,16 +41,15 @@ type TriggerProcedures = {
       key: string;
       providerRunId?: string;
       registrationKey: string;
-      ruleName: string;
+      registrationName: string;
       status: string;
     }[];
   }>;
-  listTriggerRegistrations(): Promise<{
+  listTriggerRegistrations(input?: { owner?: { key?: string; module: string } }): Promise<{
     registrations: {
       key: string;
-      rule: {
-        name: string;
-      };
+      name: string;
+      owner: { key: string; module: string };
     }[];
   }>;
   runDueTriggers(): Promise<{
@@ -43,31 +58,31 @@ type TriggerProcedures = {
   }>;
 };
 
-type RunnerProcedures = {
-  getCurrentArtifact(input: {
-    artifactKey: string;
-    sourceRef: {
-      _model: string;
-      id: string;
-    };
-  }): Promise<{
-    artifact: {
-      artifactKey: string;
-      body: string;
-      profile: string;
-      sourceRef: {
-        _model: string;
-        id: string;
-      };
-    } | null;
+type PipelineProcedures = {
+  getRun(input: { runId: string }): Promise<{
+    nodes: {
+      actionId: string;
+      nodeId: string;
+      outputDataset?: Dataset;
+      status: string;
+    }[];
+    runId: string;
+    status: string;
+  } | null>;
+  setPipeline(input: { document: string }): Promise<{
+    error?: { code: string; message: string };
+    name?: string;
+    operation: 'set';
+    status: 'applied' | 'rejected';
   }>;
 };
 
-type SourceResolutionInput = {
-  sourceSelector: {
-    domain: string;
-    selector: unknown;
-  };
+type DataProcedures = {
+  getAnnotation(input: { key: string; subject: ModelRef }): Promise<{
+    key: string;
+    subject: ModelRef;
+    value: unknown;
+  } | null>;
 };
 
 type ProviderRequest = {
@@ -75,118 +90,95 @@ type ProviderRequest = {
   model?: string;
 };
 
+type DataProviderCall = {
+  input: unknown;
+  procedure: string;
+};
+
 const databaseUrl = process.env.DATABASE_URL ?? 'postgres://agentg:agentg@127.0.0.1:5432/agentg';
 const natsUrl = process.env.NATS_URL ?? 'nats://127.0.0.1:4222';
 const host = '127.0.0.1';
-const sourceCalls: SourceResolutionInput[] = [];
+const chatRef: ModelRef = { _model: 'telegram.chat', id: '1001' };
+const messageRef: ModelRef = { _model: 'telegram.message', id: '1001:42' };
 
 const stopped: App[] = [];
-let policyDirectory: string | undefined;
+let runnerConfigDirectory: string | undefined;
 let provider: Awaited<ReturnType<typeof startProvider>> | undefined;
 
 try {
   const runKey = `integration${randomUUID().replaceAll('-', '')}`;
+  const dataProviderCalls: DataProviderCall[] = [];
   const ports = {
-    policies: await freePort(),
-    provider: await freePort(),
+    data: await freePort(),
+    llmProvider: await freePort(),
+    pipelines: await freePort(),
     runner: await freePort(),
-    source: await freePort(),
+    telegram: await freePort(),
     triggers: await freePort()
   };
   const urls = {
-    policies: `http://${host}:${String(ports.policies)}`,
+    data: `http://${host}:${String(ports.data)}`,
+    pipelines: `http://${host}:${String(ports.pipelines)}`,
     runner: `http://${host}:${String(ports.runner)}`,
-    source: `http://${host}:${String(ports.source)}`
+    telegram: `http://${host}:${String(ports.telegram)}`,
+    triggers: `http://${host}:${String(ports.triggers)}`
   };
 
-  policyDirectory = await mkdtemp(join(tmpdir(), 'agentg-policies-integration-'));
-  provider = await startProvider(ports.provider);
-
-  await startSourceModule({
-    port: ports.source,
-    runKey,
-    seen: sourceCalls
+  provider = await startProvider(ports.llmProvider);
+  await startTelegramDataProvider({
+    calls: dataProviderCalls,
+    port: ports.telegram,
+    runKey
+  });
+  await startData({
+    port: ports.data,
+    telegramUrl: urls.telegram
   });
   await startRunner({
     port: ports.runner,
-    providerUrl: provider.url,
-    sourceUrl: urls.source
+    providerUrl: provider.url
   });
-  await startPolicies({
-    directory: policyDirectory,
-    port: ports.policies
-  });
-
-  const policy = createPolicyClient({ timeoutMs: 5000, url: urls.policies });
-  const policyResult = await policy.setInstance({
-    document: {
-      apiVersion: POLICY_API_VERSION,
-      kind: 'TriggerRule',
-      metadata: {
-        labels: {
-          integration: runKey
-        },
-        name: runKey
-      },
-      spec: {
-        action: {
-          input: {
-            artifactKey: runKey,
-            instructions: 'Return a short digest for the provided Telegram messages.',
-            profile: 'integration',
-            sourceSelector: {
-              domain: 'telegram',
-              selector: {
-                chatId: '1001',
-                kind: 'recentMessages',
-                limit: 10
-              }
-            }
-          },
-          module: 'llm-runner',
-          procedure: 'runTriggered'
-        },
-        condition: {
-          everySeconds: 3600,
-          kind: 'periodic',
-          startAt: new Date(Date.now() - 1000).toISOString()
-        }
-      }
-    }
-  });
-  assert(policyResult.status === 'applied', `policy rejected: ${JSON.stringify(policyResult)}`);
-  const triggerPolicyValue = await policy.getPolicyValue({
-    kind: 'TriggerRule'
-  });
-  assert(
-    Array.isArray(triggerPolicyValue) &&
-      triggerPolicyValue.length === 1 &&
-      isRecord(triggerPolicyValue[0]) &&
-      triggerPolicyValue[0].name === runKey,
-    `trigger policy value was not resolved: ${JSON.stringify(triggerPolicyValue)}`
-  );
-
   await startTriggers({
-    policiesUrl: urls.policies,
-    port: ports.triggers,
-    runnerUrl: urls.runner
+    pipelinesUrl: urls.pipelines,
+    port: ports.triggers
+  });
+  await startPipelines({
+    dataUrl: urls.data,
+    port: ports.pipelines,
+    runnerUrl: urls.runner,
+    triggersUrl: urls.triggers
   });
 
+  const pipelines = defineInternalRpcDomain<PipelineProcedures>('pipelines')({
+    timeoutMs: 10_000,
+    url: urls.pipelines
+  });
   const triggers = defineInternalRpcDomain<TriggerProcedures>('triggers')({
-    timeoutMs: 5000,
-    url: `http://${host}:${String(ports.triggers)}`
+    timeoutMs: 10_000,
+    url: urls.triggers
   });
-  const runner = defineInternalRpcDomain<RunnerProcedures>('llm-runner')({
-    timeoutMs: 5000,
-    url: urls.runner
+  const data = defineInternalRpcDomain<DataProcedures>('data')({
+    timeoutMs: 10_000,
+    url: urls.data
   });
+
+  const setResult = await pipelines.setPipeline({
+    document: pipelineDocument(runKey, new Date(Date.now() - 1000).toISOString())
+  });
+  assert(setResult.status === 'applied', `pipeline rejected: ${JSON.stringify(setResult)}`);
 
   const registration = await waitFor(async () => {
-    const result = await triggers.listTriggerRegistrations();
-    return result.registrations.find((item) => item.rule.name === runKey) ?? null;
+    const result = await triggers.listTriggerRegistrations({
+      owner: {
+        key: runKey,
+        module: 'pipelines'
+      }
+    });
+    return result.registrations.find((item) => item.name === 'unread') ?? null;
   }, 'trigger registration');
 
-  await triggers.runDueTriggers();
+  const dispatch = await triggers.runDueTriggers();
+  assert(dispatch.dispatched === 1, `trigger dispatch count: ${JSON.stringify(dispatch)}`);
 
   const occurrence = await waitFor(async () => {
     const result = await triggers.listOccurrences({
@@ -199,25 +191,28 @@ try {
     occurrence.providerRunId !== undefined,
     `accepted occurrence has no provider run id: ${JSON.stringify(occurrence)}`
   );
+  const pipelineRunId = occurrence.providerRunId;
 
-  const artifact = await waitFor(async () => {
-    const result = await runner.getCurrentArtifact({
-      artifactKey: runKey,
-      sourceRef: {
-        _model: 'telegram.chat',
-        id: '1001'
-      }
+  const run = await waitFor(async () => {
+    const result = await pipelines.getRun({
+      runId: pipelineRunId
     });
-    return result.artifact;
-  }, 'current LLM artifact');
+    return result?.status === 'completed' ? result : null;
+  }, 'completed pipeline run');
+
+  const annotation = await waitFor(async () => {
+    const result = await data.getAnnotation({
+      key: runKey,
+      subject: chatRef
+    });
+    return result?.value === `integration summary for ${runKey}` ? result : null;
+  }, 'saved Data annotation');
 
   assert(
-    artifact.body === `integration summary for ${runKey}`,
-    `unexpected artifact: ${artifact.body}`
+    dataProviderCalls.map((call) => call.procedure).join(',') === 'dataSelect,dataExpand',
+    `unexpected Data provider calls: ${JSON.stringify(dataProviderCalls)}`
   );
-  assert(artifact.profile === 'integration', `unexpected artifact profile: ${artifact.profile}`);
-  assert(sourceCalls.length === 1, `source resolver call count: ${String(sourceCalls.length)}`);
-  const providerCallCount = provider.calls.length;
+  const providerCallCount = readProviderCallCount(provider);
   assert(providerCallCount === 1, `LLM provider call count: ${String(provider.calls.length)}`);
   const providerCall = provider.calls[0];
   assert(providerCall !== undefined, 'LLM provider call was not recorded');
@@ -225,8 +220,15 @@ try {
   assert(
     providerCall.messages?.[0]?.content ===
       'Return a short digest for the provided Telegram messages.',
-    'LLM provider did not receive instructions as the system message'
+    'LLM provider did not receive the pipeline prompt as the system message'
   );
+  for (const nodeId of ['chats', 'messages', 'summarize', 'save']) {
+    const node = run.nodes.find((item) => item.nodeId === nodeId);
+    assert(
+      node?.status === 'completed',
+      `unexpected pipeline node status: ${JSON.stringify(run.nodes)}`
+    );
+  }
 
   await triggers.runDueTriggers();
   await sleep(300);
@@ -238,16 +240,16 @@ try {
     `duplicate accepted occurrences: ${JSON.stringify(finalOccurrences)}`
   );
   assert(
-    provider.calls.length === providerCallCount,
+    readProviderCallCount(provider) === providerCallCount,
     'second trigger sweep called the LLM provider again'
   );
 
   console.log(
     JSON.stringify(
       {
-        artifactKey: artifact.artifactKey,
+        annotationKey: annotation.key,
         occurrenceKey: occurrence.key,
-        providerRunId: occurrence.providerRunId,
+        pipelineRunId,
         status: 'ok'
       },
       null,
@@ -259,59 +261,157 @@ try {
     await app.stop();
   }
   await provider?.stop();
-  if (policyDirectory !== undefined) {
-    await rm(policyDirectory, {
+  if (runnerConfigDirectory !== undefined) {
+    await rm(runnerConfigDirectory, {
       force: true,
       recursive: true
     });
   }
 }
 
-async function startSourceModule(input: {
+function pipelineDocument(name: string, startAt: string): string {
+  return `apiVersion: agentg.dev/v1
+kind: Pipeline
+metadata:
+  name: ${name}
+spec:
+  triggers:
+    unread:
+      kind: periodic
+      everySeconds: 3600
+      startAt: "${startAt}"
+  nodes:
+    chats:
+      use: data.select
+      with:
+        model: telegram.chat
+        where:
+          readState: unread
+        limit: 1
+    messages:
+      use: data.expand
+      from: chats
+      with:
+        sourceRef: chat
+        relation: messages
+        where:
+          readState: unread
+        limit: 5
+    summarize:
+      use: llm.run
+      from: messages
+      with:
+        profile: integration
+        prompt: Return a short digest for the provided Telegram messages.
+    save:
+      use: data.writeAnnotation
+      from: summarize
+      with:
+        key: ${name}
+        mode: replace
+        subject:
+          ref: chat
+`;
+}
+
+async function startTelegramDataProvider(input: {
+  calls: DataProviderCall[];
   port: number;
   runKey: string;
-  seen: SourceResolutionInput[];
 }): Promise<void> {
   const sourceModule = defineModule('telegram', {
     config: () => ({}),
     setup() {
       return {
-        resolveSourceContent(rawInput: unknown) {
-          const request = rawInput as SourceResolutionInput;
-          input.seen.push(request);
+        dataExpand(rawInput: unknown) {
+          input.calls.push({
+            input: rawInput,
+            procedure: 'dataExpand'
+          });
+          const request = rawInput as {
+            from?: DatasetRow[];
+            limit?: number;
+            relation?: string;
+            sourceRef?: string;
+            where?: { readState?: string };
+          };
           assert(
-            request.sourceSelector.domain === 'telegram',
-            `unexpected source domain: ${request.sourceSelector.domain}`
+            request.relation === 'messages',
+            `unexpected relation: ${String(request.relation)}`
           );
+          assert(
+            request.sourceRef === 'chat',
+            `unexpected sourceRef: ${String(request.sourceRef)}`
+          );
+          assert(request.where?.readState === 'unread', 'message selector did not request unread');
+          assert(request.from?.[0]?.refs.chat?.id === chatRef.id, 'expand input has no chat ref');
           return {
-            snapshot: {
-              contentRefs: [
-                {
-                  _model: 'telegram.message',
-                  id: '1001:42',
-                  sourceRef: {
-                    _model: 'telegram.chat',
-                    id: '1001'
-                  }
+            rows: [
+              {
+                lineage: [chatRef, messageRef],
+                refs: {
+                  chat: chatRef,
+                  message: messageRef
+                },
+                value: {
+                  chatId: chatRef.id,
+                  messageId: '42',
+                  text: `message payload for ${input.runKey}`
                 }
-              ],
-              payload: {
-                messages: [
-                  {
-                    chatId: '1001',
-                    messageId: '42',
-                    text: `message payload for ${input.runKey}`
-                  }
-                ]
-              },
-              sourceRefs: [
-                {
-                  _model: 'telegram.chat',
-                  id: '1001'
+              }
+            ]
+          };
+        },
+        dataGet(rawInput: unknown) {
+          const request = rawInput as { ref?: ModelRef };
+          if (request.ref?._model === chatRef._model && request.ref.id === chatRef.id) {
+            return {
+              lineage: [chatRef],
+              refs: { chat: chatRef },
+              value: {
+                id: chatRef.id,
+                title: 'Subcreative Community'
+              }
+            };
+          }
+          return null;
+        },
+        dataRender(rawInput: unknown) {
+          const request = rawInput as { from?: DatasetRow[] };
+          return {
+            rows: (request.from ?? []).map((row) => ({
+              lineage: row.lineage,
+              refs: row.refs,
+              value: JSON.stringify(row.value)
+            }))
+          };
+        },
+        dataSelect(rawInput: unknown) {
+          input.calls.push({
+            input: rawInput,
+            procedure: 'dataSelect'
+          });
+          const request = rawInput as {
+            limit?: number;
+            model?: string;
+            where?: { readState?: string };
+          };
+          assert(request.model === 'telegram.chat', `unexpected model: ${String(request.model)}`);
+          assert(request.where?.readState === 'unread', 'chat selector did not request unread');
+          return {
+            rows: [
+              {
+                lineage: [chatRef],
+                refs: {
+                  chat: chatRef
+                },
+                value: {
+                  id: chatRef.id,
+                  title: 'Subcreative Community',
+                  unreadCount: 1
                 }
-              ]
-            },
-            status: 'ready'
+              }
+            ]
           };
         }
       };
@@ -332,28 +432,47 @@ async function startSourceModule(input: {
   stopped.push(app);
 }
 
-async function startRunner(input: {
-  port: number;
-  providerUrl: string;
-  sourceUrl: string;
-}): Promise<void> {
+async function startData(input: { port: number; telegramUrl: string }): Promise<void> {
+  const config = readDataConfig({
+    DATA_PROVIDER_TARGETS: JSON.stringify({
+      telegram: input.telegramUrl
+    }),
+    DATABASE_URL: databaseUrl,
+    NATS_URL: natsUrl,
+    PORT: String(input.port)
+  });
+  const app = dataModule({
+    config,
+    connect: {
+      events: nats(config.natsUrl),
+      rpc: httpRpc({
+        host,
+        port: config.port,
+        service: 'data'
+      })
+    }
+  });
+  await app.start();
+  stopped.push(app);
+}
+
+async function startRunner(input: { port: number; providerUrl: string }): Promise<void> {
+  runnerConfigDirectory = await mkdtemp(join(tmpdir(), 'agentg-llm-runner-integration-'));
+  const profilesPath = join(runnerConfigDirectory, 'profiles.yaml');
+  await writeFile(
+    profilesPath,
+    `profiles:
+  integration:
+    adapter: openai-compatible
+    baseUrl: ${input.providerUrl}
+    model: integration-model
+    timeoutMs: 5000
+`,
+    'utf8'
+  );
   const config = readRunnerConfig({
     DATABASE_URL: databaseUrl,
-    LLM_RUNNER_PROFILES: JSON.stringify({
-      integration: {
-        adapter: 'openai-compatible',
-        baseUrl: input.providerUrl,
-        model: 'integration-model',
-        timeoutMs: 5000
-      }
-    }),
-    LLM_RUNNER_SOURCE_RESOLVERS: JSON.stringify({
-      telegram: {
-        procedure: 'resolveSourceContent',
-        timeoutMs: 5000,
-        url: input.sourceUrl
-      }
-    }),
+    LLM_RUNNER_PROFILES_PATH: profilesPath,
     LLM_RUNNER_WORKER_INTERVAL_MS: '100',
     NATS_URL: natsUrl,
     PORT: String(input.port)
@@ -373,20 +492,30 @@ async function startRunner(input: {
   stopped.push(app);
 }
 
-async function startPolicies(input: { directory: string; port: number }): Promise<void> {
-  const config = readPoliciesConfig({
+async function startPipelines(input: {
+  dataUrl: string;
+  port: number;
+  runnerUrl: string;
+  triggersUrl: string;
+}): Promise<void> {
+  const config = readPipelineConfig({
+    DATABASE_URL: databaseUrl,
     NATS_URL: natsUrl,
-    POLICY_CONFIG_DIR: input.directory,
-    PORT: String(input.port)
+    PIPELINES_ACTION_TARGETS: JSON.stringify({
+      data: input.dataUrl,
+      'llm-runner': input.runnerUrl
+    }),
+    PORT: String(input.port),
+    TRIGGERS_RPC_URL: input.triggersUrl
   });
-  const app = policiesModule({
+  const app = pipelineModule({
     config,
     connect: {
       events: nats(config.natsUrl),
       rpc: httpRpc({
         host,
         port: config.port,
-        service: 'policies'
+        service: 'pipelines'
       })
     }
   });
@@ -394,30 +523,20 @@ async function startPolicies(input: { directory: string; port: number }): Promis
   stopped.push(app);
 }
 
-async function startTriggers(input: {
-  policiesUrl: string;
-  port: number;
-  runnerUrl: string;
-}): Promise<void> {
+async function startTriggers(input: { pipelinesUrl: string; port: number }): Promise<void> {
   const config = readTriggerConfig({
     DATABASE_URL: databaseUrl,
     NATS_URL: natsUrl,
-    POLICIES_RPC_URL: input.policiesUrl,
     PORT: String(input.port),
     TRIGGERS_ACTION_TARGETS: JSON.stringify({
-      'llm-runner': input.runnerUrl
+      pipelines: input.pipelinesUrl
     }),
-    TRIGGERS_SCHEDULER_INTERVAL_MS: '100'
+    TRIGGERS_SCHEDULER_INTERVAL_MS: '60000'
   });
   const app = triggerModule({
     config,
     connect: {
       events: nats(config.natsUrl),
-      policies: () =>
-        createPolicyClient({
-          timeoutMs: 5000,
-          url: config.policiesRpcUrl
-        }),
       rpc: httpRpc({
         host,
         port: config.port,
@@ -475,13 +594,11 @@ async function handleProviderRequest(
   const userMessage = body.messages?.find((message) => message.role === 'user')?.content;
   assert(typeof userMessage === 'string', 'LLM provider did not receive user payload');
   const parsed = JSON.parse(userMessage) as {
-    payload?: {
-      messages?: {
-        text?: unknown;
-      }[];
+    value?: {
+      text?: unknown;
     };
   };
-  const text = parsed.payload?.messages?.[0]?.text;
+  const text = parsed.value?.text;
   assert(typeof text === 'string', 'LLM provider user payload has no message text');
   const runKey = text.replace('message payload for ', '');
   writeJson(response, 200, {
@@ -564,12 +681,12 @@ function sleep(milliseconds: number): Promise<void> {
   });
 }
 
+function readProviderCallCount(provider: { calls: readonly ProviderRequest[] }): number {
+  return provider.calls.length;
+}
+
 function assert(condition: unknown, message: string): asserts condition {
   if (!condition) {
     throw new Error(message);
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
