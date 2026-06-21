@@ -25,6 +25,7 @@ auditDateContract(sourceFiles);
 auditTdlibContractGeneration(sourceFiles);
 auditScopedVueComponentStyles(vueFiles, sourceFiles);
 auditTelemetryDashboardCoverage();
+auditNoTemporaryRussianDocs(sourceFiles);
 
 if (failures.length > 0) {
   for (const failure of failures) {
@@ -267,6 +268,14 @@ function auditTablePrefixes() {
       prefix: 'llm_runner_'
     },
     {
+      file: join(root, 'packages/data/src/database/schema.ts'),
+      prefix: 'data_'
+    },
+    {
+      file: join(root, 'packages/pipelines/src/database/schema.ts'),
+      prefix: 'pipelines_'
+    },
+    {
       file: join(root, 'packages/telegram/src/database/storageSchema.ts'),
       prefix: 'telegram_'
     },
@@ -331,6 +340,8 @@ function isCurrentModuleWorkspace(workspace) {
     workspace === 'packages/gateway' ||
     workspace === 'packages/telemetry' ||
     workspace === 'packages/dashboard' ||
+    workspace === 'packages/data' ||
+    workspace === 'packages/pipelines' ||
     workspace === 'packages/llm-runner' ||
     workspace === 'packages/triggers' ||
     workspace === 'packages/telegram'
@@ -741,8 +752,7 @@ function telemetrySourceFiles() {
       file.endsWith('.ts') &&
       !file.endsWith('.test.ts') &&
       !toRel(file).includes('/tests/') &&
-      !toRel(file).includes('/drizzle/') &&
-      !toRel(file).includes('/data/')
+      !toRel(file).includes('/drizzle/')
   );
 }
 
@@ -1005,6 +1015,15 @@ function ignoredDirectory(directory) {
     rel === '.git' ||
     rel.endsWith('/.git')
   );
+}
+
+function auditNoTemporaryRussianDocs(files) {
+  for (const file of files) {
+    const rel = toRel(file);
+    if (/^docs\/.*Russian\.md$/.test(rel)) {
+      failures.push(`temporary Russian documentation must not be committed: ${rel}`);
+    }
+  }
 }
 
 function ignored(file) {

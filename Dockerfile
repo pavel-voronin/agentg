@@ -2,6 +2,8 @@ FROM node:24-bookworm-slim AS deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
 COPY packages/framework/package.json packages/framework/package.json
+COPY packages/data/package.json packages/data/package.json
+COPY packages/pipelines/package.json packages/pipelines/package.json
 COPY packages/gateway/package.json packages/gateway/package.json
 COPY packages/dashboard/package.json packages/dashboard/package.json
 COPY packages/claude-plugin/package.json packages/claude-plugin/package.json
@@ -23,6 +25,8 @@ WORKDIR /app
 RUN groupadd --system agentg && useradd --system --gid agentg --home-dir /app agentg
 COPY package.json package-lock.json* ./
 COPY packages/framework/package.json packages/framework/package.json
+COPY packages/data/package.json packages/data/package.json
+COPY packages/pipelines/package.json packages/pipelines/package.json
 COPY packages/gateway/package.json packages/gateway/package.json
 COPY packages/dashboard/package.json packages/dashboard/package.json
 COPY packages/claude-plugin/package.json packages/claude-plugin/package.json

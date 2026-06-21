@@ -14,6 +14,8 @@ environment:
   - 'DATABASE_URL=${DATABASE_URL:-postgres://agentg:agentg@127.0.0.1:5432/agentg}'
   - 'NATS_URL=${NATS_URL:-nats://127.0.0.1:4222}'
   - 'TELEGRAM_RPC_URL=${TELEGRAM_RPC_URL:-http://127.0.0.1:8702}'
+  - 'DATA_RPC_URL=${DATA_RPC_URL:-http://127.0.0.1:8708}'
+  - 'PIPELINES_RPC_URL=${PIPELINES_RPC_URL:-http://127.0.0.1:8709}'
   - 'POLICIES_RPC_URL=${POLICIES_RPC_URL:-http://127.0.0.1:8705}'
   - 'LLM_RUNNER_RPC_URL=${LLM_RUNNER_RPC_URL:-http://127.0.0.1:8707}'
   - 'AGENTG_TELEMETRY=${AGENTG_TELEMETRY:-1}'
@@ -93,7 +95,7 @@ processes:
 
   llm-runner:
     namespace: app
-    description: LLM-backed content processing and artifact storage.
+    description: LLM action provider for pipeline nodes.
     command: npm run dev:llm-runner
     environment:
       - 'OTEL_SERVICE_NAME=llm-runner'
@@ -110,20 +112,61 @@ processes:
       timeout_seconds: 1
       failure_threshold: 120
 
-  triggers:
+  data:
     namespace: app
-    description: TriggerRule scheduler and action dispatcher.
-    command: npm run dev:triggers
+    description: Addressable data model, provider routing, annotations, and collections.
+    command: npm run dev:data
     environment:
-      - 'OTEL_SERVICE_NAME=triggers'
-      - 'TRIGGERS_ACTION_TARGETS={"llm-runner":"http://127.0.0.1:8707"}'
+      - 'OTEL_SERVICE_NAME=data'
+      - 'DATA_PROVIDER_TARGETS={"telegram":"http://127.0.0.1:8702"}'
     availability:
       restart: always
       backoff_seconds: 2
     depends_on:
-      policies:
+      telegram:
+        condition: process_healthy
+    readiness_probe:
+      exec:
+        command: nc -z 127.0.0.1 8708
+      period_seconds: 1
+      timeout_seconds: 1
+      failure_threshold: 120
+
+  pipelines:
+    namespace: app
+    description: Pipeline definitions, runs, action dispatch, and trigger registrations.
+    command: npm run dev:pipelines
+    environment:
+      - 'OTEL_SERVICE_NAME=pipelines'
+      - 'PIPELINES_ACTION_TARGETS={"data":"http://127.0.0.1:8708","llm-runner":"http://127.0.0.1:8707"}'
+      - 'TRIGGERS_RPC_URL=http://127.0.0.1:8706'
+    availability:
+      restart: always
+      backoff_seconds: 2
+    depends_on:
+      data:
         condition: process_healthy
       llm-runner:
+        condition: process_healthy
+    readiness_probe:
+      exec:
+        command: nc -z 127.0.0.1 8709
+      period_seconds: 1
+      timeout_seconds: 1
+      failure_threshold: 120
+
+  triggers:
+    namespace: app
+    description: Trigger registration scheduler and action dispatcher.
+    command: npm run dev:triggers
+    environment:
+      - 'OTEL_SERVICE_NAME=triggers'
+      - 'TRIGGERS_ACTION_TARGETS={"pipelines":"http://127.0.0.1:8709"}'
+    availability:
+      restart: always
+      backoff_seconds: 2
+    depends_on:
+      pipelines:
         condition: process_healthy
     readiness_probe:
       exec:

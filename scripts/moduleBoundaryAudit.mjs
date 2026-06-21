@@ -9,6 +9,8 @@ const packageDirs = [
   'packages/gateway',
   'packages/telemetry',
   'packages/dashboard',
+  'packages/data',
+  'packages/pipelines',
   'packages/llm-runner',
   'packages/triggers',
   'packages/telegram'

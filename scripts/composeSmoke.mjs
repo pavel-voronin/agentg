@@ -10,7 +10,18 @@ if (includeTelegram) {
 }
 
 const compose = ['docker', 'compose', ...profiles.flatMap((profile) => ['--profile', profile])];
-const services = ['postgres', 'nats', 'policies', 'telegram', 'gateway', 'dashboard'];
+const services = [
+  'postgres',
+  'nats',
+  'policies',
+  'telegram',
+  'llm-runner',
+  'data',
+  'pipelines',
+  'triggers',
+  'gateway',
+  'dashboard'
+];
 
 try {
   run(['up', '-d', 'postgres', 'nats', '--quiet-pull']);
@@ -151,6 +162,38 @@ if (telegramChat.chat !== null) {
   throw new Error('telegram smoke expected missing chat to return null');
 }
 
+const dataModels = await callProcedureUntilReady('http://data:8080', 'data RPC', 'listModels', undefined);
+if (!dataModels.some((model) => model.model === 'telegram.chat')) {
+  throw new Error('data smoke expected telegram.chat model');
+}
+
+const pipelines = await callProcedureUntilReady(
+  'http://pipelines:8080',
+  'pipelines RPC',
+  'listPipelines',
+  undefined
+);
+if (!Array.isArray(pipelines)) {
+  throw new Error('pipelines smoke expected listPipelines array');
+}
+
+const llmResult = await callProcedureUntilReady('http://llm-runner:8080', 'llm-runner RPC', 'getRunResult', {
+  runId: 'compose-smoke-missing-run'
+});
+if (llmResult !== null) {
+  throw new Error('llm-runner smoke expected missing run to return null');
+}
+
+const triggerRegistrations = await callProcedureUntilReady(
+  'http://triggers:8080',
+  'triggers RPC',
+  'listTriggerRegistrations',
+  {}
+);
+if (!Array.isArray(triggerRegistrations.registrations)) {
+  throw new Error('triggers smoke expected listTriggerRegistrations registrations array');
+}
+
 console.log(
   JSON.stringify(
     {
@@ -165,6 +208,18 @@ console.log(
       },
       telegram: {
         chat: telegramChat.chat
+      },
+      data: {
+        models: dataModels.length
+      },
+      pipelines: {
+        pipelines: pipelines.length
+      },
+      llmRunner: {
+        missingRun: llmResult
+      },
+      triggers: {
+        registrations: triggerRegistrations.registrations.length
       }
     },
     null,

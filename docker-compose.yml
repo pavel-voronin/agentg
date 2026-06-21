@@ -108,18 +108,69 @@ services:
         condition: service_started
       postgres:
         condition: service_healthy
+    environment:
+      <<: *agentg-telemetry-environment
+      DATABASE_URL: postgres://agentg:agentg@postgres:5432/agentg
+      NATS_URL: nats://nats:4222
+      HOST: 0.0.0.0
+      PORT: 8080
+      LLM_RUNNER_PROFILES_PATH: /app/config/llm-runner/profiles.yaml
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+    restart: 'no'
+    command: ['npm', 'run', 'dev:llm-runner']
+    healthcheck: *agentg-rpc-healthcheck
+
+  data:
+    profiles:
+      - container-client
+      - dashboard
+    build:
+      context: .
+      target: runtime
+    depends_on:
+      nats:
+        condition: service_started
+      postgres:
+        condition: service_healthy
       telegram:
+        condition: service_healthy
+    environment:
+      <<: *agentg-telemetry-environment
+      DATA_PROVIDER_TARGETS: '{"telegram":"http://telegram:8080"}'
+      DATABASE_URL: postgres://agentg:agentg@postgres:5432/agentg
+      NATS_URL: nats://nats:4222
+      HOST: 0.0.0.0
+      PORT: 8080
+    restart: 'no'
+    command: ['npm', 'run', 'dev:data']
+    healthcheck: *agentg-rpc-healthcheck
+
+  pipelines:
+    profiles:
+      - container-client
+      - dashboard
+    build:
+      context: .
+      target: runtime
+    depends_on:
+      data:
+        condition: service_healthy
+      llm-runner:
+        condition: service_healthy
+      nats:
+        condition: service_started
+      postgres:
         condition: service_healthy
     environment:
       <<: *agentg-telemetry-environment
       DATABASE_URL: postgres://agentg:agentg@postgres:5432/agentg
       NATS_URL: nats://nats:4222
-      TELEGRAM_RPC_URL: http://telegram:8080
+      PIPELINES_ACTION_TARGETS: '{"data":"http://data:8080","llm-runner":"http://llm-runner:8080"}'
+      TRIGGERS_RPC_URL: http://triggers:8080
       HOST: 0.0.0.0
       PORT: 8080
-      LLM_RUNNER_PROFILES: ${LLM_RUNNER_PROFILES:-{}}
     restart: 'no'
-    command: ['npm', 'run', 'dev:llm-runner']
+    command: ['npm', 'run', 'dev:pipelines']
     healthcheck: *agentg-rpc-healthcheck
 
   triggers:
@@ -130,20 +181,17 @@ services:
       context: .
       target: runtime
     depends_on:
-      llm-runner:
+      pipelines:
         condition: service_healthy
       nats:
         condition: service_started
-      policies:
-        condition: service_healthy
       postgres:
         condition: service_healthy
     environment:
       <<: *agentg-telemetry-environment
       DATABASE_URL: postgres://agentg:agentg@postgres:5432/agentg
       NATS_URL: nats://nats:4222
-      POLICIES_RPC_URL: http://policies:8080
-      TRIGGERS_ACTION_TARGETS: '{"llm-runner":"http://llm-runner:8080"}'
+      TRIGGERS_ACTION_TARGETS: '{"pipelines":"http://pipelines:8080"}'
       HOST: 0.0.0.0
       PORT: 8080
     restart: 'no'
@@ -228,13 +276,23 @@ services:
       target: runtime
     command: ['npm', '--workspace', '@agentg/gateway', 'run', 'dev']
     depends_on:
+      data:
+        condition: service_healthy
       nats:
         condition: service_started
+      pipelines:
+        condition: service_healthy
+      policies:
+        condition: service_healthy
+      telegram:
+        condition: service_healthy
       triggers:
         condition: service_healthy
     environment:
       <<: *agentg-telemetry-environment
+      DATA_RPC_URL: http://data:8080
       NATS_URL: nats://nats:4222
+      PIPELINES_RPC_URL: http://pipelines:8080
       TELEGRAM_RPC_URL: http://telegram:8080
       POLICIES_RPC_URL: http://policies:8080
       HOST: 0.0.0.0
