@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 
 /* eslint-disable @typescript-eslint/no-deprecated -- MCP stdio server uses the low-level SDK server API. */
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
@@ -46,6 +49,12 @@ type PendingRequest = {
   reject(reason: Error): void;
   resolve(value: unknown): void;
   timeout: NodeJS.Timeout;
+};
+
+export type ToolBridge = {
+  call(method: string, params?: unknown): Promise<unknown>;
+  readEvents(input: { clear: boolean; limit: number }): readonly unknown[];
+  status(): Record<string, unknown>;
 };
 
 const DEFAULT_EVENT_BUFFER_SIZE = 100;
@@ -265,26 +274,7 @@ class GatewayBridge {
   }
 }
 
-const bridge = new GatewayBridge(readConfig());
-
-const server = new Server(
-  {
-    name: 'agentg-codex',
-    version: '0.1.0'
-  },
-  {
-    capabilities: {
-      tools: {}
-    },
-    instructions: [
-      'AgentG Codex MCP talks only to AgentG Gateway WebSocket. Use explicit tools; do not invent method names or bypass Gateway.',
-      'Policy tools mutate the active policy store through Gateway. Treat set/delete as user-intent operations and inspect results for rejected status.',
-      'Telegram tools expose Gateway-approved Telegram reads and file requests. TDLib, storage, coverage, and worker details stay private to AgentG modules.'
-    ].join('\n')
-  }
-);
-
-const tools = [
+export const tools = [
   {
     description: 'Return AgentG Gateway connection status for this MCP server.',
     inputSchema: emptyObjectSchema(),
@@ -383,14 +373,235 @@ const tools = [
     name: 'telegram_request_file'
   },
   {
-    description: 'Resolve Telegram source content for agent processing through AgentG Gateway.',
+    description: 'List Data models known to AgentG Gateway.',
+    inputSchema: emptyObjectSchema(),
+    name: 'data_list_models'
+  },
+  {
+    description: 'Select a Data dataset through AgentG Gateway.',
     inputSchema: objectSchema(
       {
-        sourceSelector: jsonObjectSchema()
+        limit: {
+          minimum: 1,
+          type: 'integer'
+        },
+        model: {
+          minLength: 1,
+          type: 'string'
+        },
+        where: jsonValueSchema()
       },
-      ['sourceSelector']
+      ['model']
     ),
-    name: 'telegram_resolve_source_content'
+    name: 'data_select'
+  },
+  {
+    description: 'Get one Data model row by ref through AgentG Gateway.',
+    inputSchema: objectSchema(
+      {
+        ref: jsonObjectSchema()
+      },
+      ['ref']
+    ),
+    name: 'data_get'
+  },
+  {
+    description: 'Expand a Data dataset relation through AgentG Gateway.',
+    inputSchema: objectSchema(
+      {
+        from: jsonArraySchema(),
+        limit: {
+          minimum: 1,
+          type: 'integer'
+        },
+        relation: {
+          minLength: 1,
+          type: 'string'
+        },
+        sourceRef: {
+          minLength: 1,
+          type: 'string'
+        },
+        where: jsonValueSchema()
+      },
+      ['from', 'relation', 'sourceRef']
+    ),
+    name: 'data_expand'
+  },
+  {
+    description: 'Render a Data dataset into text or JSON through AgentG Gateway.',
+    inputSchema: objectSchema(
+      {
+        format: {
+          enum: ['text', 'json'],
+          type: 'string'
+        },
+        from: jsonArraySchema(),
+        options: jsonValueSchema(),
+        sourceRef: {
+          minLength: 1,
+          type: 'string'
+        }
+      },
+      ['format', 'from', 'sourceRef']
+    ),
+    name: 'data_render'
+  },
+  {
+    description: 'Read one Data annotation through AgentG Gateway.',
+    inputSchema: objectSchema(
+      {
+        key: {
+          minLength: 1,
+          type: 'string'
+        },
+        subject: jsonObjectSchema()
+      },
+      ['key', 'subject']
+    ),
+    name: 'data_get_annotation'
+  },
+  {
+    description: 'List Data annotations through AgentG Gateway.',
+    inputSchema: objectSchema(
+      {
+        key: {
+          minLength: 1,
+          type: 'string'
+        },
+        subject: jsonObjectSchema()
+      },
+      ['subject']
+    ),
+    name: 'data_list_annotations'
+  },
+  {
+    description: 'Write one Data annotation through AgentG Gateway.',
+    inputSchema: objectSchema(
+      {
+        key: {
+          minLength: 1,
+          type: 'string'
+        },
+        lineage: jsonArraySchema(),
+        mode: {
+          enum: ['replace', 'merge'],
+          type: 'string'
+        },
+        subject: jsonObjectSchema(),
+        value: jsonValueSchema()
+      },
+      ['key', 'mode', 'subject', 'value']
+    ),
+    name: 'data_write_annotation'
+  },
+  {
+    description: 'List one Data collection through AgentG Gateway.',
+    inputSchema: objectSchema(
+      {
+        key: {
+          minLength: 1,
+          type: 'string'
+        },
+        subject: jsonObjectSchema()
+      },
+      ['key', 'subject']
+    ),
+    name: 'data_list_collection'
+  },
+  {
+    description: 'Read one Data collection item through AgentG Gateway.',
+    inputSchema: objectSchema(
+      {
+        itemId: {
+          minLength: 1,
+          type: 'string'
+        },
+        key: {
+          minLength: 1,
+          type: 'string'
+        },
+        subject: jsonObjectSchema()
+      },
+      ['itemId', 'key', 'subject']
+    ),
+    name: 'data_get_collection_item'
+  },
+  {
+    description: 'Write one Data collection item through AgentG Gateway.',
+    inputSchema: collectionItemWriteSchema(),
+    name: 'data_write_collection_item'
+  },
+  {
+    description: 'List pipelines through AgentG Gateway.',
+    inputSchema: emptyObjectSchema(),
+    name: 'pipelines_list_pipelines'
+  },
+  {
+    description: 'Read one pipeline through AgentG Gateway.',
+    inputSchema: pipelineNameSchema(),
+    name: 'pipelines_get_pipeline'
+  },
+  {
+    description: 'Set one pipeline document through AgentG Gateway.',
+    inputSchema: objectSchema(
+      {
+        document: {
+          anyOf: [jsonObjectSchema(), { minLength: 1, type: 'string' }]
+        }
+      },
+      ['document']
+    ),
+    name: 'pipelines_set_pipeline'
+  },
+  {
+    description: 'Run one pipeline through AgentG Gateway.',
+    inputSchema: objectSchema(
+      {
+        idempotencyKey: {
+          minLength: 1,
+          type: 'string'
+        },
+        name: {
+          minLength: 1,
+          type: 'string'
+        }
+      },
+      ['name']
+    ),
+    name: 'pipelines_run_pipeline'
+  },
+  {
+    description: 'Read one pipeline run through AgentG Gateway.',
+    inputSchema: objectSchema(
+      {
+        runId: {
+          minLength: 1,
+          type: 'string'
+        }
+      },
+      ['runId']
+    ),
+    name: 'pipelines_get_run'
+  },
+  {
+    description: 'List pipeline runs through AgentG Gateway.',
+    inputSchema: objectSchema({
+      pipelineName: {
+        minLength: 1,
+        type: 'string'
+      },
+      status: {
+        enum: ['accepted', 'running', 'waiting', 'completed', 'failed', 'cancelled'],
+        type: 'string'
+      }
+    }),
+    name: 'pipelines_list_runs'
+  },
+  {
+    description: 'Delete one pipeline through AgentG Gateway.',
+    inputSchema: pipelineNameSchema(),
+    name: 'pipelines_delete_pipeline'
   },
   {
     description: 'List policy kinds available through AgentG Gateway.',
@@ -452,11 +663,9 @@ const tools = [
   }
 ];
 
-server.setRequestHandler(ListToolsRequestSchema, () => ({ tools }));
-
-server.setRequestHandler(CallToolRequestSchema, async (req) => {
-  const args = argsOf(req.params.arguments);
-  switch (req.params.name) {
+export async function callTool(name: string, rawArgs: unknown, bridge: ToolBridge) {
+  const args = argsOf(rawArgs);
+  switch (name) {
     case 'agentg_gateway_status':
       return toolResult(bridge.status());
     case 'agentg_gateway_read_events':
@@ -508,10 +717,143 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
           slotKey: requiredString(args, 'slotKey')
         })
       );
-    case 'telegram_resolve_source_content':
+    case 'data_list_models':
+      return toolResult(await bridge.call('data.listModels'));
+    case 'data_select':
       return toolResult(
-        await bridge.call('telegram.resolveSourceContent', {
-          sourceSelector: requiredRecord(args, 'sourceSelector')
+        await bridge.call(
+          'data.select',
+          compactObject({
+            limit: optionalInteger(args, 'limit'),
+            model: requiredString(args, 'model'),
+            where: optionalValue(args, 'where')
+          })
+        )
+      );
+    case 'data_get':
+      return toolResult(
+        await bridge.call('data.get', {
+          ref: requiredRecord(args, 'ref')
+        })
+      );
+    case 'data_expand':
+      return toolResult(
+        await bridge.call(
+          'data.expand',
+          compactObject({
+            from: requiredArray(args, 'from'),
+            limit: optionalInteger(args, 'limit'),
+            relation: requiredString(args, 'relation'),
+            sourceRef: requiredString(args, 'sourceRef'),
+            where: optionalValue(args, 'where')
+          })
+        )
+      );
+    case 'data_render':
+      return toolResult(
+        await bridge.call(
+          'data.render',
+          compactObject({
+            format: requiredString(args, 'format'),
+            from: requiredArray(args, 'from'),
+            options: optionalValue(args, 'options'),
+            sourceRef: requiredString(args, 'sourceRef')
+          })
+        )
+      );
+    case 'data_get_annotation':
+      return toolResult(
+        await bridge.call('data.getAnnotation', {
+          key: requiredString(args, 'key'),
+          subject: requiredRecord(args, 'subject')
+        })
+      );
+    case 'data_list_annotations':
+      return toolResult(
+        await bridge.call(
+          'data.listAnnotations',
+          compactObject({
+            key: optionalString(args, 'key'),
+            subject: requiredRecord(args, 'subject')
+          })
+        )
+      );
+    case 'data_write_annotation':
+      return toolResult(
+        await bridge.call(
+          'data.writeAnnotation',
+          compactObject({
+            key: requiredString(args, 'key'),
+            lineage: optionalArray(args, 'lineage'),
+            mode: requiredString(args, 'mode'),
+            subject: requiredRecord(args, 'subject'),
+            value: requiredValue(args, 'value')
+          })
+        )
+      );
+    case 'data_list_collection':
+      return toolResult(
+        await bridge.call('data.listCollection', {
+          key: requiredString(args, 'key'),
+          subject: requiredRecord(args, 'subject')
+        })
+      );
+    case 'data_get_collection_item':
+      return toolResult(
+        await bridge.call('data.getCollectionItem', {
+          itemId: requiredString(args, 'itemId'),
+          key: requiredString(args, 'key'),
+          subject: requiredRecord(args, 'subject')
+        })
+      );
+    case 'data_write_collection_item':
+      return toolResult(
+        await bridge.call('data.writeCollectionItem', collectionItemWriteParams(args))
+      );
+    case 'pipelines_list_pipelines':
+      return toolResult(await bridge.call('pipelines.listPipelines'));
+    case 'pipelines_get_pipeline':
+      return toolResult(
+        await bridge.call('pipelines.getPipeline', {
+          name: requiredString(args, 'name')
+        })
+      );
+    case 'pipelines_set_pipeline':
+      return toolResult(
+        await bridge.call('pipelines.setPipeline', {
+          document: requiredValue(args, 'document')
+        })
+      );
+    case 'pipelines_run_pipeline':
+      return toolResult(
+        await bridge.call(
+          'pipelines.runPipeline',
+          compactObject({
+            idempotencyKey: optionalString(args, 'idempotencyKey'),
+            name: requiredString(args, 'name')
+          })
+        )
+      );
+    case 'pipelines_get_run':
+      return toolResult(
+        await bridge.call('pipelines.getRun', {
+          runId: requiredString(args, 'runId')
+        })
+      );
+    case 'pipelines_list_runs':
+      return toolResult(
+        await bridge.call(
+          'pipelines.listRuns',
+          compactObject({
+            pipelineName: optionalString(args, 'pipelineName'),
+            status: optionalString(args, 'status')
+          })
+        )
+      );
+    case 'pipelines_delete_pipeline':
+      return toolResult(
+        await bridge.call('pipelines.deletePipeline', {
+          name: requiredString(args, 'name')
         })
       );
     case 'policies_list_policy_kinds':
@@ -544,27 +886,62 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
     case 'policies_delete_instance':
       return toolResult(await bridge.call('policies.deleteInstance', policyIdentity(args)));
     default:
-      throw new Error(`Unknown AgentG Codex MCP tool: ${req.params.name}`);
+      throw new Error(`Unknown AgentG Codex MCP tool: ${name}`);
   }
-});
+}
 
-process.on('SIGINT', () => {
-  bridge.stop();
-  process.exit(0);
-});
-process.on('SIGTERM', () => {
-  bridge.stop();
-  process.exit(0);
-});
-process.on('unhandledRejection', (error) => {
-  process.stderr.write(`agentg codex mcp: unhandled rejection: ${errorMessage(error)}\n`);
-});
-process.on('uncaughtException', (error) => {
-  process.stderr.write(`agentg codex mcp: uncaught exception: ${errorMessage(error)}\n`);
-});
+if (isMainModule()) {
+  await main();
+}
 
-await server.connect(new StdioServerTransport());
-bridge.start();
+async function main(): Promise<void> {
+  const bridge = new GatewayBridge(readConfig());
+  const server = new Server(
+    {
+      name: 'agentg-codex',
+      version: '0.1.0'
+    },
+    {
+      capabilities: {
+        tools: {}
+      },
+      instructions: [
+        'AgentG Codex MCP talks only to AgentG Gateway WebSocket. Use explicit tools; do not invent method names or bypass Gateway.',
+        'Policy tools mutate the active policy store through Gateway. Treat set/delete as user-intent operations and inspect results for rejected status.',
+        'Telegram tools expose Gateway-approved Telegram reads and file requests. TDLib, storage, coverage, and worker details stay private to AgentG modules.',
+        'Data and Pipeline tools expose addressable data operations and pipeline lifecycle through Gateway.'
+      ].join('\n')
+    }
+  );
+
+  server.setRequestHandler(ListToolsRequestSchema, () => ({ tools }));
+  server.setRequestHandler(CallToolRequestSchema, (req) =>
+    callTool(req.params.name, req.params.arguments, bridge)
+  );
+
+  process.on('SIGINT', () => {
+    bridge.stop();
+    process.exit(0);
+  });
+  process.on('SIGTERM', () => {
+    bridge.stop();
+    process.exit(0);
+  });
+  process.on('unhandledRejection', (error) => {
+    process.stderr.write(`agentg codex mcp: unhandled rejection: ${errorMessage(error)}\n`);
+  });
+  process.on('uncaughtException', (error) => {
+    process.stderr.write(`agentg codex mcp: uncaught exception: ${errorMessage(error)}\n`);
+  });
+
+  await server.connect(new StdioServerTransport());
+  bridge.start();
+}
+
+function isMainModule(): boolean {
+  const entrypoint = process.argv[1];
+  return entrypoint !== undefined && import.meta.url === pathToFileURL(resolve(entrypoint)).href;
+}
 
 function argsOf(value: unknown): Record<string, unknown> {
   return isRecord(value) ? value : {};
@@ -578,6 +955,73 @@ function compactObject(value: Record<string, unknown>): Record<string, unknown> 
     }
   }
   return output;
+}
+
+function collectionItemWriteParams(args: Record<string, unknown>): Record<string, unknown> {
+  const mode = requiredString(args, 'mode');
+  const base = {
+    key: requiredString(args, 'key'),
+    lineage: optionalArray(args, 'lineage'),
+    mode,
+    subject: requiredRecord(args, 'subject'),
+    value: requiredValue(args, 'value')
+  };
+
+  if (mode === 'append') {
+    if (optionalString(args, 'itemId') !== undefined) {
+      throw new Error('append mode does not accept itemId');
+    }
+    return compactObject(base);
+  }
+  if (mode === 'replace' || mode === 'merge') {
+    return compactObject({
+      ...base,
+      itemId: requiredString(args, 'itemId')
+    });
+  }
+
+  throw new Error('mode must be append, replace, or merge');
+}
+
+function collectionItemWriteSchema(): Record<string, unknown> {
+  const shared = {
+    key: {
+      minLength: 1,
+      type: 'string'
+    },
+    lineage: jsonArraySchema(),
+    subject: jsonObjectSchema(),
+    value: jsonValueSchema()
+  };
+
+  return {
+    anyOf: [
+      objectSchema(
+        {
+          ...shared,
+          mode: {
+            const: 'append',
+            type: 'string'
+          }
+        },
+        ['key', 'mode', 'subject', 'value']
+      ),
+      objectSchema(
+        {
+          ...shared,
+          itemId: {
+            minLength: 1,
+            type: 'string'
+          },
+          mode: {
+            enum: ['replace', 'merge'],
+            type: 'string'
+          }
+        },
+        ['itemId', 'key', 'mode', 'subject', 'value']
+      )
+    ]
+  };
 }
 
 function emptyObjectSchema(): Record<string, unknown> {
@@ -614,6 +1058,26 @@ function jsonObjectSchema(): Record<string, unknown> {
   };
 }
 
+function jsonArraySchema(): Record<string, unknown> {
+  return {
+    items: jsonValueSchema(),
+    type: 'array'
+  };
+}
+
+function jsonValueSchema(): Record<string, unknown> {
+  return {
+    anyOf: [
+      { type: 'object', additionalProperties: true },
+      { type: 'array' },
+      { type: 'string' },
+      { type: 'number' },
+      { type: 'boolean' },
+      { type: 'null' }
+    ]
+  };
+}
+
 function objectSchema(
   properties: Record<string, unknown>,
   required: readonly string[] = []
@@ -631,6 +1095,11 @@ function optionalBoolean(args: Record<string, unknown>, name: string): boolean |
   return typeof value === 'boolean' ? value : undefined;
 }
 
+function optionalArray(args: Record<string, unknown>, name: string): unknown[] | undefined {
+  const value = args[name];
+  return Array.isArray(value) ? value : undefined;
+}
+
 function optionalInteger(args: Record<string, unknown>, name: string): number | undefined {
   const value = args[name];
   return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : undefined;
@@ -642,6 +1111,10 @@ function optionalRecord(
 ): Record<string, unknown> | undefined {
   const value = args[name];
   return isRecord(value) ? value : undefined;
+}
+
+function optionalValue(args: Record<string, unknown>, name: string): unknown {
+  return Object.hasOwn(args, name) ? args[name] : undefined;
 }
 
 function optionalString(args: Record<string, unknown>, name: string): string | undefined;
@@ -656,6 +1129,18 @@ function policyIdentity(args: Record<string, unknown>): { kind: string; name: st
     kind: requiredString(args, 'kind'),
     name: requiredString(args, 'name')
   };
+}
+
+function pipelineNameSchema(): Record<string, unknown> {
+  return objectSchema(
+    {
+      name: {
+        minLength: 1,
+        type: 'string'
+      }
+    },
+    ['name']
+  );
 }
 
 function policyIdentitySchema(): Record<string, unknown> {
@@ -687,6 +1172,14 @@ function rawDataToString(payload: RawData): string {
   return Buffer.from(payload).toString('utf8');
 }
 
+function requiredArray(args: Record<string, unknown>, name: string): unknown[] {
+  const value = args[name];
+  if (Array.isArray(value)) {
+    return value;
+  }
+  throw new Error(`${name} is required`);
+}
+
 function requiredRecord(args: Record<string, unknown>, name: string): Record<string, unknown> {
   const value = args[name];
   if (isRecord(value)) {
@@ -699,6 +1192,13 @@ function requiredString(args: Record<string, unknown>, name: string): string {
   const value = optionalString(args, name);
   if (value !== undefined) {
     return value;
+  }
+  throw new Error(`${name} is required`);
+}
+
+function requiredValue(args: Record<string, unknown>, name: string): unknown {
+  if (Object.hasOwn(args, name)) {
+    return args[name];
   }
   throw new Error(`${name} is required`);
 }
