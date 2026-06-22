@@ -6,6 +6,8 @@ import type { ProviderRegistry } from './providers.js';
 import {
   actionRequestSchema,
   annotationAddressSchema,
+  browseAnnotationsInputSchema,
+  browseCollectionInputSchema,
   collectionItemAddressSchema,
   datasetSchema,
   expandInputSchema,
@@ -25,8 +27,11 @@ import {
   type WriteAnnotationInput,
   type WriteCollectionItemInput
 } from './schema.js';
-import type { Store, WriteResult } from './store.js';
+import type { PageResult, Store, WriteResult } from './store.js';
 import { recordWrite, timeOperation } from './telemetry.js';
+
+const DEFAULT_PAGE_LIMIT = 25;
+type BrowseWhere = Parameters<Store['browseAnnotations']>[0]['where'];
 
 export function createRuntime(input: { providers: ProviderRegistry; store: Store }) {
   return {
@@ -66,6 +71,18 @@ export function createRuntime(input: { providers: ProviderRegistry; store: Store
         (row) => (row === null ? 'missing' : 'ok')
       );
     },
+    browseAnnotations(rawInput: unknown) {
+      const request = browseAnnotationsInputSchema.parse(rawInput);
+      return timeOperation('browse_annotations', () =>
+        input.store.browseAnnotations(pageInput(request))
+      );
+    },
+    browseCollection(rawInput: unknown) {
+      const request = browseCollectionInputSchema.parse(rawInput);
+      return timeOperation('browse_collection', () =>
+        input.store.browseCollection(pageInput(request))
+      );
+    },
     listAnnotations(rawInput: unknown) {
       return timeOperation('list_annotations', () =>
         input.store.listAnnotations(listAnnotationsInputSchema.parse(rawInput))
@@ -78,6 +95,12 @@ export function createRuntime(input: { providers: ProviderRegistry; store: Store
     },
     listModels() {
       return listCatalog();
+    },
+    overview() {
+      return timeOperation('overview', async () => ({
+        catalog: listCatalog(),
+        derivedStorage: await input.store.overview()
+      }));
     },
     render(rawInput: unknown) {
       const request = renderInputSchema.parse(rawInput);
@@ -95,6 +118,20 @@ export function createRuntime(input: { providers: ProviderRegistry; store: Store
           throw new Error(`Data model ${request.model} does not support select`);
         }
         return input.providers.select(entry.provider, request);
+      });
+    },
+    async selectPage(rawInput: unknown): Promise<PageResult<DatasetRow>> {
+      const request = selectInputSchema.parse(rawInput);
+      return timeOperation('select_page', async () => {
+        const limit = request.limit ?? DEFAULT_PAGE_LIMIT;
+        const dataset = await this.select({
+          ...request,
+          limit: limit + 1
+        });
+        return {
+          hasMore: dataset.rows.length > limit,
+          rows: dataset.rows.slice(0, limit)
+        };
       });
     },
     writeAnnotation(rawInput: unknown, now = new Date()) {
@@ -232,6 +269,22 @@ async function routeByRows(
     throw new Error(`Data model ${model} does not support ${capability}`);
   }
   return operation(provider);
+}
+
+function pageInput(input: {
+  key?: string | undefined;
+  limit?: number | undefined;
+  offset?: number | undefined;
+  sort?: { direction: 'asc' | 'desc'; key: string } | undefined;
+  subject?: ModelRef | undefined;
+  subjectModel?: string | undefined;
+  where?: BrowseWhere;
+}) {
+  return {
+    ...input,
+    limit: input.limit ?? DEFAULT_PAGE_LIMIT,
+    offset: input.offset ?? 0
+  };
 }
 
 function sourceModel(sourceRef: string, rows: readonly DatasetRow[]): string {

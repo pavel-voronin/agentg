@@ -23,6 +23,8 @@ describe('data runtime', () => {
       runtime.select({
         limit: 1,
         model: 'telegram.chat',
+        offset: 2,
+        sort: { direction: 'desc', key: 'primaryRef' },
         where: { readState: 'unread' }
       })
     ).resolves.toEqual({
@@ -38,7 +40,57 @@ describe('data runtime', () => {
     expect(select).toHaveBeenCalledWith('telegram', {
       limit: 1,
       model: 'telegram.chat',
+      offset: 2,
+      sort: { direction: 'desc', key: 'primaryRef' },
       where: { readState: 'unread' }
+    });
+  });
+
+  it('routes provider-owned page selects with one extra row for hasMore', async () => {
+    const providers = {
+      ...providerRegistry(),
+      select: vi.fn(() =>
+        Promise.resolve({
+          rows: [
+            {
+              lineage: [{ _model: 'telegram.chat', id: '10' }],
+              refs: { chat: { _model: 'telegram.chat', id: '10' } },
+              value: { id: '10' }
+            },
+            {
+              lineage: [{ _model: 'telegram.chat', id: '20' }],
+              refs: { chat: { _model: 'telegram.chat', id: '20' } },
+              value: { id: '20' }
+            }
+          ]
+        })
+      )
+    };
+    const runtime = createRuntime({
+      providers,
+      store: createMemoryStore()
+    });
+
+    await expect(
+      runtime.selectPage({
+        limit: 1,
+        model: 'telegram.chat',
+        offset: 25,
+        sort: { direction: 'asc', key: 'title' }
+      })
+    ).resolves.toMatchObject({
+      hasMore: true,
+      rows: [
+        {
+          refs: { chat: { _model: 'telegram.chat', id: '10' } }
+        }
+      ]
+    });
+    expect(vi.mocked(providers.select)).toHaveBeenCalledWith('telegram', {
+      limit: 2,
+      model: 'telegram.chat',
+      offset: 25,
+      sort: { direction: 'asc', key: 'title' }
     });
   });
 
@@ -288,6 +340,330 @@ describe('data runtime', () => {
         }
       ]
     );
+  });
+
+  it('returns model catalog and derived storage overview without provider calls', async () => {
+    const providers = providerRegistry();
+    const runtime = createRuntime({
+      providers,
+      store: createMemoryStore()
+    });
+    const firstSubject = { _model: 'telegram.chat', id: '10' };
+    const secondSubject = { _model: 'telegram.user', id: '20' };
+
+    await runtime.writeAnnotation(
+      {
+        key: 'summary',
+        mode: 'replace',
+        subject: firstSubject,
+        value: { text: 'first' }
+      },
+      new Date('2026-01-01T00:00:00.000Z')
+    );
+    await runtime.writeAnnotation(
+      {
+        key: 'tag',
+        mode: 'replace',
+        subject: secondSubject,
+        value: 'candidate'
+      },
+      new Date('2026-01-01T00:00:01.000Z')
+    );
+    await runtime.writeCollectionItem(
+      {
+        itemId: 'item-1',
+        key: 'subjects',
+        mode: 'replace',
+        subject: firstSubject,
+        value: { title: 'Data' }
+      },
+      new Date('2026-01-01T00:00:02.000Z')
+    );
+
+    const overview = await runtime.overview();
+    expect(overview).toMatchObject({
+      catalog: [
+        { model: 'telegram.chat', provider: 'telegram' },
+        { model: 'telegram.message', provider: 'telegram' },
+        { model: 'telegram.user', provider: 'telegram' },
+        { model: 'data.annotation', provider: 'data' },
+        { model: 'data.collectionItem', provider: 'data' }
+      ],
+      derivedStorage: {
+        annotations: {
+          byKey: [
+            {
+              count: 1,
+              key: 'summary',
+              latestUpdatedAt: '2026-01-01T00:00:00.000Z',
+              subjectCount: 1
+            },
+            {
+              count: 1,
+              key: 'tag',
+              latestUpdatedAt: '2026-01-01T00:00:01.000Z',
+              subjectCount: 1
+            }
+          ],
+          bySubjectModel: [
+            { count: 1, subjectCount: 1, subjectModel: 'telegram.chat' },
+            { count: 1, subjectCount: 1, subjectModel: 'telegram.user' }
+          ],
+          recent: [
+            {
+              key: 'tag',
+              ref: { _model: 'data.annotation', id: 'telegram.user:20:tag' },
+              subject: secondSubject,
+              updatedAt: '2026-01-01T00:00:01.000Z'
+            },
+            {
+              key: 'summary',
+              ref: { _model: 'data.annotation', id: 'telegram.chat:10:summary' },
+              subject: firstSubject,
+              updatedAt: '2026-01-01T00:00:00.000Z'
+            }
+          ],
+          totalItems: 2
+        },
+        collectionItems: {
+          byKey: [
+            {
+              count: 1,
+              key: 'subjects',
+              latestUpdatedAt: '2026-01-01T00:00:02.000Z',
+              subjectCount: 1
+            }
+          ],
+          bySubjectModel: [{ count: 1, subjectCount: 1, subjectModel: 'telegram.chat' }],
+          recent: [
+            {
+              itemId: 'item-1',
+              key: 'subjects',
+              ref: { _model: 'data.collectionItem', id: 'telegram.chat:10:subjects:item-1' },
+              subject: firstSubject,
+              updatedAt: '2026-01-01T00:00:02.000Z'
+            }
+          ],
+          totalItems: 1
+        }
+      }
+    });
+    expect(vi.mocked(providers.select)).not.toHaveBeenCalled();
+    expect(vi.mocked(providers.get)).not.toHaveBeenCalled();
+    expect(vi.mocked(providers.expand)).not.toHaveBeenCalled();
+    expect(vi.mocked(providers.render)).not.toHaveBeenCalled();
+  });
+
+  it('browses derived storage rows by key without provider calls', async () => {
+    const providers = providerRegistry();
+    const runtime = createRuntime({
+      providers,
+      store: createMemoryStore()
+    });
+    const firstSubject = { _model: 'telegram.chat', id: '10' };
+    const secondSubject = { _model: 'telegram.user', id: '20' };
+
+    await runtime.writeAnnotation(
+      {
+        key: 'summary',
+        mode: 'replace',
+        subject: firstSubject,
+        value: { text: 'first' }
+      },
+      new Date('2026-01-01T00:00:00.000Z')
+    );
+    await runtime.writeAnnotation(
+      {
+        key: 'summary',
+        mode: 'replace',
+        subject: secondSubject,
+        value: { text: 'second' }
+      },
+      new Date('2026-01-01T00:00:01.000Z')
+    );
+    await runtime.writeAnnotation(
+      {
+        key: 'tag',
+        mode: 'replace',
+        subject: firstSubject,
+        value: 'hidden'
+      },
+      new Date('2026-01-01T00:00:02.000Z')
+    );
+    await runtime.writeCollectionItem(
+      {
+        itemId: 'item-1',
+        key: 'subjects',
+        mode: 'replace',
+        subject: firstSubject,
+        value: { title: 'first' }
+      },
+      new Date('2026-01-01T00:00:00.000Z')
+    );
+    await runtime.writeCollectionItem(
+      {
+        itemId: 'item-2',
+        key: 'subjects',
+        mode: 'replace',
+        subject: secondSubject,
+        value: { title: 'second' }
+      },
+      new Date('2026-01-01T00:00:01.000Z')
+    );
+
+    await expect(
+      runtime.browseAnnotations({ key: 'summary', limit: 1, offset: 0 })
+    ).resolves.toMatchObject({
+      hasMore: true,
+      rows: [
+        {
+          subject: secondSubject,
+          value: { text: 'second' }
+        }
+      ],
+      total: 2
+    });
+    await expect(
+      runtime.browseAnnotations({
+        key: 'summary',
+        limit: 1,
+        offset: 0,
+        sort: { direction: 'asc', key: 'subject' }
+      })
+    ).resolves.toMatchObject({
+      rows: [
+        {
+          subject: firstSubject,
+          value: { text: 'first' }
+        }
+      ],
+      total: 2
+    });
+    await expect(
+      runtime.browseAnnotations({ key: 'summary', subject: firstSubject })
+    ).resolves.toMatchObject({
+      hasMore: false,
+      rows: [
+        {
+          subject: firstSubject,
+          value: { text: 'first' }
+        }
+      ],
+      total: 1
+    });
+    await expect(
+      runtime.browseAnnotations({ key: 'summary', subjectModel: 'telegram.chat' })
+    ).resolves.toMatchObject({
+      hasMore: false,
+      rows: [
+        {
+          subject: firstSubject,
+          value: { text: 'first' }
+        }
+      ],
+      total: 1
+    });
+    await expect(
+      runtime.browseAnnotations({
+        key: 'summary',
+        where: {
+          subjectQuery: 'telegram.chat:10',
+          valueNotQuery: 'second',
+          updatedAtGte: '2026-01-01T00:00:00.000Z',
+          updatedAtLt: '2026-01-01T00:00:01.000Z',
+          valueQuery: 'fir*'
+        }
+      })
+    ).resolves.toMatchObject({
+      hasMore: false,
+      rows: [
+        {
+          subject: firstSubject,
+          value: { text: 'first' }
+        }
+      ],
+      total: 1
+    });
+    await expect(
+      runtime.browseCollection({ key: 'subjects', limit: 1, offset: 1 })
+    ).resolves.toMatchObject({
+      hasMore: false,
+      rows: [
+        {
+          itemId: 'item-1',
+          subject: firstSubject,
+          value: { title: 'first' }
+        }
+      ],
+      total: 2
+    });
+    await expect(
+      runtime.browseCollection({
+        key: 'subjects',
+        limit: 1,
+        offset: 0,
+        sort: { direction: 'desc', key: 'itemId' }
+      })
+    ).resolves.toMatchObject({
+      rows: [
+        {
+          itemId: 'item-2',
+          subject: secondSubject
+        }
+      ],
+      total: 2
+    });
+    await expect(
+      runtime.browseCollection({ key: 'subjects', subject: secondSubject })
+    ).resolves.toMatchObject({
+      hasMore: false,
+      rows: [
+        {
+          itemId: 'item-2',
+          subject: secondSubject,
+          value: { title: 'second' }
+        }
+      ],
+      total: 1
+    });
+    await expect(
+      runtime.browseCollection({ key: 'subjects', subjectModel: 'telegram.chat' })
+    ).resolves.toMatchObject({
+      hasMore: false,
+      rows: [
+        {
+          itemId: 'item-1',
+          subject: firstSubject,
+          value: { title: 'first' }
+        }
+      ],
+      total: 1
+    });
+    await expect(
+      runtime.browseCollection({
+        key: 'subjects',
+        where: {
+          itemIdQuery: 'item-2',
+          subjectNotQuery: 'telegram.chat:10',
+          updatedAtGte: '2026-01-01T00:00:01.000Z',
+          valueQuery: 'sec*'
+        }
+      })
+    ).resolves.toMatchObject({
+      hasMore: false,
+      rows: [
+        {
+          itemId: 'item-2',
+          subject: secondSubject,
+          value: { title: 'second' }
+        }
+      ],
+      total: 1
+    });
+    expect(vi.mocked(providers.select)).not.toHaveBeenCalled();
+    expect(vi.mocked(providers.get)).not.toHaveBeenCalled();
+    expect(vi.mocked(providers.expand)).not.toHaveBeenCalled();
+    expect(vi.mocked(providers.render)).not.toHaveBeenCalled();
   });
 
   it('rejects merge writes when incoming or existing values are not objects', async () => {

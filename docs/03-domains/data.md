@@ -76,6 +76,28 @@ type ModelCatalogEntry = {
   model: string;
   provider: string;
   capabilities: readonly ProviderCapability[];
+  columns: readonly ModelCatalogColumn[];
+};
+
+type ModelCatalogColumn = {
+  key: string;
+  label: string;
+  source: { kind: 'primaryRef' } | { kind: 'valuePath'; path: readonly string[] };
+  filter?: {
+    kind: 'where';
+    input: 'dateTime' | 'enum' | 'id' | 'number' | 'text';
+    operators: readonly {
+      key: 'contains' | 'eq' | 'gt' | 'gte' | 'lt' | 'lte' | 'notContains';
+      label: string;
+      whereKey: string;
+      value: 'array' | 'single';
+    }[];
+    placeholder?: string;
+    refOperator?: 'eq';
+    values?: readonly { label: string; value: string }[];
+  };
+  format?: 'dateTime';
+  sortable?: boolean;
 };
 ```
 
@@ -92,6 +114,19 @@ data.collectionItem -> provider data
 Pipeline YAML names models, not modules. `data` resolves the provider from the
 catalog and calls the provider through module RPC.
 
+Catalog columns describe the model-owned browse shape for Data Dashboard tables.
+They are declarative field descriptors only: providers do not contribute Vue
+components, CSS, or renderer functions. `sortable: false` means Dashboard must
+not send that column key as a provider `select` sort key.
+
+Column filters are also declarative. A `where` filter lists the allowed
+operators for that column and the provider-owned `whereKey` for each operator.
+`value: 'array'` wraps the entered value in a single-item array. Dashboard must
+not invent provider filters that are absent from the catalog column descriptor.
+`refOperator: 'eq'` means Dashboard may apply that column filter from a
+`ModelRef` for the same model by using `ModelRef.id` as the input value.
+Text filter descriptors may expose `contains` and `notContains`.
+
 ## Provider Contract
 
 A provider module exposes only model-level capabilities to `data`. It does not
@@ -105,6 +140,13 @@ type DataSelectInput = {
   model: string;
   where?: JsonValue;
   limit?: number;
+  offset?: number;
+  sort?: DataSortInput;
+};
+
+type DataSortInput = {
+  direction: 'asc' | 'desc';
+  key: string;
 };
 
 type DataGetInput = {
@@ -138,6 +180,12 @@ type DatasetRow = {
 
 type Dataset = {
   rows: readonly DatasetRow[];
+};
+
+type PageResult<T> = {
+  hasMore: boolean;
+  rows: readonly T[];
+  total?: number;
 };
 ```
 
@@ -269,8 +317,31 @@ existing caller-supplied `itemId`.
 Initial public internal procedures:
 
 ```ts
+type DataBrowseInput = {
+  key?: string;
+  limit?: number;
+  offset?: number;
+  sort?: DataSortInput;
+  subject?: ModelRef;
+  subjectModel?: string;
+  where?: {
+    itemIdNotQuery?: string;
+    itemIdQuery?: string;
+    subjectNotQuery?: string;
+    subjectQuery?: string;
+    updatedAtGt?: string;
+    updatedAtGte?: string;
+    updatedAtLt?: string;
+    updatedAtLte?: string;
+    valueNotQuery?: string;
+    valueQuery?: string;
+  };
+};
+
 listModels(): readonly ModelCatalogEntry[];
+overview(): DataOverview;
 select(input: DataSelectInput): Dataset;
+selectPage(input: DataSelectInput): PageResult<DatasetRow>;
 get(input: DataGetInput): DatasetRow | null;
 expand(input: DataExpandInput): Dataset;
 render(input: DataRenderInput): Dataset;
@@ -278,14 +349,26 @@ render(input: DataRenderInput): Dataset;
 writeAnnotation(input: WriteAnnotationInput): WriteResult;
 getAnnotation(input: AnnotationAddress): Annotation | null;
 listAnnotations(input: { subject: ModelRef; key?: string }): readonly Annotation[];
+browseAnnotations(input: DataBrowseInput): PageResult<Annotation>;
 
 writeCollectionItem(input: WriteCollectionItemInput): WriteResult;
 getCollectionItem(input: CollectionItemAddress): CollectionItem | null;
 listCollection(input: { subject: ModelRef; key: string }): readonly CollectionItem[];
+browseCollection(input: DataBrowseInput): PageResult<CollectionItem>;
 ```
 
 `data` validates refs, routes provider-owned models, and writes data-owned
 annotations and collection items.
+
+`overview`, `browseAnnotations`, `browseCollection`, and `selectPage` are
+operator-surface read capabilities. Derived-storage browse procedures return
+bounded pages and Data-owned totals. `selectPage` returns a bounded provider
+model page and `hasMore` without computing provider-owned totals.
+Derived-storage browse procedures may filter by key, subject, subject model,
+subject text query, negative subject text query, value text query, negative
+value text query, updated time, and collection item id query. Data-owned
+annotation sort keys are `key`, `subject`, `updatedAt`, and `value`; collection
+sort keys also include `itemId`.
 
 `WriteResult` includes the written address, written model ref, write mode, and
 created or updated timestamp. Write procedures reject non-JSON-safe values.
@@ -504,14 +587,18 @@ Metric labels must not include subject ids, item ids, model ids, chat ids,
 message ids, provider filter values, rendered content, annotation values, or
 collection item values.
 
-Operator path:
+Telemetry operator path:
 
-- AgentG Dashboard: `/telemetry/data`
+- AgentG Telemetry page: `/telemetry/data`
 - Grafana dashboard UID: `agentg-data`
 - Jaeger service: `data`
 
-The dashboard must show operation errors, write volume, operation rate,
+The Grafana dashboard must show operation errors, write volume, operation rate,
 operation p95, writes by kind and mode, RPC call rate, and Postgres p95.
+
+The top-level Data model-space operator UI is separate from telemetry and is
+documented in [Data Dashboard](../05-interfaces/dataDashboard.md). Its route is
+`/data`.
 
 ## File Structure Constraints
 
@@ -520,16 +607,25 @@ Target package ownership:
 ```text
 packages/data/
   src/
+    catalog.ts
+    config.ts
+    database/
+    ids.ts
+    index.ts
+    main.ts
     module.ts
-    client.ts
-    actions/
-    catalog/
-    providers/
-    annotations/
-    collections/
+    overview.ts
+    providers.ts
+    runtime.ts
     schema.ts
+    store.ts
+    telemetry.ts
+  dashboard/
+    dashboard.ts
+    contracts.ts
+    backend/
+    frontend/
   drizzle/
-  tests/
 ```
 
 The package root exports a typed client only when another current package
@@ -545,8 +641,8 @@ imports it.
 - Requests for unsupported provider capabilities are rejected before any
   provider call.
 - `select` calls the provider registered for the requested model.
-- `select` passes `where` and `limit` to the provider without interpreting
-  provider-owned filter semantics.
+- `select` passes `where`, `limit`, `offset`, and `sort` to the provider without
+  interpreting provider-owned filter semantics.
 - `get` calls the provider registered for the requested ref model and returns
   `null` for a missing provider-owned ref.
 - `expand` calls the provider for the model of the input rows.
@@ -585,6 +681,10 @@ imports it.
 - `getCollectionItem` returns the written value, lineage, created timestamp, and
   updated timestamp for the addressed item.
 - `listAnnotations` and `listCollection` return data by subject address.
+- `browseAnnotations` and `browseCollection` return bounded pages of data-owned
+  rows across subjects, optionally filtered by key, subject, subject model,
+  subject/value text query, updated time, and collection item id query, then
+  sorted by Data-owned columns for the top-level Data explorer.
 - Pipeline actions use the same procedures as the direct data API after resolving
   action selectors into direct procedure inputs.
 - `data.get` action returns an empty dataset when the direct `get` procedure

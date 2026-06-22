@@ -136,6 +136,7 @@ describe('gateway server', () => {
           return Promise.resolve([
             {
               capabilities: ['select', 'get', 'expand', 'render'],
+              columns: [],
               model: 'telegram.chat',
               provider: 'telegram'
             }
@@ -178,6 +179,7 @@ describe('gateway server', () => {
       await expect(request(client, 'data.listModels', {})).resolves.toEqual([
         {
           capabilities: ['select', 'get', 'expand', 'render'],
+          columns: [],
           model: 'telegram.chat',
           provider: 'telegram'
         }

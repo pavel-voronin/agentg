@@ -268,7 +268,12 @@ the data operations used by agent-authored pipelines and direct inspection.
   "where": {
     "readState": "unread"
   },
-  "limit": 50
+  "limit": 50,
+  "offset": 0,
+  "sort": {
+    "direction": "asc",
+    "key": "title"
+  }
 }
 ```
 

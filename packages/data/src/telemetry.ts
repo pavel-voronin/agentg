@@ -13,14 +13,18 @@ type Operation =
   | 'action_select'
   | 'action_write_annotation'
   | 'action_write_collection_item'
+  | 'browse_annotations'
+  | 'browse_collection'
   | 'expand'
   | 'get'
   | 'get_annotation'
   | 'get_collection_item'
   | 'list_annotations'
   | 'list_collection'
+  | 'overview'
   | 'render'
   | 'select'
+  | 'select_page'
   | 'write_annotation'
   | 'write_collection_item';
 

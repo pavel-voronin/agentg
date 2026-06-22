@@ -27,6 +27,41 @@ const datasetRowSchema = z
   })
   .strict();
 
+const sortInputSchema = z
+  .object({
+    direction: z.enum(['asc', 'desc']),
+    key: z.string().trim().min(1)
+  })
+  .strict();
+
+const textQuerySchema = z.string().trim().min(1);
+
+const dateTimeQuerySchema = z
+  .string()
+  .trim()
+  .min(1)
+  .refine((value) => !Number.isNaN(Date.parse(value)), 'Invalid date/time');
+
+const annotationBrowseWhereSchema = z
+  .object({
+    subjectNotQuery: textQuerySchema.optional(),
+    subjectQuery: textQuerySchema.optional(),
+    updatedAtGt: dateTimeQuerySchema.optional(),
+    updatedAtGte: dateTimeQuerySchema.optional(),
+    updatedAtLt: dateTimeQuerySchema.optional(),
+    updatedAtLte: dateTimeQuerySchema.optional(),
+    valueNotQuery: textQuerySchema.optional(),
+    valueQuery: textQuerySchema.optional()
+  })
+  .strict();
+
+const collectionBrowseWhereSchema = annotationBrowseWhereSchema
+  .extend({
+    itemIdNotQuery: textQuerySchema.optional(),
+    itemIdQuery: textQuerySchema.optional()
+  })
+  .strict();
+
 export const datasetSchema = z
   .object({
     rows: z.array(datasetRowSchema).readonly()
@@ -39,6 +74,8 @@ export const selectInputSchema = z
   .object({
     limit: z.number().int().positive().optional(),
     model: z.string().trim().min(1),
+    offset: z.number().int().nonnegative().optional(),
+    sort: sortInputSchema.optional(),
     where: jsonValueSchema.optional()
   })
   .strict();
@@ -137,6 +174,30 @@ export const listCollectionInputSchema = z
   .object({
     key: z.string().trim().min(1),
     subject: modelRefSchema
+  })
+  .strict();
+
+export const browseAnnotationsInputSchema = z
+  .object({
+    key: z.string().trim().min(1).optional(),
+    limit: z.number().int().positive().optional(),
+    offset: z.number().int().nonnegative().optional(),
+    sort: sortInputSchema.optional(),
+    subject: modelRefSchema.optional(),
+    subjectModel: z.string().trim().min(1).optional(),
+    where: annotationBrowseWhereSchema.optional()
+  })
+  .strict();
+
+export const browseCollectionInputSchema = z
+  .object({
+    key: z.string().trim().min(1).optional(),
+    limit: z.number().int().positive().optional(),
+    offset: z.number().int().nonnegative().optional(),
+    sort: sortInputSchema.optional(),
+    subject: modelRefSchema.optional(),
+    subjectModel: z.string().trim().min(1).optional(),
+    where: collectionBrowseWhereSchema.optional()
   })
   .strict();
 
@@ -258,6 +319,8 @@ export type Dataset = z.infer<typeof datasetSchema>;
 export type SelectInput = z.infer<typeof selectInputSchema>;
 export type GetInput = z.infer<typeof getInputSchema>;
 export type ExpandInput = z.infer<typeof expandInputSchema>;
+export type BrowseAnnotationsInput = z.infer<typeof browseAnnotationsInputSchema>;
+export type BrowseCollectionInput = z.infer<typeof browseCollectionInputSchema>;
 export type RenderInput = z.infer<typeof renderInputSchema>;
 export type WriteAnnotationInput = z.infer<typeof writeAnnotationInputSchema>;
 export type WriteCollectionItemInput = z.infer<typeof writeCollectionItemInputSchema>;
