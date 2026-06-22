@@ -13,6 +13,18 @@ const contents = [
       }
     },
     tags: ['dashboard.page']
+  },
+  {
+    contentId: 'data.telegramChat.relatedData',
+    load: () => import('./frontend/telegramChatDataContent.vue'),
+    metadata: {
+      tab: {
+        label: 'Data',
+        order: 30,
+        routeSegment: 'data'
+      }
+    },
+    tags: ['telegram.client']
   }
 ] as const satisfies readonly Omit<ContentDefinition, 'domainId'>[];
 

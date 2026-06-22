@@ -25,6 +25,28 @@ describe('data dashboard contributions', () => {
       }
     ]);
   });
+
+  it('contributes related data to the Telegram client slot', () => {
+    expect(
+      dashboard.contents
+        .filter((content) => hasTag(content, 'telegram.client'))
+        .map((content) => ({
+          contentId: content.contentId,
+          metadata: contentMetadata(content)
+        }))
+    ).toEqual([
+      {
+        contentId: 'data.telegramChat.relatedData',
+        metadata: {
+          tab: {
+            label: 'Data',
+            order: 30,
+            routeSegment: 'data'
+          }
+        }
+      }
+    ]);
+  });
 });
 
 type DashboardContent = (typeof dashboard.contents)[number];

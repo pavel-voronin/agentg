@@ -14,6 +14,8 @@ Telemetry.
 - Add a top-level Dashboard page named `Data` at `/data`.
 - Contribute the page from the Data package through the neutral
   `dashboard.page` slot.
+- Contribute a chat-level `Data` tab through the existing `telegram.client`
+  slot so operators can inspect Data derivatives for the currently opened chat.
 - Keep the page in navigation whenever Dashboard is available, independent of
   Telemetry and Grafana.
 - Show a tree navigation of structures available through Data.
@@ -50,6 +52,20 @@ label: Data
 route: /data
 page order: 8
 ```
+
+The Data package also contributes one chat-level client tab:
+
+```text
+contentId: data.telegramChat.relatedData
+slot tag: telegram.client
+label: Data
+route segment: data
+tab order: 30
+```
+
+The tab reads `selectedChatId` from the client slot context, treats it as
+`telegram.chat:<id>`, and shows the same Data-owned derivative records that
+`Open related data` shows on the `/data` page.
 
 The Data module exposes these direct read procedures for the Dashboard
 explorer:
@@ -280,6 +296,8 @@ After initialization, Dashboard procedure calls require explicit user intent:
 - clicking an annotation key calls `data.dashboard.browseAnnotations`;
 - clicking a collection key calls `data.dashboard.browseCollection`;
 - clicking a provider model calls `data.dashboard.selectPage`;
+- opening the chat-level `Data` tab calls `data.dashboard.overview` and reads
+  annotations and collections for the selected `telegram.chat` subject;
 - clicking table pagination controls calls the same selected structure
   procedure with the next `offset` and `limit`;
 - clicking a sortable table header calls the same selected structure procedure
