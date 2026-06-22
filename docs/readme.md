@@ -29,6 +29,7 @@ Do not pre-document behavior beyond the selected source-of-truth documents. The 
 - [Triggers](03-domains/triggers.md)
 - [TDLib Sidecar API](05-interfaces/tdlibSidecarApi.md)
 - [Event Plane](05-interfaces/eventPlane.md)
+- [Data Dashboard](05-interfaces/dataDashboard.md)
 - [Agent Gateway API](05-interfaces/agentGatewayApi.md)
 
 ## Documentation Layers
