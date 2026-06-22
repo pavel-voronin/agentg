@@ -88,15 +88,18 @@ function syncRouteFromBrowser(): void {
 
 function syncBrowserRoute(path: string, replace: boolean): void {
   const browser = browserGlobal();
-  if (browser.location.pathname === path) {
+  if (
+    browser.location.pathname === path &&
+    browser.location.search === '' &&
+    browser.location.hash === ''
+  ) {
     return;
   }
-  const url = `${path}${browser.location.search}${browser.location.hash}`;
   if (replace) {
-    browser.history.replaceState(null, '', url);
+    browser.history.replaceState(null, '', path);
     return;
   }
-  browser.history.pushState(null, '', url);
+  browser.history.pushState(null, '', path);
 }
 
 watch(
