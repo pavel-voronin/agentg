@@ -1,6 +1,7 @@
 import { defineConfig, number, string, type ConfigOf } from '@agentg/framework';
 
 export const readConfig = defineConfig({
+  dataRpcUrl: string('DATA_RPC_URL').default('http://127.0.0.1:8708'),
   databaseUrl: string('DATABASE_URL'),
   grafanaUrl: string('GRAFANA_URL').default('http://127.0.0.1:3000'),
   host: string('DASHBOARD_HOST').default('127.0.0.1'),

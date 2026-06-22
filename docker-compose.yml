@@ -233,6 +233,7 @@ services:
     environment:
       <<: *agentg-telemetry-environment
       DATABASE_URL: postgres://agentg:agentg@postgres:5432/agentg
+      DATA_RPC_URL: http://data:8080
       DASHBOARD_HOST: 0.0.0.0
       DASHBOARD_PORT: 8080
       NATS_URL: nats://nats:4222

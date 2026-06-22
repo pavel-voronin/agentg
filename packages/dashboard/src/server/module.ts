@@ -1,6 +1,8 @@
 import { createLogger, defineModule } from '@agentg/framework';
+import { dataClient } from '@agentg/data';
 import { telegramClient } from '@agentg/telegram';
 
+import { createProcedures as createDataProcedures } from '../../../data/dashboard/backend/procedures.js';
 import { createProcedures as createTelegramProcedures } from '../../../telegram/dashboard/backend/procedures.js';
 import { createDatabase } from '../../../telegram/src/database/client.js';
 import { createProcedures as createTelemetryProcedures } from '../../../telemetry/dashboard/backend/procedures.js';
@@ -23,7 +25,14 @@ export const serverModule = defineModule('dashboard', {
       timeoutMs: 15_000,
       url: config.telegramRpcUrl
     });
+    const data = dataClient({
+      timeoutMs: 15_000,
+      url: config.dataRpcUrl
+    });
     const procedures = {
+      ...createDataProcedures({
+        client: data
+      }),
       ...createTelegramProcedures({
         database,
         events,
