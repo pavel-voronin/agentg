@@ -55,6 +55,40 @@ describe('Telegram data provider procedures', () => {
     expect(state.repositories.chats.list).not.toHaveBeenCalled();
   });
 
+  it('maps chat sorts to repository order before reading chats', async () => {
+    state.repositories.chats.list.mockResolvedValueOnce([]);
+
+    await expect(
+      dataSelectProcedure(resources())({
+        model: 'telegram.chat',
+        sort: { direction: 'desc', key: 'title' }
+      })
+    ).resolves.toEqual({
+      rows: []
+    });
+    expect(state.repositories.chats.list).toHaveBeenCalledWith({
+      order: { direction: 'desc', key: 'title' }
+    });
+  });
+
+  it('maps negative chat text filters before reading chats', async () => {
+    state.repositories.chats.list.mockResolvedValueOnce([]);
+
+    await expect(
+      dataSelectProcedure(resources())({
+        model: 'telegram.chat',
+        where: {
+          titleQueryNot: 'archive'
+        }
+      })
+    ).resolves.toEqual({
+      rows: []
+    });
+    expect(state.repositories.chats.list).toHaveBeenCalledWith({
+      titleQueryNot: 'archive'
+    });
+  });
+
   it('selects messages through repository filters before rendering dataset rows', async () => {
     state.repositories.messages.list.mockResolvedValueOnce([
       message({
@@ -68,12 +102,15 @@ describe('Telegram data provider procedures', () => {
     const result = await dataSelectProcedure(resources())({
       limit: 10,
       model: 'telegram.message',
+      sort: { direction: 'asc', key: 'primaryRef' },
       where: {
         chatId: '1001',
         endAt: '2026-06-01T00:00:00.000Z',
         messageIds: ['42'],
         readState: 'unread',
-        startAt: '2026-05-01T00:00:00.000Z'
+        senderQueryNot: 'Muted',
+        startAt: '2026-05-01T00:00:00.000Z',
+        textQueryNot: 'draft'
       }
     });
 
@@ -82,8 +119,11 @@ describe('Telegram data provider procedures', () => {
       endAt: '2026-06-01T00:00:00.000Z',
       limit: 10,
       messageIds: ['42'],
+      order: { direction: 'asc', key: 'id' },
       readState: 'unread',
-      startAt: '2026-05-01T00:00:00.000Z'
+      senderQueryNot: 'Muted',
+      startAt: '2026-05-01T00:00:00.000Z',
+      textQueryNot: 'draft'
     });
     expect(result.rows.map((row) => ({ lineage: row.lineage, refs: row.refs }))).toEqual([
       {

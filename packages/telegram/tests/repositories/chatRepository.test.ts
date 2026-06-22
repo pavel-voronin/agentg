@@ -14,6 +14,7 @@ describe('Telegram chat repository', () => {
       limit: 1,
       pinned: true,
       readState: 'unread',
+      titleQueryNot: 'Muted',
       type: 'group'
     });
 
@@ -29,7 +30,8 @@ describe('Telegram chat repository', () => {
     expect(compiled.sql).toContain('exists');
     expect(compiled.sql).toContain('"telegram_chat_positions"."list_key"');
     expect(compiled.sql).toContain('"telegram_chat_positions"."is_pinned"');
-    expect(compiled.params).toEqual(expect.arrayContaining(['folder:7', true]));
+    expect(compiled.sql).toContain('not (');
+    expect(compiled.params).toEqual(expect.arrayContaining(['%Muted%', 'folder:7', true]));
   });
 });
 

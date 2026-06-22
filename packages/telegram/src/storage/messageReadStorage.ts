@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, ilike, inArray, lt, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, ilike, inArray, lt, or, sql, type SQL } from 'drizzle-orm';
 
 import type { Database } from '../database/client.js';
 import { telegramChats, telegramMessages } from '../database/schema.js';
@@ -32,11 +32,31 @@ export type MessageSearchRead = {
 
 export type MessageListRead = {
   chatId?: string | undefined;
+  chatIdGt?: string | undefined;
+  chatIdGte?: string | undefined;
+  chatIdLt?: string | undefined;
+  chatIdLte?: string | undefined;
+  contentType?: string | undefined;
   endAt?: Date | string | undefined;
   limit: number;
+  messageDateGt?: Date | string | undefined;
+  messageDateGte?: Date | string | undefined;
+  messageDateLt?: Date | string | undefined;
+  messageDateLte?: Date | string | undefined;
+  messageId?: string | undefined;
+  messageIdGt?: string | undefined;
+  messageIdGte?: string | undefined;
+  messageIdLt?: string | undefined;
+  messageIdLte?: string | undefined;
   messageIds?: readonly string[] | undefined;
+  offset?: number | undefined;
+  order?: { direction: 'asc' | 'desc'; key: 'date' | 'id' | 'text' } | undefined;
   readState?: 'read' | 'unread' | undefined;
+  senderQueryNot?: string | undefined;
+  senderQuery?: string | undefined;
   startAt?: Date | string | undefined;
+  textQueryNot?: string | undefined;
+  textQuery?: string | undefined;
 };
 
 export type MessageRangeCountInput = {
@@ -171,17 +191,61 @@ export async function readMessageRows(
   }
   const startAt = dateBound(input.startAt);
   const endAt = dateBound(input.endAt);
+  const messageDateGt = dateBound(input.messageDateGt);
+  const messageDateGte = dateBound(input.messageDateGte);
+  const messageDateLt = dateBound(input.messageDateLt);
+  const messageDateLte = dateBound(input.messageDateLte);
   if (startAt !== undefined && endAt !== undefined && startAt >= endAt) {
     return [];
   }
 
   const where = andSql(
     input.chatId === undefined ? undefined : eq(telegramMessages.chatId, input.chatId),
+    input.chatIdGte === undefined
+      ? undefined
+      : sql`${telegramMessages.chatId}::bigint >= ${input.chatIdGte}::bigint`,
+    input.chatIdGt === undefined
+      ? undefined
+      : sql`${telegramMessages.chatId}::bigint > ${input.chatIdGt}::bigint`,
+    input.chatIdLte === undefined
+      ? undefined
+      : sql`${telegramMessages.chatId}::bigint <= ${input.chatIdLte}::bigint`,
+    input.chatIdLt === undefined
+      ? undefined
+      : sql`${telegramMessages.chatId}::bigint < ${input.chatIdLt}::bigint`,
     input.messageIds === undefined
       ? undefined
       : inArray(telegramMessages.id, [...input.messageIds]),
+    input.messageId === undefined ? undefined : eq(telegramMessages.id, input.messageId),
+    input.messageIdGte === undefined
+      ? undefined
+      : sql`${telegramMessages.id}::bigint >= ${input.messageIdGte}::bigint`,
+    input.messageIdGt === undefined
+      ? undefined
+      : sql`${telegramMessages.id}::bigint > ${input.messageIdGt}::bigint`,
+    input.messageIdLte === undefined
+      ? undefined
+      : sql`${telegramMessages.id}::bigint <= ${input.messageIdLte}::bigint`,
+    input.messageIdLt === undefined
+      ? undefined
+      : sql`${telegramMessages.id}::bigint < ${input.messageIdLt}::bigint`,
     startAt === undefined ? undefined : gte(telegramMessages.date, startAt),
     endAt === undefined ? undefined : lt(telegramMessages.date, endAt),
+    messageDateGte === undefined ? undefined : gte(telegramMessages.date, messageDateGte),
+    messageDateGt === undefined ? undefined : sql`${telegramMessages.date} > ${messageDateGt}`,
+    messageDateLte === undefined ? undefined : sql`${telegramMessages.date} <= ${messageDateLte}`,
+    messageDateLt === undefined ? undefined : lt(telegramMessages.date, messageDateLt),
+    input.contentType === undefined
+      ? undefined
+      : sql`coalesce(${telegramMessages.content}->>'_', 'unknown') = ${input.contentType}`,
+    input.senderQuery === undefined ? undefined : senderQueryWhere(input.senderQuery),
+    input.senderQueryNot === undefined ? undefined : notSenderQueryWhere(input.senderQueryNot),
+    input.textQuery === undefined
+      ? undefined
+      : textQueryWhere(sql`coalesce(${messageTextExpression()}, '')`, input.textQuery),
+    input.textQueryNot === undefined
+      ? undefined
+      : notTextQueryWhere(sql`coalesce(${messageTextExpression()}, '')`, input.textQueryNot),
     messageReadStateWhere(input.readState)
   );
 
@@ -190,9 +254,82 @@ export async function readMessageRows(
     .from(telegramMessages)
     .leftJoin(telegramChats, eq(telegramChats.id, telegramMessages.chatId))
     .where(where)
-    .orderBy(desc(telegramMessages.date), sql`${telegramMessages.id}::bigint desc`)
-    .limit(input.limit);
+    .orderBy(...messageListOrderBy(input))
+    .limit(input.limit)
+    .offset(input.offset ?? 0);
   return toMessageStorageRows(rows);
+}
+
+function senderQueryWhere(query: string): SQL | undefined {
+  return andSql(
+    ...wildcardPatterns(query).map(
+      (pattern) => sql`(
+        (${telegramMessages.senderId}->>'_' = 'messageSenderUser' and exists (
+          select 1 from telegram_users sender_users
+          where sender_users.id = ${telegramMessages.senderId}->>'user_id'
+            and coalesce(sender_users.first_name, '') || ' ' || coalesce(sender_users.last_name, '') ilike ${pattern} escape '\\'
+        ))
+        or
+        (${telegramMessages.senderId}->>'_' = 'messageSenderChat' and exists (
+          select 1 from telegram_chats sender_chats
+          where sender_chats.id = ${telegramMessages.senderId}->>'chat_id'
+            and coalesce(sender_chats.title, '') ilike ${pattern} escape '\\'
+        ))
+      )`
+    )
+  );
+}
+
+function notSenderQueryWhere(query: string): SQL | undefined {
+  const condition = senderQueryWhere(query);
+  return condition === undefined ? undefined : sql`not (${condition})`;
+}
+
+function textQueryWhere(expression: SQL, query: string): SQL | undefined {
+  return andSql(
+    ...wildcardPatterns(query).map((pattern) => sql`${expression} ilike ${pattern} escape '\\'`)
+  );
+}
+
+function notTextQueryWhere(expression: SQL, query: string): SQL | undefined {
+  const condition = textQueryWhere(expression, query);
+  return condition === undefined ? undefined : sql`not (${condition})`;
+}
+
+function wildcardPatterns(query: string): string[] {
+  return query
+    .trim()
+    .split(/\s+/)
+    .filter((token) => token.length > 0)
+    .map((token) => `%${token.replace(/[\\%_]/g, '\\$&').replace(/\*/g, '%')}%`);
+}
+
+function messageListOrderBy(input: MessageListRead): SQL[] {
+  if (input.order === undefined) {
+    return [desc(telegramMessages.date), sql`${telegramMessages.id}::bigint desc`];
+  }
+  switch (input.order.key) {
+    case 'date':
+      return [
+        ordered(telegramMessages.date, input.order.direction),
+        ordered(sql`${telegramMessages.id}::bigint`, input.order.direction)
+      ];
+    case 'id':
+      return [
+        ordered(sql`${telegramMessages.id}::bigint`, input.order.direction),
+        desc(telegramMessages.date)
+      ];
+    case 'text':
+      return [
+        ordered(messageTextExpression(), input.order.direction),
+        desc(telegramMessages.date),
+        sql`${telegramMessages.id}::bigint desc`
+      ];
+  }
+}
+
+function ordered(expression: Parameters<typeof asc>[0], direction: 'asc' | 'desc'): SQL {
+  return direction === 'asc' ? asc(expression) : desc(expression);
 }
 
 export async function readMessageRowsByRefs(

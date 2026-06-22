@@ -125,7 +125,10 @@ operators for that column and the provider-owned `whereKey` for each operator.
 not invent provider filters that are absent from the catalog column descriptor.
 `refOperator: 'eq'` means Dashboard may apply that column filter from a
 `ModelRef` for the same model by using `ModelRef.id` as the input value.
-Text filter descriptors may expose `contains` and `notContains`.
+Text filter descriptors may expose `contains` and `notContains`. Query syntax
+is provider-owned; the initial Telegram provider uses case-insensitive SQL
+matching, splits words by spaces as AND terms, and treats `*` inside a term as
+a wildcard.
 
 ## Provider Contract
 

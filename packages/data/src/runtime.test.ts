@@ -448,6 +448,63 @@ describe('data runtime', () => {
         }
       }
     });
+    expect(
+      overview.catalog.find((entry) => entry.model === 'telegram.chat')?.columns[0]?.filter
+    ).toMatchObject({
+      input: 'id',
+      kind: 'where',
+      operators: [
+        { key: 'eq', value: 'array', whereKey: 'chatIds' },
+        { key: 'gte', whereKey: 'chatIdsGte' },
+        { key: 'gt', whereKey: 'chatIdsGt' },
+        { key: 'lte', whereKey: 'chatIdsLte' },
+        { key: 'lt', whereKey: 'chatIdsLt' }
+      ],
+      placeholder: '-1001449711572',
+      refOperator: 'eq'
+    });
+    expect(
+      overview.catalog
+        .find((entry) => entry.model === 'telegram.message')
+        ?.columns.map((column) => ({
+          filter: {
+            input: column.filter?.input,
+            operators: column.filter?.operators.map((operator) => operator.key)
+          },
+          key: column.key,
+          label: column.label
+        }))
+    ).toEqual([
+      {
+        filter: {
+          input: 'id',
+          operators: ['eq', 'gte', 'gt', 'lte', 'lt']
+        },
+        key: 'chatId',
+        label: 'Chat'
+      },
+      {
+        filter: { input: 'id', operators: ['eq', 'gte', 'gt', 'lte', 'lt'] },
+        key: 'telegramMessageId',
+        label: 'Message'
+      },
+      {
+        filter: { input: 'dateTime', operators: ['gte', 'gt', 'lte', 'lt'] },
+        key: 'messageDate',
+        label: 'Date'
+      },
+      { filter: { input: 'enum', operators: ['eq'] }, key: 'contentType', label: 'Type' },
+      {
+        filter: { input: 'text', operators: ['contains', 'notContains'] },
+        key: 'senderDisplayName',
+        label: 'Sender'
+      },
+      {
+        filter: { input: 'text', operators: ['contains', 'notContains'] },
+        key: 'text',
+        label: 'Text'
+      }
+    ]);
     expect(vi.mocked(providers.select)).not.toHaveBeenCalled();
     expect(vi.mocked(providers.get)).not.toHaveBeenCalled();
     expect(vi.mocked(providers.expand)).not.toHaveBeenCalled();

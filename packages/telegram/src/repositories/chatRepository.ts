@@ -1,4 +1,4 @@
-import { asc, inArray, sql, type SQL } from 'drizzle-orm';
+import { asc, desc, inArray, sql, type SQL } from 'drizzle-orm';
 
 import type { Database } from '../database/client.js';
 import { telegramChatPositions, telegramChats } from '../database/schema.js';
@@ -39,12 +39,25 @@ export type ChatRepository = {
 };
 
 export type ChatListRead = {
+  chatIdGt?: string | undefined;
+  chatIdGte?: string | undefined;
+  chatIdLt?: string | undefined;
+  chatIdLte?: string | undefined;
   chatIds?: readonly string[] | undefined;
   folderId?: number | undefined;
   limit?: number | undefined;
+  offset?: number | undefined;
+  order?: { direction: 'asc' | 'desc'; key: 'id' | 'title' } | undefined;
   pinned?: boolean | undefined;
   readState?: 'read' | 'unread' | undefined;
+  titleQueryNot?: string | undefined;
+  titleQuery?: string | undefined;
   type?: string | undefined;
+  unreadCount?: number | undefined;
+  unreadCountGt?: number | undefined;
+  unreadCountGte?: number | undefined;
+  unreadCountLt?: number | undefined;
+  unreadCountLte?: number | undefined;
 };
 
 export type ChatListItem = {
@@ -71,8 +84,9 @@ export function createChatRepository(database: Database): ChatRepository {
         .select(readChatSelection())
         .from(telegramChats)
         .where(chatListWhere(input))
-        .orderBy(asc(telegramChats.title), asc(telegramChats.id));
-      const rows = input.limit === undefined ? await query : await query.limit(input.limit);
+        .orderBy(...chatListOrderBy(input));
+      const limited = input.limit === undefined ? query : query.limit(input.limit);
+      const rows = input.offset === undefined ? await limited : await limited.offset(input.offset);
       const chatRows = rows.map(toChatStorageRow);
       const placementsByChat = await readChatPlacementsByChat(database, chatRows);
       const filesByChat = await readChatFileRefsByChat(
@@ -119,11 +133,58 @@ export function createChatRepository(database: Database): ChatRepository {
 function chatListWhere(input: ChatListRead): SQL | undefined {
   return andSql(
     input.chatIds === undefined ? undefined : inArray(telegramChats.id, [...input.chatIds]),
+    input.chatIdGte === undefined
+      ? undefined
+      : sql`${telegramChats.id}::bigint >= ${input.chatIdGte}::bigint`,
+    input.chatIdGt === undefined
+      ? undefined
+      : sql`${telegramChats.id}::bigint > ${input.chatIdGt}::bigint`,
+    input.chatIdLte === undefined
+      ? undefined
+      : sql`${telegramChats.id}::bigint <= ${input.chatIdLte}::bigint`,
+    input.chatIdLt === undefined
+      ? undefined
+      : sql`${telegramChats.id}::bigint < ${input.chatIdLt}::bigint`,
     input.type === undefined ? undefined : chatTypeWhere(input.type),
+    input.titleQuery === undefined
+      ? undefined
+      : textQueryWhere(sql`coalesce(${telegramChats.title}, '')`, input.titleQuery),
+    input.titleQueryNot === undefined
+      ? undefined
+      : notTextQueryWhere(sql`coalesce(${telegramChats.title}, '')`, input.titleQueryNot),
+    input.unreadCount === undefined
+      ? undefined
+      : sql`coalesce(${telegramChats.unreadCount}, 0) = ${input.unreadCount}`,
+    input.unreadCountGte === undefined
+      ? undefined
+      : sql`coalesce(${telegramChats.unreadCount}, 0) >= ${input.unreadCountGte}`,
+    input.unreadCountGt === undefined
+      ? undefined
+      : sql`coalesce(${telegramChats.unreadCount}, 0) > ${input.unreadCountGt}`,
+    input.unreadCountLte === undefined
+      ? undefined
+      : sql`coalesce(${telegramChats.unreadCount}, 0) <= ${input.unreadCountLte}`,
+    input.unreadCountLt === undefined
+      ? undefined
+      : sql`coalesce(${telegramChats.unreadCount}, 0) < ${input.unreadCountLt}`,
     input.readState === undefined ? undefined : readStateWhere(input.readState),
     input.folderId === undefined ? undefined : folderWhere(input.folderId),
     input.pinned === undefined ? undefined : pinnedWhere(input.pinned)
   );
+}
+
+function chatListOrderBy(input: ChatListRead): SQL[] {
+  const order = input.order ?? { direction: 'asc' as const, key: 'title' as const };
+  switch (order.key) {
+    case 'id':
+      return [ordered(telegramChats.id, order.direction), asc(telegramChats.title)];
+    case 'title':
+      return [ordered(telegramChats.title, order.direction), asc(telegramChats.id)];
+  }
+}
+
+function ordered(expression: Parameters<typeof asc>[0], direction: 'asc' | 'desc'): SQL {
+  return direction === 'asc' ? asc(expression) : desc(expression);
 }
 
 function chatTypeWhere(type: string): SQL {
@@ -164,6 +225,24 @@ function pinnedWhere(pinned: boolean): SQL {
     where ${telegramChatPositions.chatId} = ${telegramChats.id}
       and ${telegramChatPositions.isPinned} = ${pinned}
   )`;
+}
+
+function textQueryWhere(expression: SQL, query: string): SQL | undefined {
+  const patterns = wildcardPatterns(query);
+  return andSql(...patterns.map((pattern) => sql`${expression} ilike ${pattern} escape '\\'`));
+}
+
+function notTextQueryWhere(expression: SQL, query: string): SQL | undefined {
+  const condition = textQueryWhere(expression, query);
+  return condition === undefined ? undefined : sql`not (${condition})`;
+}
+
+function wildcardPatterns(query: string): string[] {
+  return query
+    .trim()
+    .split(/\s+/)
+    .filter((token) => token.length > 0)
+    .map((token) => `%${token.replace(/[\\%_]/g, '\\$&').replace(/\*/g, '%')}%`);
 }
 
 async function readChatFileRefsByChat(
