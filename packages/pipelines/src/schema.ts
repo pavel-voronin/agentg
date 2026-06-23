@@ -1,7 +1,7 @@
 import { datasetSchema, jsonValueSchema } from '@agentg/data';
 import { z } from 'zod';
 
-const nodeSchema = z
+export const nodeSchema = z
   .object({
     from: z.string().trim().min(1).optional(),
     needs: z.array(z.string().trim().min(1)).readonly().optional(),
@@ -10,7 +10,7 @@ const nodeSchema = z
   })
   .strict();
 
-const triggerSchema = z
+export const triggerSchema = z
   .object({
     everySeconds: z.number().int().positive(),
     kind: z.literal('periodic'),

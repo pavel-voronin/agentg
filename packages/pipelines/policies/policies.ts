@@ -1,34 +1,7 @@
-import type { JsonValue } from '@agentg/framework';
 import { definePolicy, type PolicyInstance } from '@agentg/framework/policies';
 import { z } from 'zod';
 
-const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
-  z.union([
-    z.string(),
-    z.number(),
-    z.boolean(),
-    z.null(),
-    z.array(jsonValueSchema),
-    z.record(z.string(), jsonValueSchema)
-  ])
-);
-
-const nodeSchema = z
-  .object({
-    from: z.string().trim().min(1).optional(),
-    needs: z.array(z.string().trim().min(1)).readonly().optional(),
-    use: z.string().trim().min(1),
-    with: jsonValueSchema.optional()
-  })
-  .strict();
-
-const triggerSchema = z
-  .object({
-    everySeconds: z.number().int().positive(),
-    kind: z.literal('periodic'),
-    startAt: z.iso.datetime().optional()
-  })
-  .strict();
+import { nodeSchema, triggerSchema } from '../src/schema.js';
 
 const pipelineAutomationRuleSpec = z
   .object({
