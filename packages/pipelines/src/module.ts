@@ -1,3 +1,7 @@
+import { readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { createLogger, defineModule, logError } from '@agentg/framework';
 
 import { pipelineAutomationRulesPolicy } from '../policies/policies.js';
@@ -9,6 +13,10 @@ import { createPostgresStore } from './store.js';
 import { createRegistrationClient } from './triggers.js';
 
 const logger = createLogger('pipelines');
+const specPath =
+  process.env.PIPELINE_SPEC_PATH === undefined
+    ? fileURLToPath(new URL('../../../docs/03-domains/pipelineSpec.md', import.meta.url))
+    : resolve(process.env.PIPELINE_SPEC_PATH);
 
 export const moduleDefinition = defineModule('pipelines', {
   config: readConfig,
@@ -66,6 +74,7 @@ export const moduleDefinition = defineModule('pipelines', {
 
     return {
       deletePipeline: (input: unknown) => runtime.deletePipeline(input),
+      describeSpec: () => readSpec(),
       getPipeline: (input: unknown) => runtime.getPipeline(input),
       getRun: (input: unknown) => runtime.getRun(input),
       listPipelines: () => runtime.listPipelines(),
@@ -76,3 +85,11 @@ export const moduleDefinition = defineModule('pipelines', {
     };
   }
 });
+
+async function readSpec() {
+  return {
+    format: 'markdown',
+    path: specPath,
+    text: await readFile(specPath, 'utf8')
+  };
+}

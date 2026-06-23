@@ -39,6 +39,7 @@ COPY packages/tdlib-docs/package.json packages/tdlib-docs/package.json
 RUN npm install --include=dev && npm cache clean --force
 COPY --from=build --chown=agentg:agentg /app/packages ./packages
 COPY --from=build --chown=agentg:agentg /app/config ./config
+COPY --from=build --chown=agentg:agentg /app/docs/03-domains/pipelineSpec.md ./docs/03-domains/pipelineSpec.md
 RUN mkdir -p /app/td-data/database /app/td-data/files && chown -R agentg:agentg /app
 USER agentg
 CMD ["npm", "run", "dev:telegram"]

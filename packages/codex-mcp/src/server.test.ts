@@ -48,6 +48,7 @@ describe('Codex MCP tools', () => {
     ]);
     expect(names.filter((name) => name.startsWith('pipelines_')).sort()).toEqual([
       'pipelines_delete_pipeline',
+      'pipelines_describe_spec',
       'pipelines_get_pipeline',
       'pipelines_get_run',
       'pipelines_list_pipelines',
@@ -152,6 +153,7 @@ describe('Codex MCP tools', () => {
         tool: 'data_write_collection_item'
       },
       { args: {}, method: 'pipelines.listPipelines', tool: 'pipelines_list_pipelines' },
+      { args: {}, method: 'pipelines.describeSpec', tool: 'pipelines_describe_spec' },
       {
         args: { name: 'digest' },
         method: 'pipelines.getPipeline',

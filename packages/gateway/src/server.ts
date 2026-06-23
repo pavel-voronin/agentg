@@ -46,6 +46,7 @@ type DataAccess = Pick<
 type PipelineAccess = Pick<
   ReturnType<typeof pipelinesClient>,
   | 'deletePipeline'
+  | 'describeSpec'
   | 'getPipeline'
   | 'getRun'
   | 'listPipelines'
@@ -264,6 +265,10 @@ function methodHandlers(
     'data.writeAnnotation': (params) => access.data.writeAnnotation(params),
     'data.writeCollectionItem': (params) => access.data.writeCollectionItem(params),
     'pipelines.deletePipeline': (params) => access.pipelines.deletePipeline(params),
+    'pipelines.describeSpec': (params) => {
+      requireNoParams(params, 'pipelines.describeSpec');
+      return access.pipelines.describeSpec();
+    },
     'pipelines.getPipeline': (params) => access.pipelines.getPipeline(params),
     'pipelines.getRun': (params) => access.pipelines.getRun(params),
     'pipelines.listPipelines': (params) => {

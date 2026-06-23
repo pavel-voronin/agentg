@@ -8,7 +8,7 @@
 - [Telegram Files](telegramFiles.md): own Telegram file references, product media cache, download policy, canonical file serving, file events, and file observability.
 - [Telegram History Gap Restore](telegramHistoryGapRestore.md): define startup-only policy-driven restoration of bounded history gaps through a direct call to the existing Telegram `getMessages` procedure.
 - [Data](data.md): own the shared addressable model space, model refs, provider routing, schema-free annotations, collections, and data pipeline actions.
-- [Pipelines](pipelines.md): own named YAML pipeline definitions, pipeline run lifecycle, node execution, and schedule registration with `triggers`.
+- [Pipelines](pipelines.md): own `PipelineAutomationRule` policy, materialized pipeline definitions, pipeline run lifecycle, node execution, schedule registration with `triggers`, and the agent-facing [Pipeline Spec](pipelineSpec.md).
 - [LLM Runner](llmRunner.md): own LLM action execution for pipeline nodes, profiles, provider adapters, and LLM run lifecycle.
 - Telegram Storage: persist normalized Telegram table records, current Telegram
   message state, and Telegram history coverage in Postgres.

@@ -2,8 +2,12 @@
 
 ## Purpose
 
-`pipelines` owns named YAML pipeline definitions, pipeline validation, pipeline
-run lifecycle, node execution, and schedule registration with `triggers`.
+`pipelines` owns materialized pipeline definitions, pipeline validation,
+pipeline run lifecycle, node execution, and schedule registration with
+`triggers`.
+
+The agent-facing contract for composing pipeline policy documents is
+[Pipeline Spec](pipelineSpec.md).
 
 A pipeline is a graph of named nodes. Each node calls one action provider, reads
 datasets from previous nodes, and either produces a dataset, performs a side

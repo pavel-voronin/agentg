@@ -538,6 +538,11 @@ export const tools = [
     name: 'pipelines_list_pipelines'
   },
   {
+    description: 'Read the Pipeline Spec for creating PipelineAutomationRule documents.',
+    inputSchema: emptyObjectSchema(),
+    name: 'pipelines_describe_spec'
+  },
+  {
     description: 'Read one pipeline through AgentG Gateway.',
     inputSchema: pipelineNameSchema(),
     name: 'pipelines_get_pipeline'
@@ -812,6 +817,8 @@ export async function callTool(name: string, rawArgs: unknown, bridge: ToolBridg
       );
     case 'pipelines_list_pipelines':
       return toolResult(await bridge.call('pipelines.listPipelines'));
+    case 'pipelines_describe_spec':
+      return toolResult(await bridge.call('pipelines.describeSpec'));
     case 'pipelines_get_pipeline':
       return toolResult(
         await bridge.call('pipelines.getPipeline', {

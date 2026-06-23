@@ -5,6 +5,8 @@ Codex-facing MCP server for AgentG Gateway.
 The server connects to Agent Gateway over WebSocket and exposes explicit MCP
 tools for the Gateway methods that are allowed for external agent clients.
 
+Use `pipelines_describe_spec` before composing a `PipelineAutomationRule`.
+
 Defaults:
 
 - `GATEWAY_WS_URL=ws://127.0.0.1:8787/`

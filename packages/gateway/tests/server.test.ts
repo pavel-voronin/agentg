@@ -33,6 +33,7 @@ type TestDataAccess = Pick<
 type TestPipelineAccess = Pick<
   ReturnType<typeof pipelinesClient>,
   | 'deletePipeline'
+  | 'describeSpec'
   | 'getPipeline'
   | 'getRun'
   | 'listPipelines'
@@ -156,6 +157,14 @@ describe('gateway server', () => {
         }
       },
       pipelines: {
+        describeSpec() {
+          calls.push(['pipelines.describeSpec']);
+          return Promise.resolve({
+            format: 'markdown',
+            path: 'docs/03-domains/pipelineSpec.md',
+            text: '# Pipeline Spec'
+          });
+        },
         runPipeline(input) {
           calls.push(['pipelines.runPipeline', input]);
           return Promise.resolve({
@@ -198,6 +207,11 @@ describe('gateway server', () => {
           }
         ]
       });
+      await expect(request(client, 'pipelines.describeSpec', {})).resolves.toEqual({
+        format: 'markdown',
+        path: 'docs/03-domains/pipelineSpec.md',
+        text: '# Pipeline Spec'
+      });
       await expect(
         request(client, 'pipelines.runPipeline', {
           name: 'digest'
@@ -210,6 +224,7 @@ describe('gateway server', () => {
       expect(calls).toEqual([
         ['data.listModels'],
         ['data.select', { model: 'telegram.chat', where: { readState: 'unread' } }],
+        ['pipelines.describeSpec'],
         ['pipelines.runPipeline', { name: 'digest' }]
       ]);
     } finally {
@@ -524,6 +539,7 @@ function defaultDataAccess(): TestDataAccess {
 function defaultPipelineAccess(): TestPipelineAccess {
   return {
     deletePipeline: unavailableMethod('pipelines.deletePipeline'),
+    describeSpec: unavailableMethod('pipelines.describeSpec'),
     getPipeline: unavailableMethod('pipelines.getPipeline'),
     getRun: unavailableMethod('pipelines.getRun'),
     listPipelines: unavailableMethod('pipelines.listPipelines'),

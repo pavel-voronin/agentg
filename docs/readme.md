@@ -25,6 +25,7 @@ Do not pre-document behavior beyond the selected source-of-truth documents. The 
 - [Telegram Files](03-domains/telegramFiles.md)
 - [Data](03-domains/data.md)
 - [Pipelines](03-domains/pipelines.md)
+- [Pipeline Spec](03-domains/pipelineSpec.md)
 - [LLM Runner](03-domains/llmRunner.md)
 - [Triggers](03-domains/triggers.md)
 - [TDLib Sidecar API](05-interfaces/tdlibSidecarApi.md)

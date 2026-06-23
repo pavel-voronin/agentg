@@ -449,6 +449,15 @@ Durable scheduled automation is configured through `policies.setInstance` with
 `pipelines.deletePipeline` are dev/test escape hatches for materialized pipeline
 documents.
 
+`pipelines.describeSpec`
+
+Returns [Pipeline Spec](../03-domains/pipelineSpec.md) as Markdown for agents
+that need to compose `PipelineAutomationRule` documents.
+
+```json
+{}
+```
+
 `pipelines.listPipelines`
 
 ```json
