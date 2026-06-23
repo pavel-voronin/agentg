@@ -13,7 +13,7 @@ import {
   type NodeStatus,
   type RunStatus
 } from './database/schema.js';
-import type { Document } from './schema.js';
+import { executionContextSchema, type Document, type ExecutionContext } from './schema.js';
 
 export type DefinitionRecord = Readonly<{
   document: Document;
@@ -23,6 +23,7 @@ export type DefinitionRecord = Readonly<{
 
 export type RunRecord = Readonly<{
   definitionSnapshot: Document;
+  context: ExecutionContext;
   failureCode?: string | undefined;
   failureMessage?: string | undefined;
   idempotencyKey?: string | undefined;
@@ -47,6 +48,7 @@ export type NodeRecord = Readonly<{
 export type Store = {
   createRun(input: {
     definition: Document;
+    context: ExecutionContext;
     idempotencyKey?: string | undefined;
     name: string;
     now: Date;
@@ -128,6 +130,7 @@ export function createPostgresStore(database: Database): Store {
   return {
     async createRun(input) {
       const row = {
+        context: toJsonValue(input.context),
         createdAt: input.now,
         definitionSnapshot: toJsonValue(input.definition),
         idempotencyKey: input.idempotencyKey ?? null,
@@ -416,6 +419,7 @@ export function createMemoryStore(): Store {
         }
       }
       const run: RunRecord = {
+        context: input.context,
         definitionSnapshot: input.definition,
         ...(input.idempotencyKey === undefined ? {} : { idempotencyKey: input.idempotencyKey }),
         name: input.name,
@@ -641,6 +645,7 @@ function toDefinition(row: typeof definitions.$inferSelect): DefinitionRecord {
 
 function toRun(row: typeof runs.$inferSelect): RunRecord {
   return {
+    context: executionContextSchema.parse(row.context),
     definitionSnapshot: row.definitionSnapshot as unknown as Document,
     ...(row.failureCode === null ? {} : { failureCode: row.failureCode }),
     ...(row.failureMessage === null ? {} : { failureMessage: row.failureMessage }),

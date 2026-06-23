@@ -42,6 +42,7 @@ export const runs = pgTable(
   'pipelines_runs',
   {
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    context: jsonb('context').$type<JsonValue>().notNull(),
     definitionSnapshot: jsonb('definition_snapshot').$type<JsonValue>().notNull(),
     failureCode: text('failure_code'),
     failureMessage: text('failure_message'),

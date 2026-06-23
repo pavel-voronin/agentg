@@ -287,6 +287,141 @@ describe('pipelines runtime', () => {
     expect(first).toEqual(second);
   });
 
+  it('resolves triggered context values and keeps them after provider resume', async () => {
+    const calls: { nodeId: string; withInput: unknown }[] = [];
+    let readResult: ProviderRunResult = {
+      runId: 'provider-run-1',
+      status: 'processing'
+    };
+    const runtime = runtimeWith({
+      dispatcher: {
+        dispatch: vi.fn((input: Parameters<Dispatcher['dispatch']>[0]) => {
+          calls.push({ nodeId: input.nodeId, withInput: input.withInput });
+          if (input.nodeId === 'summary') {
+            return Promise.resolve({
+              runId: 'provider-run-1',
+              status: 'accepted'
+            } satisfies ProviderResult);
+          }
+          return Promise.resolve({
+            dataset: dataset(input.nodeId),
+            status: 'ready'
+          } satisfies ProviderResult);
+        })
+      },
+      results: {
+        read: vi.fn(() => Promise.resolve(readResult))
+      }
+    });
+    await runtime.setPipeline(dailyDocument('daily'));
+
+    const accepted = await runtime.runTriggered({
+      actionInput: { pipelineName: 'daily', triggerName: 'everyDay' },
+      occurrence: {
+        idempotencyKey: 'occurrence-1',
+        registrationKey: 'pipelines:daily:everyDay',
+        scheduledAt: '2026-06-22T00:00:00.000Z'
+      },
+      trigger: { kind: 'trigger', requestId: 'occurrence-1' }
+    });
+
+    expect(accepted).toMatchObject({ status: 'accepted' });
+    expect(calls).toEqual([
+      {
+        nodeId: 'messages',
+        withInput: {
+          model: 'telegram.message',
+          where: {
+            endAt: '2026-06-22T00:00:00.000Z',
+            readState: 'unread',
+            startAt: '2026-06-21T00:00:00.000Z'
+          }
+        }
+      },
+      {
+        nodeId: 'summary',
+        withInput: {
+          profile: 'openrouterCheapSummary',
+          prompt: 'Summarize unread messages.'
+        }
+      }
+    ]);
+
+    readResult = {
+      dataset: dataset('summary'),
+      runId: 'provider-run-1',
+      status: 'completed'
+    };
+    await runtime.resumeProviderRun({
+      nodeId: 'summary',
+      pipelineRunId: accepted.runId,
+      runId: 'provider-run-1',
+      status: 'completed'
+    });
+
+    expect(calls.at(-1)).toEqual({
+      nodeId: 'save',
+      withInput: {
+        itemId: '2026-06-21',
+        key: 'dailyUnreadSummaries',
+        mode: 'replace',
+        subject: { ref: 'chat' },
+        valueFrom: { field: 'value' }
+      }
+    });
+    await expect(runtime.getRun({ runId: accepted.runId })).resolves.toMatchObject({
+      context: {
+        date: { utc: '2026-06-21' },
+        trigger: { scheduledAt: '2026-06-22T00:00:00.000Z' },
+        window: {
+          endAt: '2026-06-22T00:00:00.000Z',
+          startAt: '2026-06-21T00:00:00.000Z'
+        }
+      },
+      status: 'completed'
+    });
+  });
+
+  it('fails runs with unavailable context values', async () => {
+    const dispatch = vi.fn<Dispatcher['dispatch']>(() =>
+      Promise.resolve({
+        dataset: dataset('messages'),
+        status: 'ready'
+      })
+    );
+    const runtime = runtimeWith({
+      dispatcher: { dispatch }
+    });
+    await runtime.setPipeline({
+      document: {
+        apiVersion: 'agentg.dev/v1',
+        kind: 'Pipeline',
+        metadata: { name: 'brokenContext' },
+        spec: {
+          nodes: {
+            messages: {
+              use: 'data.select',
+              with: {
+                model: 'telegram.message',
+                where: {
+                  startAt: { $context: 'window.startAt' }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+
+    const accepted = await runtime.runPipeline({ name: 'brokenContext' });
+
+    expect(dispatch).not.toHaveBeenCalled();
+    await expect(runtime.getRun({ runId: accepted.runId })).resolves.toMatchObject({
+      failureMessage: 'Pipeline context value is not available: window.startAt',
+      status: 'failed'
+    });
+  });
+
   it('registers pipeline schedules with triggers on set and clears them on delete', async () => {
     const registration = registrationClient();
     const runtime = runtimeWith({ registration });
@@ -386,6 +521,53 @@ function simpleDocument(name: string): { document: Document } {
         },
         triggers: {
           everyMinute: { everySeconds: 60, kind: 'periodic' }
+        }
+      }
+    }
+  };
+}
+
+function dailyDocument(name: string): { document: Document } {
+  return {
+    document: {
+      apiVersion: 'agentg.dev/v1',
+      kind: 'Pipeline',
+      metadata: { name },
+      spec: {
+        nodes: {
+          messages: {
+            use: 'data.select',
+            with: {
+              model: 'telegram.message',
+              where: {
+                endAt: { $context: 'window.endAt' },
+                readState: 'unread',
+                startAt: { $context: 'window.startAt' }
+              }
+            }
+          },
+          save: {
+            from: 'summary',
+            use: 'data.writeCollectionItem',
+            with: {
+              itemId: { $context: 'date.utc' },
+              key: 'dailyUnreadSummaries',
+              mode: 'replace',
+              subject: { ref: 'chat' },
+              valueFrom: { field: 'value' }
+            }
+          },
+          summary: {
+            from: 'messages',
+            use: 'llm.run',
+            with: {
+              profile: 'openrouterCheapSummary',
+              prompt: 'Summarize unread messages.'
+            }
+          }
+        },
+        triggers: {
+          everyDay: { everySeconds: 86400, kind: 'periodic' }
         }
       }
     }

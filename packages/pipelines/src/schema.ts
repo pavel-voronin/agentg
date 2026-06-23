@@ -160,9 +160,38 @@ export const providerRunEventSchema = z
   })
   .loose();
 
+export const executionContextSchema = z
+  .object({
+    date: z
+      .object({
+        utc: z.string().trim().min(1)
+      })
+      .strict(),
+    run: z
+      .object({
+        startedAt: z.string().trim().min(1)
+      })
+      .strict(),
+    trigger: z
+      .object({
+        scheduledAt: z.string().trim().min(1)
+      })
+      .strict()
+      .optional(),
+    window: z
+      .object({
+        endAt: z.string().trim().min(1),
+        startAt: z.string().trim().min(1)
+      })
+      .strict()
+      .optional()
+  })
+  .strict();
+
 export type Document = z.infer<typeof documentSchema>;
 export type Node = z.infer<typeof nodeSchema>;
 export type Trigger = z.infer<typeof triggerSchema>;
+export type ExecutionContext = z.infer<typeof executionContextSchema>;
 export type ProviderResult = z.infer<typeof providerResultSchema>;
 export type ProviderRunResult = z.infer<typeof providerRunResultSchema>;
 export type ProviderRunEvent = z.infer<typeof providerRunEventSchema>;

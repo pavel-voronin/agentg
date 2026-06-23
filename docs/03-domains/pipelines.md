@@ -127,6 +127,38 @@ the current input row only. They do not join against arbitrary previous node
 outputs. If a later node needs a ref or lineage, an upstream action must carry it
 forward in the dataset row.
 
+Pipeline-owned runtime context expressions are explicit JSON objects with a
+single `$context` key. Pipelines resolves them before dispatching the action, so
+action providers receive ordinary JSON values:
+
+```yaml
+where:
+  startAt:
+    $context: window.startAt
+  endAt:
+    $context: window.endAt
+itemId:
+  $context: date.utc
+```
+
+Supported context paths:
+
+```text
+run.startedAt
+trigger.scheduledAt
+window.startAt
+window.endAt
+date.utc
+```
+
+`run.startedAt` is the actual run creation time. For triggered periodic runs,
+`trigger.scheduledAt` is the occurrence time from `triggers`,
+`window.endAt` equals that scheduled occurrence, and `window.startAt` is
+`scheduledAt - trigger.everySeconds`. `date.utc` is the UTC date of
+`window.startAt` for triggered runs and the UTC date of `run.startedAt` for
+manual runs. Context expressions do not perform string templating; unknown or
+unavailable context paths fail the node.
+
 Action ids use module-owned action names:
 
 ```text
@@ -462,6 +494,11 @@ imports it.
 - Started runs keep the definition snapshot accepted at run start after the
   pipeline definition is changed.
 - Manual `runPipeline` and triggered `runTriggered` use the same run lifecycle.
+- Triggered periodic runs persist runtime context on the run record.
+- `$context` expressions in node `with` resolve before action dispatch and
+  survive async provider resume.
+- Unknown or unavailable `$context` paths fail the node instead of passing
+  through as literal data.
 - Pipeline telemetry records definition count, run state, node state, started
   runs, dispatch count, and node dispatch duration without pipeline names, run
   ids, node ids, provider run ids, trigger names, idempotency keys, dataset

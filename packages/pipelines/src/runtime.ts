@@ -1,3 +1,5 @@
+import type { JsonValue } from '@agentg/framework';
+
 import type { Dispatcher, ResultReader } from './actions.js';
 import { executionOrder, parseDefinition } from './definition.js';
 import {
@@ -16,7 +18,8 @@ import {
   setInputSchema,
   triggeredInputSchema,
   type Dataset,
-  type Document
+  type Document,
+  type ExecutionContext
 } from './schema.js';
 import type { NodeRecord, RunRecord, Store } from './store.js';
 
@@ -35,7 +38,12 @@ type ProviderReadResult =
   | { code: string; message: string; status: 'failed' }
   | { status: 'waiting' };
 type ResumeResult =
-  | { definitionSnapshot: Document; runId: string; status: 'completed' }
+  | {
+      context: ExecutionContext;
+      definitionSnapshot: Document;
+      runId: string;
+      status: 'completed';
+    }
   | { status: 'failed' | 'waiting' }
   | null;
 
@@ -98,14 +106,14 @@ export function createRuntime(input: RuntimeInput) {
     async resumeProviderRun(rawInput: unknown) {
       const result = await resumeProviderRun(input, rawInput, serialize);
       if (result?.status === 'completed') {
-        await executeRun(input, result.runId, result.definitionSnapshot);
+        await executeRun(input, result.runId, result.definitionSnapshot, result.context);
       }
     },
     async resumeWaitingRuns() {
       const results = await resumeWaitingRuns(input, serialize);
       for (const result of results) {
         if (result?.status === 'completed') {
-          await executeRun(input, result.runId, result.definitionSnapshot);
+          await executeRun(input, result.runId, result.definitionSnapshot, result.context);
         }
       }
     },
@@ -130,6 +138,7 @@ export function createRuntime(input: RuntimeInput) {
           name: request.actionInput.pipelineName,
           serialize,
           source: 'triggered',
+          triggerScheduledAt: request.occurrence.scheduledAt,
           triggerName: request.actionInput.triggerName
         });
         return {
@@ -188,6 +197,7 @@ async function startRun(
     idempotencyKey?: string | undefined;
     name: string;
     serialize<T>(operation: () => Promise<T>): Promise<T>;
+    triggerScheduledAt?: string | undefined;
     triggerName?: string | undefined;
     source: 'manual' | 'triggered';
   }
@@ -197,18 +207,20 @@ async function startRun(
     if (definition === null) {
       throw new Error(`Pipeline is not found: ${request.name}`);
     }
+    const now = new Date();
     return input.store.createRun({
+      context: executionContext(definition.document, request, now),
       definition: definition.document,
       idempotencyKey: request.idempotencyKey,
       name: request.name,
-      now: new Date(),
+      now,
       triggerName: request.triggerName
     });
   });
   if (result.created) {
     recordRunStarted(request.source);
     await recordCurrentStats(() => input.store.readStats());
-    await executeRun(input, result.run.runId, result.run.definitionSnapshot);
+    await executeRun(input, result.run.runId, result.run.definitionSnapshot, result.run.context);
   }
   return (await input.store.getRun(result.run.runId)) ?? result.run;
 }
@@ -290,6 +302,7 @@ async function settleWaitingNode(input: ExecutionInput, node: NodeRecord): Promi
   await recordCurrentStats(() => input.store.readStats());
   return {
     definitionSnapshot: run.definitionSnapshot,
+    context: run.context,
     runId: run.runId,
     status: 'completed'
   };
@@ -323,7 +336,12 @@ async function readProviderResult(
   return { status: 'waiting' };
 }
 
-async function executeRun(input: ExecutionInput, runId: string, document: Document): Promise<void> {
+async function executeRun(
+  input: ExecutionInput,
+  runId: string,
+  document: Document,
+  context: ExecutionContext
+): Promise<void> {
   await input.store.markRunStatus({ runId, status: 'running' });
   const existingNodes = new Map(
     (await input.store.listNodeRuns(runId)).map((node) => [node.nodeId, node])
@@ -365,7 +383,7 @@ async function executeRun(input: ExecutionInput, runId: string, document: Docume
           dataset,
           nodeId,
           runId,
-          withInput: node.with
+          withInput: resolveContext(node.with, context)
         })
       );
       recordNodeDispatched(node.use, result.status);
@@ -480,4 +498,100 @@ function emptyDataset(): Dataset {
   return {
     rows: []
   };
+}
+
+function executionContext(
+  document: Document,
+  request: {
+    triggerName?: string | undefined;
+    triggerScheduledAt?: string | undefined;
+  },
+  startedAt: Date
+): ExecutionContext {
+  const base = {
+    date: {
+      utc: utcDate(startedAt)
+    },
+    run: {
+      startedAt: startedAt.toISOString()
+    }
+  };
+  if (request.triggerName === undefined) {
+    return base;
+  }
+  const trigger = document.spec.triggers?.[request.triggerName];
+  if (trigger === undefined) {
+    throw new Error(`Pipeline trigger is not found: ${request.triggerName}`);
+  }
+  const scheduledAt = parseDate(request.triggerScheduledAt, 'trigger.scheduledAt');
+  const startAt = new Date(scheduledAt.getTime() - trigger.everySeconds * 1000);
+  return {
+    ...base,
+    date: {
+      utc: utcDate(startAt)
+    },
+    trigger: {
+      scheduledAt: scheduledAt.toISOString()
+    },
+    window: {
+      endAt: scheduledAt.toISOString(),
+      startAt: startAt.toISOString()
+    }
+  };
+}
+
+function resolveContext(
+  value: JsonValue | undefined,
+  context: ExecutionContext
+): JsonValue | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === null || typeof value !== 'object') {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => resolveContext(item, context) ?? null);
+  }
+  const entries = Object.entries(value);
+  if (entries.length === 1 && typeof value.$context === 'string') {
+    return contextValue(value.$context, context);
+  }
+  return Object.fromEntries(
+    entries.map(([key, item]) => [key, resolveContext(item, context) ?? null])
+  );
+}
+
+function contextValue(path: string, context: ExecutionContext): string {
+  if (path === 'run.startedAt') {
+    return context.run.startedAt;
+  }
+  if (path === 'trigger.scheduledAt' && context.trigger !== undefined) {
+    return context.trigger.scheduledAt;
+  }
+  if (path === 'window.startAt' && context.window !== undefined) {
+    return context.window.startAt;
+  }
+  if (path === 'window.endAt' && context.window !== undefined) {
+    return context.window.endAt;
+  }
+  if (path === 'date.utc') {
+    return context.date.utc;
+  }
+  throw new Error(`Pipeline context value is not available: ${path}`);
+}
+
+function parseDate(value: string | undefined, name: string): Date {
+  if (value === undefined) {
+    throw new Error(`Pipeline ${name} is required`);
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    throw new Error(`Pipeline ${name} is invalid: ${value}`);
+  }
+  return date;
+}
+
+function utcDate(date: Date): string {
+  return date.toISOString().slice(0, 10);
 }

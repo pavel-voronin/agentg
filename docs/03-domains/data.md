@@ -463,7 +463,9 @@ row value.
 rejects a node that sets both. `value` is a literal JSON value. `valueFrom` is a
 row selector. A write action rejects a node that sets both. String templating is
 not part of the first implementation; create a field in an upstream node when a
-compound id is needed.
+compound id is needed. Pipeline runtime context expressions are resolved by
+`pipelines` before Data receives the action input; Data sees the resolved
+literal value.
 
 For `data.writeCollectionItem`, `append` rejects `itemId` and `itemIdFrom`.
 `replace` and `merge` require exactly one of `itemId` or `itemIdFrom`.
