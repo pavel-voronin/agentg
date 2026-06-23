@@ -1028,6 +1028,70 @@ describe('usePolicy', () => {
     await app.stop();
   });
 
+  it('calls policy change hooks after loading the latest policy value', async () => {
+    const events = manualEvents();
+    let currentValue: PolicyValue = [
+      {
+        key: 'alpha',
+        mode: 'enabled'
+      }
+    ];
+    const client = {
+      getPolicyValue: vi.fn(() => Promise.resolve(currentValue))
+    } as unknown as PolicyClient;
+    const changes: PolicyValue[] = [];
+    const definition = defineModule('sample', {
+      config: readEmptyConfig,
+      setup({ usePolicy }) {
+        usePolicy(sampleRule, {
+          onChange(value) {
+            changes.push(value);
+          }
+        });
+        return {};
+      }
+    });
+    const app = definition({
+      config: {},
+      connect: {
+        events: () => events,
+        policies: () => client,
+        rpc: testRpc()
+      }
+    });
+
+    await app.start();
+
+    currentValue = [
+      {
+        key: 'beta',
+        mode: 'disabled'
+      }
+    ];
+    await events.emit(POLICY_INSTANCES_CHANGED_EVENT, {
+      kind: 'SampleRule',
+      moduleId: 'sample'
+    });
+    await nextMicrotask();
+
+    expect(changes).toEqual([
+      [
+        {
+          key: 'alpha',
+          mode: 'enabled'
+        }
+      ],
+      [
+        {
+          key: 'beta',
+          mode: 'disabled'
+        }
+      ]
+    ]);
+
+    await app.stop();
+  });
+
   it('rejects runtime mutation of array policy values', async () => {
     const events = manualEvents();
     const client = {

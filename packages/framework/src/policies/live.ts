@@ -18,6 +18,7 @@ type LiveInput<TSpec, TValue extends PolicyResolvedValue> = {
     error(entry: Record<string, unknown>, message: string): void;
   };
   moduleName: string;
+  onChange?: ((value: Readonly<TValue>) => Promise<void> | void) | undefined;
 };
 
 export type LivePolicyValue<TValue> = {
@@ -34,9 +35,11 @@ export function createLivePolicyValue<TSpec, TValue extends PolicyResolvedValue>
 
   async function refresh(required: boolean): Promise<void> {
     try {
-      current = assertPolicyValue(
+      const next = assertPolicyValue(
         await input.client.getPolicyValue({ kind: input.definition.kind })
       );
+      await input.onChange?.(next as Readonly<TValue>);
+      current = next;
     } catch (error) {
       if (required) {
         throw error;

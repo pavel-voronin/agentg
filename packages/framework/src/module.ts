@@ -81,7 +81,10 @@ type ModuleSetup<TConfig = unknown> = {
   resource: <T>(name: string, create: (resource: ResourceSetup) => T) => T;
   startup: (name: string, start: ModuleProcess['start']) => void;
   usePolicy: <TSpec, TValue extends PolicyResolvedValue>(
-    definition: PolicyDefinition<TSpec, TValue>
+    definition: PolicyDefinition<TSpec, TValue>,
+    options?: {
+      onChange?: ((value: Readonly<TValue>) => Promise<void> | void) | undefined;
+    }
   ) => () => Readonly<TValue>;
 };
 
@@ -115,7 +118,10 @@ function createModuleApp<TConfig>(
   let runningTelemetryRuntime: StopProcess | undefined;
 
   function usePolicy<TSpec, TValue extends PolicyResolvedValue>(
-    definition: PolicyDefinition<TSpec, TValue>
+    definition: PolicyDefinition<TSpec, TValue>,
+    options?: {
+      onChange?: ((value: Readonly<TValue>) => Promise<void> | void) | undefined;
+    }
   ): () => Readonly<TValue> {
     if (policyClient === undefined) {
       throw new Error(
@@ -127,7 +133,8 @@ function createModuleApp<TConfig>(
       definition,
       events,
       logger,
-      moduleName: name
+      moduleName: name,
+      onChange: options?.onChange
     });
     pushProcess(startupProcesses, `policy.${definition.kind}`, () => live.start());
     return () => live.read();

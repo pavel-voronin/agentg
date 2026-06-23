@@ -198,6 +198,12 @@ setup({ resource, usePolicy }) {
 `usePolicy(definition)` returns a stable getter. Every call reads the latest
 resolved policy value. The module receives the resolver output only.
 
+When a module needs to reconcile derived runtime state after policy changes, it
+uses `usePolicy(definition, { onChange })`. The callback receives the resolved
+value after the policy endpoint refetch succeeds. The callback is module-owned:
+it may compile registrations, update module storage, or fail startup if current
+policy cannot be materialized.
+
 Domain code reads the getter as normal TypeScript data. The policy endpoint,
 YAML, file paths, raw events, and resolver execution stay in the policy
 framework and endpoint.
@@ -318,5 +324,7 @@ the behavior below.
 - `usePolicy(definition)` returns a stable getter.
 - The getter reads the latest resolved value after
   `policies.instances.changed`.
+- `usePolicy(definition, { onChange })` calls the hook after the initial
+  resolved value load and after later policy refetches.
 - Modules receive only resolver output, not policy endpoint internals, file
   paths, raw events, or unrelated policy documents.
