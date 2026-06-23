@@ -56,30 +56,32 @@ describe('LLM runner telemetry', () => {
   });
 
   it('records run and row counters with profile as the only dynamic business label', () => {
-    recordRunStarted('openrouterFree');
-    recordRowsProcessed('openrouterFree', 'completed', 3);
+    recordRunStarted('openrouterCheapSummary');
+    recordRowsProcessed('openrouterCheapSummary', 'completed', 3);
 
     expect(incrementTelemetryCounter).toHaveBeenCalledWith('llm_runner.runs.started', 1, {
-      'llm.profile': 'openrouterFree'
+      'llm.profile': 'openrouterCheapSummary'
     });
     expect(incrementTelemetryCounter).toHaveBeenCalledWith('llm_runner.rows.processed', 3, {
-      'llm.profile': 'openrouterFree',
+      'llm.profile': 'openrouterCheapSummary',
       'llm.run.result': 'completed'
     });
   });
 
   it('records provider and run duration with bounded result labels', async () => {
     await expect(
-      timeProviderCall('openrouterFree', 'json', () => Promise.resolve({ text: '{"ok":true}' }))
+      timeProviderCall('openrouterCheapSummary', 'json', () =>
+        Promise.resolve({ text: '{"ok":true}' })
+      )
     ).resolves.toEqual({ text: '{"ok":true}' });
-    recordRunDuration('openrouterFree', 'completed', 0);
+    recordRunDuration('openrouterCheapSummary', 'completed', 0);
 
     expect(recordTelemetryHistogram).toHaveBeenCalledWith(
       'llm_runner.provider.duration',
       expect.any(Number),
       {
         'llm.output.format': 'json',
-        'llm.profile': 'openrouterFree',
+        'llm.profile': 'openrouterCheapSummary',
         'llm.provider.result': 'completed'
       },
       {
@@ -91,7 +93,7 @@ describe('LLM runner telemetry', () => {
       'llm_runner.run.duration',
       expect.any(Number),
       {
-        'llm.profile': 'openrouterFree',
+        'llm.profile': 'openrouterCheapSummary',
         'llm.run.result': 'completed'
       },
       {

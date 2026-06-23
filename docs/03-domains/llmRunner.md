@@ -78,14 +78,14 @@ Profile file shape:
 
 ```yaml
 profiles:
-  openrouterFree:
+  openrouterCheapSummary:
     adapter: openai-compatible
     apiKeyEnv: OPENROUTER_API_KEY
     baseUrl: https://openrouter.ai/api/v1
-    model: openrouter/free
+    model: inclusionai/ling-2.6-flash
     timeoutMs: 60000
     maxAttempts: 1
-    maxOutputTokens: 300
+    maxOutputTokens: 80
     temperature: 0.2
 ```
 
@@ -102,6 +102,10 @@ Supported profile fields:
 
 `apiKey` is not a supported profile file field.
 
+Cost and provider-size controls belong to the selected LLM Runner profile.
+Pipeline nodes choose a profile name and prompt; they do not carry provider
+pricing, model limits, or cost policy.
+
 ## Pipeline Action Contract
 
 Pipeline node:
@@ -111,7 +115,7 @@ summary:
   use: llm.run
   from: promptInput
   with:
-    profile: openrouterFree
+    profile: openrouterCheapSummary
     prompt: Summarize the input in one sentence.
 ```
 
@@ -205,7 +209,7 @@ summary:
   use: llm.run
   from: promptInput
   with:
-    profile: openrouterFree
+    profile: openrouterCheapSummary
     prompt: Summarize the input in one sentence.
 ```
 
@@ -371,6 +375,8 @@ imports it. Internal tests use relative imports.
 - The provider request contains the node prompt and upstream dataset content.
 - The provider request uses the configured profile and does not read provider
   settings from the pipeline node beyond the profile name.
+- Output token limits and provider-cost controls live in the selected profile,
+  not in pipeline definitions.
 - The profile is connection and provider configuration only; it does not supply
   or override node prompts.
 - Multi-row input uses one LLM run id and one provider call per input row.
