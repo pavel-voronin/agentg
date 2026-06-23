@@ -698,6 +698,8 @@ imports it.
   dataset is empty.
 - Write actions resolve `subject`, `itemIdFrom`, `valueFrom`, and default `value`
   from the current input row only.
+- Write actions attempt one write per input row and return one output row per
+  successful write.
 - Write actions reject selector references that are missing from the current
   input row.
 - Write actions reject nodes that set both `itemId` and `itemIdFrom`.

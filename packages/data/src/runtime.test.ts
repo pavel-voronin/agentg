@@ -844,6 +844,108 @@ describe('data runtime', () => {
     });
   });
 
+  it('writes one collection item per input row and replaces by address', async () => {
+    const runtime = createRuntime({
+      providers: providerRegistry(),
+      store: createMemoryStore()
+    });
+    const input = {
+      rows: [
+        {
+          lineage: [{ _model: 'telegram.chat', id: '10' }],
+          refs: { chat: { _model: 'telegram.chat', id: '10' } },
+          value: { summary: 'first' }
+        },
+        {
+          lineage: [{ _model: 'telegram.chat', id: '20' }],
+          refs: { chat: { _model: 'telegram.chat', id: '20' } },
+          value: { summary: 'second' }
+        }
+      ]
+    };
+
+    await expect(
+      runtime.actionWriteCollectionItem({
+        input,
+        node: { id: 'save', runId: 'run-1' },
+        with: {
+          itemId: '2026-06-21',
+          key: 'dailyUnreadSummaries',
+          mode: 'replace',
+          subject: { ref: 'chat' },
+          valueFrom: { field: 'summary' }
+        }
+      })
+    ).resolves.toMatchObject({
+      dataset: {
+        rows: [
+          {
+            refs: {
+              chat: { _model: 'telegram.chat', id: '10' },
+              collectionItem: {
+                _model: 'data.collectionItem',
+                id: 'telegram.chat:10:dailyUnreadSummaries:2026-06-21'
+              }
+            }
+          },
+          {
+            refs: {
+              chat: { _model: 'telegram.chat', id: '20' },
+              collectionItem: {
+                _model: 'data.collectionItem',
+                id: 'telegram.chat:20:dailyUnreadSummaries:2026-06-21'
+              }
+            }
+          }
+        ]
+      },
+      status: 'ready'
+    });
+
+    await runtime.actionWriteCollectionItem({
+      input: {
+        rows: [
+          {
+            lineage: [{ _model: 'telegram.chat', id: '10' }],
+            refs: { chat: { _model: 'telegram.chat', id: '10' } },
+            value: { summary: 'first updated' }
+          }
+        ]
+      },
+      node: { id: 'save', runId: 'run-2' },
+      with: {
+        itemId: '2026-06-21',
+        key: 'dailyUnreadSummaries',
+        mode: 'replace',
+        subject: { ref: 'chat' },
+        valueFrom: { field: 'summary' }
+      }
+    });
+
+    await expect(
+      runtime.listCollection({
+        key: 'dailyUnreadSummaries',
+        subject: { _model: 'telegram.chat', id: '10' }
+      })
+    ).resolves.toMatchObject([
+      {
+        itemId: '2026-06-21',
+        value: 'first updated'
+      }
+    ]);
+    await expect(
+      runtime.listCollection({
+        key: 'dailyUnreadSummaries',
+        subject: { _model: 'telegram.chat', id: '20' }
+      })
+    ).resolves.toMatchObject([
+      {
+        itemId: '2026-06-21',
+        value: 'second'
+      }
+    ]);
+  });
+
   it('returns rejected action results for provider failures', async () => {
     const runtime = createRuntime({
       providers: {
