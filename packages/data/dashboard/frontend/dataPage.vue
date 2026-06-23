@@ -15,6 +15,7 @@ import { useDashboardApi } from './api.js';
 import DataGrid from './dataGrid.vue';
 import DataInspector from './dataInspector.vue';
 import DataTree from './dataTree.vue';
+import { isModelRouteSafeRef, isTelegramIntegerId } from './modelRefNavigation.js';
 import type {
   DataGridColumn,
   DataGridRow,
@@ -591,28 +592,26 @@ async function clearFilters(): Promise<void> {
 }
 
 async function goToSubject(subject: ModelRef): Promise<void> {
-  if (!isSelectableModel(subject._model)) {
+  if (!isOpenableSubject(subject)) {
     return;
   }
   const next = { kind: 'model', model: subject._model } as const;
   const refFilter = modelRefFilterOption(subject._model);
-  const drafts = emptyModelFilterDrafts(subject._model);
-  const appliedFilter =
-    refFilter === null
-      ? null
-      : {
-          key: refFilter.option.key,
-          operator: refFilter.operator.key,
-          value: subject.id
-        };
-  if (appliedFilter !== null) {
-    drafts[appliedFilter.key] = appliedFilter;
+  if (refFilter === null) {
+    return;
   }
+  const drafts = emptyModelFilterDrafts(subject._model);
+  const appliedFilter = {
+    key: refFilter.option.key,
+    operator: refFilter.operator.key,
+    value: subject.id
+  };
+  drafts[appliedFilter.key] = appliedFilter;
   selection.value = next;
   writeSelectionRoute(next);
   inspector.value = null;
   modelFilterDrafts.value = drafts;
-  modelFilters.value = appliedFilter === null ? {} : { [appliedFilter.key]: appliedFilter };
+  modelFilters.value = { [appliedFilter.key]: appliedFilter };
   filtersVisible.value = true;
   filterError.value = null;
   sortState.value = null;
@@ -897,7 +896,7 @@ function annotationRow(record: AnnotationRecord): DataGridRow {
       value
     },
     subject: record.subject,
-    subjectOpenable: isSelectableModel(record.subject._model)
+    subjectOpenable: isOpenableSubject(record.subject)
   };
 }
 
@@ -930,7 +929,7 @@ function collectionRow(record: CollectionRecord): DataGridRow {
       value
     },
     subject: record.subject,
-    subjectOpenable: isSelectableModel(record.subject._model)
+    subjectOpenable: isOpenableSubject(record.subject)
   };
 }
 
@@ -1279,7 +1278,7 @@ function clientChatRef(row: DatasetRow): ModelRef | null {
 }
 
 function clientChatId(ref: ModelRef): string | null {
-  return ref._model === 'telegram.chat' && ref.id.trim().length > 0 ? ref.id : null;
+  return ref._model === 'telegram.chat' && isTelegramIntegerId(ref.id) ? ref.id : null;
 }
 
 function clientPathForChat(chatId: string): string {
@@ -1315,7 +1314,7 @@ function parseFullRef(value: string): ModelRef | null {
 }
 
 function subjectMeta(ref: ModelRef): InspectorView['fields'][number] {
-  if (isSelectableModel(ref._model)) {
+  if (isOpenableSubject(ref)) {
     return { label: 'Subject', ref, value: refLabel(ref) };
   }
   return { label: 'Subject', value: refLabel(ref) };
@@ -1336,6 +1335,14 @@ function rowActions(refs: readonly ModelRef[]): InspectorView['actions'] {
 
 function isSelectableModel(model: string): boolean {
   return selectableModels.value.some((entry) => entry.model === model);
+}
+
+function isOpenableSubject(ref: ModelRef): boolean {
+  return (
+    isSelectableModel(ref._model) &&
+    modelRefFilterOption(ref._model) !== null &&
+    isModelRouteSafeRef(ref)
+  );
 }
 
 function modelFilterWhere(model: string): unknown | null | undefined {
