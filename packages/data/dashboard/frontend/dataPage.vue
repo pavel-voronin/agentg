@@ -986,7 +986,8 @@ function annotationView(record: AnnotationRecord): InspectorView {
       { label: 'Updated', value: formatDate(record.updatedAt) },
       { label: 'Value', value: preview(record.value) }
     ],
-    title: 'Annotation'
+    title: 'Annotation',
+    value: record.value
   };
 }
 
@@ -1000,7 +1001,8 @@ function collectionView(record: CollectionRecord): InspectorView {
       { label: 'Updated', value: formatDate(record.updatedAt) },
       { label: 'Value', value: preview(record.value) }
     ],
-    title: 'Collection item'
+    title: 'Collection item',
+    value: record.value
   };
 }
 
@@ -1021,7 +1023,8 @@ function datasetView(row: DatasetRow, columns: readonly ModelColumn[]): Inspecto
       label: column.label,
       value: modelColumnValue(row, column)
     })),
-    title: ref === null ? 'Row' : refLabel(ref)
+    title: ref === null ? 'Row' : refLabel(ref),
+    value: row.value
   };
 }
 

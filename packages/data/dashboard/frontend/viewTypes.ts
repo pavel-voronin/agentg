@@ -45,6 +45,7 @@ export type InspectorView = Readonly<{
   actions?: readonly InspectorAction[] | undefined;
   fields: readonly Readonly<{ label: string; ref?: ModelRef | undefined; value: string }>[];
   title: string;
+  value?: unknown;
 }>;
 
 export type SortDirection = 'asc' | 'desc';

@@ -278,9 +278,9 @@ or `not contains`. Rows with an openable model ref must also expose
 
 `Inspector`: the right-side inspector is hidden by default. It appears only
 after the operator selects a table row. It shows formatted domain fields for
-the selected row and may expose row actions such as `Open related data`. It must
-not show debug-only refs, lineage counts, or full raw JSON blocks by default.
-Passive navigation changes must close it.
+the selected row, the full selected row value as JSON, and may expose row
+actions such as `Open related data`. It must not show debug-only refs or lineage
+counts. Passive navigation changes must close it.
 
 Rows that carry a `telegram.chat` reference may expose `Open in client` in the
 row context menu and inspector actions. The action navigates to the existing
@@ -445,8 +445,8 @@ Browser verification must prove `/data` loads directly, remains in navigation
 with Telemetry disabled, loads the initial table when Data is running, shows a
 dependency unavailable state when Data RPC is down, and performs reads only from
 initialization or explicit user actions. It must also prove row-click inspector
-toggle, persisted tree expansion, persisted column resizing, and table
-pagination controls.
+toggle, full value JSON for the selected annotation or collection row, persisted
+tree expansion, persisted column resizing, and table pagination controls.
 
 ## Migration Notes
 

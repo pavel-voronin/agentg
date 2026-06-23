@@ -29,6 +29,10 @@ function runAction(action: NonNullable<InspectorView['actions']>[number]): void 
   }
   emit('openHref', action.href);
 }
+
+function formatJson(value: unknown): string {
+  return JSON.stringify(value, null, 2);
+}
 </script>
 
 <template>
@@ -72,6 +76,11 @@ function runAction(action: NonNullable<InspectorView['actions']>[number]): void 
           </dd>
         </template>
       </dl>
+
+      <section v-if="view.value !== undefined" class="data-inspector__section">
+        <h3 class="data-inspector__section-title">Value</h3>
+        <pre class="data-inspector__code">{{ formatJson(view.value) }}</pre>
+      </section>
     </div>
   </aside>
 </template>
@@ -121,5 +130,17 @@ function runAction(action: NonNullable<InspectorView['actions']>[number]): void 
 
 .data-inspector__meta-link {
   @apply max-w-full break-words bg-transparent p-0 text-left font-mono text-[11px] text-teal-700 hover:text-teal-950 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500;
+}
+
+.data-inspector__section {
+  @apply grid gap-2 border-b border-zinc-200 px-4 py-4;
+}
+
+.data-inspector__section-title {
+  @apply text-xs font-semibold text-zinc-500;
+}
+
+.data-inspector__code {
+  @apply max-h-80 overflow-auto overscroll-none whitespace-pre-wrap break-words bg-zinc-50 p-3 font-mono text-xs leading-5 text-zinc-800 ring-1 ring-inset ring-zinc-200;
 }
 </style>
