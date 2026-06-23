@@ -543,7 +543,7 @@ export const tools = [
     name: 'pipelines_get_pipeline'
   },
   {
-    description: 'Set one pipeline document through AgentG Gateway.',
+    description: 'Set one dev/test pipeline document through AgentG Gateway.',
     inputSchema: objectSchema(
       {
         document: {
@@ -555,7 +555,7 @@ export const tools = [
     name: 'pipelines_set_pipeline'
   },
   {
-    description: 'Run one pipeline through AgentG Gateway.',
+    description: 'Run one materialized pipeline through AgentG Gateway.',
     inputSchema: objectSchema(
       {
         idempotencyKey: {

@@ -1,5 +1,6 @@
 import { createLogger, defineModule, logError } from '@agentg/framework';
 
+import { pipelineAutomationRulesPolicy } from '../policies/policies.js';
 import { createRpcDispatcher, createRpcResultReader } from './actions.js';
 import { readConfig } from './config.js';
 import { createDatabase } from './database/client.js';
@@ -11,7 +12,7 @@ const logger = createLogger('pipelines');
 
 export const moduleDefinition = defineModule('pipelines', {
   config: readConfig,
-  setup({ config, events, resource, startup }) {
+  setup({ config, events, resource, startup, usePolicy }) {
     const database = resource('database', ({ startup }) => {
       const resource = createDatabase(config.databaseUrl);
 
@@ -36,6 +37,9 @@ export const moduleDefinition = defineModule('pipelines', {
         store: createPostgresStore(database)
       })
     );
+    usePolicy(pipelineAutomationRulesPolicy, {
+      onChange: (rules) => runtime.reconcilePolicyRules(rules)
+    });
 
     startup('providerResultEvents', () => {
       const completed = events.subscribe('llmRunner.run.completed', (event) =>

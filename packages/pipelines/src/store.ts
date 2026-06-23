@@ -10,6 +10,7 @@ import {
   nodeRuns,
   runs,
   triggerBindings,
+  type DefinitionSource,
   type NodeStatus,
   type RunStatus
 } from './database/schema.js';
@@ -18,6 +19,7 @@ import { executionContextSchema, type Document, type ExecutionContext } from './
 export type DefinitionRecord = Readonly<{
   document: Document;
   name: string;
+  source: DefinitionSource;
   yaml: string;
 }>;
 
@@ -62,7 +64,9 @@ export type Store = {
   }): Promise<NodeRecord | null>;
   getDefinition(name: string): Promise<DefinitionRecord | null>;
   getRun(runId: string): Promise<RunRecord | null>;
-  listDefinitions(): Promise<readonly DefinitionRecord[]>;
+  listDefinitions(input?: {
+    source?: DefinitionSource | undefined;
+  }): Promise<readonly DefinitionRecord[]>;
   listNodeRuns(runId: string): Promise<readonly NodeRecord[]>;
   listRuns(input: {
     pipelineName?: string | undefined;
@@ -108,6 +112,7 @@ export type Store = {
     bindings: readonly { key: string; registrationKey: string; triggerName: string }[];
     document: Document;
     now: Date;
+    source?: DefinitionSource | undefined;
     yaml: string;
   }): Promise<void>;
 };
@@ -197,8 +202,12 @@ export function createPostgresStore(database: Database): Store {
       const [row] = await database.select().from(runs).where(eq(runs.runId, runId)).limit(1);
       return row === undefined ? null : toRun(row);
     },
-    async listDefinitions() {
-      const rows = await database.select().from(definitions).orderBy(definitions.name);
+    async listDefinitions(input = {}) {
+      const rows = await database
+        .select()
+        .from(definitions)
+        .where(input.source === undefined ? undefined : eq(definitions.source, input.source))
+        .orderBy(definitions.name);
       return rows.map(toDefinition);
     },
     async listNodeRuns(runId) {
@@ -447,8 +456,12 @@ export function createMemoryStore(): Store {
     getRun(runId) {
       return Promise.resolve(runRows.get(runId) ?? null);
     },
-    listDefinitions() {
-      return Promise.resolve([...definitionRows.values()]);
+    listDefinitions(input = {}) {
+      return Promise.resolve(
+        [...definitionRows.values()].filter(
+          (definition) => input.source === undefined || definition.source === input.source
+        )
+      );
     },
     listNodeRuns(runId) {
       return Promise.resolve([...nodes.values()].filter((node) => node.runId === runId));
@@ -558,6 +571,7 @@ export function createMemoryStore(): Store {
       definitionRows.set(input.document.metadata.name, {
         document: input.document,
         name: input.document.metadata.name,
+        source: input.source ?? 'manual',
         yaml: input.yaml
       });
       return Promise.resolve();
@@ -580,19 +594,21 @@ function countsByStatus<TStatus extends string>(
 
 async function upsertDefinition(
   database: StoreDatabase,
-  input: { document: Document; now: Date; yaml: string }
+  input: { document: Document; now: Date; source?: DefinitionSource | undefined; yaml: string }
 ): Promise<void> {
   await database
     .insert(definitions)
     .values({
       document: toJsonValue(input.document),
       name: input.document.metadata.name,
+      source: input.source ?? 'manual',
       updatedAt: input.now,
       yaml: input.yaml
     })
     .onConflictDoUpdate({
       set: {
         document: toJsonValue(input.document),
+        source: input.source ?? 'manual',
         updatedAt: input.now,
         yaml: input.yaml
       },
@@ -639,6 +655,7 @@ function toDefinition(row: typeof definitions.$inferSelect): DefinitionRecord {
   return {
     document: row.document as unknown as Document,
     name: row.name,
+    source: row.source,
     yaml: row.yaml
   };
 }

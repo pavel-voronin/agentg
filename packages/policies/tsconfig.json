@@ -3,5 +3,5 @@
   "compilerOptions": {
     "rootDir": "../.."
   },
-  "include": ["src", "tests", "../telegram/policies"]
+  "include": ["src", "tests", "../pipelines/policies", "../telegram/policies"]
 }

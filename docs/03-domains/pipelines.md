@@ -9,9 +9,17 @@ A pipeline is a graph of named nodes. Each node calls one action provider, reads
 datasets from previous nodes, and either produces a dataset, performs a side
 effect, or both.
 
+Durable automation behavior is defined by the `PipelineAutomationRule` policy
+kind. `pipelines` consumes the resolved policy value and compiles it into
+materialized pipeline definitions plus trigger registrations. Direct pipeline
+set/delete procedures are a Gateway/MCP dev and test escape hatch, not the main
+control-plane path.
+
 ## Goals
 
-- Store named YAML pipeline definitions.
+- Store materialized pipeline definitions.
+- Treat `PipelineAutomationRule` policy instances as the source of truth for
+  scheduled automation.
 - Run the same pipeline manually, through Gateway/MCP, or from a schedule.
 - Treat writes as ordinary pipeline nodes.
 - Build execution order from node dependencies, not YAML mapping order.
@@ -23,82 +31,98 @@ effect, or both.
 - Do not store semantic data inside `pipelines`.
 - Do not call Telegram, LLM providers, or storage directly from pipeline core.
 - Do not make `triggers` store pipeline YAML.
+- Do not make direct `setPipeline`/`deletePipeline` the primary behavior-change
+  path.
 - Do not make `llm-runner` resolve source selectors or write final semantic
   outputs.
 - Do not use detached post-processing write blocks.
 
 ## Ubiquitous Language
 
-- `Pipeline`: one named YAML definition.
+- `PipelineAutomationRule`: one policy instance that owns durable automation
+  behavior for one named pipeline.
+- `Pipeline`: one materialized runnable graph.
 - `PipelineNode`: one named action invocation in a pipeline graph.
 - `Action`: the provider capability selected by `node.use`.
 - `ActionProvider`: a module that implements pipeline actions.
 - `Dataset`: the rows passed between nodes.
 - `PipelineRun`: one execution of one pipeline definition.
 - `NodeRun`: one execution of one node inside a pipeline run.
-- `TriggerBinding`: a schedule declaration in a pipeline that `pipelines`
-  registers with `triggers`.
+- `TriggerBinding`: a schedule registration that `pipelines` compiles from a
+  policy-owned automation rule and stores in `triggers`.
 
-## Pipeline Document
+## Policy Source Contract
 
-Pipeline definitions live in `pipelines`, not in `triggers`.
+Scheduled pipeline automation is configured through policy:
 
 ```yaml
 apiVersion: agentg.dev/v1
-kind: Pipeline
+kind: PipelineAutomationRule
 metadata:
   name: subcreativeUnreadSummary
 spec:
-  triggers:
-    unreadSummaryEveryMinute:
-      kind: periodic
-      everySeconds: 60
+  enabled: true
+  trigger:
+    kind: periodic
+    everySeconds: 86400
 
-  nodes:
-    chats:
-      use: data.select
-      with:
-        model: telegram.chat
-        where:
-          chatIds:
-            - '-1002129631268'
-          readState: unread
+  pipeline:
+    nodes:
+      messages:
+        use: data.select
+        with:
+          model: telegram.message
+          where:
+            readState: unread
+            startAt:
+              $context: window.startAt
+            endAt:
+              $context: window.endAt
 
-    messages:
-      use: data.expand
-      from: chats
-      with:
-        relation: messages
-        sourceRef: chat
-        where:
-          readState: unread
-        limit: 50
+      promptInput:
+        use: data.render
+        from: messages
+        with:
+          format: text
+          sourceRef: message
+          options:
+            groupByRef: chat
 
-    promptInput:
-      use: data.render
-      from: messages
-      with:
-        format: text
-        sourceRef: message
-        options:
-          groupByRef: chat
+      summary:
+        use: llm.run
+        from: promptInput
+        with:
+          profile: openrouterCheapSummary
+          prompt: Summarize the input in one sentence.
 
-    summary:
-      use: llm.run
-      from: promptInput
-      with:
-        profile: openrouterFree
-        prompt: Summarize the input in one sentence.
-
-    save:
-      use: data.writeAnnotation
-      from: summary
-      with:
-        subject:
-          ref: chat
-        key: unreadSummary
-        mode: replace
+      save:
+        use: data.writeCollectionItem
+        from: summary
+        with:
+          subject:
+            ref: chat
+          key: dailyUnreadSummaries
+          itemId:
+            $context: date.utc
+          mode: replace
 ```
+
+`metadata.name` is the pipeline name. `spec.trigger` is compiled into one
+`triggers` registration named `schedule`. `spec.pipeline.nodes` is compiled into
+the materialized pipeline document.
+
+When `enabled` is `false`, `pipelines` removes the materialized policy-owned
+pipeline definition and trigger registration for that policy instance.
+
+Deleting a `PipelineAutomationRule` removes only policy-owned materialized
+definitions. Manual dev/test definitions created through `setPipeline` are
+stored with `source: manual` and are not deleted by policy reconciliation.
+
+## Materialized Pipeline Document
+
+The materialized document uses `kind: Pipeline`. It is stored by `pipelines`,
+not by `triggers`. Gateway/MCP may also submit this document directly for
+dev/test runs.
 
 YAML mapping order is not execution semantics. Named nodes execute according to
 `from` and `needs`.
@@ -239,24 +263,27 @@ node, or many write nodes.
 
 ## Scheduling
 
-Pipelines can include schedule declarations under `spec.triggers`.
+`PipelineAutomationRule.spec.trigger` is the scheduled automation source of
+truth.
 
-`pipelines` compiles each schedule into a trigger registration:
+`pipelines` compiles each enabled policy instance into one trigger registration:
 
 ```text
-pipeline name + trigger name + schedule
+policy metadata.name + schedule
   -> triggers registration
   -> action module: pipelines
   -> action procedure: runTriggered
-  -> action input: pipeline name and trigger name
+  -> action input: pipeline name and trigger name "schedule"
 ```
 
 `triggers` owns occurrence creation, leases, and dispatch. `pipelines` owns the
-pipeline definition and the pipeline run created by a trigger occurrence.
+materialized pipeline definition and the pipeline run created by a trigger
+occurrence.
 
-Deleting or changing a pipeline updates the trigger registrations owned by that
-pipeline. Existing started `PipelineRun` records keep the definition snapshot
-accepted at run start.
+Changing policy updates the trigger registration owned by that policy-backed
+pipeline. Deleting or disabling policy removes future trigger registrations and
+the policy-owned materialized definition. Existing started `PipelineRun` records
+keep the definition snapshot accepted at run start.
 
 ## Public Procedures
 
@@ -265,8 +292,8 @@ Initial internal procedures:
 ```ts
 listPipelines(): readonly PipelineSummary[];
 getPipeline(input: { name: string }): PipelineDocument | null;
-setPipeline(input: { document: PipelineDocument }): PipelineMutationResult;
-deletePipeline(input: { name: string }): PipelineMutationResult;
+setPipeline(input: { document: PipelineDocument }): PipelineMutationResult; // dev/test escape hatch
+deletePipeline(input: { name: string }): PipelineMutationResult; // dev/test escape hatch
 runPipeline(input: { name: string; idempotencyKey?: string }): PipelineRunAccepted;
 getRun(input: { runId: string }): PipelineRunView | null;
 listRuns(input: { pipelineName?: string; status?: PipelineRunStatus }): readonly PipelineRunView[];
@@ -358,7 +385,8 @@ Action providers own:
 
 `pipelines` owns:
 
-- pipeline document validation;
+- `PipelineAutomationRule` policy definition and reconciliation;
+- materialized pipeline document validation;
 - dependency graph execution;
 - run and node state;
 - schedule registration with `triggers`;
@@ -379,6 +407,7 @@ pipelines_trigger_bindings
 Definitions store:
 
 - pipeline name;
+- source: `policy` or `manual`;
 - document YAML or normalized JSON;
 - validation status;
 - created timestamp;
@@ -459,7 +488,13 @@ imports it.
 
 ## Test Contract
 
-- `setPipeline` rejects malformed YAML documents.
+- `PipelineAutomationRule` resolves policy instance names as pipeline names.
+- Policy reconciliation materializes enabled rules as `source: policy`.
+- Policy reconciliation removes disabled or deleted policy-owned definitions and
+  trigger registrations.
+- Policy reconciliation does not delete `source: manual` definitions.
+- `setPipeline` remains available for dev/test materialized definitions and
+  rejects malformed YAML documents.
 - `setPipeline` rejects unsupported `apiVersion` values.
 - `setPipeline` rejects unsupported `kind` values.
 - `setPipeline` rejects missing or invalid `metadata.name`.
@@ -489,8 +524,10 @@ imports it.
   existing pipeline run.
 - A manual run creates a new run without an idempotency key.
 - A manual run with an idempotency key returns the existing run for that key.
-- Updating a pipeline updates its trigger registrations.
-- Deleting a pipeline removes its trigger registrations.
+- Updating policy updates trigger registrations.
+- Deleting or disabling policy removes policy-owned trigger registrations.
+- Direct `deletePipeline` removes the named dev/test materialized definition and
+  its trigger registrations.
 - Started runs keep the definition snapshot accepted at run start after the
   pipeline definition is changed.
 - Manual `runPipeline` and triggered `runTriggered` use the same run lifecycle.
@@ -515,4 +552,5 @@ imports it.
 5. Add `data` action provider integration.
 6. Add `llm.run` action provider integration.
 7. Add schedule registration into `triggers`.
-8. Add Gateway and MCP methods for pipeline management and manual runs.
+8. Add Gateway and MCP methods for policy inspection plus dev/test manual
+   pipeline runs.

@@ -79,6 +79,8 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
+      triggers:
+        condition: service_healthy
     environment:
       <<: *agentg-telemetry-environment
       DATABASE_URL: postgres://agentg:agentg@postgres:5432/agentg
@@ -159,6 +161,8 @@ services:
         condition: service_healthy
       nats:
         condition: service_started
+      policies:
+        condition: service_healthy
       postgres:
         condition: service_healthy
     environment:
@@ -166,6 +170,7 @@ services:
       DATABASE_URL: postgres://agentg:agentg@postgres:5432/agentg
       NATS_URL: nats://nats:4222
       PIPELINES_ACTION_TARGETS: '{"data":"http://data:8080","llm-runner":"http://llm-runner:8080"}'
+      POLICIES_RPC_URL: http://policies:8080
       TRIGGERS_RPC_URL: http://triggers:8080
       HOST: 0.0.0.0
       PORT: 8080
@@ -181,8 +186,6 @@ services:
       context: .
       target: runtime
     depends_on:
-      pipelines:
-        condition: service_healthy
       nats:
         condition: service_started
       postgres:

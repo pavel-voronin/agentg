@@ -9,8 +9,9 @@ work with leases, dispatches ordinary module procedures, and publishes trigger
 runtime events while hiding clock reconciliation, duplicate prevention, and
 dispatch retry mechanics.
 
-Pipeline definitions live in `pipelines`. `triggers` only stores the compiled
-registration needed to wake `pipelines.runTriggered`.
+Pipeline automation policy and materialized pipeline definitions live in
+`pipelines`. `triggers` only stores the compiled registration needed to wake
+`pipelines.runTriggered`.
 
 ## Goals
 
@@ -20,7 +21,7 @@ registration needed to wake `pipelines.runTriggered`.
 - Persist enough state to avoid duplicate dispatches across restarts.
 - Keep action execution, action input semantics, and target run lifecycle in the
   target module.
-- Let `pipelines` register schedules for named pipeline runs.
+- Let `pipelines` register schedules for policy-owned named pipeline runs.
 
 ## Non-Goals
 
@@ -28,7 +29,7 @@ registration needed to wake `pipelines.runTriggered`.
 - Do not validate pipeline node definitions.
 - Do not inspect action input beyond JSON safety.
 - Do not own LLM runs, data writes, or Telegram reads.
-- Do not define a separate policy language for scheduled pipelines.
+- Do not own policy semantics for scheduled pipelines.
 
 ## Ubiquitous Language
 
@@ -61,8 +62,9 @@ registration needed to wake `pipelines.runTriggered`.
 
 Related ownership:
 
-- `pipelines` owns pipeline documents, schedule declarations inside pipeline
-  documents, pipeline run lifecycle, and `pipelines.runTriggered`.
+- `pipelines` owns `PipelineAutomationRule` policy, materialized pipeline
+  documents, schedule compilation, pipeline run lifecycle, and
+  `pipelines.runTriggered`.
 - Target modules own procedure input validation, execution lifecycle, data
   writes, read models, and module events after accepting an action call.
 - Gateway owns external protocol compatibility.
@@ -104,23 +106,23 @@ type TriggerAction = {
 };
 ```
 
-Example registration compiled by `pipelines`:
+Example registration compiled by `pipelines` from a `PipelineAutomationRule`:
 
 ```yaml
 owner:
   module: pipelines
   key: subcreativeUnreadSummary
 registrations:
-  - name: unreadSummaryEveryMinute
+  - name: schedule
     condition:
       kind: periodic
-      everySeconds: 60
+      everySeconds: 86400
     action:
       module: pipelines
       procedure: runTriggered
       input:
         pipelineName: subcreativeUnreadSummary
-        triggerName: unreadSummaryEveryMinute
+        triggerName: schedule
 ```
 
 The registration key is stable for `owner.module + owner.key + name`. Updating a
@@ -423,7 +425,7 @@ imports it.
 - Consumers can recover trigger state through read procedures after live event
   loss.
 - A compiled pipeline registration dispatches `pipelines.runTriggered` with the
-  pipeline name and trigger name.
+  policy-owned pipeline name and trigger name.
 - Trigger telemetry records registration count, occurrence state, due backlog,
   oldest due age, occurrence creation, dispatch result, runtime duration, and
   dispatch duration without registration keys, owner keys, occurrence keys,

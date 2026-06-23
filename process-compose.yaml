@@ -139,6 +139,7 @@ processes:
     environment:
       - 'OTEL_SERVICE_NAME=pipelines'
       - 'PIPELINES_ACTION_TARGETS={"data":"http://127.0.0.1:8708","llm-runner":"http://127.0.0.1:8707"}'
+      - 'POLICIES_RPC_URL=http://127.0.0.1:8705'
       - 'TRIGGERS_RPC_URL=http://127.0.0.1:8706'
     availability:
       restart: always
@@ -147,6 +148,10 @@ processes:
       data:
         condition: process_healthy
       llm-runner:
+        condition: process_healthy
+      policies:
+        condition: process_healthy
+      triggers:
         condition: process_healthy
     readiness_probe:
       exec:
@@ -166,8 +171,8 @@ processes:
       restart: always
       backoff_seconds: 2
     depends_on:
-      pipelines:
-        condition: process_healthy
+      db-migrate:
+        condition: process_completed_successfully
     readiness_probe:
       exec:
         command: nc -z 127.0.0.1 8706

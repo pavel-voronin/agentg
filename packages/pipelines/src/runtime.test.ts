@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import type { PipelineAutomationRuleSet } from '../policies/policies.js';
 import type { Dispatcher, ResultReader } from './actions.js';
 import { createRuntime } from './runtime.js';
 import type { Dataset, Document, ProviderResult, ProviderRunResult } from './schema.js';
@@ -438,6 +439,42 @@ describe('pipelines runtime', () => {
     expect(replace).toHaveBeenNthCalledWith(2, null, 'scheduled');
   });
 
+  it('reconciles policy-owned pipeline definitions without deleting manual definitions', async () => {
+    const registration = registrationClient();
+    const runtime = runtimeWith({ registration });
+
+    await runtime.setPipeline(summaryDocument('scratch'));
+    await runtime.reconcilePolicyRules([automationRule('dailySummary')]);
+
+    await expect(runtime.getPipeline({ name: 'scratch' })).resolves.toMatchObject({
+      source: 'manual'
+    });
+    await expect(runtime.getPipeline({ name: 'dailySummary' })).resolves.toMatchObject({
+      document: {
+        spec: {
+          triggers: {
+            schedule: { everySeconds: 86400, kind: 'periodic' }
+          }
+        }
+      },
+      source: 'policy'
+    });
+    expect(vi.mocked(registration.replace)).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        metadata: { name: 'dailySummary' }
+      }),
+      'dailySummary'
+    );
+
+    await runtime.reconcilePolicyRules([]);
+
+    await expect(runtime.getPipeline({ name: 'dailySummary' })).resolves.toBeNull();
+    await expect(runtime.getPipeline({ name: 'scratch' })).resolves.toMatchObject({
+      source: 'manual'
+    });
+    expect(vi.mocked(registration.replace)).toHaveBeenLastCalledWith(null, 'dailySummary');
+  });
+
   it('keeps definitions unchanged when trigger registration replacement fails', async () => {
     const registration = registrationClient();
     const runtime = runtimeWith({ registration });
@@ -507,6 +544,19 @@ function runtimeWith(
       } satisfies ResultReader),
     store: createMemoryStore()
   });
+}
+
+function automationRule(name: string): PipelineAutomationRuleSet[number] {
+  return {
+    enabled: true,
+    name,
+    pipeline: {
+      nodes: {
+        chats: { use: 'data.select', with: { model: 'telegram.chat' } }
+      }
+    },
+    trigger: { everySeconds: 86400, kind: 'periodic' }
+  };
 }
 
 function simpleDocument(name: string): { document: Document } {

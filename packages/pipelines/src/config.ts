@@ -8,6 +8,7 @@ const rawConfig = defineConfig({
   databaseUrl: string('DATABASE_URL'),
   host: string('HOST').optional(),
   natsUrl: string('NATS_URL'),
+  policiesRpcUrl: string('POLICIES_RPC_URL').default('http://127.0.0.1:8705'),
   port: number('PORT').default(8709),
   triggersRpcUrl: string('TRIGGERS_RPC_URL').default('http://127.0.0.1:8706')
 });
@@ -26,6 +27,7 @@ export function readConfig(...sources: Parameters<typeof rawConfig>): Config {
     databaseUrl: config.databaseUrl,
     host: config.host,
     natsUrl: config.natsUrl,
+    policiesRpcUrl: config.policiesRpcUrl,
     port: config.port,
     triggersRpcUrl: config.triggersRpcUrl
   };

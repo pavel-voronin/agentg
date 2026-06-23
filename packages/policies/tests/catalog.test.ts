@@ -13,6 +13,7 @@ describe('policy catalog', () => {
       'utf8'
     );
 
+    expect(source).toContain('../../../pipelines/policies/policies.js');
     expect(source).toContain('../../../telegram/policies/policies.js');
     expect(source).not.toContain('../../../triggers/policies/policies.js');
     expect(source).not.toContain('/src/module');
@@ -29,6 +30,7 @@ describe('policy catalog', () => {
 
     const kinds = await server.procedures.listPolicyKinds();
     expect(kinds.map((item) => item.kind).sort()).toEqual([
+      'PipelineAutomationRule',
       'TelegramFileDownloadRule',
       'TelegramHistoryGapRestoreRule'
     ]);

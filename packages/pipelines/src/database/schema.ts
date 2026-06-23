@@ -29,11 +29,13 @@ export const nodeStatuses = [
 
 export type RunStatus = (typeof runStatuses)[number];
 export type NodeStatus = (typeof nodeStatuses)[number];
+export type DefinitionSource = 'manual' | 'policy';
 
 export const definitions = pgTable('pipelines_definitions', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   document: jsonb('document').$type<JsonValue>().notNull(),
   name: text('name').primaryKey(),
+  source: text('source').$type<DefinitionSource>().notNull().default('manual'),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   yaml: text('yaml').notNull()
 });

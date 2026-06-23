@@ -36,7 +36,7 @@ The system should separate:
 - data provider routing
 - schema-free annotations and collections
 - durable pipeline node datasets
-- pipeline definitions and pipeline runs
+- pipeline automation policy, materialized definitions, and pipeline runs
 - LLM action runs
 - materialized trigger registration runtime state
 - module procedure dispatch from trigger registrations
@@ -48,8 +48,8 @@ The system should separate:
 - Telegram provider capabilities are accepted by [Telegram Client](telegramClient.md).
 - Shared model refs, provider routing, annotations, and collections are accepted
   by [Data](data.md).
-- Pipeline definition, run lifecycle, node execution, and schedule registration
-  are accepted by [Pipelines](pipelines.md).
+- Pipeline automation policy, materialized definitions, run lifecycle, node
+  execution, and schedule registration are accepted by [Pipelines](pipelines.md).
 - LLM action execution and profile behavior are accepted by
   [LLM Runner](llmRunner.md).
 - Trigger registration, occurrence, lease, and dispatch behavior are accepted by

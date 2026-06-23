@@ -444,6 +444,10 @@ and `merge` update an addressed item and require `itemId`.
 ## Pipeline Methods
 
 Pipeline methods call the typed `@agentg/pipelines` internal RPC client.
+Durable scheduled automation is configured through `policies.setInstance` with
+`kind: PipelineAutomationRule`. Direct `pipelines.setPipeline` and
+`pipelines.deletePipeline` are dev/test escape hatches for materialized pipeline
+documents.
 
 `pipelines.listPipelines`
 
@@ -459,7 +463,7 @@ Pipeline methods call the typed `@agentg/pipelines` internal RPC client.
 }
 ```
 
-`pipelines.setPipeline`
+`pipelines.setPipeline` dev/test only
 
 ```json
 {
@@ -560,11 +564,30 @@ storage, resolved policy values, and policy update events. Module-owned policy
 {
   "document": {
     "apiVersion": "agentg.dev/v1",
-    "kind": "ExampleRule",
+    "kind": "PipelineAutomationRule",
     "metadata": {
-      "name": "example"
+      "name": "subcreativeUnreadSummary"
     },
-    "spec": {}
+    "spec": {
+      "enabled": true,
+      "trigger": {
+        "kind": "periodic",
+        "everySeconds": 86400
+      },
+      "pipeline": {
+        "nodes": {
+          "messages": {
+            "use": "data.select",
+            "with": {
+              "model": "telegram.message",
+              "where": {
+                "readState": "unread"
+              }
+            }
+          }
+        }
+      }
+    }
   }
 }
 ```

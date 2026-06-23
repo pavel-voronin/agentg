@@ -125,9 +125,14 @@ Mutation flow:
 The file store is the source of truth for active policy documents. Derived
 runtime state belongs to the module that consumes the resolved policy value.
 
-Pipeline definitions are not policy documents in the target architecture.
-`pipelines` stores pipeline YAML, validates pipeline nodes, and registers
-compiled schedules in `triggers`.
+Scheduled pipeline automation is policy-owned through
+`PipelineAutomationRule`, defined by `pipelines`. The policy document is the
+source of truth. `pipelines` consumes the resolved value, validates the
+materialized pipeline graph, stores the runtime definition with `source:
+policy`, and registers compiled schedules in `triggers`.
+
+Direct `pipelines.setPipeline` remains available as a dev/test escape hatch for
+materialized pipeline documents. It is not the main behavior-change path.
 
 ## Endpoint API
 
@@ -279,8 +284,9 @@ the behavior below.
 
 - `setInstance` rejects a document with an unsupported `apiVersion`.
 - `setInstance` rejects a document with an unknown `kind`.
-- `setInstance` rejects a `Pipeline` document because pipeline definitions are
-  stored by `pipelines`, not by `policies`.
+- `setInstance` rejects a `Pipeline` document. Durable scheduled pipeline
+  automation uses `PipelineAutomationRule`; direct `Pipeline` documents belong
+  to the pipelines dev/test procedure surface.
 - `setInstance` rejects missing or invalid `metadata.name`.
 - `setInstance` validates `spec` through the `PolicyDefinition` selected by
   `kind`.

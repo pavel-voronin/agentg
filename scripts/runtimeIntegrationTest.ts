@@ -13,6 +13,8 @@ import { readConfig as readRunnerConfig } from '../packages/llm-runner/src/confi
 import { moduleDefinition as runnerModule } from '../packages/llm-runner/src/module.js';
 import { readConfig as readPipelineConfig } from '../packages/pipelines/src/config.js';
 import { moduleDefinition as pipelineModule } from '../packages/pipelines/src/module.js';
+import { readConfig as readPolicyConfig } from '../packages/policies/src/config.js';
+import { endpointModule as policyModule } from '../packages/policies/src/module.js';
 import { readConfig as readTriggerConfig } from '../packages/triggers/src/config.js';
 import { moduleDefinition as triggerModule } from '../packages/triggers/src/module.js';
 
@@ -111,6 +113,7 @@ try {
   const ports = {
     data: await freePort(),
     llmProvider: await freePort(),
+    policies: await freePort(),
     pipelines: await freePort(),
     runner: await freePort(),
     telegram: await freePort(),
@@ -119,6 +122,7 @@ try {
   const urls = {
     data: `http://${host}:${String(ports.data)}`,
     pipelines: `http://${host}:${String(ports.pipelines)}`,
+    policies: `http://${host}:${String(ports.policies)}`,
     runner: `http://${host}:${String(ports.runner)}`,
     telegram: `http://${host}:${String(ports.telegram)}`,
     triggers: `http://${host}:${String(ports.triggers)}`
@@ -142,8 +146,12 @@ try {
     pipelinesUrl: urls.pipelines,
     port: ports.triggers
   });
+  await startPolicies({
+    port: ports.policies
+  });
   await startPipelines({
     dataUrl: urls.data,
+    policiesUrl: urls.policies,
     port: ports.pipelines,
     runnerUrl: urls.runner,
     triggersUrl: urls.triggers
@@ -494,6 +502,7 @@ async function startRunner(input: { port: number; providerUrl: string }): Promis
 
 async function startPipelines(input: {
   dataUrl: string;
+  policiesUrl: string;
   port: number;
   runnerUrl: string;
   triggersUrl: string;
@@ -506,6 +515,7 @@ async function startPipelines(input: {
       'llm-runner': input.runnerUrl
     }),
     PORT: String(input.port),
+    POLICIES_RPC_URL: input.policiesUrl,
     TRIGGERS_RPC_URL: input.triggersUrl
   });
   const app = pipelineModule({
@@ -521,6 +531,33 @@ async function startPipelines(input: {
   });
   await app.start();
   stopped.push(app);
+}
+
+async function startPolicies(input: { port: number }): Promise<void> {
+  const directory = await mkdtemp(join(tmpdir(), 'agentg-policies-'));
+  const config = readPolicyConfig({
+    NATS_URL: natsUrl,
+    POLICY_CONFIG_DIR: directory,
+    PORT: String(input.port)
+  });
+  const app = policyModule({
+    config,
+    connect: {
+      events: nats(config.natsUrl),
+      rpc: httpRpc({
+        host,
+        port: config.port,
+        service: 'policies'
+      })
+    }
+  });
+  await app.start();
+  stopped.push({
+    async stop() {
+      await app.stop();
+      await rm(directory, { force: true, recursive: true });
+    }
+  });
 }
 
 async function startTriggers(input: { pipelinesUrl: string; port: number }): Promise<void> {

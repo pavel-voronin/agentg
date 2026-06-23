@@ -473,7 +473,7 @@ For `data.writeCollectionItem`, `append` rejects `itemId` and `itemIdFrom`.
 Write actions with an empty input dataset perform zero writes and return an empty
 dataset.
 
-Example:
+Example node graph inside `PipelineAutomationRule.spec.pipeline`:
 
 ```yaml
 nodes:
@@ -506,7 +506,7 @@ nodes:
     use: llm.run
     from: promptInput
     with:
-      profile: openrouterFree
+      profile: openrouterCheapSummary
       prompt: Summarize the input in one sentence.
 
   save:

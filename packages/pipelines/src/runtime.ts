@@ -1,5 +1,6 @@
 import type { JsonValue } from '@agentg/framework';
 
+import type { PipelineAutomationRule, PipelineAutomationRuleSet } from '../policies/policies.js';
 import type { Dispatcher, ResultReader } from './actions.js';
 import { executionOrder, parseDefinition } from './definition.js';
 import {
@@ -31,6 +32,8 @@ type RuntimeInput = {
   results: ResultReader;
   store: Store;
 };
+
+const policyTriggerName = 'schedule';
 
 type ExecutionInput = Pick<RuntimeInput, 'dispatcher' | 'results' | 'store'>;
 type ProviderReadResult =
@@ -117,6 +120,45 @@ export function createRuntime(input: RuntimeInput) {
         }
       }
     },
+    reconcilePolicyRules(rules: PipelineAutomationRuleSet) {
+      return serialize(async () => {
+        const parsedRules = rules.map((rule) => ({
+          ...(rule.enabled ? { parsed: parseDefinition(policyDocument(rule)) } : {}),
+          rule
+        }));
+        const activeNames = new Set(rules.map((rule) => rule.name));
+        const now = new Date();
+
+        for (const { parsed, rule } of parsedRules) {
+          if (!rule.enabled) {
+            await input.registration.replace(null, rule.name);
+            await input.store.deleteDefinition(rule.name);
+            continue;
+          }
+          if (parsed === undefined) {
+            throw new Error(`Enabled pipeline automation rule was not parsed: ${rule.name}`);
+          }
+          const bindings = await input.registration.replace(parsed.document, rule.name);
+          await input.store.replaceDefinition({
+            bindings,
+            document: parsed.document,
+            now,
+            source: 'policy',
+            yaml: parsed.yaml
+          });
+        }
+
+        for (const definition of await input.store.listDefinitions({ source: 'policy' })) {
+          if (activeNames.has(definition.name)) {
+            continue;
+          }
+          await input.registration.replace(null, definition.name);
+          await input.store.deleteDefinition(definition.name);
+        }
+
+        await recordCurrentStats(() => input.store.readStats());
+      });
+    },
     async runPipeline(rawInput: unknown) {
       const request = runInputSchema.parse(rawInput);
       const run = await startRun(input, {
@@ -187,6 +229,22 @@ export function createRuntime(input: RuntimeInput) {
           };
         }
       });
+    }
+  };
+}
+
+function policyDocument(rule: PipelineAutomationRule): Document {
+  return {
+    apiVersion: 'agentg.dev/v1',
+    kind: 'Pipeline',
+    metadata: {
+      name: rule.name
+    },
+    spec: {
+      nodes: rule.pipeline.nodes,
+      triggers: {
+        [policyTriggerName]: rule.trigger
+      }
     }
   };
 }
