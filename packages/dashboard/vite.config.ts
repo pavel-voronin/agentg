@@ -15,6 +15,7 @@ const vueRuntimeFilePath = nodeRequire.resolve('vue/dist/vue.runtime.esm-browser
 const mediaServerUrl = safeMediaServerUrl(
   process.env.TELEGRAM_FILES_URL ?? 'http://127.0.0.1:8790'
 );
+const telemetryAvailable = telemetryEnabled(process.env);
 
 export default defineConfig(({ command }): UserConfig => {
   const devServer = command === 'serve';
@@ -30,7 +31,9 @@ export default defineConfig(({ command }): UserConfig => {
       exclude: devServer ? ['pinia', ...browserSharedModules] : [...browserSharedModules]
     },
     plugins: [
-      dashboardProviderDiscovery(),
+      dashboardProviderDiscovery({
+        disabledModuleNames: telemetryAvailable ? [] : ['telemetry']
+      }),
       ...(devServer ? [rewriteBrowserSharedModuleImports()] : [externalizeBrowserSharedModules()]),
       vue(),
       Icons({ autoInstall: false, compiler: 'vue3' }),
@@ -130,4 +133,9 @@ function safeMediaServerUrl(value: string): string {
     throw new Error('TELEGRAM_FILES_URL must be an HTTP(S) origin without credentials or path');
   }
   return value;
+}
+
+function telemetryEnabled(env: NodeJS.ProcessEnv): boolean {
+  const value = env.AGENTG_TELEMETRY?.trim().toLowerCase();
+  return value !== undefined && value.length > 0 && !['0', 'false', 'no', 'off'].includes(value);
 }

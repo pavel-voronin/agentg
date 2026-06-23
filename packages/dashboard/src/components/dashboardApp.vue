@@ -15,13 +15,14 @@ import { useDashboardRuntime } from '../runtime/useDashboardRuntime.js';
 import { useAppShellStore } from '../stores/appShell.js';
 import { DEFAULT_PAGE_SEGMENT, pathForRoute, routeFromPathname } from '../stores/shellRoute.js';
 import { shellPageContributions } from '../view-models/pageContributions.js';
+import { slotDebugAvailable } from 'virtual:dashboard/providers';
 import { dashboardContentCatalog } from '../composition/contentProviders.js';
 import { dashboardSlotLayout } from '../composition/slots/manifest.js';
 import IconifyIcon from './iconifyIcon.vue';
 
 const appShellStore = useAppShellStore();
 const host = useDashboardRuntime();
-const slotDebugEnabled = computed(() => appShellStore.slotDebugEnabled);
+const slotDebugEnabled = computed(() => slotDebugAvailable && appShellStore.slotDebugEnabled);
 const slotRuntime = createSlotRuntime({
   catalog: dashboardContentCatalog,
   debugEnabled: slotDebugEnabled,
@@ -153,6 +154,7 @@ onBeforeUnmount(() => {
           </div>
           <div class="dashboard-app__toggle-group">
             <UiButton
+              v-if="slotDebugAvailable"
               :aria-pressed="appShellStore.slotDebugEnabled"
               class="dashboard-app__slot-debug-button"
               :title="
@@ -188,7 +190,7 @@ onBeforeUnmount(() => {
       </UiPage>
     </main>
   </div>
-  <SlotDebugLayer />
+  <SlotDebugLayer v-if="slotDebugAvailable" />
 </template>
 
 <style scoped>

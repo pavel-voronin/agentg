@@ -5,7 +5,8 @@ import type { Plugin } from 'vite';
 import {
   dashboardProviderEntryPattern,
   discoverProviders,
-  type DiscoveredProvider
+  type DiscoveredProvider,
+  type DiscoverProvidersOptions
 } from './providerDiscovery.js';
 
 const virtualModuleId = 'virtual:dashboard/providers';
@@ -14,12 +15,12 @@ const shellProviderFile = fileURLToPath(
   new URL('../composition/content/dashboard/provider.ts', import.meta.url)
 );
 
-export function dashboardProviderDiscovery(): Plugin {
+export function dashboardProviderDiscovery(options: DiscoverProvidersOptions = {}): Plugin {
   let providers: DiscoveredProvider[] = [];
 
   return {
     buildStart() {
-      providers = discoverProviders();
+      providers = discoverProviders(process.cwd(), options);
       for (const provider of providers) {
         this.addWatchFile(provider.entryFile);
       }
@@ -55,6 +56,7 @@ function providerModuleCode(providers: readonly DiscoveredProvider[]): string {
   const imports: string[] = [
     `import { dashboardContentProvider } from ${JSON.stringify(viteFilePath(shellProviderFile))};`
   ];
+  const slotDebugAvailable = providers.some((provider) => provider.moduleName === 'telemetry');
   const providerObjects = ['dashboardContentProvider'];
   let providerIndex = 0;
 
@@ -73,6 +75,7 @@ function providerModuleCode(providers: readonly DiscoveredProvider[]): string {
   return `${imports.join('\n')}
 
 export const providers = [${providerObjects.join(',')}];
+export const slotDebugAvailable = ${JSON.stringify(slotDebugAvailable)};
 `;
 }
 

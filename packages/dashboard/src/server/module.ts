@@ -1,15 +1,23 @@
-import { createLogger, defineModule } from '@agentg/framework';
+import { createLogger, defineModule, telemetryEnabled } from '@agentg/framework';
 import { dataClient } from '@agentg/data';
 import { telegramClient } from '@agentg/telegram';
 
 import { createProcedures as createDataProcedures } from '../../../data/dashboard/backend/procedures.js';
 import { createProcedures as createTelegramProcedures } from '../../../telegram/dashboard/backend/procedures.js';
 import { createDatabase } from '../../../telegram/src/database/client.js';
-import { createProcedures as createTelemetryProcedures } from '../../../telemetry/dashboard/backend/procedures.js';
 import { readConfig } from './config.js';
 import { startServer } from './server.js';
 
 const logger = createLogger('dashboard-server');
+const telemetryLinksMethod = 'telemetry.links';
+
+type DashboardProcedureMap = Record<string, (input: unknown) => Promise<unknown>>;
+
+type TelemetryResources = {
+  grafanaUrl: string;
+  jaegerUiUrl: string;
+  victoriaMetricsUrl: string;
+};
 
 export const serverModule = defineModule('dashboard', {
   config: readConfig,
@@ -38,11 +46,13 @@ export const serverModule = defineModule('dashboard', {
         events,
         telegram
       }),
-      ...createTelemetryProcedures({
-        grafanaUrl: config.grafanaUrl,
-        jaegerUiUrl: config.jaegerUiUrl,
-        victoriaMetricsUrl: config.victoriaMetricsUrl
-      })
+      ...(telemetryEnabled()
+        ? createLazyTelemetryProcedures({
+            grafanaUrl: config.grafanaUrl,
+            jaegerUiUrl: config.jaegerUiUrl,
+            victoriaMetricsUrl: config.victoriaMetricsUrl
+          })
+        : {})
     };
 
     background('server', async () => {
@@ -73,3 +83,22 @@ export const serverModule = defineModule('dashboard', {
     return {};
   }
 });
+
+function createLazyTelemetryProcedures(resources: TelemetryResources): DashboardProcedureMap {
+  let procedures: DashboardProcedureMap | null = null;
+
+  return {
+    [telemetryLinksMethod]: async (input) => {
+      if (procedures === null) {
+        const module = await import('../../../telemetry/dashboard/backend/procedures.js');
+        procedures = module.createProcedures(resources);
+      }
+
+      const procedure = procedures[telemetryLinksMethod];
+      if (procedure === undefined) {
+        throw new Error(`Dashboard procedure is not registered: ${telemetryLinksMethod}`);
+      }
+      return procedure(input);
+    }
+  };
+}

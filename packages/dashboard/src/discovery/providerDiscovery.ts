@@ -6,10 +6,18 @@ export type DiscoveredProvider = {
   moduleName: string;
 };
 
-export function discoverProviders(rootDirectory = process.cwd()): DiscoveredProvider[] {
+export type DiscoverProvidersOptions = {
+  disabledModuleNames?: readonly string[] | undefined;
+};
+
+export function discoverProviders(
+  rootDirectory = process.cwd(),
+  options: DiscoverProvidersOptions = {}
+): DiscoveredProvider[] {
   const root = workspaceRoot(rootDirectory);
+  const disabledModuleNames = new Set(options.disabledModuleNames ?? []);
   return modulePackageDirectories(root)
-    .flatMap((packageDirectory) => discoverModule(packageDirectory))
+    .flatMap((packageDirectory) => discoverModule(packageDirectory, disabledModuleNames))
     .sort((left, right) => left.moduleName.localeCompare(right.moduleName));
 }
 
@@ -17,7 +25,15 @@ export function dashboardProviderEntryPattern(rootDirectory = process.cwd()): st
   return join(workspaceRoot(rootDirectory), 'packages/*/dashboard/dashboard.ts');
 }
 
-function discoverModule(packageDirectory: string): DiscoveredProvider[] {
+function discoverModule(
+  packageDirectory: string,
+  disabledModuleNames: ReadonlySet<string>
+): DiscoveredProvider[] {
+  const moduleName = basename(packageDirectory);
+  if (disabledModuleNames.has(moduleName)) {
+    return [];
+  }
+
   const entryFile = join(packageDirectory, 'dashboard/dashboard.ts');
   if (!existsSync(entryFile)) {
     return [];
@@ -26,7 +42,7 @@ function discoverModule(packageDirectory: string): DiscoveredProvider[] {
   return [
     {
       entryFile,
-      moduleName: basename(packageDirectory)
+      moduleName
     }
   ];
 }

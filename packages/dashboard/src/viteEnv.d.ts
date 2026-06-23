@@ -5,6 +5,7 @@ declare module 'virtual:dashboard/providers' {
   import type { ContentProvider } from '@agentg/framework/dashboard';
 
   export const providers: readonly ContentProvider[];
+  export const slotDebugAvailable: boolean;
 }
 
 declare module '*.vue' {
